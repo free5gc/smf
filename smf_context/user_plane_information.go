@@ -2,6 +2,8 @@ package smf_context
 
 import (
 	"gofree5gc/lib/pfcp/pfcpType"
+	"gofree5gc/src/smf/factory"
+	"gofree5gc/src/smf/logger"
 	"net"
 )
 
@@ -27,4 +29,58 @@ type UPNode struct {
 	Dnn            string
 	Links          []*UPNode
 	UPFInformation *UPFInformation
+}
+
+func processUPTopology(upTopology *factory.UserPlaneInformation) {
+	nodePool := make(map[string]*UPNode)
+	upfPool := make(map[string]*UPNode)
+	anPool := make(map[string]*UPNode)
+	for name, node := range upTopology.UPNodes {
+		upNode := new(UPNode)
+		upNode.Type = UPNodeType(node.Type)
+		switch upNode.Type {
+		case UPNODE_AN:
+			upNode.ANIP = net.ParseIP(node.ANIP)
+			anPool[name] = upNode
+		case UPNODE_UPF:
+			ip := net.ParseIP(node.NodeID)
+			switch len(ip) {
+			case net.IPv4len:
+				upNode.NodeID = pfcpType.NodeID{
+					NodeIdType:  pfcpType.NodeIdTypeIpv4Address,
+					NodeIdValue: ip,
+				}
+			case net.IPv6len:
+				upNode.NodeID = pfcpType.NodeID{
+					NodeIdType:  pfcpType.NodeIdTypeIpv4Address,
+					NodeIdValue: ip,
+				}
+			default:
+				upNode.NodeID = pfcpType.NodeID{
+					NodeIdType:  pfcpType.NodeIdTypeFqdn,
+					NodeIdValue: []byte(node.NodeID),
+				}
+			}
+
+			upfPool[name] = upNode
+		default:
+			logger.InitLog.Warningf("invalid UPNodeType: %s\n", upNode.Type)
+		}
+
+		nodePool[name] = upNode
+	}
+
+	for _, link := range upTopology.Links {
+		nodeA := nodePool[link.A]
+		nodeB := nodePool[link.B]
+		if nodeA == nil || nodeB == nil {
+			logger.InitLog.Warningf("UPLink [%s] <=> [%s] not establish\n", link.A, link.B)
+			continue
+		}
+		nodeA.Links = append(nodeA.Links, nodeB)
+		nodeB.Links = append(nodeA.Links, nodeB)
+	}
+	smfContext.UserPlaneInformation.UPNodes = nodePool
+	smfContext.UserPlaneInformation.UPFs = upfPool
+	smfContext.UserPlaneInformation.AccessNetwork = anPool
 }
