@@ -145,7 +145,7 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 		smfContext.UERoutingPaths[supi] = routingInfo.PathList
 	}
 
-	for supi, _ := range smfContext.UERoutingPaths {
+	for supi := range smfContext.UERoutingPaths {
 
 		graph := NewUEPathGraph(supi)
 		smfContext.UERoutingGraphs[supi] = graph

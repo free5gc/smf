@@ -37,7 +37,7 @@ func (uepg *UEPathGraph) PrintGraph() {
 		fmt.Println("\tUPF: ")
 		fmt.Println("\t\t", node_name)
 		fmt.Println("\tNeighbors: ")
-		for neighbor_name, _ := range node.Neighbors {
+		for neighbor_name := range node.Neighbors {
 
 			fmt.Println("\t\t", neighbor_name)
 		}
