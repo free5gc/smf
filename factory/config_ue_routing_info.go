@@ -7,5 +7,5 @@ package factory
 type UERoutingInfo struct {
 	IMSI string `yaml:"IMSI,omitempty"`
 
-	pathList []Path `yaml:"pathList,omitempty"`
+	PathList []Path `yaml:"PathList,omitempty"`
 }

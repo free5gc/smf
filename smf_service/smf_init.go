@@ -72,6 +72,9 @@ func (*SMF) Initialize(c *cli.Context) {
 		factory.InitConfigFactory(DefaultSmfConfigPath)
 	}
 
+	DefaultUERoutingPath := path_util.Gofree5gcPath("gofree5gc/config/uerouting.yaml")
+	factory.InitRoutingConfigFactory(DefaultUERoutingPath)
+
 	initLog.Traceln("SMF debug level(string):", app.ContextSelf().Logger.SMF.DebugLevel)
 	if app.ContextSelf().Logger.SMF.DebugLevel != "" {
 		initLog.Infoln("SMF debug level(string):", app.ContextSelf().Logger.SMF.DebugLevel)
@@ -99,6 +102,8 @@ func (smf *SMF) FilterCli(c *cli.Context) (args []string) {
 
 func (smf *SMF) Start() {
 	smf_context.InitSmfContext(&factory.SmfConfig)
+	smf_context.InitSMFUERouting(&factory.UERoutingConfig)
+	smf_context.PrintSMFUERouting()
 
 	initLog.Infoln("Server started")
 	router := gin.Default()

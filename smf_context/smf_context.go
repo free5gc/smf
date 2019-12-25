@@ -47,6 +47,8 @@ type SMFContext struct {
 	NFDiscoveryClient  *Nnrf_NFDiscovery.APIClient
 
 	UserPlaneInformation UserPlaneInformation
+	//*** For ULCL ** //
+	UERoutingPaths map[string][]factory.Path
 }
 
 func AllocUEIP() net.IP {
@@ -174,6 +176,45 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 	smfContext.UserPlaneInformation.UPNodes = nodePool
 	smfContext.UserPlaneInformation.UPFs = upfPool
 	smfContext.UserPlaneInformation.AccessNetwork = anPool
+func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
+
+	if routingConfig == nil {
+		logger.CtxLog.Infof("Routing Config is nil")
+	}
+
+	logger.CtxLog.Infof("ue routing config Info: Version[%s] Description[%s]",
+		routingConfig.Info.Version, routingConfig.Info.Description)
+
+	UERoutingInfo := routingConfig.UERoutingInfo
+	smfContext.UERoutingPaths = make(map[string][]factory.Path)
+
+	for _, routingInfo := range UERoutingInfo {
+
+		imsi := routingInfo.IMSI
+
+		smfContext.UERoutingPaths[imsi] = routingInfo.PathList
+	}
+
+}
+
+func PrintSMFUERouting() {
+
+	for imsi, paths := range smfContext.UERoutingPaths {
+		fmt.Println("IMSI: ", imsi)
+
+		for idx, path := range paths {
+			fmt.Println("Path ", idx, ":")
+			fmt.Println("\tDestIP ", path.DestinationIP)
+			fmt.Println("\tDestPort ", path.DestinationPort)
+			fmt.Printf("\t")
+
+			for _, node := range path.UPF {
+				fmt.Printf("%s->", node)
+			}
+			fmt.Printf("\n")
+		}
+
+	}
 }
 
 func SMF_Self() *SMFContext {

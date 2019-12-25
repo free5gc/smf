@@ -14,7 +14,7 @@ import (
 )
 
 var SmfConfig Config
-var RoutingConfig RoutingConfig
+var UERoutingConfig RoutingConfig
 
 func checkErr(err error) {
 	if err != nil {
@@ -40,9 +40,9 @@ func InitRoutingConfigFactory(f string) {
 	content, err := ioutil.ReadFile(f)
 	checkErr(err)
 
-	RoutingConfig = RoutingConfig{}
+	UERoutingConfig = RoutingConfig{}
 
-	err = yaml.Unmarshal([]byte(content), &RoutingConfig)
+	err = yaml.Unmarshal([]byte(content), &UERoutingConfig)
 	checkErr(err)
 
 	logger.InitLog.Infof("Successfully initialize configuration %s", f)
