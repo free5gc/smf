@@ -49,6 +49,7 @@ type SMFContext struct {
 	//*** For ULCL ** //
 	UserPlaneInformation UserPlaneInformation
 	UERoutingPaths       map[string][]factory.Path
+	UERoutingGraphs      map[string]*UEPathGraph
 }
 
 func AllocUEIP() net.IP {
@@ -135,20 +136,28 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 
 	UERoutingInfo := routingConfig.UERoutingInfo
 	smfContext.UERoutingPaths = make(map[string][]factory.Path)
+	smfContext.UERoutingGraphs = make(map[string]*UEPathGraph)
 
 	for _, routingInfo := range UERoutingInfo {
 
-		imsi := routingInfo.IMSI
+		supi := routingInfo.SUPI
 
-		smfContext.UERoutingPaths[imsi] = routingInfo.PathList
+		smfContext.UERoutingPaths[supi] = routingInfo.PathList
+	}
+
+	for supi, _ := range smfContext.UERoutingPaths {
+
+		graph := NewUEPathGraph(supi)
+		smfContext.UERoutingGraphs[supi] = graph
+		graph.PrintGraph()
 	}
 
 }
 
 func PrintSMFUERouting() {
 
-	for imsi, paths := range smfContext.UERoutingPaths {
-		fmt.Println("IMSI: ", imsi)
+	for supi, paths := range smfContext.UERoutingPaths {
+		fmt.Println("SUPI: ", supi)
 
 		for idx, path := range paths {
 			fmt.Println("Path ", idx, ":")
