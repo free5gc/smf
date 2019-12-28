@@ -5,14 +5,14 @@ import (
 )
 
 type UEPathGraph struct {
-	SUPI string
-	//Graph map[string]*UEPathNode
+	SUPI  string
 	Graph []*UEPathNode
 }
 
 type UEPathNode struct {
-	UPFName   string
-	Neighbors map[string]*UEPathNode
+	UPFName          string
+	Neighbors        map[string]*UEPathNode
+	IsBranchingPoint bool
 }
 
 func (node *UEPathNode) AddNeighbor(neighbor *UEPathNode) {
@@ -25,8 +25,9 @@ func (node *UEPathNode) AddNeighbor(neighbor *UEPathNode) {
 
 func NewUEPathNode(name string) (node *UEPathNode) {
 	node = &UEPathNode{
-		UPFName:   name,
-		Neighbors: make(map[string]*UEPathNode),
+		UPFName:          name,
+		Neighbors:        make(map[string]*UEPathNode),
+		IsBranchingPoint: false,
 	}
 	return
 }
@@ -37,6 +38,8 @@ func (uepg *UEPathGraph) PrintGraph() {
 	for _, node := range uepg.Graph {
 		fmt.Println("\tUPF: ")
 		fmt.Println("\t\t", node.UPFName)
+		fmt.Println("\tBranching Point: ")
+		fmt.Println("\t\t", node.IsBranchingPoint)
 		fmt.Println("\tNeighbors: ")
 		for neighbor_name := range node.Neighbors {
 
@@ -124,10 +127,59 @@ func NewUEPathGraph(SUPI string) (UEPGraph *UEPathGraph) {
 }
 
 func (uepg *UEPathGraph) FindBranchingPoints() {
+	//BFS algo implementation
 	const (
 		WHITE int = 0
 		GREY  int = 1
 		BLACK int = 2
 	)
+
+	num_of_nodes := len(uepg.Graph)
+
+	color := make(map[string]int)
+	distance := make(map[string]int)
+	queue := make(chan *UEPathNode, num_of_nodes)
+
+	for _, node := range uepg.Graph {
+
+		color[node.UPFName] = WHITE
+		distance[node.UPFName] = num_of_nodes + 1
+	}
+
+	cur_idx := 0 // start point
+	for j := 0; j < num_of_nodes; j++ {
+
+		cur_name := uepg.Graph[cur_idx].UPFName
+		if color[cur_name] == WHITE {
+			color[cur_name] = GREY
+			distance[cur_name] = 0
+
+			queue <- uepg.Graph[cur_idx]
+			for len(queue) > 0 {
+				node := <-queue
+				branchingCount := 0
+				for neighbor_name, neighbor_node := range node.Neighbors {
+
+					if color[neighbor_name] == WHITE {
+						color[neighbor_name] = GREY
+						distance[neighbor_name] = distance[cur_name] + 1
+						queue <- neighbor_node
+					}
+
+					if color[neighbor_name] == WHITE || color[neighbor_name] == GREY {
+						branchingCount += 1
+					}
+				}
+
+				if branchingCount >= 2 {
+					node.IsBranchingPoint = true
+				}
+				color[node.UPFName] = BLACK
+			}
+		}
+
+		//Keep finding other connected components
+		cur_idx = j
+	}
 
 }
