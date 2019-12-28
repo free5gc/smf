@@ -149,7 +149,7 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 
 		graph := NewUEPathGraph(supi)
 		smfContext.UERoutingGraphs[supi] = graph
-		//graph.PrintGraph()
+		graph.PrintGraph()
 	}
 
 }

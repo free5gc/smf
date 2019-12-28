@@ -5,8 +5,9 @@ import (
 )
 
 type UEPathGraph struct {
-	SUPI  string
-	Graph map[string]*UEPathNode
+	SUPI string
+	//Graph map[string]*UEPathNode
+	Graph []*UEPathNode
 }
 
 type UEPathNode struct {
@@ -33,9 +34,9 @@ func NewUEPathNode(name string) (node *UEPathNode) {
 func (uepg *UEPathGraph) PrintGraph() {
 
 	fmt.Println("SUPI: ", uepg.SUPI)
-	for node_name, node := range uepg.Graph {
+	for _, node := range uepg.Graph {
 		fmt.Println("\tUPF: ")
-		fmt.Println("\t\t", node_name)
+		fmt.Println("\t\t", node.UPFName)
 		fmt.Println("\tNeighbors: ")
 		for neighbor_name := range node.Neighbors {
 
@@ -47,11 +48,13 @@ func (uepg *UEPathGraph) PrintGraph() {
 func NewUEPathGraph(SUPI string) (UEPGraph *UEPathGraph) {
 
 	UEPGraph = new(UEPathGraph)
-	UEPGraph.Graph = make(map[string]*UEPathNode)
+	UEPGraph.Graph = make([]*UEPathNode, 0)
 	UEPGraph.SUPI = SUPI
 
 	paths := smfContext.UERoutingPaths[SUPI]
 	lowerBound := 0
+
+	NodeCreated := make(map[string]*UEPathNode)
 
 	for _, path := range paths {
 		upperBound := len(path.UPF) - 1
@@ -62,18 +65,20 @@ func NewUEPathGraph(SUPI string) (UEPGraph *UEPathGraph) {
 			var parent_node *UEPathNode
 			var exist bool
 
-			if ue_node, exist = UEPGraph.Graph[node_name]; !exist {
+			if ue_node, exist = NodeCreated[node_name]; !exist {
 				ue_node = NewUEPathNode(node_name)
-				UEPGraph.Graph[node_name] = ue_node
+				NodeCreated[node_name] = ue_node
+				UEPGraph.Graph = append(UEPGraph.Graph, ue_node)
 			}
 
 			switch idx {
 			case lowerBound:
 				child_name := path.UPF[idx+1]
 
-				if child_node, exist = UEPGraph.Graph[child_name]; !exist {
+				if child_node, exist = NodeCreated[child_name]; !exist {
 					child_node = NewUEPathNode(child_name)
-					UEPGraph.Graph[child_name] = child_node
+					NodeCreated[child_name] = child_node
+					UEPGraph.Graph = append(UEPGraph.Graph, child_node)
 				}
 
 				//fmt.Printf("%+v\n", ue_node)
@@ -82,37 +87,47 @@ func NewUEPathGraph(SUPI string) (UEPGraph *UEPathGraph) {
 			case upperBound:
 				parent_name := path.UPF[idx-1]
 
-				if parent_node, exist = UEPGraph.Graph[parent_name]; !exist {
+				if parent_node, exist = NodeCreated[parent_name]; !exist {
 					parent_node = NewUEPathNode(parent_name)
-					UEPGraph.Graph[parent_name] = parent_node
+					NodeCreated[parent_name] = parent_node
+					UEPGraph.Graph = append(UEPGraph.Graph, parent_node)
 				}
 
 				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddNeighbor(parent_node)
 			default:
-				fmt.Println("Upperbound", upperBound)
-				fmt.Println("Idx", idx)
-
 				child_name := path.UPF[idx+1]
 
-				if child_node, exist = UEPGraph.Graph[child_name]; !exist {
+				if child_node, exist = NodeCreated[child_name]; !exist {
 					child_node = NewUEPathNode(child_name)
-					UEPGraph.Graph[child_name] = child_node
+					NodeCreated[child_name] = child_node
+					UEPGraph.Graph = append(UEPGraph.Graph, child_node)
 				}
 
 				parent_name := path.UPF[idx-1]
 
-				if parent_node, exist = UEPGraph.Graph[parent_name]; !exist {
+				if parent_node, exist = NodeCreated[parent_name]; !exist {
 					parent_node = NewUEPathNode(parent_name)
-					UEPGraph.Graph[parent_name] = parent_node
+					NodeCreated[parent_name] = parent_node
+					UEPGraph.Graph = append(UEPGraph.Graph, parent_node)
 				}
 
 				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddNeighbor(child_node)
 				ue_node.AddNeighbor(parent_node)
 			}
+
 		}
 	}
 
 	return
+}
+
+func (uepg *UEPathGraph) FindBranchingPoints() {
+	const (
+		WHITE int = 0
+		GREY  int = 1
+		BLACK int = 2
+	)
+
 }
