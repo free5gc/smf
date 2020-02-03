@@ -3,6 +3,7 @@ package smf_producer
 import (
 	"gofree5gc/lib/Namf_Communication"
 	"gofree5gc/lib/Nsmf_PDUSession"
+	"gofree5gc/lib/flowdesc"
 	"gofree5gc/lib/http_wrapper"
 	"gofree5gc/lib/nas"
 	"gofree5gc/lib/openapi/models"
@@ -377,4 +378,59 @@ func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMe
 		Status: http.StatusNoContent,
 		Body:   nil,
 	}}
+}
+
+//test SDFFilter Rule
+
+var sdf_filter_id uint32
+
+func getSDFFilterID() uint32 {
+	sdf_filter_id++
+	return sdf_filter_id
+}
+
+func AddBranchingPoints(smContextRef string) {
+
+	smContext := smf_context.GetSMContext(smContextRef)
+
+	tunnel := smContext.Tunnel
+
+	FlowDespcription := flowdesc.NewIPFilterRule()
+
+	FlowDespcription.SetAction(true)     //permit
+	FlowDespcription.SetDirection(false) //uplink
+	FlowDespcription.SetDestinationIp("0.0.0.0")
+	FlowDespcription.SetDestinationPorts("0000")
+	FlowDespcription.SetSourceIp("0.0.0.0")
+	FlowDespcription.SetSourcePorts("0000")
+	FlowDespcription.SetProtocal(0xfc)
+
+	FlowDespcriptionStr, err := FlowDespcription.Encode()
+
+	if err == nil {
+		logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
+	}
+
+	tunnel.DLPDR.PDI.SDFFilter = &pfcpType.SDFFilter{
+		Bid:                     false,
+		Fl:                      false,
+		Spi:                     false,
+		Ttc:                     false,
+		Fd:                      true,
+		LengthOfFlowDescription: uint16(len(FlowDespcriptionStr)),
+		FlowDescription:         []byte(FlowDespcriptionStr),
+		SdfFilterId:             getSDFFilterID(),
+	}
+
+	addr := net.UDPAddr{
+		IP:   smContext.Tunnel.Node.NodeID.NodeIdValue,
+		Port: pfcpUdp.PFCP_PORT,
+	}
+
+	pdr_list := []*smf_context.PDR{tunnel.DLPDR}
+	far_list := []*smf_context.FAR{}
+	bar_list := []*smf_context.BAR{}
+
+	pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
+
 }

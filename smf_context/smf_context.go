@@ -148,8 +148,8 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 	for supi := range smfContext.UERoutingPaths {
 
 		graph := NewUEPathGraph(supi)
-		smfContext.UERoutingGraphs[supi] = graph
 		graph.FindBranchingPoints()
+		smfContext.UERoutingGraphs[supi] = graph
 		//graph.PrintGraph()
 	}
 

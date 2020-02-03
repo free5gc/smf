@@ -35,6 +35,7 @@ type PDI struct {
 	LocalFTeid      pfcpType.FTEID
 	NetworkInstance util_3gpp.Dnn
 	UEIPAddress     *pfcpType.UEIPAddress
+	SDFFilter       *pfcpType.SDFFilter
 }
 
 // Forwarding Action Rule. 7.5.2.3-1
