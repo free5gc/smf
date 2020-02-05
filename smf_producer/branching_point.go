@@ -11,13 +11,6 @@ import (
 	"net"
 )
 
-var sdf_filter_id uint32
-
-func getSDFFilterID() uint32 {
-	sdf_filter_id++
-	return sdf_filter_id
-}
-
 func CheckBranchingPoint(nodeID *pfcpType.NodeID, smContext *smf_context.SMContext) bool {
 	upfIP := nodeID.ResolveNodeIdToIp().String()
 	upfName := smf_context.SMF_Self().UserPlaneInformation.UPFIPToName[upfIP]
@@ -29,18 +22,39 @@ func CheckBranchingPoint(nodeID *pfcpType.NodeID, smContext *smf_context.SMConte
 
 func AddBranchingRule(nodeID *pfcpType.NodeID, smContext *smf_context.SMContext) {
 	tunnel := smContext.Tunnel
-
+	var err error
 	//PDR1
 
 	FlowDespcription := flowdesc.NewIPFilterRule()
 
-	FlowDespcription.SetAction(true)     //permit
-	FlowDespcription.SetDirection(false) //uplink
-	FlowDespcription.SetDestinationIp("0.0.0.0")
-	FlowDespcription.SetDestinationPorts("0000")
-	FlowDespcription.SetSourceIp("0.0.0.0")
-	FlowDespcription.SetSourcePorts("0000")
-	FlowDespcription.SetProtocal(0xfc)
+	err = FlowDespcription.SetAction(true) //permit
+	if err != nil {
+		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+	}
+	err = FlowDespcription.SetDirection(true) //uplink
+	if err != nil {
+		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+	}
+	err = FlowDespcription.SetDestinationIp("0.0.0.0")
+	if err != nil {
+		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+	}
+	err = FlowDespcription.SetDestinationPorts("0000")
+	if err != nil {
+		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+	}
+	err = FlowDespcription.SetSourceIp("0.0.0.0")
+	if err != nil {
+		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+	}
+	err = FlowDespcription.SetSourcePorts("0000")
+	if err != nil {
+		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+	}
+	err = FlowDespcription.SetProtocal(0xfc)
+	if err != nil {
+		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+	}
 
 	FlowDespcriptionStr, err := FlowDespcription.Encode()
 
@@ -57,19 +71,39 @@ func AddBranchingRule(nodeID *pfcpType.NodeID, smContext *smf_context.SMContext)
 		Fd:                      true,
 		LengthOfFlowDescription: uint16(len(FlowDespcriptionStr)),
 		FlowDescription:         []byte(FlowDespcriptionStr),
-		SdfFilterId:             getSDFFilterID(),
 	}
 	//PDR2
 
 	FlowDespcription = flowdesc.NewIPFilterRule()
 
-	FlowDespcription.SetAction(true)     //permit
-	FlowDespcription.SetDirection(false) //uplink
-	FlowDespcription.SetDestinationIp("0.0.0.0")
-	FlowDespcription.SetDestinationPorts("0000")
-	FlowDespcription.SetSourceIp("0.0.0.0")
-	FlowDespcription.SetSourcePorts("0000")
-	FlowDespcription.SetProtocal(0xfc)
+	err = FlowDespcription.SetAction(true) //permit
+	if err != nil {
+		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+	}
+	err = FlowDespcription.SetDirection(true) //uplink
+	if err != nil {
+		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+	}
+	err = FlowDespcription.SetDestinationIp("0.0.0.0")
+	if err != nil {
+		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+	}
+	err = FlowDespcription.SetDestinationPorts("0000")
+	if err != nil {
+		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+	}
+	err = FlowDespcription.SetSourceIp("0.0.0.0")
+	if err != nil {
+		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+	}
+	err = FlowDespcription.SetSourcePorts("0000")
+	if err != nil {
+		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+	}
+	err = FlowDespcription.SetProtocal(0xfc)
+	if err != nil {
+		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+	}
 
 	FlowDespcriptionStr, err = FlowDespcription.Encode()
 
@@ -113,7 +147,6 @@ func AddBranchingRule(nodeID *pfcpType.NodeID, smContext *smf_context.SMContext)
 		Fd:                      true,
 		LengthOfFlowDescription: uint16(len(FlowDespcriptionStr)),
 		FlowDescription:         []byte(FlowDespcriptionStr),
-		SdfFilterId:             getSDFFilterID(),
 	}
 
 	addr := net.UDPAddr{
