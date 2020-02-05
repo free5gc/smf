@@ -11,6 +11,7 @@ type UEPathGraph struct {
 
 type UEPathNode struct {
 	UPFName          string
+	Parent           string
 	Neighbors        map[string]*UEPathNode
 	IsBranchingPoint bool
 }
@@ -23,6 +24,11 @@ func (node *UEPathNode) AddNeighbor(neighbor *UEPathNode) {
 	}
 }
 
+func (node *UEPathNode) RmbParent(parent string) {
+
+	node.Parent = parent
+}
+
 func NewUEPathNode(name string) (node *UEPathNode) {
 	node = &UEPathNode{
 		UPFName:          name,
@@ -32,14 +38,31 @@ func NewUEPathNode(name string) (node *UEPathNode) {
 	return
 }
 
+//check a given upf name is a branching point or not
+func (uepg *UEPathGraph) IsBranchingPoint(name string) bool {
+
+	for _, node := range uepg.Graph {
+		if node.IsBranchingPoint {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (uepg *UEPathGraph) PrintGraph() {
 
 	fmt.Println("SUPI: ", uepg.SUPI)
 	for _, node := range uepg.Graph {
 		fmt.Println("\tUPF: ")
 		fmt.Println("\t\t", node.UPFName)
+
 		fmt.Println("\tBranching Point: ")
 		fmt.Println("\t\t", node.IsBranchingPoint)
+
+		fmt.Println("\tParent: ")
+		fmt.Println("\t\t", node.Parent)
+
 		fmt.Println("\tNeighbors: ")
 		for neighbor_name := range node.Neighbors {
 
@@ -98,6 +121,7 @@ func NewUEPathGraph(SUPI string) (UEPGraph *UEPathGraph) {
 
 				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddNeighbor(parent_node)
+				ue_node.RmbParent(parent_name)
 			default:
 				child_name := path.UPF[idx+1]
 
@@ -118,6 +142,7 @@ func NewUEPathGraph(SUPI string) (UEPGraph *UEPathGraph) {
 				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddNeighbor(child_node)
 				ue_node.AddNeighbor(parent_node)
+				ue_node.RmbParent(parent_name)
 			}
 
 		}

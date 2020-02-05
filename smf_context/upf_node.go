@@ -44,8 +44,15 @@ type UPFInformation struct {
 
 func AddUPF(nodeId *pfcpType.NodeID) (upf *UPFInformation) {
 	upf = new(UPFInformation)
-	key, _ := generateUpfIdFromNodeId(nodeId)
+	key, err := generateUpfIdFromNodeId(nodeId)
+
+	if err != nil {
+		fmt.Println("[SMF] Error occurs while calling AddUPF")
+		return
+	}
+
 	upfPool[key] = upf
+	fmt.Println("[SMF] Add UPF!")
 	upf.NodeID = *nodeId
 	upf.pdrPool = make(map[uint16]*PDR)
 	upf.farPool = make(map[uint32]*FAR)
@@ -95,11 +102,21 @@ func RemoveUPFNodeByNodeId(nodeId pfcpType.NodeID) {
 
 func SelectUPFByDnn(Dnn string) *UPFInformation {
 	for _, upf := range upfPool {
+		fmt.Println("[SMF] In SelectUPFByDnn UPFInfo.NetworkInstance: ", string(upf.UPIPInfo.NetworkInstance))
 		if !upf.UPIPInfo.Assoni || string(upf.UPIPInfo.NetworkInstance) == Dnn {
 			return upf
 		}
 	}
+
+	fmt.Println("[SMF] ", upfPool)
+
+	fmt.Println("[SMF] In SelectUPFByDnn")
 	return nil
+}
+
+func (upf *UPFInformation) GetUPFIP() string {
+
+	return upf.NodeID.ResolveNodeIdToIp().String()
 }
 
 func (upf *UPFInformation) pdrID() uint16 {

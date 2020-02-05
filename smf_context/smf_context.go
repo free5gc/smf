@@ -150,7 +150,7 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 		graph := NewUEPathGraph(supi)
 		graph.FindBranchingPoints()
 		smfContext.UERoutingGraphs[supi] = graph
-		//graph.PrintGraph()
+		graph.PrintGraph()
 	}
 
 }

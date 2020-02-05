@@ -12,6 +12,7 @@ import (
 	"gofree5gc/src/smf/smf_context"
 	"gofree5gc/src/smf/smf_handler/smf_message"
 	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
+	"gofree5gc/src/smf/smf_producer"
 	"net/http"
 )
 
@@ -68,6 +69,7 @@ func HandlePfcpAssociationSetupResponse(msg *pfcpUdp.Message) {
 		if req.UserPlaneIPResourceInformation != nil {
 			upf := smf_context.AddUPF(req.NodeID)
 			upf.UPIPInfo = *req.UserPlaneIPResourceInformation
+			fmt.Println("[SMF] UPF IP: ", upf.GetUPFIP())
 			logger.PfcpLog.Infof("UPF[%s]", upf.UPIPInfo.NetworkInstance)
 		}
 	}
@@ -169,6 +171,20 @@ func HandlePfcpSessionEstablishmentResponse(msg *pfcpUdp.Message) {
 		if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 			logger.PfcpLog.Warnf("%v", rspData.Cause)
 		}
+
+		if smf_producer.CheckBranchingPoint(rsp.NodeID, smContext) {
+			fmt.Println("[SMF] ======= In HandlePfcpSessionEstablishmentResponse ======")
+			fmt.Println("[SMF] Is branching point!")
+			fmt.Println("[SMF] In HandlePfcpSessionEstablishmentResponse Supi: ", smContext.Supi)
+			fmt.Println("[SMF] In HandlePfcpSessionEstablishmentResponse NodeID: ", rsp.NodeID.ResolveNodeIdToIp().String())
+
+			for upfIP, upfName := range smf_context.SMF_Self().UserPlaneInformation.UPFIPToName {
+
+				fmt.Println("[SMF] UPF Name: ", upfName)
+				fmt.Println("[SMF] UPF IP: ", upfIP)
+			}
+		}
+
 	}
 }
 

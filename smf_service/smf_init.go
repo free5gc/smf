@@ -127,11 +127,15 @@ func (smf *SMF) Start() {
 	}
 	pfcp_udp.Run()
 
-	for _, upf := range smf_context.SMF_Self().UserPlaneInformation.UPFs {
+	for upf_name, upf := range smf_context.SMF_Self().UserPlaneInformation.UPFs {
 		addr := new(net.UDPAddr)
 		addr.IP = net.IP(upf.NodeID.NodeIdValue)
 
 		addr.Port = pfcpUdp.PFCP_PORT
+
+		fmt.Println("[SMF] UPF Name: ", upf_name)
+		fmt.Println("[SMF] UPF IP: ", addr.IP.String())
+		fmt.Println("[SMF] UPF Port: ", addr.Port)
 		pfcp_message.SendPfcpAssociationSetupRequest(addr)
 	}
 

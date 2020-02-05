@@ -1,9 +1,9 @@
 package smf_producer
 
 import (
+	"fmt"
 	"gofree5gc/lib/Namf_Communication"
 	"gofree5gc/lib/Nsmf_PDUSession"
-	"gofree5gc/lib/flowdesc"
 	"gofree5gc/lib/http_wrapper"
 	"gofree5gc/lib/nas"
 	"gofree5gc/lib/openapi/models"
@@ -132,6 +132,8 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		IP:   smContext.Tunnel.Node.NodeID.NodeIdValue,
 		Port: pfcpUdp.PFCP_PORT,
 	}
+
+	fmt.Println("[SMF] Send PFCP to UPF IP: ", addr.IP.String())
 	pfcp_message.SendPfcpSessionEstablishmentRequest(&addr, smContext)
 
 	smf_consumer.SendNFDiscoveryServingAMF(smContext)
@@ -153,6 +155,9 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 			smContext.CommunicationClient = Namf_Communication.NewAPIClient(communicationConf)
 		}
 	}
+
+	//check branching points
+	//smf_producer.CheckBranchingPoint()
 }
 
 func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMessage, smContextRef string, body models.UpdateSmContextRequest) (seqNum uint32, resBody models.UpdateSmContextResponse) {
@@ -382,55 +387,114 @@ func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMe
 
 //test SDFFilter Rule
 
-var sdf_filter_id uint32
+// var sdf_filter_id uint32
 
-func getSDFFilterID() uint32 {
-	sdf_filter_id++
-	return sdf_filter_id
-}
+// func getSDFFilterID() uint32 {
+// 	sdf_filter_id++
+// 	return sdf_filter_id
+// }
 
-func AddBranchingPoints(smContextRef string) {
+// func AddBranchingPoints(smContextRef string) {
 
-	smContext := smf_context.GetSMContext(smContextRef)
+// 	smContext := smf_context.GetSMContext(smContextRef)
 
-	tunnel := smContext.Tunnel
+// 	tunnel := smContext.Tunnel
 
-	FlowDespcription := flowdesc.NewIPFilterRule()
+// 	//PDR1
 
-	FlowDespcription.SetAction(true)     //permit
-	FlowDespcription.SetDirection(false) //uplink
-	FlowDespcription.SetDestinationIp("0.0.0.0")
-	FlowDespcription.SetDestinationPorts("0000")
-	FlowDespcription.SetSourceIp("0.0.0.0")
-	FlowDespcription.SetSourcePorts("0000")
-	FlowDespcription.SetProtocal(0xfc)
+// 	FlowDespcription := flowdesc.NewIPFilterRule()
 
-	FlowDespcriptionStr, err := FlowDespcription.Encode()
+// 	FlowDespcription.SetAction(true)     //permit
+// 	FlowDespcription.SetDirection(false) //uplink
+// 	FlowDespcription.SetDestinationIp("0.0.0.0")
+// 	FlowDespcription.SetDestinationPorts("0000")
+// 	FlowDespcription.SetSourceIp("0.0.0.0")
+// 	FlowDespcription.SetSourcePorts("0000")
+// 	FlowDespcription.SetProtocal(0xfc)
 
-	if err == nil {
-		logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
-	}
+// 	FlowDespcriptionStr, err := FlowDespcription.Encode()
 
-	tunnel.DLPDR.PDI.SDFFilter = &pfcpType.SDFFilter{
-		Bid:                     false,
-		Fl:                      false,
-		Spi:                     false,
-		Ttc:                     false,
-		Fd:                      true,
-		LengthOfFlowDescription: uint16(len(FlowDespcriptionStr)),
-		FlowDescription:         []byte(FlowDespcriptionStr),
-		SdfFilterId:             getSDFFilterID(),
-	}
+// 	if err == nil {
+// 		logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
+// 	}
 
-	addr := net.UDPAddr{
-		IP:   smContext.Tunnel.Node.NodeID.NodeIdValue,
-		Port: pfcpUdp.PFCP_PORT,
-	}
+// 	tunnel.ULPDR.State = smf_context.RULE_UPDATE
+// 	tunnel.ULPDR.PDI.SDFFilter = &pfcpType.SDFFilter{
+// 		Bid:                     false,
+// 		Fl:                      false,
+// 		Spi:                     false,
+// 		Ttc:                     false,
+// 		Fd:                      true,
+// 		LengthOfFlowDescription: uint16(len(FlowDespcriptionStr)),
+// 		FlowDescription:         []byte(FlowDespcriptionStr),
+// 		SdfFilterId:             getSDFFilterID(),
+// 	}
+// 	//PDR2
 
-	pdr_list := []*smf_context.PDR{tunnel.DLPDR}
-	far_list := []*smf_context.FAR{}
-	bar_list := []*smf_context.BAR{}
+// 	FlowDespcription = flowdesc.NewIPFilterRule()
 
-	pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
+// 	FlowDespcription.SetAction(true)     //permit
+// 	FlowDespcription.SetDirection(false) //uplink
+// 	FlowDespcription.SetDestinationIp("0.0.0.0")
+// 	FlowDespcription.SetDestinationPorts("0000")
+// 	FlowDespcription.SetSourceIp("0.0.0.0")
+// 	FlowDespcription.SetSourcePorts("0000")
+// 	FlowDespcription.SetProtocal(0xfc)
 
-}
+// 	FlowDespcriptionStr, err = FlowDespcription.Encode()
+
+// 	if err == nil {
+// 		logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
+// 	}
+
+// 	newULPDR := smContext.Tunnel.Node.AddPDR()
+// 	newULPDR.State = smf_context.RULE_INITIAL
+// 	newULPDR.Precedence = 32
+// 	newULPDR.PDI = smf_context.PDI{
+// 		SourceInterface: pfcpType.SourceInterface{
+// 			InterfaceValue: pfcpType.SourceInterfaceAccess,
+// 		},
+// 		LocalFTeid: pfcpType.FTEID{
+// 			V4:          true,
+// 			Teid:        tunnel.ULTEID,
+// 			Ipv4Address: tunnel.Node.UPIPInfo.Ipv4Address,
+// 		},
+// 		NetworkInstance: []byte(smContext.Dnn),
+// 		UEIPAddress: &pfcpType.UEIPAddress{
+// 			V4:          true,
+// 			Ipv4Address: smContext.PDUAddress.To4(),
+// 		},
+// 	}
+// 	newULPDR.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
+// 	newULPDR.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
+// 	newULPDR.FAR.ApplyAction.Forw = true
+// 	newULPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
+// 		DestinationInterface: pfcpType.DestinationInterface{
+// 			InterfaceValue: pfcpType.DestinationInterfaceCore,
+// 		},
+// 		NetworkInstance: []byte(smContext.Dnn),
+// 	}
+
+// 	newULPDR.PDI.SDFFilter = &pfcpType.SDFFilter{
+// 		Bid:                     false,
+// 		Fl:                      false,
+// 		Spi:                     false,
+// 		Ttc:                     false,
+// 		Fd:                      true,
+// 		LengthOfFlowDescription: uint16(len(FlowDespcriptionStr)),
+// 		FlowDescription:         []byte(FlowDespcriptionStr),
+// 		SdfFilterId:             getSDFFilterID(),
+// 	}
+
+// 	addr := net.UDPAddr{
+// 		IP:   smContext.Tunnel.Node.NodeID.NodeIdValue,
+// 		Port: pfcpUdp.PFCP_PORT,
+// 	}
+
+// 	pdr_list := []*smf_context.PDR{tunnel.ULPDR}
+// 	far_list := []*smf_context.FAR{}
+// 	bar_list := []*smf_context.BAR{}
+
+// 	pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
+
+// }

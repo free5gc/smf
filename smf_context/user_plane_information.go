@@ -11,6 +11,7 @@ type UserPlaneInformation struct {
 	UPNodes       map[string]*UPNode
 	UPFs          map[string]*UPNode
 	AccessNetwork map[string]*UPNode
+	UPFIPToName   map[string]string
 }
 
 type UPNodeType string
@@ -35,6 +36,8 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 	nodePool := make(map[string]*UPNode)
 	upfPool := make(map[string]*UPNode)
 	anPool := make(map[string]*UPNode)
+	upfIpMap := make(map[string]string)
+
 	for name, node := range upTopology.UPNodes {
 		upNode := new(UPNode)
 		upNode.Type = UPNodeType(node.Type)
@@ -68,6 +71,9 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 		}
 
 		nodePool[name] = upNode
+
+		ipStr := upNode.NodeID.ResolveNodeIdToIp().String()
+		upfIpMap[ipStr] = name
 	}
 
 	for _, link := range upTopology.Links {
@@ -83,4 +89,5 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 	smfContext.UserPlaneInformation.UPNodes = nodePool
 	smfContext.UserPlaneInformation.UPFs = upfPool
 	smfContext.UserPlaneInformation.AccessNetwork = anPool
+	smfContext.UserPlaneInformation.UPFIPToName = upfIpMap
 }
