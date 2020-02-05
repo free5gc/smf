@@ -183,6 +183,8 @@ func HandlePfcpSessionEstablishmentResponse(msg *pfcpUdp.Message) {
 				fmt.Println("[SMF] UPF Name: ", upfName)
 				fmt.Println("[SMF] UPF IP: ", upfIP)
 			}
+
+			smf_producer.AddBranchingRule(rsp.NodeID, smContext)
 		}
 
 	}

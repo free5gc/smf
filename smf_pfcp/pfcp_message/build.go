@@ -1,6 +1,7 @@
 package pfcp_message
 
 import (
+	"fmt"
 	"net"
 
 	"gofree5gc/lib/pfcp"
@@ -77,6 +78,13 @@ func pdrToCreatePDR(pdr *smf_context.PDR) *pfcp.CreatePDR {
 		UEIPAddress:     pdr.PDI.UEIPAddress,
 	}
 
+	if pdr.PDI.SDFFilter != nil {
+		fmt.Println("[SMF] In pdrToCreatePDR create SDFFilter!")
+		createPDR.PDI.SDFFilter = pdr.PDI.SDFFilter
+	} else {
+		fmt.Println("[SMF] In pdrToCreatePDR no SDFFilter!")
+	}
+
 	createPDR.OuterHeaderRemoval = pdr.OuterHeaderRemoval
 
 	createPDR.FARID = &pfcpType.FARID{
@@ -136,6 +144,13 @@ func pdrToUpdatePDR(pdr *smf_context.PDR) *pfcp.UpdatePDR {
 		LocalFTEID:      &pdr.PDI.LocalFTeid,
 		NetworkInstance: &pdr.PDI.NetworkInstance,
 		UEIPAddress:     pdr.PDI.UEIPAddress,
+	}
+
+	if pdr.PDI.SDFFilter != nil {
+		fmt.Println("[SMF] In pdrToUpdatePDR create SDFFilter!")
+		updatePDR.PDI.SDFFilter = pdr.PDI.SDFFilter
+	} else {
+		fmt.Println("[SMF] In pdrToUpdatePDR no SDFFilter!")
 	}
 
 	updatePDR.OuterHeaderRemoval = pdr.OuterHeaderRemoval
