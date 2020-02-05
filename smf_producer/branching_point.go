@@ -126,3 +126,7 @@ func CheckBranchingPoint(nodeID *pfcpType.NodeID, smContext *smf_context.SMConte
 	// pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
 
 }
+
+func AddBranchingRule() {
+	
+}

@@ -188,12 +188,13 @@ func HandlePfcpSessionEstablishmentResponse(msg *pfcpUdp.Message) {
 	}
 }
 
-func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message, HttpResponseQueue *smf_message.ResponseQueue) {
+func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 	pfcpRsp := msg.PfcpMessage.Body.(pfcp.PFCPSessionModificationResponse)
 
 	SEID := msg.PfcpMessage.Header.SEID
 	seqNum := msg.PfcpMessage.Header.SequenceNumber
 
+	HttpResponseQueue := smf_message.RspQueue
 	if HttpResponseQueue.CheckItemExist(seqNum) {
 		if pfcpRsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
 			resQueueItem := HttpResponseQueue.GetItem(seqNum)

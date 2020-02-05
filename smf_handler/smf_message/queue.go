@@ -4,8 +4,14 @@ import (
 	"gofree5gc/lib/openapi/models"
 )
 
+var RspQueue *ResponseQueue
+
 type ResponseQueue struct {
 	RspQueue map[uint32]*ResponseQueueItem
+}
+
+func init() {
+	RspQueue = NewQueue()
 }
 
 func NewQueue() *ResponseQueue {
