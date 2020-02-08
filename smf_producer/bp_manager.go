@@ -11,6 +11,36 @@ import (
 	"net"
 )
 
+var ueRoutingInitialized map[string]UeRoutingInitializeState
+
+type UeRoutingInitializeState int
+
+const (
+	Uninitialized      UeRoutingInitializeState = 0
+	HasSendPFCPMsg     UeRoutingInitializeState = 1
+	InitializedSuccess UeRoutingInitializeState = 2
+	InitializedFail    UeRoutingInitializeState = 3
+)
+
+func init() {
+	ueRoutingInitialized = make(map[string]UeRoutingInitializeState)
+}
+
+func AddUEUpLinkRoutingInfo(smContext *smf_context.SMContext) {
+
+	supi := smContext.Supi
+	fmt.Println("[SMF] In AddUEUpLinkRoutingInfo add｀ supi: ", supi)
+	if _, exist := ueRoutingInitialized[supi]; !exist {
+		ueRoutingInitialized[supi] = Uninitialized
+	}
+}
+
+func CheckUEUpLinkRoutingStatus(smContext *smf_context.SMContext) UeRoutingInitializeState {
+
+	supi := smContext.Supi
+	return ueRoutingInitialized[supi]
+}
+
 func CheckBranchingPoint(nodeID *pfcpType.NodeID, smContext *smf_context.SMContext) bool {
 	upfIP := nodeID.ResolveNodeIdToIp().String()
 	upfName := smf_context.SMF_Self().UserPlaneInformation.UPFIPToName[upfIP]
