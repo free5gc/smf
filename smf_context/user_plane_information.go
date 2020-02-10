@@ -91,3 +91,8 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 	smfContext.UserPlaneInformation.AccessNetwork = anPool
 	smfContext.UserPlaneInformation.UPFIPToName = upfIpMap
 }
+
+func (upi *UserPlaneInformation) GetUPFIPByName(name string) []byte {
+
+	return upi.UPFs[name].NodeID.NodeIdValue
+}

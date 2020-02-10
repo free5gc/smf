@@ -83,6 +83,10 @@ func InitializeUEUplinkRouting(smContext *smf_context.SMContext) {
 	}
 }
 
+func AddRoutingRule(smContext *smf_context.SMContext, upfNode *smf_context.UEPathNode) {
+
+}
+
 func AddBranchingRule(smContext *smf_context.SMContext, upfNode *smf_context.UEPathNode) {
 	upfName := upfNode.UPFName
 	upfNodeID := smf_context.SMF_Self().UserPlaneInformation.UPFs[upfName].NodeID
@@ -100,7 +104,8 @@ func AddBranchingRule(smContext *smf_context.SMContext, upfNode *smf_context.UEP
 
 	for _, child_node := range upfNode.GetChild() {
 		var err error
-		childEndPoint := upfNode.EndPointOfEachChild[child_node.UPFName]
+		child_name := child_node.UPFName
+		childEndPoint := upfNode.EndPointOfEachChild[child_name]
 		FlowDespcription := flowdesc.NewIPFilterRule()
 
 		err = FlowDespcription.SetAction(true) //permit
@@ -153,6 +158,12 @@ func AddBranchingRule(smContext *smf_context.SMContext, upfNode *smf_context.UEP
 			LengthOfFlowDescription: uint16(len(FlowDespcriptionStr)),
 			FlowDescription:         []byte(FlowDespcriptionStr),
 		}
+
+		fp := newULPDR.FAR.ForwardingParameters
+		fp.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
+		fp.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+		fp.OuterHeaderCreation.Teid = 10 //?
+		fp.OuterHeaderCreation.Ipv4Address = smf_context.GetUserPlaneInformation().GetUPFIPByName(child_name)
 
 		pdr_list = append(pdr_list, newULPDR)
 		far_list = append(far_list, newULPDR.FAR)

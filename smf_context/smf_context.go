@@ -178,3 +178,7 @@ func PrintSMFUERouting() {
 func SMF_Self() *SMFContext {
 	return &smfContext
 }
+
+func GetUserPlaneInformation() *UserPlaneInformation {
+	return &smfContext.UserPlaneInformation
+}
