@@ -9,6 +9,7 @@ import (
 	"gofree5gc/src/smf/smf_context"
 	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
 	"net"
+	"strconv"
 )
 
 var ueRoutingInitialized map[string]UeRoutingInitializeState
@@ -29,7 +30,7 @@ func init() {
 func AddUEUpLinkRoutingInfo(smContext *smf_context.SMContext) {
 
 	supi := smContext.Supi
-	fmt.Println("[SMF] In AddUEUpLinkRoutingInfo add｀ supi: ", supi)
+	fmt.Println("[SMF] In AddUEUpLinkRoutingInfo add supi: ", supi)
 	if _, exist := ueRoutingInitialized[supi]; !exist {
 		ueRoutingInitialized[supi] = Uninitialized
 	}
@@ -50,143 +51,126 @@ func CheckBranchingPoint(nodeID *pfcpType.NodeID, smContext *smf_context.SMConte
 	return ueRoutingGraph.IsBranchingPoint(upfName)
 }
 
-func AddBranchingRule(nodeID *pfcpType.NodeID, smContext *smf_context.SMContext) {
-	tunnel := smContext.Tunnel
-	var err error
-	//PDR1
+func SetUeRoutingInitializeState(smContext *smf_context.SMContext, status UeRoutingInitializeState) {
 
-	FlowDespcription := flowdesc.NewIPFilterRule()
+	supi := smContext.Supi
+	ueRoutingInitialized[supi] = status
+}
 
-	err = FlowDespcription.SetAction(true) //permit
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+func InitializeUEUplinkRouting(smContext *smf_context.SMContext) {
+
+	supi := smContext.Supi
+	ueRoutingGraph := smf_context.SMF_Self().UERoutingGraphs[supi]
+	ANUPFIP := smContext.Tunnel.Node.NodeID.ResolveNodeIdToIp().String()
+	ANUPFName := smf_context.SMF_Self().UserPlaneInformation.UPFIPToName[ANUPFIP]
+
+	for _, upfNode := range ueRoutingGraph.Graph {
+
+		upfName := upfNode.UPFName
+		if upfName == ANUPFName {
+
+			if ueRoutingGraph.IsBranchingPoint(upfName) {
+				AddBranchingRule(smContext, upfNode)
+			}
+
+		} //else {
+		// 	pdr = smContext.Tunnel.Node.AddPDR()
+
+		// 	pdr.InitializePDR(smContext)
+
+		// }
+
 	}
-	err = FlowDespcription.SetDirection(true) //uplink
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-	}
-	err = FlowDespcription.SetDestinationIp("0.0.0.0")
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-	}
-	err = FlowDespcription.SetDestinationPorts("0000")
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-	}
-	err = FlowDespcription.SetSourceIp("0.0.0.0")
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-	}
-	err = FlowDespcription.SetSourcePorts("0000")
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-	}
-	err = FlowDespcription.SetProtocal(0xfc)
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+}
+
+func AddBranchingRule(smContext *smf_context.SMContext, upfNode *smf_context.UEPathNode) {
+	upfName := upfNode.UPFName
+	upfNodeID := smf_context.SMF_Self().UserPlaneInformation.UPFs[upfName].NodeID
+	upfIP := upfNodeID.ResolveNodeIdToIp().String()
+
+	//tunnel := smContext.Tunnel
+
+	var pdr_list []*smf_context.PDR
+
+	pdr_list = make([]*smf_context.PDR, 0)
+	far_list := make([]*smf_context.FAR, 0)
+	bar_list := make([]*smf_context.BAR, 0)
+
+	//upfULPDR := tunnel.ULPDR
+
+	for _, child_node := range upfNode.GetChild() {
+		var err error
+		childEndPoint := upfNode.EndPointOfEachChild[child_node.UPFName]
+		FlowDespcription := flowdesc.NewIPFilterRule()
+
+		err = FlowDespcription.SetAction(true) //permit
+		if err != nil {
+			logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+		}
+		err = FlowDespcription.SetDirection(true) //uplink
+		if err != nil {
+			logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+		}
+		err = FlowDespcription.SetDestinationIp(childEndPoint.EndPointIP)
+		if err != nil {
+			logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+		}
+		err = FlowDespcription.SetDestinationPorts(childEndPoint.EndPointPort)
+		if err != nil {
+			logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+		}
+		err = FlowDespcription.SetSourceIp(upfIP)
+		if err != nil {
+			logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+		}
+
+		fmt.Println("[SMF] PFCP port: ", strconv.Itoa(pfcpUdp.PFCP_PORT))
+
+		err = FlowDespcription.SetSourcePorts(strconv.Itoa(pfcpUdp.PFCP_PORT))
+		if err != nil {
+			logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+		}
+		err = FlowDespcription.SetProtocal(0xfc)
+		if err != nil {
+			logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
+		}
+
+		FlowDespcriptionStr, err := FlowDespcription.Encode()
+
+		if err != nil {
+			logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
+		}
+
+		newULPDR := smContext.Tunnel.Node.AddPDR()
+		newULPDR.InitializePDR(smContext)
+		newULPDR.Precedence = 30
+		newULPDR.PDI.SDFFilter = &pfcpType.SDFFilter{
+			Bid:                     false,
+			Fl:                      false,
+			Spi:                     false,
+			Ttc:                     false,
+			Fd:                      true,
+			LengthOfFlowDescription: uint16(len(FlowDespcriptionStr)),
+			FlowDescription:         []byte(FlowDespcriptionStr),
+		}
+
+		pdr_list = append(pdr_list, newULPDR)
+		far_list = append(far_list, newULPDR.FAR)
+		//has change to: Modify existing pdr first, and then create new pdr.
+		// if len(upfULPDR) > idx {
+		// 	// modify existing pdr
+
+		// } else {
+		// 	// create new pdr
+
 	}
 
-	FlowDespcriptionStr, err := FlowDespcription.Encode()
-
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
-	}
-
-	tunnel.ULPDR.State = smf_context.RULE_UPDATE
-	tunnel.ULPDR.PDI.SDFFilter = &pfcpType.SDFFilter{
-		Bid:                     false,
-		Fl:                      false,
-		Spi:                     false,
-		Ttc:                     false,
-		Fd:                      true,
-		LengthOfFlowDescription: uint16(len(FlowDespcriptionStr)),
-		FlowDescription:         []byte(FlowDespcriptionStr),
-	}
 	//PDR2
 
-	FlowDespcription = flowdesc.NewIPFilterRule()
-
-	err = FlowDespcription.SetAction(true) //permit
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-	}
-	err = FlowDespcription.SetDirection(true) //uplink
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-	}
-	err = FlowDespcription.SetDestinationIp("0.0.0.0")
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-	}
-	err = FlowDespcription.SetDestinationPorts("0000")
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-	}
-	err = FlowDespcription.SetSourceIp("0.0.0.0")
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-	}
-	err = FlowDespcription.SetSourcePorts("0000")
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-	}
-	err = FlowDespcription.SetProtocal(0xfc)
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-	}
-
-	FlowDespcriptionStr, err = FlowDespcription.Encode()
-
-	if err != nil {
-		logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
-	}
-
-	newULPDR := smContext.Tunnel.Node.AddPDR()
-	newULPDR.State = smf_context.RULE_INITIAL
-	newULPDR.Precedence = 32
-	newULPDR.PDI = smf_context.PDI{
-		SourceInterface: pfcpType.SourceInterface{
-			InterfaceValue: pfcpType.SourceInterfaceAccess,
-		},
-		LocalFTeid: pfcpType.FTEID{
-			V4:          true,
-			Teid:        tunnel.ULTEID,
-			Ipv4Address: tunnel.Node.UPIPInfo.Ipv4Address,
-		},
-		NetworkInstance: []byte(smContext.Dnn),
-		UEIPAddress: &pfcpType.UEIPAddress{
-			V4:          true,
-			Ipv4Address: smContext.PDUAddress.To4(),
-		},
-	}
-	newULPDR.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
-	newULPDR.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
-	newULPDR.FAR.ApplyAction.Forw = true
-	newULPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
-		DestinationInterface: pfcpType.DestinationInterface{
-			InterfaceValue: pfcpType.DestinationInterfaceCore,
-		},
-		NetworkInstance: []byte(smContext.Dnn),
-	}
-
-	newULPDR.PDI.SDFFilter = &pfcpType.SDFFilter{
-		Bid:                     false,
-		Fl:                      false,
-		Spi:                     false,
-		Ttc:                     false,
-		Fd:                      true,
-		LengthOfFlowDescription: uint16(len(FlowDespcriptionStr)),
-		FlowDescription:         []byte(FlowDespcriptionStr),
-	}
-
 	addr := net.UDPAddr{
-		IP:   smContext.Tunnel.Node.NodeID.NodeIdValue,
+		IP:   upfNodeID.NodeIdValue,
 		Port: pfcpUdp.PFCP_PORT,
 	}
-
-	pdr_list := []*smf_context.PDR{tunnel.ULPDR, newULPDR}
-	far_list := []*smf_context.FAR{newULPDR.FAR}
-	bar_list := []*smf_context.BAR{}
 
 	pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
 	fmt.Println("[SMF] Add Branching Rule msg has been send")

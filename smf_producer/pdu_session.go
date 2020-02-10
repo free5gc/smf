@@ -271,13 +271,8 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate Supi: ", smContext.Supi)
 			fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate NodeID: ", NodeID.ResolveNodeIdToIp().String())
 
-			for upfIP, upfName := range smf_context.SMF_Self().UserPlaneInformation.UPFIPToName {
-
-				fmt.Println("[SMF] UPF Name: ", upfName)
-				fmt.Println("[SMF] UPF IP: ", upfIP)
-			}
-
-			AddBranchingRule(&NodeID, smContext)
+			InitializeUEUplinkRouting(smContext)
+			SetUeRoutingInitializeState(smContext, HasSendPFCPMsg)
 		}
 
 		tunnel.DLPDR.Precedence = 32

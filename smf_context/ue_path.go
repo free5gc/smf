@@ -44,6 +44,18 @@ func (node *UEPathNode) RmbParent(parent string) {
 	node.Parent = parent
 }
 
+func (node *UEPathNode) GetChild() []*UEPathNode {
+
+	child := make([]*UEPathNode, 0)
+	for upfName, upfNode := range node.Neighbors {
+		if upfName != node.Parent {
+			child = append(child, upfNode)
+		}
+	}
+
+	return child
+}
+
 func NewUEPathNode(name string) (node *UEPathNode) {
 	node = &UEPathNode{
 		UPFName:             name,

@@ -164,11 +164,48 @@ func (upf *UPFInformation) AddPDR() (pdr *PDR) {
 	return pdr
 }
 
+func (pdr *PDR) InitializePDR(smContext *SMContext) {
+
+	tunnel := smContext.Tunnel
+	pdr.State = RULE_INITIAL
+	pdr.Precedence = 32
+	pdr.PDI = PDI{
+		SourceInterface: pfcpType.SourceInterface{
+			InterfaceValue: pfcpType.SourceInterfaceAccess,
+		},
+		LocalFTeid: pfcpType.FTEID{
+			V4:          true,
+			Teid:        tunnel.ULTEID,
+			Ipv4Address: tunnel.Node.UPIPInfo.Ipv4Address,
+		},
+		NetworkInstance: []byte(smContext.Dnn),
+		UEIPAddress: &pfcpType.UEIPAddress{
+			V4:          true,
+			Ipv4Address: smContext.PDUAddress.To4(),
+		},
+	}
+	pdr.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
+	pdr.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
+
+	pdr.FAR.InitializeFAR(smContext)
+}
+
 func (upf *UPFInformation) AddFAR() (far *FAR) {
 	far = new(FAR)
 	far.FARID = upf.farID()
 	upf.farPool[far.FARID] = far
 	return far
+}
+
+func (far *FAR) InitializeFAR(smContext *SMContext) {
+
+	far.ApplyAction.Forw = true
+	far.ForwardingParameters = &ForwardingParameters{
+		DestinationInterface: pfcpType.DestinationInterface{
+			InterfaceValue: pfcpType.DestinationInterfaceCore,
+		},
+		NetworkInstance: []byte(smContext.Dnn),
+	}
 }
 
 func (upf *UPFInformation) AddBAR() (bar *BAR) {
