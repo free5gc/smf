@@ -96,3 +96,8 @@ func (upi *UserPlaneInformation) GetUPFIPByName(name string) []byte {
 
 	return upi.UPFs[name].NodeID.NodeIdValue
 }
+
+func (upi *UserPlaneInformation) GetUPFNodeIDByName(name string) pfcpType.NodeID {
+
+	return upi.UPFs[name].NodeID
+}

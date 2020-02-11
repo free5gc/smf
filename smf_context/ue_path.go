@@ -56,6 +56,18 @@ func (node *UEPathNode) GetChild() []*UEPathNode {
 	return child
 }
 
+func (node *UEPathNode) IsLeafNode() bool {
+
+	if len(node.Neighbors) == 1 {
+
+		if _, exist := node.Neighbors[node.Parent]; exist {
+			return true
+		}
+	}
+
+	return false
+}
+
 func NewUEPathNode(name string) (node *UEPathNode) {
 	node = &UEPathNode{
 		UPFName:             name,
@@ -69,9 +81,10 @@ func NewUEPathNode(name string) (node *UEPathNode) {
 //check a given upf name is a branching point or not
 func (uepg *UEPathGraph) IsBranchingPoint(name string) bool {
 
-	for _, node := range uepg.Graph {
-		if node.IsBranchingPoint {
-			return true
+	for _, upfNode := range uepg.Graph {
+
+		if name == upfNode.UPFName {
+			return upfNode.IsBranchingPoint
 		}
 	}
 

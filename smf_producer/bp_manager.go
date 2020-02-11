@@ -61,42 +61,83 @@ func InitializeUEUplinkRouting(smContext *smf_context.SMContext) {
 
 	supi := smContext.Supi
 	ueRoutingGraph := smf_context.SMF_Self().UERoutingGraphs[supi]
-	ANUPFIP := smContext.Tunnel.Node.NodeID.ResolveNodeIdToIp().String()
-	ANUPFName := smf_context.SMF_Self().UserPlaneInformation.UPFIPToName[ANUPFIP]
+	// ANUPFIP := smContext.Tunnel.Node.NodeID.ResolveNodeIdToIp().String()
+	// ANUPFName := smf_context.SMF_Self().UserPlaneInformation.UPFIPToName[ANUPFIP]
 
 	for _, upfNode := range ueRoutingGraph.Graph {
 
 		upfName := upfNode.UPFName
-		if upfName == ANUPFName {
+		fmt.Println("[SMF] Initializing UPF: ", upfName)
+		//if upfName == ANUPFName {
 
-			if ueRoutingGraph.IsBranchingPoint(upfName) {
-				AddBranchingRule(smContext, upfNode)
-			}
+		if upfNode.IsBranchingPoint {
+			AddBranchingRule(smContext, upfNode)
+		} else {
+			AddRoutingRule(smContext, upfNode)
+		}
 
-		} //else {
+		//} //else {
 		// 	pdr = smContext.Tunnel.Node.AddPDR()
 
 		// 	pdr.InitializePDR(smContext)
 
 		// }
 
+		// if ueRoutingGraph.IsBranchingPoint(upfName) {
+		// 	AddBranchingRule(smContext, upfNode)
+		// } else {
+		// 	AddRoutingRule(smContext, upfNode)
+		// }
+
 	}
 }
 
 func AddRoutingRule(smContext *smf_context.SMContext, upfNode *smf_context.UEPathNode) {
+	upfName := upfNode.UPFName
+	upfNodeID := smf_context.GetUserPlaneInformation().GetUPFNodeIDByName(upfName)
 
+	var newULPDR *smf_context.PDR
+	if upfNode.IsLeafNode() {
+		newULPDR = smContext.Tunnel.Node.AddPDR()
+		newULPDR.InitializePDR(smContext)
+
+	} else {
+		newULPDR = smContext.Tunnel.Node.AddPDR()
+		newULPDR.InitializePDR(smContext)
+
+		// has only one child
+		var childIP []byte
+		for _, child_node := range upfNode.GetChild() {
+			childIP = smf_context.GetUserPlaneInformation().GetUPFIPByName(child_node.UPFName)
+		}
+
+		fp := newULPDR.FAR.ForwardingParameters
+		fp.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+		fp.OuterHeaderCreation.Teid = 10 //?
+		fp.OuterHeaderCreation.Ipv4Address = childIP
+	}
+
+	pdr_list := []*smf_context.PDR{newULPDR}
+	far_list := []*smf_context.FAR{newULPDR.FAR}
+	bar_list := []*smf_context.BAR{}
+
+	addr := net.UDPAddr{
+		IP:   upfNodeID.NodeIdValue,
+		Port: pfcpUdp.PFCP_PORT,
+	}
+
+	pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdr_list, far_list, bar_list)
+	fmt.Println("[SMF] Add Routing Rule msg has been send")
 }
 
 func AddBranchingRule(smContext *smf_context.SMContext, upfNode *smf_context.UEPathNode) {
 	upfName := upfNode.UPFName
-	upfNodeID := smf_context.SMF_Self().UserPlaneInformation.UPFs[upfName].NodeID
+	upfNodeID := smf_context.GetUserPlaneInformation().GetUPFNodeIDByName(upfName)
 	upfIP := upfNodeID.ResolveNodeIdToIp().String()
 
 	//tunnel := smContext.Tunnel
 
-	var pdr_list []*smf_context.PDR
-
-	pdr_list = make([]*smf_context.PDR, 0)
+	pdr_list := make([]*smf_context.PDR, 0)
 	far_list := make([]*smf_context.FAR, 0)
 	bar_list := make([]*smf_context.BAR, 0)
 
