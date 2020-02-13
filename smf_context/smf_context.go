@@ -46,7 +46,10 @@ type SMFContext struct {
 	NFManagementClient *Nnrf_NFManagement.APIClient
 	NFDiscoveryClient  *Nnrf_NFDiscovery.APIClient
 
+	//*** For ULCL ** //
 	UserPlaneInformation UserPlaneInformation
+	UERoutingPaths       map[string][]factory.Path
+	UERoutingGraphs      map[string]*UEPathGraph
 }
 
 func AllocUEIP() net.IP {
@@ -122,58 +125,53 @@ func InitSmfContext(config *factory.Config) {
 	SetupNFProfile()
 }
 
-func processUPTopology(upTopology *factory.UserPlaneInformation) {
-	nodePool := make(map[string]*UPNode)
-	upfPool := make(map[string]*UPNode)
-	anPool := make(map[string]*UPNode)
-	for name, node := range upTopology.UPNodes {
-		upNode := new(UPNode)
-		upNode.Type = UPNodeType(node.Type)
-		switch upNode.Type {
-		case UPNODE_AN:
-			upNode.ANIP = net.ParseIP(node.ANIP)
-			anPool[name] = upNode
-		case UPNODE_UPF:
-			ip := net.ParseIP(node.NodeID)
-			switch len(ip) {
-			case net.IPv4len:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType:  pfcpType.NodeIdTypeIpv4Address,
-					NodeIdValue: ip,
-				}
-			case net.IPv6len:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType:  pfcpType.NodeIdTypeIpv4Address,
-					NodeIdValue: ip,
-				}
-			default:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType:  pfcpType.NodeIdTypeFqdn,
-					NodeIdValue: []byte(node.NodeID),
-				}
+func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
+
+	if routingConfig == nil {
+		logger.CtxLog.Infof("Routing Config is nil")
+	}
+
+	logger.CtxLog.Infof("ue routing config Info: Version[%s] Description[%s]",
+		routingConfig.Info.Version, routingConfig.Info.Description)
+
+	UERoutingInfo := routingConfig.UERoutingInfo
+	smfContext.UERoutingPaths = make(map[string][]factory.Path)
+	smfContext.UERoutingGraphs = make(map[string]*UEPathGraph)
+
+	for _, routingInfo := range UERoutingInfo {
+
+		supi := routingInfo.SUPI
+
+		smfContext.UERoutingPaths[supi] = routingInfo.PathList
+	}
+
+	for supi := range smfContext.UERoutingPaths {
+
+		graph := NewUEPathGraph(supi)
+		smfContext.UERoutingGraphs[supi] = graph
+		//graph.PrintGraph()
+	}
+
+}
+
+func PrintSMFUERouting() {
+
+	for supi, paths := range smfContext.UERoutingPaths {
+		fmt.Println("SUPI: ", supi)
+
+		for idx, path := range paths {
+			fmt.Println("Path ", idx, ":")
+			fmt.Println("\tDestIP ", path.DestinationIP)
+			fmt.Println("\tDestPort ", path.DestinationPort)
+			fmt.Printf("\t")
+
+			for _, node := range path.UPF {
+				fmt.Printf("%s->", node)
 			}
-
-			upfPool[name] = upNode
-		default:
-			logger.InitLog.Warningf("invalid UPNodeType: %s\n", upNode.Type)
+			fmt.Printf("\n")
 		}
 
-		nodePool[name] = upNode
 	}
-
-	for _, link := range upTopology.Links {
-		nodeA := nodePool[link.A]
-		nodeB := nodePool[link.B]
-		if nodeA == nil || nodeB == nil {
-			logger.InitLog.Warningf("UPLink [%s] <=> [%s] not establish\n", link.A, link.B)
-			continue
-		}
-		nodeA.Links = append(nodeA.Links, nodeB)
-		nodeB.Links = append(nodeA.Links, nodeB)
-	}
-	smfContext.UserPlaneInformation.UPNodes = nodePool
-	smfContext.UserPlaneInformation.UPFs = upfPool
-	smfContext.UserPlaneInformation.AccessNetwork = anPool
 }
 
 func SMF_Self() *SMFContext {
