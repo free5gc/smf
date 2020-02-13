@@ -61,51 +61,67 @@ func TestRemovePDR(t *testing.T) {
 func TestRemoveFAR(t *testing.T) {
 	var exist bool
 
-	fmt.Println("Before Remove")
-	upf.PrintFARPoolStatus()
+	//fmt.Println("Before Remove")
+	//upf.PrintFARPoolStatus()
 	far := farQueue[0]
 	upf.RemoveFAR(far)
 
-	// exist = upf.CheckFARIDExist(1)
-	// assertEqual(exist, false)
+	exist = upf.CheckFARIDExist(2)
+	assertEqual(exist, false)
 
 	far = farQueue[3]
 	upf.RemoveFAR(far)
 
-	// exist = upf.CheckFARIDExist(4)
-	// assertEqual(exist, false)
+	exist = upf.CheckFARIDExist(8)
+	assertEqual(exist, false)
 	far = farQueue[5]
 	upf.RemoveFAR(far)
 
-	// exist = upf.CheckFARIDExist(6)
-	// assertEqual(exist, false)
-	fmt.Println("After Remove")
-	upf.PrintFARPoolStatus()
+	exist = upf.CheckFARIDExist(12)
+	assertEqual(exist, false)
 
-	fmt.Println("Insert FAR")
+	// fmt.Println("After Remove")
+	// upf.PrintFARPoolStatus()
+
+	//fmt.Println("Insert FAR")
 	upf.AddFAR()
-	upf.PrintFARPoolStatus()
+	//upf.PrintFARPoolStatus()
 
-	exist = upf.CheckFARIDExist(1)
+	exist = upf.CheckFARIDExist(2)
 	assertEqual(exist, true)
 }
 
 func TestRemoveBAR(t *testing.T) {
-	fmt.Println("Before Remove")
-	upf.PrintBARPoolStatus()
+	var exist bool
+
+	// fmt.Println("Before Remove")
+	// upf.PrintBARPoolStatus()
 	bar := barQueue[0]
 	upf.RemoveBAR(bar)
+	exist = upf.CheckBARIDExist(1)
+	assertEqual(exist, false)
+
 	bar = barQueue[3]
 	upf.RemoveBAR(bar)
+	exist = upf.CheckBARIDExist(4)
+	assertEqual(exist, false)
+
 	bar = barQueue[5]
 	upf.RemoveBAR(bar)
-	fmt.Println("After Remove")
-	upf.PrintBARPoolStatus()
+	exist = upf.CheckBARIDExist(6)
+	assertEqual(exist, false)
+
+	// fmt.Println("After Remove")
+	// upf.PrintBARPoolStatus()
 
 	fmt.Println("Insert BAR")
 	upf.AddBAR()
 	upf.AddBAR()
-	upf.PrintBARPoolStatus()
+	exist = upf.CheckBARIDExist(1)
+	assertEqual(exist, true)
+	exist = upf.CheckBARIDExist(4)
+	assertEqual(exist, true)
+	//upf.PrintBARPoolStatus()
 }
 
 func assertEqual(a, b bool) {
