@@ -148,9 +148,9 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 	for supi := range smfContext.UERoutingPaths {
 
 		graph := NewUEPathGraph(supi)
-		smfContext.UERoutingGraphs[supi] = graph
 		graph.FindBranchingPoints()
-		//graph.PrintGraph()
+		smfContext.UERoutingGraphs[supi] = graph
+		graph.PrintGraph()
 	}
 
 }
@@ -177,4 +177,8 @@ func PrintSMFUERouting() {
 
 func SMF_Self() *SMFContext {
 	return &smfContext
+}
+
+func GetUserPlaneInformation() *UserPlaneInformation {
+	return &smfContext.UserPlaneInformation
 }

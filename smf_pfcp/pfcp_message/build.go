@@ -1,6 +1,7 @@
 package pfcp_message
 
 import (
+	"fmt"
 	"net"
 
 	"gofree5gc/lib/pfcp"
@@ -77,6 +78,13 @@ func pdrToCreatePDR(pdr *smf_context.PDR) *pfcp.CreatePDR {
 		UEIPAddress:     pdr.PDI.UEIPAddress,
 	}
 
+	if pdr.PDI.SDFFilter != nil {
+		fmt.Println("[SMF] In pdrToCreatePDR create SDFFilter!")
+		createPDR.PDI.SDFFilter = pdr.PDI.SDFFilter
+	} else {
+		fmt.Println("[SMF] In pdrToCreatePDR no SDFFilter!")
+	}
+
 	createPDR.OuterHeaderRemoval = pdr.OuterHeaderRemoval
 
 	createPDR.FARID = &pfcpType.FARID{
@@ -138,6 +146,13 @@ func pdrToUpdatePDR(pdr *smf_context.PDR) *pfcp.UpdatePDR {
 		UEIPAddress:     pdr.PDI.UEIPAddress,
 	}
 
+	if pdr.PDI.SDFFilter != nil {
+		fmt.Println("[SMF] In pdrToUpdatePDR create SDFFilter!")
+		updatePDR.PDI.SDFFilter = pdr.PDI.SDFFilter
+	} else {
+		fmt.Println("[SMF] In pdrToUpdatePDR no SDFFilter!")
+	}
+
 	updatePDR.OuterHeaderRemoval = pdr.OuterHeaderRemoval
 
 	updatePDR.FARID = &pfcpType.FARID{
@@ -196,6 +211,47 @@ func BuildPfcpSessionEstablishmentRequest(smContext *smf_context.SMContext) (pfc
 
 	msg.CreatePDR = append(msg.CreatePDR, pdrToCreatePDR(smContext.Tunnel.ULPDR))
 	msg.CreateFAR = append(msg.CreateFAR, farToCreateFAR(smContext.Tunnel.ULPDR.FAR))
+
+	msg.PDNType = &pfcpType.PDNType{
+		PdnType: pfcpType.PDNTypeIpv4,
+	}
+
+	return msg, nil
+}
+
+func BuildPfcpSessionEstablishmentRequestForULCL(smContext *smf_context.SMContext, pdr_list []*smf_context.PDR, far_list []*smf_context.FAR, bar_list []*smf_context.BAR) (pfcp.PFCPSessionEstablishmentRequest, error) {
+	msg := pfcp.PFCPSessionEstablishmentRequest{}
+
+	msg.NodeID = &smf_context.SMF_Self().CPNodeID
+
+	isv4 := smf_context.SMF_Self().CPNodeID.NodeIdType == 0
+	msg.CPFSEID = &pfcpType.FSEID{
+		V4:          isv4,
+		V6:          !isv4,
+		Seid:        smContext.LocalSEID,
+		Ipv4Address: smf_context.SMF_Self().CPNodeID.NodeIdValue,
+	}
+
+	msg.CreatePDR = make([]*pfcp.CreatePDR, 0)
+	msg.CreateFAR = make([]*pfcp.CreateFAR, 0)
+
+	for _, pdr := range pdr_list {
+		if pdr.State == smf_context.RULE_INITIAL {
+			msg.CreatePDR = append(msg.CreatePDR, pdrToCreatePDR(pdr))
+		}
+	}
+
+	for _, far := range far_list {
+		if far.State == smf_context.RULE_INITIAL {
+			msg.CreateFAR = append(msg.CreateFAR, farToCreateFAR(far))
+		}
+	}
+
+	for _, bar := range bar_list {
+		if bar.State == smf_context.RULE_INITIAL {
+			msg.CreateBAR = append(msg.CreateBAR, barToCreateBAR(bar))
+		}
+	}
 
 	msg.PDNType = &pfcpType.PDNType{
 		PdnType: pfcpType.PDNTypeIpv4,

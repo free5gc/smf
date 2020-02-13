@@ -1,6 +1,7 @@
 package pfcp_message
 
 import (
+	"fmt"
 	"gofree5gc/lib/pfcp"
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/src/smf/logger"
@@ -121,6 +122,30 @@ func SendPfcpSessionEstablishmentRequest(raddr *net.UDPAddr, ctx *smf_context.SM
 		Body: pfcpMsg,
 	}
 
+	pfcp_udp.SendPfcp(message, raddr)
+}
+
+func SendPfcpSessionEstablishmentRequestForULCL(raddr *net.UDPAddr, ctx *smf_context.SMContext, pdr_list []*smf_context.PDR, far_list []*smf_context.FAR, bar_list []*smf_context.BAR) {
+	pfcpMsg, err := BuildPfcpSessionEstablishmentRequestForULCL(ctx, pdr_list, far_list, bar_list)
+	if err != nil {
+		logger.PfcpLog.Errorf("Build PFCP Session Establishment Request failed: %v", err)
+		return
+	}
+
+	message := pfcp.Message{
+		Header: pfcp.Header{
+			Version:         pfcp.PfcpVersion,
+			MP:              1,
+			S:               pfcp.SEID_PRESENT,
+			MessageType:     pfcp.PFCP_SESSION_ESTABLISHMENT_REQUEST,
+			SEID:            0,
+			SequenceNumber:  getSeqNumber(),
+			MessagePriority: 0,
+		},
+		Body: pfcpMsg,
+	}
+
+	fmt.Println("[SMF] Send SendPfcpSessionEstablishmentRequestForULCL")
 	pfcp_udp.SendPfcp(message, raddr)
 }
 

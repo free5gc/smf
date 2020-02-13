@@ -1,6 +1,7 @@
 package smf_producer
 
 import (
+	"fmt"
 	"gofree5gc/lib/Namf_Communication"
 	"gofree5gc/lib/Nsmf_PDUSession"
 	"gofree5gc/lib/http_wrapper"
@@ -131,7 +132,10 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		IP:   smContext.Tunnel.Node.NodeID.NodeIdValue,
 		Port: pfcpUdp.PFCP_PORT,
 	}
+
+	fmt.Println("[SMF] Send PFCP to UPF IP: ", addr.IP.String())
 	pfcp_message.SendPfcpSessionEstablishmentRequest(&addr, smContext)
+	AddUEUpLinkRoutingInfo(smContext)
 
 	smf_consumer.SendNFDiscoveryServingAMF(smContext)
 
@@ -152,6 +156,9 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 			smContext.CommunicationClient = Namf_Communication.NewAPIClient(communicationConf)
 		}
 	}
+
+	//check branching points
+	//smf_producer.CheckBranchingPoint()
 }
 
 func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMessage, smContextRef string, body models.UpdateSmContextRequest) (seqNum uint32, resBody models.UpdateSmContextResponse) {
@@ -256,6 +263,19 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		} else {
 			tunnel.DLPDR.State = smf_context.RULE_UPDATE
 		}
+
+		NodeID := tunnel.Node.NodeID
+		if CheckUEUpLinkRoutingStatus(smContext) == Uninitialized {
+			fmt.Println("[SMF] ======= In HandlePDUSessionSMContextUpdate ======")
+			fmt.Println("[SMF] Initialized UE UPLink Routing !")
+			fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate Supi: ", smContext.Supi)
+			fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate NodeID: ", NodeID.ResolveNodeIdToIp().String())
+
+			// TODO: Setup Uplink Routing
+			// InitializeUEUplinkRouting(smContext)
+			SetUeRoutingInitializeState(smContext, HasSendPFCPMsg)
+		}
+
 		tunnel.DLPDR.Precedence = 32
 		tunnel.DLPDR.PDI = smf_context.PDI{
 			SourceInterface: pfcpType.SourceInterface{

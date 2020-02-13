@@ -10,14 +10,13 @@ import (
 
 func Handle() {
 
-	ResponseQueue := smf_message.NewQueue()
 	for {
 		select {
 		case msg, ok := <-smf_message.SmfChannel:
 			if ok {
 				switch msg.Event {
 				case smf_message.PFCPMessage:
-					smf_pfcp.Dispatch(msg.PFCPRequest, ResponseQueue)
+					smf_pfcp.Dispatch(msg.PFCPRequest)
 				case smf_message.PDUSessionSMContextCreate:
 					smf_producer.HandlePDUSessionSMContextCreate(msg.ResponseChan, msg.HTTPRequest.Body.(models.PostSmContextsRequest))
 				case smf_message.PDUSessionSMContextUpdate:
@@ -25,7 +24,7 @@ func Handle() {
 					seqNum, ResBody := smf_producer.HandlePDUSessionSMContextUpdate(
 						msg.ResponseChan, smContextRef, msg.HTTPRequest.Body.(models.UpdateSmContextRequest))
 
-					ResponseQueue.PutItem(
+					smf_message.RspQueue.PutItem(
 						seqNum, msg.ResponseChan, ResBody)
 				case smf_message.PDUSessionSMContextRelease:
 					smContextRef := msg.HTTPRequest.Params["smContextRef"]

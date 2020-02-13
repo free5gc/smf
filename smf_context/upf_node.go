@@ -44,8 +44,15 @@ type UPFInformation struct {
 
 func AddUPF(nodeId *pfcpType.NodeID) (upf *UPFInformation) {
 	upf = new(UPFInformation)
-	key, _ := generateUpfIdFromNodeId(nodeId)
+	key, err := generateUpfIdFromNodeId(nodeId)
+
+	if err != nil {
+		fmt.Println("[SMF] Error occurs while calling AddUPF")
+		return
+	}
+
 	upfPool[key] = upf
+	fmt.Println("[SMF] Add UPF!")
 	upf.NodeID = *nodeId
 	upf.pdrPool = make(map[uint16]*PDR)
 	upf.farPool = make(map[uint32]*FAR)
@@ -95,11 +102,21 @@ func RemoveUPFNodeByNodeId(nodeId pfcpType.NodeID) {
 
 func SelectUPFByDnn(Dnn string) *UPFInformation {
 	for _, upf := range upfPool {
+		fmt.Println("[SMF] In SelectUPFByDnn UPFInfo.NetworkInstance: ", string(upf.UPIPInfo.NetworkInstance))
 		if !upf.UPIPInfo.Assoni || string(upf.UPIPInfo.NetworkInstance) == Dnn {
 			return upf
 		}
 	}
+
+	fmt.Println("[SMF] ", upfPool)
+
+	fmt.Println("[SMF] In SelectUPFByDnn")
 	return nil
+}
+
+func (upf *UPFInformation) GetUPFIP() string {
+
+	return upf.NodeID.ResolveNodeIdToIp().String()
 }
 
 func (upf *UPFInformation) pdrID() uint16 {
@@ -147,11 +164,48 @@ func (upf *UPFInformation) AddPDR() (pdr *PDR) {
 	return pdr
 }
 
+func (pdr *PDR) InitializePDR(smContext *SMContext) {
+
+	tunnel := smContext.Tunnel
+	pdr.State = RULE_INITIAL
+	pdr.Precedence = 32
+	pdr.PDI = PDI{
+		SourceInterface: pfcpType.SourceInterface{
+			InterfaceValue: pfcpType.SourceInterfaceAccess,
+		},
+		LocalFTeid: pfcpType.FTEID{
+			V4:          true,
+			Teid:        tunnel.ULTEID,
+			Ipv4Address: tunnel.Node.UPIPInfo.Ipv4Address,
+		},
+		NetworkInstance: []byte(smContext.Dnn),
+		UEIPAddress: &pfcpType.UEIPAddress{
+			V4:          true,
+			Ipv4Address: smContext.PDUAddress.To4(),
+		},
+	}
+	pdr.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
+	pdr.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
+
+	pdr.FAR.InitializeFAR(smContext)
+}
+
 func (upf *UPFInformation) AddFAR() (far *FAR) {
 	far = new(FAR)
 	far.FARID = upf.farID()
 	upf.farPool[far.FARID] = far
 	return far
+}
+
+func (far *FAR) InitializeFAR(smContext *SMContext) {
+
+	far.ApplyAction.Forw = true
+	far.ForwardingParameters = &ForwardingParameters{
+		DestinationInterface: pfcpType.DestinationInterface{
+			InterfaceValue: pfcpType.DestinationInterfaceCore,
+		},
+		NetworkInstance: []byte(smContext.Dnn),
+	}
 }
 
 func (upf *UPFInformation) AddBAR() (bar *BAR) {

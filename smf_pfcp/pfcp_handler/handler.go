@@ -68,6 +68,7 @@ func HandlePfcpAssociationSetupResponse(msg *pfcpUdp.Message) {
 		if req.UserPlaneIPResourceInformation != nil {
 			upf := smf_context.AddUPF(req.NodeID)
 			upf.UPIPInfo = *req.UserPlaneIPResourceInformation
+			fmt.Println("[SMF] UPF IP: ", upf.GetUPFIP())
 			logger.PfcpLog.Infof("UPF[%s]", upf.UPIPInfo.NetworkInstance)
 		}
 	}
@@ -169,15 +170,17 @@ func HandlePfcpSessionEstablishmentResponse(msg *pfcpUdp.Message) {
 		if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 			logger.PfcpLog.Warnf("%v", rspData.Cause)
 		}
+
 	}
 }
 
-func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message, HttpResponseQueue *smf_message.ResponseQueue) {
+func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 	pfcpRsp := msg.PfcpMessage.Body.(pfcp.PFCPSessionModificationResponse)
 
 	SEID := msg.PfcpMessage.Header.SEID
 	seqNum := msg.PfcpMessage.Header.SequenceNumber
 
+	HttpResponseQueue := smf_message.RspQueue
 	if HttpResponseQueue.CheckItemExist(seqNum) {
 		if pfcpRsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
 			resQueueItem := HttpResponseQueue.GetItem(seqNum)

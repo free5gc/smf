@@ -10,9 +10,16 @@ type UEPathGraph struct {
 }
 
 type UEPathNode struct {
-	UPFName          string
-	Neighbors        map[string]*UEPathNode
-	IsBranchingPoint bool
+	UPFName             string
+	Parent              string
+	Neighbors           map[string]*UEPathNode
+	IsBranchingPoint    bool
+	EndPointOfEachChild map[string]*UEPathEndPoint
+}
+
+type UEPathEndPoint struct {
+	EndPointIP   string
+	EndPointPort string
 }
 
 func (node *UEPathNode) AddNeighbor(neighbor *UEPathNode) {
@@ -23,13 +30,65 @@ func (node *UEPathNode) AddNeighbor(neighbor *UEPathNode) {
 	}
 }
 
+//Add End Point Info to of child node to the map "EndPointOfEachChild"
+//If the node is leaf node, it will add the end point info for itself name.
+func (node *UEPathNode) AddEndPointOfChild(neighbor *UEPathNode, EndPoint *UEPathEndPoint) {
+
+	if _, exist := node.EndPointOfEachChild[neighbor.UPFName]; !exist {
+		node.EndPointOfEachChild[neighbor.UPFName] = EndPoint
+	}
+}
+
+func (node *UEPathNode) RmbParent(parent string) {
+
+	node.Parent = parent
+}
+
+func (node *UEPathNode) GetChild() []*UEPathNode {
+
+	child := make([]*UEPathNode, 0)
+	for upfName, upfNode := range node.Neighbors {
+		if upfName != node.Parent {
+			child = append(child, upfNode)
+		}
+	}
+
+	return child
+}
+
+func (node *UEPathNode) IsLeafNode() bool {
+
+	if len(node.Neighbors) == 1 {
+
+		if _, exist := node.Neighbors[node.Parent]; exist {
+			return true
+		}
+	}
+
+	return false
+}
+
 func NewUEPathNode(name string) (node *UEPathNode) {
 	node = &UEPathNode{
-		UPFName:          name,
-		Neighbors:        make(map[string]*UEPathNode),
-		IsBranchingPoint: false,
+		UPFName:             name,
+		Neighbors:           make(map[string]*UEPathNode),
+		EndPointOfEachChild: make(map[string]*UEPathEndPoint),
+		IsBranchingPoint:    false,
 	}
 	return
+}
+
+//check a given upf name is a branching point or not
+func (uepg *UEPathGraph) IsBranchingPoint(name string) bool {
+
+	for _, upfNode := range uepg.Graph {
+
+		if name == upfNode.UPFName {
+			return upfNode.IsBranchingPoint
+		}
+	}
+
+	return false
 }
 
 func (uepg *UEPathGraph) PrintGraph() {
@@ -38,12 +97,25 @@ func (uepg *UEPathGraph) PrintGraph() {
 	for _, node := range uepg.Graph {
 		fmt.Println("\tUPF: ")
 		fmt.Println("\t\t", node.UPFName)
+
 		fmt.Println("\tBranching Point: ")
 		fmt.Println("\t\t", node.IsBranchingPoint)
+
+		fmt.Println("\tParent: ")
+		fmt.Println("\t\t", node.Parent)
+
 		fmt.Println("\tNeighbors: ")
 		for neighbor_name := range node.Neighbors {
 
 			fmt.Println("\t\t", neighbor_name)
+		}
+
+		fmt.Println("\tEndPoint Of Child: ")
+		for child_name, ep := range node.EndPointOfEachChild {
+
+			fmt.Println("\t\t", child_name)
+			fmt.Println("\t\tDestination IP: ", ep.EndPointIP)
+			fmt.Println("\t\tDestination Port: ", ep.EndPointPort)
 		}
 	}
 }
@@ -61,6 +133,11 @@ func NewUEPathGraph(SUPI string) (UEPGraph *UEPathGraph) {
 
 	for _, path := range paths {
 		upperBound := len(path.UPF) - 1
+
+		pathEndPoint := &UEPathEndPoint{
+			EndPointIP:   path.DestinationIP,
+			EndPointPort: path.DestinationPort,
+		}
 		for idx, node_name := range path.UPF {
 
 			var ue_node *UEPathNode
@@ -86,6 +163,7 @@ func NewUEPathGraph(SUPI string) (UEPGraph *UEPathGraph) {
 
 				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddNeighbor(child_node)
+				ue_node.AddEndPointOfChild(child_node, pathEndPoint)
 
 			case upperBound:
 				parent_name := path.UPF[idx-1]
@@ -98,6 +176,8 @@ func NewUEPathGraph(SUPI string) (UEPGraph *UEPathGraph) {
 
 				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddNeighbor(parent_node)
+				ue_node.AddEndPointOfChild(ue_node, pathEndPoint)
+				ue_node.RmbParent(parent_name)
 			default:
 				child_name := path.UPF[idx+1]
 
@@ -117,7 +197,9 @@ func NewUEPathGraph(SUPI string) (UEPGraph *UEPathGraph) {
 
 				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddNeighbor(child_node)
+				ue_node.AddEndPointOfChild(child_node, pathEndPoint)
 				ue_node.AddNeighbor(parent_node)
+				ue_node.RmbParent(parent_name)
 			}
 
 		}
