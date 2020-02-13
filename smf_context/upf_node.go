@@ -31,6 +31,7 @@ type UPFInformation struct {
 	barPool         map[uint8]*BAR
 	urrPool         map[uint32]*URR
 	qerPool         map[uint32]*QER
+	teidPool        map[uint32]bool
 	pdrCount        uint16
 	farCount        uint32
 	barCount        uint8
@@ -78,8 +79,9 @@ func generateUpfIdFromNodeId(nodeId *pfcpType.NodeID) (string, error) {
 }
 
 func (upf *UPFInformation) GenerateTEID() uint32 {
-	upf.TEIDCount++
-	return upf.TEIDCount
+	id := uint32(upf.GetValidID(TEIDType))
+	upf.teidPool[id] = true
+	return id
 }
 
 func RetrieveUPFNodeByNodeId(nodeId pfcpType.NodeID) (upf *UPFInformation) {
@@ -282,8 +284,17 @@ func (upf *UPFInformation) GetValidID(idType IDType) (id int) {
 		}
 
 		id = int(upf.barCount)
-	}
 
+	case TEIDType:
+		for {
+			upf.TEIDCount++
+			if _, exist := upf.teidPool[upf.TEIDCount]; !exist { // valid id
+				break
+			}
+		}
+
+		id = int(upf.TEIDCount)
+	}
 	return
 }
 
