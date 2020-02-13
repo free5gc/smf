@@ -374,19 +374,16 @@ func (upf *UPF) PrintBARPoolStatus() {
 }
 
 func (upf *UPF) CheckPDRIDExist(id int) (exist bool) {
-
 	_, exist = upf.pdrPool[uint16(id)]
 	return
 }
 
 func (upf *UPF) CheckFARIDExist(id int) (exist bool) {
-
 	_, exist = upf.farPool[uint32(id)]
 	return
 }
 
 func (upf *UPF) CheckBARIDExist(id int) (exist bool) {
-
 	_, exist = upf.barPool[uint8(id)]
 	return
 }
