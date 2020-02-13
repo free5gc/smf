@@ -61,7 +61,8 @@ type SMContext struct {
 	OldPduSessionId int32
 	HoState         models.HoState
 
-	PDUAddress net.IP
+	PDUAddress             net.IP
+	SelectedPDUSessionType uint8
 
 	// Client
 	SMPolicyClient      *Npcf_SMPolicyControl.APIClient

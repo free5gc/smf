@@ -3,6 +3,7 @@ package smf_context
 import (
 	"gofree5gc/lib/nas"
 	"gofree5gc/lib/nas/nasMessage"
+	"gofree5gc/lib/nas/nasType"
 	// "gofree5gc/lib/nas/nasType"
 )
 
@@ -27,6 +28,14 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	pDUSessionEstablishmentAccept.SessionAMBR.SetUnitForSessionAMBRForDownlink(10)
 	pDUSessionEstablishmentAccept.SessionAMBR.SetUnitForSessionAMBRForUplink(10)
 	pDUSessionEstablishmentAccept.SessionAMBR.SetLen(uint8(len(pDUSessionEstablishmentAccept.SessionAMBR.Octet)))
+
+	if smContext.PDUAddress != nil {
+		var pDUAddressBuffer [12]uint8
+		copy(pDUAddressBuffer[:], smContext.PDUAddress)
+		pDUSessionEstablishmentAccept.PDUAddress = nasType.NewPDUAddress(nasMessage.PDUSessionEstablishmentAcceptPDUAddressType)
+		pDUSessionEstablishmentAccept.PDUAddress.SetPDUSessionTypeValue(smContext.SelectedPDUSessionType)
+		pDUSessionEstablishmentAccept.PDUAddress.SetPDUAddressInformation(pDUAddressBuffer)
+	}
 
 	// pDUSessionEstablishmentAccept.AuthorizedQosFlowDescriptions = nasType.NewAuthorizedQosFlowDescriptions(nasMessage.PDUSessionEstablishmentAcceptAuthorizedQosFlowDescriptionsType)
 	// pDUSessionEstablishmentAccept.AuthorizedQosFlowDescriptions.SetLen(6)
