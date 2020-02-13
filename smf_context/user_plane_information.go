@@ -49,20 +49,6 @@ func AllocateUPFID() {
 	}
 }
 
-func AllocateUPFID() {
-	UPFsID := smfContext.UserPlaneInformation.UPFsID
-	UPFsIPtoID := smfContext.UserPlaneInformation.UPFsIPtoID
-
-	for up_name, up_node := range smfContext.UserPlaneInformation.UPFs {
-		upfid := uuid.New().ID()
-		upfip := up_node.NodeID.ResolveNodeIdToIp().String()
-
-		UPFsID[up_name] = upfid
-		UPFsIPtoID[upfip] = upfid
-
-	}
-}
-
 func processUPTopology(upTopology *factory.UserPlaneInformation) {
 	nodePool := make(map[string]*UPNode)
 	upfPool := make(map[string]*UPNode)

@@ -143,11 +143,9 @@ func (upf *UPF) pdrID() (pdrID uint16, err error) {
 	}
 
 	if upf.pdrIdReuseQueue.IsEmpty() {
-
 		id := upf.GetValidID(PDRType)
 		pdrID = uint16(id)
 	} else {
-
 		id, err := upf.pdrIdReuseQueue.Pop()
 
 		if err != nil {
@@ -344,7 +342,6 @@ func (upf *UPF) GetValidID(idType IDType) (id int) {
 		}
 
 		id = int(upf.barCount)
-
 	case TEIDType:
 		for {
 			upf.TEIDCount++

@@ -27,7 +27,6 @@ func NewIDQueue(idType IDType) (idQueue *IDQueue) {
 }
 
 func (q *IDQueue) Push(item int) {
-
 	q.Queue = append(q.Queue, item)
 }
 
