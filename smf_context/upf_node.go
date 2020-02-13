@@ -129,7 +129,7 @@ func (upf *UPFInformation) pdrID() (pdrID uint16) {
 		pdrID = uint16(id)
 	} else {
 
-		id, err := upf.farIdReuseQueue.Pop()
+		id, err := upf.pdrIdReuseQueue.Pop()
 
 		if err != nil {
 			fmt.Println(err)
@@ -314,4 +314,22 @@ func (upf *UPFInformation) PrintBARPoolStatus() {
 	for k := range upf.barPool {
 		fmt.Println("BAR ID: ", k, " using")
 	}
+}
+
+func (upf *UPFInformation) CheckPDRIDExist(id int) (exist bool) {
+
+	_, exist = upf.pdrPool[uint16(id)]
+	return
+}
+
+func (upf *UPFInformation) CheckFARIDExist(id int) (exist bool) {
+
+	_, exist = upf.farPool[uint32(id)]
+	return
+}
+
+func (upf *UPFInformation) CheckBARIDExist(id int) (exist bool) {
+
+	_, exist = upf.barPool[uint8(id)]
+	return
 }
