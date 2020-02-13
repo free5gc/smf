@@ -271,7 +271,8 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate Supi: ", smContext.Supi)
 			fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate NodeID: ", NodeID.ResolveNodeIdToIp().String())
 
-			InitializeUEUplinkRouting(smContext)
+			// TODO: Setup Uplink Routing
+			// InitializeUEUplinkRouting(smContext)
 			SetUeRoutingInitializeState(smContext, HasSendPFCPMsg)
 		}
 
