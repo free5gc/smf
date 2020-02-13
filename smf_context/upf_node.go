@@ -37,9 +37,9 @@ type UPFInformation struct {
 	urrCount        uint32
 	qerCount        uint32
 	TEIDCount       uint32
-	pdrIdReuseQueue []uint16
-	farIdReuseQueue []uint32
-	barIdReuseQueue []uint8
+	pdrIdReuseQueue *IDQueue
+	farIdReuseQueue *IDQueue
+	barIdReuseQueue *IDQueue
 }
 
 func AddUPF(nodeId *pfcpType.NodeID) (upf *UPFInformation) {
@@ -59,9 +59,9 @@ func AddUPF(nodeId *pfcpType.NodeID) (upf *UPFInformation) {
 	upf.barPool = make(map[uint8]*BAR)
 	upf.qerPool = make(map[uint32]*QER)
 	upf.urrPool = make(map[uint32]*URR)
-	upf.pdrIdReuseQueue = make([]uint16, 0)
-	upf.farIdReuseQueue = make([]uint32, 0)
-	upf.barIdReuseQueue = make([]uint8, 0)
+	upf.pdrIdReuseQueue = NewIDQueue(PDRType)
+	upf.farIdReuseQueue = NewIDQueue(FARType)
+	upf.barIdReuseQueue = NewIDQueue(BARType)
 
 	return
 }
@@ -119,41 +119,60 @@ func (upf *UPFInformation) GetUPFIP() string {
 	return upf.NodeID.ResolveNodeIdToIp().String()
 }
 
-func (upf *UPFInformation) pdrID() uint16 {
+func (upf *UPFInformation) pdrID() (pdrID uint16) {
 
-	if len(upf.pdrIdReuseQueue) == 0 {
-		upf.pdrCount++
-		return upf.pdrCount
+	if upf.pdrIdReuseQueue.IsEmpty() {
+
+		id := upf.GetValidID(PDRType)
+		pdrID = uint16(id)
 	} else {
-		pdrID := upf.pdrIdReuseQueue[0]
-		upf.pdrIdReuseQueue = upf.pdrIdReuseQueue[1:]
-		return pdrID
+
+		id, err := upf.farIdReuseQueue.Pop()
+
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		pdrID = uint16(id)
 	}
 
+	return
 }
 
-func (upf *UPFInformation) farID() uint32 {
+func (upf *UPFInformation) farID() (farID uint32) {
 
-	if len(upf.farIdReuseQueue) == 0 {
-		upf.farCount++
-		return upf.farCount
+	if upf.farIdReuseQueue.IsEmpty() {
+
+		id := upf.GetValidID(FARType)
+		farID = uint32(id)
 	} else {
-		farID := upf.farIdReuseQueue[0]
-		upf.farIdReuseQueue = upf.farIdReuseQueue[1:]
-		return farID
+		id, err := upf.farIdReuseQueue.Pop()
+
+		if err != nil {
+			fmt.Println(err)
+		}
+		farID = uint32(id)
 	}
+
+	return
 }
 
-func (upf *UPFInformation) barID() uint8 {
+func (upf *UPFInformation) barID() (barID uint8) {
 
-	if len(upf.barIdReuseQueue) == 0 {
-		upf.barCount++
-		return upf.barCount
+	if upf.barIdReuseQueue.IsEmpty() {
+
+		id := upf.GetValidID(BARType)
+		barID = uint8(id)
 	} else {
-		barID := upf.barIdReuseQueue[0]
-		upf.barIdReuseQueue = upf.barIdReuseQueue[1:]
-		return barID
+		id, err := upf.barIdReuseQueue.Pop()
+
+		if err != nil {
+			fmt.Println(err)
+		}
+		barID = uint8(id)
 	}
+
+	return
 }
 
 func (upf *UPFInformation) AddPDR() (pdr *PDR) {
@@ -217,32 +236,55 @@ func (upf *UPFInformation) AddBAR() (bar *BAR) {
 
 func (upf *UPFInformation) RemovePDR(pdr *PDR) {
 
-	upf.RemovePDRID(pdr.PDRID)
+	upf.pdrIdReuseQueue.Push(int(pdr.PDRID))
 	delete(upf.pdrPool, pdr.PDRID)
 }
 
 func (upf *UPFInformation) RemoveFAR(far *FAR) {
 
-	upf.RemoveFARID(far.FARID)
+	upf.farIdReuseQueue.Push(int(far.FARID))
 	delete(upf.farPool, far.FARID)
 }
 
 func (upf *UPFInformation) RemoveBAR(bar *BAR) {
 
-	upf.RemoveBARID(bar.BARID)
+	upf.barIdReuseQueue.Push(int(bar.BARID))
 	delete(upf.barPool, bar.BARID)
 }
 
-func (upf *UPFInformation) RemovePDRID(PDRID uint16) {
-	upf.pdrIdReuseQueue = append(upf.pdrIdReuseQueue, PDRID)
-}
+func (upf *UPFInformation) GetValidID(idType IDType) (id int) {
 
-func (upf *UPFInformation) RemoveFARID(FARID uint32) {
-	upf.farIdReuseQueue = append(upf.farIdReuseQueue, FARID)
-}
+	switch idType {
+	case PDRType:
+		for {
+			upf.pdrCount++
+			if _, exist := upf.pdrPool[upf.pdrCount]; !exist { // valid id
+				break
+			}
+		}
 
-func (upf *UPFInformation) RemoveBARID(BARID uint8) {
-	upf.barIdReuseQueue = append(upf.barIdReuseQueue, BARID)
+		id = int(upf.pdrCount)
+	case FARType:
+		for {
+			upf.farCount++
+			if _, exist := upf.farPool[upf.farCount]; !exist { // valid id
+				break
+			}
+		}
+
+		id = int(upf.farCount)
+	case BARType:
+		for {
+			upf.barCount++
+			if _, exist := upf.barPool[upf.barCount]; !exist { // valid id
+				break
+			}
+		}
+
+		id = int(upf.barCount)
+	}
+
+	return
 }
 
 func (upf *UPFInformation) PrintPDRPoolStatus() {
