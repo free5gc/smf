@@ -78,7 +78,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	establishmentRequest := m.PDUSessionEstablishmentRequest
 
-	smContext.PDUSessionID = int32(establishmentRequest.PDUSessionID.Octet)
+	smContext.HandlePDUSessionEstablishmentRequest(establishmentRequest)
 	smContext.SetCreateData(createData)
 	response.JsonData = smContext.BuildCreatedData()
 	rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
