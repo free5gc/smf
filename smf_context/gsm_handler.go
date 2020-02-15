@@ -13,7 +13,7 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 		smContext.SelectedPDUSessionType = req.PDUSessionType.GetPDUSessionTypeValue()
 	} else {
 		// Default to IPv4
-		smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4
+		//smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4
 	}
 }
 
