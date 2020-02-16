@@ -7,14 +7,14 @@ import (
 	"reflect"
 )
 
-var upfPool map[string]*UPFInformation
+var upfPool map[string]*UPF
 
 func init() {
-	upfPool = make(map[string]*UPFInformation)
+	upfPool = make(map[string]*UPF)
 }
 
 type UPTunnel struct {
-	Node  *UPFInformation
+	Node  *UPF
 	ULPDR *PDR
 	DLPDR *PDR
 
@@ -22,7 +22,7 @@ type UPTunnel struct {
 	DLTEID uint32
 }
 
-type UPFInformation struct {
+type UPF struct {
 	NodeID   pfcpType.NodeID
 	UPIPInfo pfcpType.UserPlaneIPResourceInformation
 
@@ -43,8 +43,8 @@ type UPFInformation struct {
 	barIdReuseQueue *IDQueue
 }
 
-func AddUPF(nodeId *pfcpType.NodeID) (upf *UPFInformation) {
-	upf = new(UPFInformation)
+func AddUPF(nodeId *pfcpType.NodeID) (upf *UPF) {
+	upf = new(UPF)
 	key, err := generateUpfIdFromNodeId(nodeId)
 
 	if err != nil {
@@ -79,13 +79,13 @@ func generateUpfIdFromNodeId(nodeId *pfcpType.NodeID) (string, error) {
 	}
 }
 
-func (upf *UPFInformation) GenerateTEID() uint32 {
+func (upf *UPF) GenerateTEID() uint32 {
 	id := uint32(upf.GetValidID(TEIDType))
 	upf.teidPool[id] = true
 	return id
 }
 
-func RetrieveUPFNodeByNodeId(nodeId pfcpType.NodeID) (upf *UPFInformation) {
+func RetrieveUPFNodeByNodeId(nodeId pfcpType.NodeID) (upf *UPF) {
 	for _, upf := range upfPool {
 		if reflect.DeepEqual(upf.NodeID, nodeId) {
 			return upf
@@ -103,7 +103,7 @@ func RemoveUPFNodeByNodeId(nodeId pfcpType.NodeID) {
 	}
 }
 
-func SelectUPFByDnn(Dnn string) *UPFInformation {
+func SelectUPFByDnn(Dnn string) *UPF {
 	for _, upf := range upfPool {
 		fmt.Println("[SMF] In SelectUPFByDnn UPFInfo.NetworkInstance: ", string(upf.UPIPInfo.NetworkInstance))
 		if !upf.UPIPInfo.Assoni || string(upf.UPIPInfo.NetworkInstance) == Dnn {
@@ -117,12 +117,12 @@ func SelectUPFByDnn(Dnn string) *UPFInformation {
 	return nil
 }
 
-func (upf *UPFInformation) GetUPFIP() string {
+func (upf *UPF) GetUPFIP() string {
 
 	return upf.NodeID.ResolveNodeIdToIp().String()
 }
 
-func (upf *UPFInformation) pdrID() (pdrID uint16) {
+func (upf *UPF) pdrID() (pdrID uint16) {
 
 	if upf.pdrIdReuseQueue.IsEmpty() {
 
@@ -142,7 +142,7 @@ func (upf *UPFInformation) pdrID() (pdrID uint16) {
 	return
 }
 
-func (upf *UPFInformation) farID() (farID uint32) {
+func (upf *UPF) farID() (farID uint32) {
 
 	if upf.farIdReuseQueue.IsEmpty() {
 
@@ -160,7 +160,7 @@ func (upf *UPFInformation) farID() (farID uint32) {
 	return
 }
 
-func (upf *UPFInformation) barID() (barID uint8) {
+func (upf *UPF) barID() (barID uint8) {
 
 	if upf.barIdReuseQueue.IsEmpty() {
 
@@ -178,7 +178,7 @@ func (upf *UPFInformation) barID() (barID uint8) {
 	return
 }
 
-func (upf *UPFInformation) AddPDR() (pdr *PDR) {
+func (upf *UPF) AddPDR() (pdr *PDR) {
 	pdr = new(PDR)
 	pdr.PDRID = uint16(upf.pdrID())
 	upf.pdrPool[pdr.PDRID] = pdr
@@ -212,7 +212,7 @@ func (pdr *PDR) InitializePDR(smContext *SMContext) {
 	pdr.FAR.InitializeFAR(smContext)
 }
 
-func (upf *UPFInformation) AddFAR() (far *FAR) {
+func (upf *UPF) AddFAR() (far *FAR) {
 	far = new(FAR)
 	far.FARID = upf.farID()
 	upf.farPool[far.FARID] = far
@@ -230,32 +230,32 @@ func (far *FAR) InitializeFAR(smContext *SMContext) {
 	}
 }
 
-func (upf *UPFInformation) AddBAR() (bar *BAR) {
+func (upf *UPF) AddBAR() (bar *BAR) {
 	bar = new(BAR)
 	bar.BARID = uint8(upf.barID())
 	upf.barPool[bar.BARID] = bar
 	return bar
 }
 
-func (upf *UPFInformation) RemovePDR(pdr *PDR) {
+func (upf *UPF) RemovePDR(pdr *PDR) {
 
 	upf.pdrIdReuseQueue.Push(int(pdr.PDRID))
 	delete(upf.pdrPool, pdr.PDRID)
 }
 
-func (upf *UPFInformation) RemoveFAR(far *FAR) {
+func (upf *UPF) RemoveFAR(far *FAR) {
 
 	upf.farIdReuseQueue.Push(int(far.FARID))
 	delete(upf.farPool, far.FARID)
 }
 
-func (upf *UPFInformation) RemoveBAR(bar *BAR) {
+func (upf *UPF) RemoveBAR(bar *BAR) {
 
 	upf.barIdReuseQueue.Push(int(bar.BARID))
 	delete(upf.barPool, bar.BARID)
 }
 
-func (upf *UPFInformation) GetValidID(idType IDType) (id int) {
+func (upf *UPF) GetValidID(idType IDType) (id int) {
 
 	switch idType {
 	case PDRType:
@@ -299,37 +299,37 @@ func (upf *UPFInformation) GetValidID(idType IDType) (id int) {
 	return
 }
 
-func (upf *UPFInformation) PrintPDRPoolStatus() {
+func (upf *UPF) PrintPDRPoolStatus() {
 	for k := range upf.pdrPool {
 		fmt.Println("PDR ID: ", k, " using")
 	}
 }
 
-func (upf *UPFInformation) PrintFARPoolStatus() {
+func (upf *UPF) PrintFARPoolStatus() {
 	for k := range upf.farPool {
 		fmt.Println("FAR ID: ", k, " using")
 	}
 }
 
-func (upf *UPFInformation) PrintBARPoolStatus() {
+func (upf *UPF) PrintBARPoolStatus() {
 	for k := range upf.barPool {
 		fmt.Println("BAR ID: ", k, " using")
 	}
 }
 
-func (upf *UPFInformation) CheckPDRIDExist(id int) (exist bool) {
+func (upf *UPF) CheckPDRIDExist(id int) (exist bool) {
 
 	_, exist = upf.pdrPool[uint16(id)]
 	return
 }
 
-func (upf *UPFInformation) CheckFARIDExist(id int) (exist bool) {
+func (upf *UPF) CheckFARIDExist(id int) (exist bool) {
 
 	_, exist = upf.farPool[uint32(id)]
 	return
 }
 
-func (upf *UPFInformation) CheckBARIDExist(id int) (exist bool) {
+func (upf *UPF) CheckBARIDExist(id int) (exist bool) {
 
 	_, exist = upf.barPool[uint8(id)]
 	return

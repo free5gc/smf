@@ -3,7 +3,7 @@ package smf_context
 import "github.com/google/uuid"
 
 type DataPathNode struct {
-	UPF  *UPFInformation
+	UPF  *UPF
 	Prev *DataPathLink
 	Next map[uuid.UUID]*DataPathLink
 }

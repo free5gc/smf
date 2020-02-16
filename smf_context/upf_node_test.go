@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-var upf *smf_context.UPFInformation
+var upf *smf_context.UPF
 var pdrQueue []*smf_context.PDR
 var farQueue []*smf_context.FAR
 var barQueue []*smf_context.BAR

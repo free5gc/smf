@@ -27,13 +27,13 @@ const (
 
 // UPNode represent the user plane node
 type UPNode struct {
-	Type           UPNodeType
-	NodeID         pfcpType.NodeID
-	UPResourceIP   net.IP
-	ANIP           net.IP
-	Dnn            string
-	Links          []*UPNode
-	UPFInformation *UPFInformation
+	Type         UPNodeType
+	NodeID       pfcpType.NodeID
+	UPResourceIP net.IP
+	ANIP         net.IP
+	Dnn          string
+	Links        []*UPNode
+	UPF          *UPF
 }
 
 func AllocateUPFID() {
