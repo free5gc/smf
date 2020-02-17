@@ -1,11 +1,12 @@
 package smf_context
 
-import "github.com/google/uuid"
-
 type DataPathNode struct {
 	UPF  *UPF
 	Prev *DataPathLink
-	Next map[uuid.UUID]*DataPathLink
+	Next map[string]*DataPathLink //uuid to DataPathLink
+
+	//for UE Routing Topology
+	IsBranchingPoint bool
 }
 
 type DataPathLink struct {

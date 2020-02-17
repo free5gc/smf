@@ -154,7 +154,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	fmt.Println("[SMF] Send PFCP to UPF IP: ", addr.IP.String())
 	pfcp_message.SendPfcpSessionEstablishmentRequest(&addr, smContext)
-	AddUEUpLinkRoutingInfo(smContext)
+	//AddUEUpLinkRoutingInfo(smContext)
 
 	smf_consumer.SendNFDiscoveryServingAMF(smContext)
 
@@ -283,17 +283,17 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			tunnel.DLPDR.State = smf_context.RULE_UPDATE
 		}
 
-		NodeID := tunnel.Node.NodeID
-		if CheckUEUpLinkRoutingStatus(smContext) == Uninitialized {
-			fmt.Println("[SMF] ======= In HandlePDUSessionSMContextUpdate ======")
-			fmt.Println("[SMF] Initialized UE UPLink Routing !")
-			fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate Supi: ", smContext.Supi)
-			fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate NodeID: ", NodeID.ResolveNodeIdToIp().String())
+		//NodeID := tunnel.Node.NodeID
+		// if CheckUEUpLinkRoutingStatus(smContext) == Uninitialized {
+		// 	fmt.Println("[SMF] ======= In HandlePDUSessionSMContextUpdate ======")
+		// 	fmt.Println("[SMF] Initialized UE UPLink Routing !")
+		// 	fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate Supi: ", smContext.Supi)
+		// 	fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate NodeID: ", NodeID.ResolveNodeIdToIp().String())
 
-			// TODO: Setup Uplink Routing
-			// InitializeUEUplinkRouting(smContext)
-			SetUeRoutingInitializeState(smContext, HasSendPFCPMsg)
-		}
+		// 	// TODO: Setup Uplink Routing
+		// 	// InitializeUEUplinkRouting(smContext)
+		// 	SetUeRoutingInitializeState(smContext, HasSendPFCPMsg)
+		// }
 
 		tunnel.DLPDR.Precedence = 32
 		tunnel.DLPDR.PDI = smf_context.PDI{

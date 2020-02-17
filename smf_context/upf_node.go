@@ -45,7 +45,7 @@ type UPF struct {
 
 func AddUPF(nodeId *pfcpType.NodeID) (upf *UPF) {
 	upf = new(UPF)
-	key, err := generateUpfIdFromNodeId(nodeId)
+	key, err := GetUPFIDByNodeID(nodeId)
 
 	if err != nil {
 		fmt.Println("[SMF] Error occurs while calling AddUPF")
