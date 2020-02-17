@@ -14,8 +14,8 @@ type UserPlaneInformation struct {
 	UPFs          map[string]*UPNode
 	AccessNetwork map[string]*UPNode
 	UPFIPToName   map[string]string
-	UPFsID        map[string]uint32 // name to id
-	UPFsIPtoID    map[string]uint32 // ip->id table, for speed optimization
+	UPFsID        map[string]string // name to id
+	UPFsIPtoID    map[string]string // ip->id table, for speed optimization
 }
 
 type UPNodeType string
@@ -40,11 +40,11 @@ func AllocateUPFID() {
 	UPFsID := smfContext.UserPlaneInformation.UPFsID
 	UPFsIPtoID := smfContext.UserPlaneInformation.UPFsIPtoID
 
-	for up_name, up_node := range smfContext.UserPlaneInformation.UPFs {
-		upfid := uuid.New().ID()
-		upfip := up_node.NodeID.ResolveNodeIdToIp().String()
+	for upf_name, upf_node := range smfContext.UserPlaneInformation.UPFs {
+		upfid := uuid.New().String()
+		upfip := upf_node.NodeID.ResolveNodeIdToIp().String()
 
-		UPFsID[up_name] = upfid
+		UPFsID[upf_name] = upfid
 		UPFsIPtoID[upfip] = upfid
 
 	}
@@ -108,8 +108,8 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 	smfContext.UserPlaneInformation.UPFs = upfPool
 	smfContext.UserPlaneInformation.AccessNetwork = anPool
 	smfContext.UserPlaneInformation.UPFIPToName = upfIpMap
-	smfContext.UserPlaneInformation.UPFsID = make(map[string]uint32)
-	smfContext.UserPlaneInformation.UPFsIPtoID = make(map[string]uint32)
+	smfContext.UserPlaneInformation.UPFsID = make(map[string]string)
+	smfContext.UserPlaneInformation.UPFsIPtoID = make(map[string]string)
 }
 
 func (upi *UserPlaneInformation) GetUPFIPByName(name string) []byte {
