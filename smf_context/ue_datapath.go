@@ -2,6 +2,7 @@ package smf_context
 
 import (
 	"fmt"
+	"gofree5gc/src/smf/logger"
 )
 
 type UEDataPathGraph struct {
@@ -29,31 +30,31 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 
 func (uepg *UEDataPathGraph) PrintGraph() {
 
-	fmt.Println("SUPI: ", uepg.SUPI)
+	logger.CtxLog.Traceln("SUPI: ", uepg.SUPI)
 	upi := smfContext.UserPlaneInformation
 
 	for _, node := range uepg.Graph {
-		fmt.Println("\tUPF Name: ")
+		logger.CtxLog.Traceln("\tUPF Name: ")
 		node_ip := node.GetNodeIP()
-		fmt.Println("\t\t", upi.GetUPFNameByIp(node_ip))
+		logger.CtxLog.Traceln("\t\t", upi.GetUPFNameByIp(node_ip))
 
-		fmt.Println("\tBranching Point: ")
-		fmt.Println("\t\t", node.IsBranchingPoint)
+		logger.CtxLog.Traceln("\tBranching Point: ")
+		logger.CtxLog.Traceln("\t\t", node.IsBranchingPoint)
 
 		if node.Prev != nil {
-			fmt.Println("\tParent Name: ")
+			logger.CtxLog.Traceln("\tParent Name: ")
 			parent_ip := node.Prev.To.GetNodeIP()
-			fmt.Println("\t\t", upi.GetUPFNameByIp(parent_ip))
+			logger.CtxLog.Traceln("\t\t", upi.GetUPFNameByIp(parent_ip))
 		}
 
 		if node.Next != nil {
-			fmt.Println("\tChildren Name: ")
+			logger.CtxLog.Traceln("\tChildren Name: ")
 			for _, child_link := range node.Next {
 
 				child_ip := child_link.To.GetNodeIP()
-				fmt.Println("\t\t", upi.GetUPFNameByIp(child_ip))
-				fmt.Println("\t\tDestination IP: ", child_link.DestinationIP)
-				fmt.Println("\t\tDestination Port: ", child_link.DestinationPort)
+				logger.CtxLog.Traceln("\t\t", upi.GetUPFNameByIp(child_ip))
+				logger.CtxLog.Traceln("\t\tDestination IP: ", child_link.DestinationIP)
+				logger.CtxLog.Traceln("\t\tDestination Port: ", child_link.DestinationPort)
 			}
 		}
 	}
