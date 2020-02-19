@@ -46,7 +46,6 @@ func AllocateUPFID() {
 
 		UPFsID[upf_name] = upfid
 		UPFsIPtoID[upfip] = upfid
-
 	}
 }
 
@@ -119,9 +118,9 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 	smfContext.UserPlaneInformation.UPFsIPtoID = make(map[string]string)
 }
 
-func (upi *UserPlaneInformation) GetUPFIPByName(name string) []byte {
+func (upi *UserPlaneInformation) GetUPFNameByIp(ip string) string {
 
-	return upi.UPFs[name].NodeID.NodeIdValue
+	return upi.UPFIPToName[ip]
 }
 
 func (upi *UserPlaneInformation) GetUPFNodeIDByName(name string) pfcpType.NodeID {

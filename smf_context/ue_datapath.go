@@ -107,23 +107,28 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 func (uepg *UEDataPathGraph) PrintGraph() {
 
 	fmt.Println("SUPI: ", uepg.SUPI)
+	upi := smfContext.UserPlaneInformation
+
 	for _, node := range uepg.Graph {
-		fmt.Println("\tUPF IP: ")
-		fmt.Println("\t\t", node.GetNodeIP())
+		fmt.Println("\tUPF Name: ")
+		node_ip := node.GetNodeIP()
+		fmt.Println("\t\t", upi.GetUPFNameByIp(node_ip))
 
 		fmt.Println("\tBranching Point: ")
 		fmt.Println("\t\t", node.IsBranchingPoint)
 
 		if node.Prev != nil {
-			fmt.Println("\tParent IP: ")
-			fmt.Println("\t\t", node.Prev.To.GetNodeIP())
+			fmt.Println("\tParent Name: ")
+			parent_ip := node.Prev.To.GetNodeIP()
+			fmt.Println("\t\t", upi.GetUPFNameByIp(parent_ip))
 		}
 
 		if node.Next != nil {
-			fmt.Println("\tChildren IP: ")
+			fmt.Println("\tChildren Name: ")
 			for _, child_link := range node.Next {
 
-				fmt.Println("\t\t", child_link.To.GetNodeIP())
+				child_ip := child_link.To.GetNodeIP()
+				fmt.Println("\t\t", upi.GetUPFNameByIp(child_ip))
 				fmt.Println("\t\tDestination IP: ", child_link.DestinationIP)
 				fmt.Println("\t\tDestination Port: ", child_link.DestinationPort)
 			}
