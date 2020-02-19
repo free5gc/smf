@@ -23,7 +23,6 @@ func (node *DataPathNode) AddChild(child *DataPathNode) (err error) {
 			To: child,
 		}
 		node.Next[child_id] = child_link
-
 	}
 
 	return
@@ -31,7 +30,7 @@ func (node *DataPathNode) AddChild(child *DataPathNode) (err error) {
 
 func (node *DataPathNode) AddParent(parent *DataPathNode) (err error) {
 
-	parent_ip := parent.UPF.NodeID.ResolveNodeIdToIp().String()
+	parent_ip := parent.GetNodeIP()
 	var exist bool
 
 	if _, exist = smfContext.UserPlaneInformation.UPFsIPtoID[parent_ip]; !exist {
@@ -69,7 +68,7 @@ func (node *DataPathNode) AddDestinationOfChild(child *DataPathNode, Dest *DataP
 }
 
 func (node *DataPathNode) GetUPFID() (id string, err error) {
-	node_ip := node.UPF.NodeID.ResolveNodeIdToIp().String()
+	node_ip := node.GetNodeIP()
 	var exist bool
 
 	if id, exist = smfContext.UserPlaneInformation.UPFsIPtoID[node_ip]; !exist {
@@ -81,50 +80,11 @@ func (node *DataPathNode) GetUPFID() (id string, err error) {
 
 }
 
-// func (node *UEPathNode) AddEndPointOfChild(neighbor *UEPathNode, EndPoint *UEPathEndPoint) {
+func (node *DataPathNode) GetNodeIP() (ip string) {
 
-// 	if _, exist := node.EndPointOfEachChild[neighbor.UPFName]; !exist {
-// 		node.EndPointOfEachChild[neighbor.UPFName] = EndPoint
-// 	}
-// }
-
-// func (node *UEPathNode) RmbParent(parent string) {
-
-// 	node.Parent = parent
-// }
-
-// //Add End Point Info to of child node to the map "EndPointOfEachChild"
-// //If the node is leaf node, it will add the end point info for itself name.
-// func (node *UEPathNode) AddEndPointOfChild(neighbor *UEPathNode, EndPoint *UEPathEndPoint) {
-
-// 	if _, exist := node.EndPointOfEachChild[neighbor.UPFName]; !exist {
-// 		node.EndPointOfEachChild[neighbor.UPFName] = EndPoint
-// 	}
-// }
-
-// func (node *UEPathNode) GetChild() []*UEPathNode {
-
-// 	child := make([]*UEPathNode, 0)
-// 	for upfName, upfNode := range node.Neighbors {
-// 		if upfName != node.Parent {
-// 			child = append(child, upfNode)
-// 		}
-// 	}
-
-// 	return child
-// }
-
-// func (node *UEPathNode) IsLeafNode() bool {
-
-// 	if len(node.Neighbors) == 1 {
-
-// 		if _, exist := node.Neighbors[node.Parent]; exist {
-// 			return true
-// 		}
-// 	}
-
-// 	return false
-// }
+	ip = node.UPF.NodeID.ResolveNodeIdToIp().String()
+	return
+}
 
 func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 
@@ -135,11 +95,6 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 		return nil, err
 	}
 
-	fmt.Println("In NewUEDataPathNode: ")
-	fmt.Println("New node name: ", name)
-	fmt.Println(upNodes)
-	fmt.Println("New node IP: ", upNodes[name].NodeID.ResolveNodeIdToIp().String())
-
 	node = &DataPathNode{
 		UPF:              upNodes[name].UPF,
 		Next:             make(map[string]*DataPathLink),
@@ -149,39 +104,26 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 	return
 }
 
-//check a given upf name is a branching point or not
-// func (uepg *UEPathGraph) IsBranchingPoint(name string) bool {
-
-// 	for _, upfNode := range uepg.Graph {
-
-// 		if name == upfNode.UPFName {
-// 			return upfNode.IsBranchingPoint
-// 		}
-// 	}
-
-// 	return false
-// }
-
 func (uepg *UEDataPathGraph) PrintGraph() {
 
 	fmt.Println("SUPI: ", uepg.SUPI)
 	for _, node := range uepg.Graph {
 		fmt.Println("\tUPF IP: ")
-		fmt.Println("\t\t", node.UPF.NodeID.ResolveNodeIdToIp().String())
+		fmt.Println("\t\t", node.GetNodeIP())
 
-		// fmt.Println("\tBranching Point: ")
-		// fmt.Println("\t\t", node.IsBranchingPoint)
+		fmt.Println("\tBranching Point: ")
+		fmt.Println("\t\t", node.IsBranchingPoint)
 
 		if node.Prev != nil {
 			fmt.Println("\tParent IP: ")
-			fmt.Println("\t\t", node.Prev.To.UPF.NodeID.ResolveNodeIdToIp().String())
+			fmt.Println("\t\t", node.Prev.To.GetNodeIP())
 		}
 
 		if node.Next != nil {
 			fmt.Println("\tChildren IP: ")
 			for _, child_link := range node.Next {
 
-				fmt.Println("\t\t", child_link.To.UPF.NodeID.ResolveNodeIdToIp().String())
+				fmt.Println("\t\t", child_link.To.GetNodeIP())
 				fmt.Println("\t\tDestination IP: ", child_link.DestinationIP)
 				fmt.Println("\t\tDestination Port: ", child_link.DestinationPort)
 			}
@@ -294,60 +236,77 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 	return
 }
 
-// func (uepg *UEPathGraph) FindBranchingPoints() {
-// 	//BFS algo implementation
-// 	const (
-// 		WHITE int = 0
-// 		GREY  int = 1
-// 		BLACK int = 2
-// 	)
+func (uepg *UEDataPathGraph) FindBranchingPoints() {
+	//BFS algo implementation
+	const (
+		WHITE int = 0
+		GREY  int = 1
+		BLACK int = 2
+	)
 
-// 	num_of_nodes := len(uepg.Graph)
+	num_of_nodes := len(uepg.Graph)
 
-// 	color := make(map[string]int)
-// 	distance := make(map[string]int)
-// 	queue := make(chan *UEPathNode, num_of_nodes)
+	color := make(map[string]int)
+	distance := make(map[string]int)
+	queue := make(chan *DataPathNode, num_of_nodes)
 
-// 	for _, node := range uepg.Graph {
+	for _, node := range uepg.Graph {
 
-// 		color[node.UPFName] = WHITE
-// 		distance[node.UPFName] = num_of_nodes + 1
-// 	}
+		node_id, _ := node.GetUPFID()
+		color[node_id] = WHITE
+		distance[node_id] = num_of_nodes + 1
+	}
 
-// 	cur_idx := 0 // start point
-// 	for j := 0; j < num_of_nodes; j++ {
+	cur_idx := 0 // start point
+	for j := 0; j < num_of_nodes; j++ {
 
-// 		cur_name := uepg.Graph[cur_idx].UPFName
-// 		if color[cur_name] == WHITE {
-// 			color[cur_name] = GREY
-// 			distance[cur_name] = 0
+		node_id, _ := uepg.Graph[cur_idx].GetUPFID()
+		if color[node_id] == WHITE {
+			color[node_id] = GREY
+			distance[node_id] = 0
 
-// 			queue <- uepg.Graph[cur_idx]
-// 			for len(queue) > 0 {
-// 				node := <-queue
-// 				branchingCount := 0
-// 				for neighbor_name, neighbor_node := range node.Neighbors {
+			queue <- uepg.Graph[cur_idx]
+			for len(queue) > 0 {
+				node := <-queue
+				branchingCount := 0
+				for child_id, child_link := range node.Next {
 
-// 					if color[neighbor_name] == WHITE {
-// 						color[neighbor_name] = GREY
-// 						distance[neighbor_name] = distance[cur_name] + 1
-// 						queue <- neighbor_node
-// 					}
+					if color[child_id] == WHITE {
+						color[child_id] = GREY
+						distance[child_id] = distance[node_id] + 1
+						queue <- child_link.To
+					}
 
-// 					if color[neighbor_name] == WHITE || color[neighbor_name] == GREY {
-// 						branchingCount += 1
-// 					}
-// 				}
+					if color[child_id] == WHITE || color[child_id] == GREY {
+						branchingCount += 1
+					}
+				}
 
-// 				if branchingCount >= 2 {
-// 					node.IsBranchingPoint = true
-// 				}
-// 				color[node.UPFName] = BLACK
-// 			}
-// 		}
+				if node.Prev != nil {
 
-// 		//Keep finding other connected components
-// 		cur_idx = j
-// 	}
+					parent := node.Prev.To
+					parent_id, _ := node.Prev.To.GetUPFID()
 
-// }
+					if color[parent_id] == WHITE {
+						color[parent_id] = GREY
+						distance[parent_id] = distance[node_id] + 1
+						queue <- parent
+					}
+
+					if color[parent_id] == WHITE || color[parent_id] == GREY {
+						branchingCount += 1
+					}
+				}
+
+				if branchingCount >= 2 {
+					node.IsBranchingPoint = true
+				}
+				color[node_id] = BLACK
+			}
+		}
+
+		//Keep finding other connected components
+		cur_idx = j
+	}
+
+}

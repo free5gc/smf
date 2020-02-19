@@ -102,9 +102,10 @@ func (smf *SMF) FilterCli(c *cli.Context) (args []string) {
 
 func (smf *SMF) Start() {
 	smf_context.InitSmfContext(&factory.SmfConfig)
-	smf_context.InitSMFUERouting(&factory.UERoutingConfig)
 	//allocate id for each upf
 	smf_context.AllocateUPFID()
+	smf_context.InitSMFUERouting(&factory.UERoutingConfig)
+
 	initLog.Infoln("Server started")
 	router := gin.Default()
 
