@@ -107,7 +107,8 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 
 	//Initialize each UPF
 	for _, upf_node := range upfPool {
-		AddUPF(&upf_node.NodeID)
+		upf := AddUPF(&upf_node.NodeID)
+		upf_node.UPF = upf
 	}
 
 	smfContext.UserPlaneInformation.UPNodes = nodePool

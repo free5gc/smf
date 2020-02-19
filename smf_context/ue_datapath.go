@@ -35,7 +35,7 @@ func (node *DataPathNode) AddParent(parent *DataPathNode) (err error) {
 	var exist bool
 
 	if _, exist = smfContext.UserPlaneInformation.UPFsIPtoID[parent_ip]; !exist {
-		err = fmt.Errorf("UPNode IP ", parent_ip, " doesn't exist in smfcfg.conf, please sync the config files!")
+		err = fmt.Errorf("UPNode IP %s doesn't exist in smfcfg.conf, please sync the config files!", parent_ip)
 		return err
 	}
 
@@ -73,7 +73,7 @@ func (node *DataPathNode) GetUPFID() (id string, err error) {
 	var exist bool
 
 	if id, exist = smfContext.UserPlaneInformation.UPFsIPtoID[node_ip]; !exist {
-		err = fmt.Errorf("UPNode IP ", node_ip, " doesn't exist in smfcfg.conf, please sync the config files!")
+		err = fmt.Errorf("UPNode IP %s doesn't exist in smfcfg.conf, please sync the config files!", node_ip)
 		return "", err
 	}
 
@@ -131,7 +131,7 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 	upNodes := smfContext.UserPlaneInformation.UPNodes
 
 	if _, exist := upNodes[name]; !exist {
-		err = fmt.Errorf("UPNode ", name, " isn't exist in smfcfg.conf, but in UERouting.yaml!")
+		err = fmt.Errorf("UPNode %s isn't exist in smfcfg.conf, but in UERouting.yaml!", name)
 		return nil, err
 	}
 
@@ -172,15 +172,19 @@ func (uepg *UEDataPathGraph) PrintGraph() {
 		// fmt.Println("\tBranching Point: ")
 		// fmt.Println("\t\t", node.IsBranchingPoint)
 
-		fmt.Println("\tParent IP: ")
-		fmt.Println("\t\t", node.Prev.To.UPF.NodeID.ResolveNodeIdToIp().String())
+		if node.Prev != nil {
+			fmt.Println("\tParent IP: ")
+			fmt.Println("\t\t", node.Prev.To.UPF.NodeID.ResolveNodeIdToIp().String())
+		}
 
-		fmt.Println("\tChildren IP: ")
-		for _, child_link := range node.Next {
+		if node.Next != nil {
+			fmt.Println("\tChildren IP: ")
+			for _, child_link := range node.Next {
 
-			fmt.Println("\t\t", child_link.To.UPF.NodeID.ResolveNodeIdToIp().String())
-			fmt.Println("\t\tDestination IP: ", child_link.DestinationIP)
-			fmt.Println("\t\tDestination Port: ", child_link.DestinationPort)
+				fmt.Println("\t\t", child_link.To.UPF.NodeID.ResolveNodeIdToIp().String())
+				fmt.Println("\t\tDestination IP: ", child_link.DestinationIP)
+				fmt.Println("\t\tDestination Port: ", child_link.DestinationPort)
+			}
 		}
 	}
 }
