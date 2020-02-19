@@ -66,7 +66,9 @@ func HandlePfcpAssociationSetupResponse(msg *pfcpUdp.Message) {
 		}
 
 		if req.UserPlaneIPResourceInformation != nil {
-			upf := smf_context.AddUPF(req.NodeID)
+			//upf := smf_context.AddUPF(req.NodeID)
+			upf := smf_context.RetrieveUPFNodeByNodeId(*req.NodeID)
+			upf.UPFStatus = smf_context.AssociatedSetUpSuccess
 			upf.UPIPInfo = *req.UserPlaneIPResourceInformation
 			fmt.Println("[SMF] UPF IP: ", upf.GetUPFIP())
 			logger.PfcpLog.Infof("UPF[%s]", upf.UPIPInfo.NetworkInstance)

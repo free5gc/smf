@@ -20,9 +20,13 @@ func init() {
 	barQueue = make([]*smf_context.BAR, 0)
 
 	for i := 0; i < 6; i++ {
-		pdrQueue = append(pdrQueue, upf.AddPDR())
-		farQueue = append(farQueue, upf.AddFAR())
-		barQueue = append(barQueue, upf.AddBAR())
+		pdr, _ := upf.AddPDR()
+		far, _ := upf.AddFAR()
+		bar, _ := upf.AddBAR()
+
+		pdrQueue = append(pdrQueue, pdr)
+		farQueue = append(farQueue, far)
+		barQueue = append(barQueue, bar)
 	}
 
 }

@@ -22,9 +22,18 @@ type UPTunnel struct {
 	DLTEID uint32
 }
 
+type UPFStatus int
+
+const (
+	NotAssociated          UPFStatus = 0
+	AssociatedSettingUp    UPFStatus = 1
+	AssociatedSetUpSuccess UPFStatus = 2
+)
+
 type UPF struct {
-	NodeID   pfcpType.NodeID
-	UPIPInfo pfcpType.UserPlaneIPResourceInformation
+	NodeID    pfcpType.NodeID
+	UPIPInfo  pfcpType.UserPlaneIPResourceInformation
+	UPFStatus UPFStatus
 
 	pdrPool         map[uint16]*PDR
 	farPool         map[uint32]*FAR
@@ -45,7 +54,7 @@ type UPF struct {
 
 func AddUPF(nodeId *pfcpType.NodeID) (upf *UPF) {
 	upf = new(UPF)
-	key, err := GetUPFIDByNodeID(nodeId)
+	key, err := generateUpfIdFromNodeId(nodeId)
 
 	if err != nil {
 		fmt.Println("[SMF] Error occurs while calling AddUPF")
@@ -54,6 +63,7 @@ func AddUPF(nodeId *pfcpType.NodeID) (upf *UPF) {
 
 	upfPool[key] = upf
 	fmt.Println("[SMF] Add UPF!")
+	upf.UPFStatus = NotAssociated
 	upf.NodeID = *nodeId
 	upf.pdrPool = make(map[uint16]*PDR)
 	upf.farPool = make(map[uint32]*FAR)
@@ -79,10 +89,14 @@ func generateUpfIdFromNodeId(nodeId *pfcpType.NodeID) (string, error) {
 	}
 }
 
-func (upf *UPF) GenerateTEID() uint32 {
-	id := uint32(upf.GetValidID(TEIDType))
+func (upf *UPF) GenerateTEID() (id uint32, err error) {
+	if upf.UPFStatus != AssociatedSetUpSuccess {
+		err := fmt.Errorf("UPF didn't Setup!")
+		return 0, err
+	}
+	id = uint32(upf.GetValidID(TEIDType))
 	upf.teidPool[id] = true
-	return id
+	return
 }
 
 func RetrieveUPFNodeByNodeId(nodeId pfcpType.NodeID) (upf *UPF) {
@@ -122,7 +136,11 @@ func (upf *UPF) GetUPFIP() string {
 	return upf.NodeID.ResolveNodeIdToIp().String()
 }
 
-func (upf *UPF) pdrID() (pdrID uint16) {
+func (upf *UPF) pdrID() (pdrID uint16, err error) {
+	if upf.UPFStatus != AssociatedSetUpSuccess {
+		err := fmt.Errorf("UPF didn't Setup!")
+		return 0, err
+	}
 
 	if upf.pdrIdReuseQueue.IsEmpty() {
 
@@ -142,7 +160,11 @@ func (upf *UPF) pdrID() (pdrID uint16) {
 	return
 }
 
-func (upf *UPF) farID() (farID uint32) {
+func (upf *UPF) farID() (farID uint32, err error) {
+	if upf.UPFStatus != AssociatedSetUpSuccess {
+		err := fmt.Errorf("UPF didn't Setup!")
+		return 0, err
+	}
 
 	if upf.farIdReuseQueue.IsEmpty() {
 
@@ -160,7 +182,11 @@ func (upf *UPF) farID() (farID uint32) {
 	return
 }
 
-func (upf *UPF) barID() (barID uint8) {
+func (upf *UPF) barID() (barID uint8, err error) {
+	if upf.UPFStatus != AssociatedSetUpSuccess {
+		err := fmt.Errorf("UPF didn't Setup!")
+		return 0, err
+	}
 
 	if upf.barIdReuseQueue.IsEmpty() {
 
@@ -178,12 +204,46 @@ func (upf *UPF) barID() (barID uint8) {
 	return
 }
 
-func (upf *UPF) AddPDR() (pdr *PDR) {
+func (upf *UPF) AddPDR() (pdr *PDR, err error) {
+
+	if upf.UPFStatus != AssociatedSetUpSuccess {
+		err = fmt.Errorf("UPF didn't Setup!")
+		return nil, err
+	}
+
 	pdr = new(PDR)
-	pdr.PDRID = uint16(upf.pdrID())
+	PDRID, _ := upf.pdrID()
+	pdr.PDRID = uint16(PDRID)
 	upf.pdrPool[pdr.PDRID] = pdr
-	pdr.FAR = upf.AddFAR()
-	return pdr
+	pdr.FAR, _ = upf.AddFAR()
+	return pdr, nil
+}
+
+func (upf *UPF) AddFAR() (far *FAR, err error) {
+
+	if upf.UPFStatus != AssociatedSetUpSuccess {
+		err = fmt.Errorf("UPF didn't Setup!")
+		return nil, err
+	}
+
+	far = new(FAR)
+	far.FARID, _ = upf.farID()
+	upf.farPool[far.FARID] = far
+	return far, nil
+}
+
+func (upf *UPF) AddBAR() (bar *BAR, err error) {
+
+	if upf.UPFStatus != AssociatedSetUpSuccess {
+		err = fmt.Errorf("UPF didn't Setup!")
+		return nil, err
+	}
+
+	bar = new(BAR)
+	BARID, _ := upf.barID()
+	bar.BARID = uint8(BARID)
+	upf.barPool[bar.BARID] = bar
+	return bar, nil
 }
 
 func (pdr *PDR) InitializePDR(smContext *SMContext) {
@@ -212,13 +272,6 @@ func (pdr *PDR) InitializePDR(smContext *SMContext) {
 	pdr.FAR.InitializeFAR(smContext)
 }
 
-func (upf *UPF) AddFAR() (far *FAR) {
-	far = new(FAR)
-	far.FARID = upf.farID()
-	upf.farPool[far.FARID] = far
-	return far
-}
-
 func (far *FAR) InitializeFAR(smContext *SMContext) {
 
 	far.ApplyAction.Forw = true
@@ -230,29 +283,35 @@ func (far *FAR) InitializeFAR(smContext *SMContext) {
 	}
 }
 
-func (upf *UPF) AddBAR() (bar *BAR) {
-	bar = new(BAR)
-	bar.BARID = uint8(upf.barID())
-	upf.barPool[bar.BARID] = bar
-	return bar
-}
+func (upf *UPF) RemovePDR(pdr *PDR) (err error) {
 
-func (upf *UPF) RemovePDR(pdr *PDR) {
+	if upf.UPFStatus != AssociatedSetUpSuccess {
+		err = fmt.Errorf("UPF didn't Setup!")
+		return err
+	}
 
 	upf.pdrIdReuseQueue.Push(int(pdr.PDRID))
 	delete(upf.pdrPool, pdr.PDRID)
+	return nil
 }
 
-func (upf *UPF) RemoveFAR(far *FAR) {
+func (upf *UPF) RemoveFAR(far *FAR) (err error) {
 
 	upf.farIdReuseQueue.Push(int(far.FARID))
 	delete(upf.farPool, far.FARID)
+	return nil
 }
 
-func (upf *UPF) RemoveBAR(bar *BAR) {
+func (upf *UPF) RemoveBAR(bar *BAR) (err error) {
+
+	if upf.UPFStatus != AssociatedSetUpSuccess {
+		err = fmt.Errorf("UPF didn't Setup!")
+		return err
+	}
 
 	upf.barIdReuseQueue.Push(int(bar.BARID))
 	delete(upf.barPool, bar.BARID)
+	return nil
 }
 
 func (upf *UPF) GetValidID(idType IDType) (id int) {

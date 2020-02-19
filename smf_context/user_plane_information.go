@@ -1,12 +1,12 @@
 package smf_context
 
 import (
-	"fmt"
-	"github.com/google/uuid"
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/src/smf/factory"
 	"gofree5gc/src/smf/logger"
 	"net"
+
+	"github.com/google/uuid"
 )
 
 type UserPlaneInformation struct {
@@ -48,21 +48,6 @@ func AllocateUPFID() {
 		UPFsIPtoID[upfip] = upfid
 
 	}
-}
-
-func GetUPFIDByNodeID(nodeId *pfcpType.NodeID) (id string, err error) {
-
-	var exist bool
-	upf_ip := nodeId.ResolveNodeIdToIp().String()
-
-	if id, exist = smfContext.UserPlaneInformation.UPFsIPtoID[upf_ip]; !exist {
-
-		err = fmt.Errorf("IP ", upf_ip, " doesn't exist in cfg!")
-		return "", err
-	}
-
-	return id, nil
-
 }
 
 func processUPTopology(upTopology *factory.UserPlaneInformation) {
@@ -119,6 +104,12 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 		nodeA.Links = append(nodeA.Links, nodeB)
 		nodeB.Links = append(nodeA.Links, nodeB)
 	}
+
+	//Initialize each UPF
+	for _, upf_node := range upfPool {
+		AddUPF(&upf_node.NodeID)
+	}
+
 	smfContext.UserPlaneInformation.UPNodes = nodePool
 	smfContext.UserPlaneInformation.UPFs = upfPool
 	smfContext.UserPlaneInformation.AccessNetwork = anPool

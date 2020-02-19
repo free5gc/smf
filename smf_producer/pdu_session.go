@@ -96,9 +96,9 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	tunnel := smContext.Tunnel
 	// Establish UP
 
-	tunnel.ULTEID = tunnel.Node.GenerateTEID()
+	tunnel.ULTEID, _ = tunnel.Node.GenerateTEID()
 
-	tunnel.ULPDR = smContext.Tunnel.Node.AddPDR()
+	tunnel.ULPDR, _ = smContext.Tunnel.Node.AddPDR()
 	tunnel.ULPDR.Precedence = 32
 	tunnel.ULPDR.PDI = smf_context.PDI{
 		SourceInterface: pfcpType.SourceInterface{
@@ -264,7 +264,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			tunnel.DLPDR.FAR.ApplyAction.Nocp = true
 
 			if tunnel.DLPDR.FAR.BAR == nil {
-				tunnel.DLPDR.FAR.BAR = smContext.Tunnel.Node.AddBAR()
+				tunnel.DLPDR.FAR.BAR, _ = smContext.Tunnel.Node.AddBAR()
 				bar_list = []*smf_context.BAR{tunnel.DLPDR.FAR.BAR}
 			}
 
@@ -278,7 +278,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 	switch smContextUpdateData.N2SmInfoType {
 	case models.N2SmInfoType_PDU_RES_SETUP_RSP:
 		if tunnel.DLPDR == nil {
-			tunnel.DLPDR = smContext.Tunnel.Node.AddPDR()
+			tunnel.DLPDR, _ = smContext.Tunnel.Node.AddPDR()
 		} else {
 			tunnel.DLPDR.State = smf_context.RULE_UPDATE
 		}
