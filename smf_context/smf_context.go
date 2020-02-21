@@ -46,10 +46,10 @@ type SMFContext struct {
 	NFManagementClient *Nnrf_NFManagement.APIClient
 	NFDiscoveryClient  *Nnrf_NFDiscovery.APIClient
 
-	//*** For ULCL ** //
 	UserPlaneInformation UserPlaneInformation
-	UERoutingPaths       map[string][]factory.Path
-	UERoutingGraphs      map[string]*UEPathGraph
+	//*** For ULCL ** //
+	UERoutingPaths  map[string][]factory.Path
+	UERoutingGraphs map[string]*UEPathGraph
 }
 
 func AllocUEIP() net.IP {

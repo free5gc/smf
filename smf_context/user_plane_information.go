@@ -5,6 +5,8 @@ import (
 	"gofree5gc/src/smf/factory"
 	"gofree5gc/src/smf/logger"
 	"net"
+
+	"github.com/google/uuid"
 )
 
 type UserPlaneInformation struct {
@@ -12,6 +14,8 @@ type UserPlaneInformation struct {
 	UPFs          map[string]*UPNode
 	AccessNetwork map[string]*UPNode
 	UPFIPToName   map[string]string
+	UPFsID        map[string]string // name to id
+	UPFsIPtoID    map[string]string // ip->id table, for speed optimization
 }
 
 type UPNodeType string
@@ -30,6 +34,20 @@ type UPNode struct {
 	Dnn            string
 	Links          []*UPNode
 	UPFInformation *UPFInformation
+}
+
+func AllocateUPFID() {
+	UPFsID := smfContext.UserPlaneInformation.UPFsID
+	UPFsIPtoID := smfContext.UserPlaneInformation.UPFsIPtoID
+
+	for upf_name, upf_node := range smfContext.UserPlaneInformation.UPFs {
+		upfid := uuid.New().String()
+		upfip := upf_node.NodeID.ResolveNodeIdToIp().String()
+
+		UPFsID[upf_name] = upfid
+		UPFsIPtoID[upfip] = upfid
+
+	}
 }
 
 func processUPTopology(upTopology *factory.UserPlaneInformation) {
@@ -90,6 +108,8 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 	smfContext.UserPlaneInformation.UPFs = upfPool
 	smfContext.UserPlaneInformation.AccessNetwork = anPool
 	smfContext.UserPlaneInformation.UPFIPToName = upfIpMap
+	smfContext.UserPlaneInformation.UPFsID = make(map[string]string)
+	smfContext.UserPlaneInformation.UPFsIPtoID = make(map[string]string)
 }
 
 func (upi *UserPlaneInformation) GetUPFIPByName(name string) []byte {
