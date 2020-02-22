@@ -105,8 +105,6 @@ func (smf *SMF) Start() {
 	//allocate id for each upf
 	smf_context.AllocateUPFID()
 	smf_context.InitSMFUERouting(&factory.UERoutingConfig)
-	//allocate id for each upf
-	smf_context.AllocateUPFID()
 
 	initLog.Infoln("Server started")
 	router := gin.Default()
