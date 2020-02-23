@@ -238,3 +238,9 @@ func (uepg *UEDataPathGraph) FindBranchingPoints() {
 	}
 
 }
+
+func CheckUEHasPreConfig(SUPI string) (exist bool) {
+
+	_, exist = smfContext.UERoutingGraphs[SUPI]
+	return
+}

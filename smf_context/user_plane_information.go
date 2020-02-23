@@ -1,21 +1,22 @@
 package smf_context
 
 import (
+	"github.com/google/uuid"
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/src/smf/factory"
 	"gofree5gc/src/smf/logger"
 	"net"
-
-	"github.com/google/uuid"
+	"reflect"
 )
 
 type UserPlaneInformation struct {
-	UPNodes       map[string]*UPNode
-	UPFs          map[string]*UPNode
-	AccessNetwork map[string]*UPNode
-	UPFIPToName   map[string]string
-	UPFsID        map[string]string // name to id
-	UPFsIPtoID    map[string]string // ip->id table, for speed optimization
+	UPNodes              map[string]*UPNode
+	UPFs                 map[string]*UPNode
+	AccessNetwork        map[string]*UPNode
+	UPFIPToName          map[string]string
+	UPFsID               map[string]string    // name to id
+	UPFsIPtoID           map[string]string    // ip->id table, for speed optimization
+	DefaultUserPlanePath map[string]*[]UPNode // DNN to Default Path
 }
 
 type UPNodeType string
@@ -126,4 +127,87 @@ func (upi *UserPlaneInformation) GetUPFNameByIp(ip string) string {
 func (upi *UserPlaneInformation) GetUPFNodeIDByName(name string) pfcpType.NodeID {
 
 	return upi.UPFs[name].NodeID
+}
+
+func (upi *UserPlaneInformation) ExistDefaultPath(dnn string) bool {
+
+	_, exist := upi.DefaultUserPlanePath[dnn]
+	return exist
+}
+
+func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (path []*UPNode, pathExist bool) {
+
+	var source *UPNode
+	var destination *UPNode
+
+	for _, node := range upi.UPNodes {
+
+		if node.Type == UPNODE_AN {
+			source = node
+			break
+		}
+	}
+
+	if source == nil {
+		logger.CtxLog.Errorf("There is no AN Node in config file!")
+		return nil, false
+	}
+
+	for _, node := range upi.UPNodes {
+
+		node_dnn := string(node.UPF.UPIPInfo.NetworkInstance)
+		if node_dnn == dnn {
+			destination = node
+			break
+		}
+	}
+
+	if destination == nil {
+		logger.CtxLog.Errorf("Can't find UPF with DNN [%s]\n", dnn)
+		return nil, false
+	}
+	//Run DFS
+
+	var visited map[*UPNode]bool
+	visited = make(map[*UPNode]bool)
+
+	for _, upNode := range upi.UPNodes {
+		visited[upNode] = false
+	}
+
+	path, pathExist = getPathBetween(source, destination, visited)
+	return
+}
+
+func getPathBetween(cur *UPNode, dest *UPNode, visited map[*UPNode]bool) (path []*UPNode, pathExist bool) {
+
+	visited[cur] = true
+
+	if reflect.DeepEqual(*cur, *dest) {
+
+		path = make([]*UPNode, 0)
+		path = append(path, cur)
+		pathExist = true
+		return
+	}
+
+	for _, nodes := range cur.Links {
+
+		if !visited[nodes] {
+			path_tail, path_exist := getPathBetween(nodes, dest, visited)
+
+			if path_exist {
+				path = make([]*UPNode, 0)
+				path = append(path, cur)
+
+				path = append(path, path_tail...)
+				pathExist = true
+
+				return
+			}
+		}
+	}
+
+	return nil, false
+
 }

@@ -124,10 +124,6 @@ func SelectUPFByDnn(Dnn string) *UPF {
 			return upf
 		}
 	}
-
-	fmt.Println("[SMF] ", upfPool)
-
-	fmt.Println("[SMF] In SelectUPFByDnn")
 	return nil
 }
 

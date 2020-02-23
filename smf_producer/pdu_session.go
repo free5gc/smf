@@ -42,6 +42,12 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		return
 	}
 
+	if smf_context.CheckUEHasPreConfig(createData.Supi) {
+
+	} else {
+
+	}
+
 	selectedUPF := smf_context.SelectUPFByDnn(createData.Dnn)
 	if selectedUPF == nil {
 		logger.PduSessLog.Errorf("UPF for serve DNN[%s] not found\n", createData.Dnn)
