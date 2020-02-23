@@ -62,7 +62,6 @@ func AddUPF(nodeId *pfcpType.NodeID) (upf *UPF) {
 	}
 
 	upfPool[key] = upf
-	fmt.Println("[SMF] Add UPF!")
 	upf.UPFStatus = NotAssociated
 	upf.NodeID = *nodeId
 	upf.pdrPool = make(map[uint16]*PDR)
@@ -119,7 +118,6 @@ func RemoveUPFNodeByNodeId(nodeId pfcpType.NodeID) {
 
 func SelectUPFByDnn(Dnn string) *UPF {
 	for _, upf := range upfPool {
-		fmt.Println("[SMF] In SelectUPFByDnn UPFInfo.NetworkInstance: ", string(upf.UPIPInfo.NetworkInstance))
 		if !upf.UPIPInfo.Assoni || string(upf.UPIPInfo.NetworkInstance) == Dnn {
 			return upf
 		}

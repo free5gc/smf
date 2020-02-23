@@ -1,6 +1,7 @@
 package smf_context
 
 import (
+	"fmt"
 	"github.com/google/uuid"
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/src/smf/factory"
@@ -102,7 +103,7 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 			continue
 		}
 		nodeA.Links = append(nodeA.Links, nodeB)
-		nodeB.Links = append(nodeA.Links, nodeB)
+		nodeB.Links = append(nodeB.Links, nodeA)
 	}
 
 	//Initialize each UPF
@@ -140,7 +141,7 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (path []*UPNode
 	var source *UPNode
 	var destination *UPNode
 
-	for _, node := range upi.UPNodes {
+	for _, node := range upi.AccessNetwork {
 
 		if node.Type == UPNODE_AN {
 			source = node
@@ -153,12 +154,14 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (path []*UPNode
 		return nil, false
 	}
 
-	for _, node := range upi.UPNodes {
+	for _, node := range upi.UPFs {
 
-		node_dnn := string(node.UPF.UPIPInfo.NetworkInstance)
-		if node_dnn == dnn {
-			destination = node
-			break
+		if node.UPF.UPIPInfo.NetworkInstance != nil {
+			node_dnn := string(node.UPF.UPIPInfo.NetworkInstance)
+			if node_dnn == dnn {
+				destination = node
+				break
+			}
 		}
 	}
 
@@ -166,8 +169,8 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (path []*UPNode
 		logger.CtxLog.Errorf("Can't find UPF with DNN [%s]\n", dnn)
 		return nil, false
 	}
-	//Run DFS
 
+	//Run DFS
 	var visited map[*UPNode]bool
 	visited = make(map[*UPNode]bool)
 
@@ -177,6 +180,57 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (path []*UPNode
 
 	path, pathExist = getPathBetween(source, destination, visited)
 	return
+}
+
+func (upi *UserPlaneInformation) PrintUserPlaneTopology() {
+
+	var source *UPNode
+	for _, node := range upi.AccessNetwork {
+
+		if node.Type == UPNODE_AN {
+			source = node
+			break
+		}
+	}
+
+	var visited map[*UPNode]bool
+	visited = make(map[*UPNode]bool)
+
+	for _, upNode := range upi.UPNodes {
+		visited[upNode] = false
+	}
+
+	upi.dfsTraverse(source, visited)
+}
+
+func (upi *UserPlaneInformation) dfsTraverse(cur *UPNode, visited map[*UPNode]bool) {
+
+	visited[cur] = true
+	if cur.Type == UPNODE_AN {
+		fmt.Println("Node: gNB")
+	} else if cur.Type == UPNODE_UPF {
+
+		ip := cur.NodeID.ResolveNodeIdToIp().String()
+		fmt.Println("Node: ", upi.GetUPFNameByIp(ip))
+	}
+
+	fmt.Println("Link: ")
+	for _, nodes := range cur.Links {
+		if nodes.Type == UPNODE_AN {
+			fmt.Println("\t\tNode: gNB")
+		} else if nodes.Type == UPNODE_UPF {
+
+			ip := nodes.NodeID.ResolveNodeIdToIp().String()
+			fmt.Println("\t\tNode: ", upi.GetUPFNameByIp(ip))
+		}
+	}
+
+	for _, nodes := range cur.Links {
+
+		if !visited[nodes] {
+			upi.dfsTraverse(nodes, visited)
+		}
+	}
 }
 
 func getPathBetween(cur *UPNode, dest *UPNode, visited map[*UPNode]bool) (path []*UPNode, pathExist bool) {
