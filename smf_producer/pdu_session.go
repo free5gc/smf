@@ -42,9 +42,30 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		return
 	}
 
+	var upfRoot *smf_context.DataPathNode
 	if smf_context.CheckUEHasPreConfig(createData.Supi) {
 
+		ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
+		upfRoot = ueRoutingGraph.GetGraphRoot()
 	} else {
+
+	}
+
+	if upfRoot == nil {
+
+		logger.PduSessLog.Errorf("UPF for serve DNN[%s] not found\n", createData.Dnn)
+		rspChan <- smf_message.HandlerResponseMessage{
+			HTTPResponse: &http_wrapper.Response{
+				Header: nil,
+				Status: http.StatusForbidden,
+				Body: models.PostSmContextsErrorResponse{
+					JsonData: &models.SmContextCreateError{
+						Error:   &Nsmf_PDUSession.DnnNotSupported,
+						N1SmMsg: &models.RefToBinaryData{ContentId: "N1Msg"},
+					},
+				},
+			},
+		}
 
 	}
 

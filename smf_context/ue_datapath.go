@@ -27,38 +27,6 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 	return
 }
 
-func (uepg *UEDataPathGraph) PrintGraph() {
-
-	fmt.Println("SUPI: ", uepg.SUPI)
-	upi := smfContext.UserPlaneInformation
-
-	for _, node := range uepg.Graph {
-		fmt.Println("\tUPF Name: ")
-		node_ip := node.GetNodeIP()
-		fmt.Println("\t\t", upi.GetUPFNameByIp(node_ip))
-
-		fmt.Println("\tBranching Point: ")
-		fmt.Println("\t\t", node.IsBranchingPoint)
-
-		if node.Prev != nil {
-			fmt.Println("\tParent Name: ")
-			parent_ip := node.Prev.To.GetNodeIP()
-			fmt.Println("\t\t", upi.GetUPFNameByIp(parent_ip))
-		}
-
-		if node.Next != nil {
-			fmt.Println("\tChildren Name: ")
-			for _, child_link := range node.Next {
-
-				child_ip := child_link.To.GetNodeIP()
-				fmt.Println("\t\t", upi.GetUPFNameByIp(child_ip))
-				fmt.Println("\t\tDestination IP: ", child_link.DestinationIP)
-				fmt.Println("\t\tDestination Port: ", child_link.DestinationPort)
-			}
-		}
-	}
-}
-
 func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 
 	UEPGraph = new(UEDataPathGraph)
@@ -164,6 +132,38 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 	return
 }
 
+func (uepg *UEDataPathGraph) PrintGraph() {
+
+	fmt.Println("SUPI: ", uepg.SUPI)
+	upi := smfContext.UserPlaneInformation
+
+	for _, node := range uepg.Graph {
+		fmt.Println("\tUPF Name: ")
+		node_ip := node.GetNodeIP()
+		fmt.Println("\t\t", upi.GetUPFNameByIp(node_ip))
+
+		fmt.Println("\tBranching Point: ")
+		fmt.Println("\t\t", node.IsBranchingPoint)
+
+		if node.Prev != nil {
+			fmt.Println("\tParent Name: ")
+			parent_ip := node.Prev.To.GetNodeIP()
+			fmt.Println("\t\t", upi.GetUPFNameByIp(parent_ip))
+		}
+
+		if node.Next != nil {
+			fmt.Println("\tChildren Name: ")
+			for _, child_link := range node.Next {
+
+				child_ip := child_link.To.GetNodeIP()
+				fmt.Println("\t\t", upi.GetUPFNameByIp(child_ip))
+				fmt.Println("\t\tDestination IP: ", child_link.DestinationIP)
+				fmt.Println("\t\tDestination Port: ", child_link.DestinationPort)
+			}
+		}
+	}
+}
+
 func (uepg *UEDataPathGraph) FindBranchingPoints() {
 	//BFS algo implementation
 	const (
@@ -239,8 +239,37 @@ func (uepg *UEDataPathGraph) FindBranchingPoints() {
 
 }
 
+func (uepg *UEDataPathGraph) GetGraphRoot() *DataPathNode {
+
+	return uepg.Graph[0]
+}
+
 func CheckUEHasPreConfig(SUPI string) (exist bool) {
 
 	_, exist = smfContext.UERoutingGraphs[SUPI]
 	return
+}
+
+func GetUERoutingGraph(SUPI string) *UEDataPathGraph {
+
+	return smfContext.UERoutingGraphs[SUPI]
+}
+
+func ConstructUserPlaneTopoByPath(upPath []*UPNode) (root *DataPathNode) {
+
+	var lowerBound = 0
+	var upperBound = len(upPath) - 1
+
+	for idx, node := range upPath {
+
+		switch idx {
+		case lowerBound:
+
+		case upperBound:
+
+		default:
+
+		}
+	}
+
 }
