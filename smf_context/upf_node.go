@@ -99,6 +99,7 @@ func (upf *UPF) GenerateTEID() (id uint32, err error) {
 }
 
 func RetrieveUPFNodeByNodeId(nodeId pfcpType.NodeID) (upf *UPF) {
+
 	for _, upf := range upfPool {
 		if reflect.DeepEqual(upf.NodeID, nodeId) {
 			return upf

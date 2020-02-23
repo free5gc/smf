@@ -17,7 +17,7 @@ type UserPlaneInformation struct {
 	UPFIPToName          map[string]string
 	UPFsID               map[string]string    // name to id
 	UPFsIPtoID           map[string]string    // ip->id table, for speed optimization
-	DefaultUserPlanePath map[string]*[]UPNode // DNN to Default Path
+	DefaultUserPlanePath map[string][]*UPNode // DNN to Default Path
 }
 
 type UPNodeType string
@@ -65,7 +65,19 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 			upNode.ANIP = net.ParseIP(node.ANIP)
 			anPool[name] = upNode
 		case UPNODE_UPF:
-			ip := net.ParseIP(node.NodeID)
+			fmt.Println(node.NodeID)
+			//ParseIp() always return 16 bytes
+			//so we can't use the length of return ip to seperate IPv4 and IPv6
+			//This is just a work around
+			var ip net.IP
+			if net.ParseIP(node.NodeID).To4() == nil {
+
+				ip = net.ParseIP(node.NodeID)
+			} else {
+
+				ip = net.ParseIP(node.NodeID).To4()
+			}
+
 			switch len(ip) {
 			case net.IPv4len:
 				upNode.NodeID = pfcpType.NodeID{
@@ -74,7 +86,7 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 				}
 			case net.IPv6len:
 				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType:  pfcpType.NodeIdTypeIpv4Address,
+					NodeIdType:  pfcpType.NodeIdTypeIpv6Address,
 					NodeIdValue: ip,
 				}
 			default:
@@ -118,6 +130,7 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 	smfContext.UserPlaneInformation.UPFIPToName = upfIpMap
 	smfContext.UserPlaneInformation.UPFsID = make(map[string]string)
 	smfContext.UserPlaneInformation.UPFsIPtoID = make(map[string]string)
+	smfContext.UserPlaneInformation.DefaultUserPlanePath = make(map[string][]*UPNode)
 }
 
 func (upi *UserPlaneInformation) GetUPFNameByIp(ip string) string {

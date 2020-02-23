@@ -101,10 +101,18 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	smContext.Tunnel.Node = selectedUPF
 	tunnel := smContext.Tunnel
 	// Establish UP
+	tunnel.ULTEID, err = tunnel.Node.GenerateTEID()
 
-	tunnel.ULTEID, _ = tunnel.Node.GenerateTEID()
+	if err != nil {
+		logger.PduSessLog.Error(err)
+	}
 
-	tunnel.ULPDR, _ = smContext.Tunnel.Node.AddPDR()
+	tunnel.ULPDR, err = smContext.Tunnel.Node.AddPDR()
+
+	if err != nil {
+		logger.PduSessLog.Error(err)
+	}
+
 	tunnel.ULPDR.Precedence = 32
 	tunnel.ULPDR.PDI = smf_context.PDI{
 		SourceInterface: pfcpType.SourceInterface{
