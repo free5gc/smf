@@ -55,7 +55,10 @@ func (node *DataPathNode) AddChild(child *DataPathNode) (err error) {
 	if _, exist := node.Next[child_id]; !exist {
 
 		child_link := &DataPathLink{
-			To: child,
+			To:              child,
+			DestinationIP:   "",
+			DestinationPort: "",
+			PDR:             nil,
 		}
 		node.Next[child_id] = child_link
 	}
@@ -73,10 +76,13 @@ func (node *DataPathNode) AddParent(parent *DataPathNode) (err error) {
 		return err
 	}
 
-	if node.Prev != nil {
+	if node.Prev == nil {
 
 		parent_link := &DataPathLink{
-			To: parent,
+			To:              parent,
+			DestinationIP:   "",
+			DestinationPort: "",
+			PDR:             nil,
 		}
 
 		node.Prev = parent_link
@@ -134,7 +140,7 @@ func (node *DataPathNode) PrintPath() {
 
 func (node *DataPathNode) IsANUPF() bool {
 
-	if node.Prev == nil {
+	if node.Prev.To == nil {
 		return true
 	} else {
 		return false

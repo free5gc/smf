@@ -18,15 +18,16 @@ func SetUpUplinkUserPlane(root *smf_context.DataPathNode, smContext *smf_context
 func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_context.SMContext) {
 
 	var err error
+
 	upLink := node.Prev
-	upLink.PDR, err = node.UPF.AddPDR()
+
+	teid, err := node.UPF.GenerateTEID()
 
 	if err != nil {
 		logger.PduSessLog.Error(err)
 	}
 
-	teid, err := node.UPF.GenerateTEID()
-
+	upLink.PDR, err = node.UPF.AddPDR()
 	if err != nil {
 		logger.PduSessLog.Error(err)
 	}
@@ -89,6 +90,7 @@ func SendUplinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context.S
 	upLink := node.Prev
 	pdr_list := []*smf_context.PDR{upLink.PDR}
 	far_list := []*smf_context.FAR{upLink.PDR.FAR}
+	bar_list := []*smf_context.BAR{}
 
 	pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdr_list, far_list, bar_list)
 }

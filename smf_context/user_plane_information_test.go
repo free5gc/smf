@@ -32,7 +32,6 @@ func TestGenerateDefaultPath(t *testing.T) {
 
 	//userPlaneInfo.PrintUserPlaneTopology()
 	pathExist := userPlaneInfo.GenerateDefaultPath("internet")
-
 	assertEqual(pathExist, true)
 	userPlaneInfo.PrintDefaultDnnPath("internet")
 }
