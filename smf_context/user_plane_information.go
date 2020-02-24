@@ -163,6 +163,7 @@ func (upi *UserPlaneInformation) GetDefaultUPFTopoByDNN(dnn string) (root *DataP
 		case lowerBound:
 
 			root = dataPathNode
+			root.Prev = NewDataPathLink()
 			parent = dataPathNode
 		default:
 

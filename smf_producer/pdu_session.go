@@ -51,7 +51,9 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	// }
 
+	//smf_context.GetUserPlaneInformation().PrintDefaultDnnPath(createData.Dnn)
 	upfRoot = smf_context.GetUserPlaneInformation().GetDefaultUPFTopoByDNN(createData.Dnn)
+	upfRoot.PrintPath()
 
 	if upfRoot == nil {
 

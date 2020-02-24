@@ -33,6 +33,17 @@ func NewDataPathNode() (node *DataPathNode) {
 	return
 }
 
+func NewDataPathLink() (link *DataPathLink) {
+
+	link = &DataPathLink{
+		To:              nil,
+		DestinationIP:   "",
+		DestinationPort: "",
+		PDR:             nil,
+	}
+	return
+}
+
 func (node *DataPathNode) AddChild(child *DataPathNode) (err error) {
 
 	child_id, err := child.GetUPFID()
@@ -119,4 +130,23 @@ func (node *DataPathNode) PrintPath() {
 
 		node.To.PrintPath()
 	}
+}
+
+func (node *DataPathNode) IsANUPF() bool {
+
+	if node.Prev == nil {
+		return true
+	} else {
+		return false
+	}
+}
+
+func (node *DataPathNode) IsAnchorUPF() bool {
+
+	if len(node.Next) == 0 {
+		return true
+	} else {
+		return false
+	}
+
 }
