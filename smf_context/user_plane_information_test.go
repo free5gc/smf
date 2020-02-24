@@ -1,7 +1,6 @@
 package smf_context_test
 
 import (
-	"fmt"
 	"gofree5gc/lib/path_util"
 	"gofree5gc/src/smf/factory"
 	"gofree5gc/src/smf/smf_context"
@@ -32,16 +31,31 @@ func TestGenerateDefaultPath(t *testing.T) {
 	}
 
 	//userPlaneInfo.PrintUserPlaneTopology()
-	path, pathExist := userPlaneInfo.GenerateDefaultPath("internet")
+	pathExist := userPlaneInfo.GenerateDefaultPath("internet")
 
 	assertEqual(pathExist, true)
-	for idx, node := range path {
+	userPlaneInfo.PrintDefaultDnnPath("internet")
+}
 
-		if node.Type == smf_context.UPNODE_AN {
-			fmt.Println("Node ", idx, ": ", node.ANIP.String())
-		} else if node.Type == smf_context.UPNODE_UPF {
-			fmt.Println("Node ", idx, ": ", node.NodeID.ResolveNodeIdToIp().String())
+func TestGetDefaultUPFTopoByDNN(t *testing.T) {
+
+	userPlaneInfo := smf_context.GetUserPlaneInformation()
+
+	for node_name, node := range userPlaneInfo.UPNodes {
+
+		if node_name == "AnchorUPF3" {
+			node.UPF.UPIPInfo.NetworkInstance = []byte("internet")
+			break
 		}
 	}
 
+	//userPlaneInfo.PrintUserPlaneTopology()
+	userPlaneInfo.GenerateDefaultPath("internet")
+	//userPlaneInfo.PrintDefaultDnnPath("internet")
+	root := userPlaneInfo.GetDefaultUPFTopoByDNN("internet")
+
+	if root == nil {
+		panic("There is no default upf topo")
+	}
+	root.PrintPath()
 }

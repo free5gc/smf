@@ -109,3 +109,14 @@ func (node *DataPathNode) GetNodeIP() (ip string) {
 	ip = node.UPF.NodeID.ResolveNodeIdToIp().String()
 	return
 }
+
+func (node *DataPathNode) PrintPath() {
+
+	upi := smfContext.UserPlaneInformation
+	fmt.Println(upi.GetUPFNameByIp(node.GetNodeIP()))
+
+	for _, node := range node.Next {
+
+		node.To.PrintPath()
+	}
+}

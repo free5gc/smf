@@ -65,7 +65,6 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 			upNode.ANIP = net.ParseIP(node.ANIP)
 			anPool[name] = upNode
 		case UPNODE_UPF:
-			fmt.Println(node.NodeID)
 			//ParseIp() always return 16 bytes
 			//so we can't use the length of return ip to seperate IPv4 and IPv6
 			//This is just a work around
@@ -162,6 +161,7 @@ func (upi *UserPlaneInformation) GetDefaultUPFTopoByDNN(dnn string) (root *DataP
 		dataPathNode.UPF = node.UPF
 		switch idx {
 		case lowerBound:
+
 			root = dataPathNode
 			parent = dataPathNode
 		default:
@@ -183,7 +183,7 @@ func (upi *UserPlaneInformation) ExistDefaultPath(dnn string) bool {
 	return exist
 }
 
-func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (path []*UPNode, pathExist bool) {
+func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (pathExist bool) {
 
 	var source *UPNode
 	var destination *UPNode
@@ -198,7 +198,7 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (path []*UPNode
 
 	if source == nil {
 		logger.CtxLog.Errorf("There is no AN Node in config file!")
-		return nil, false
+		return false
 	}
 
 	for _, node := range upi.UPFs {
@@ -214,7 +214,7 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (path []*UPNode
 
 	if destination == nil {
 		logger.CtxLog.Errorf("Can't find UPF with DNN [%s]\n", dnn)
-		return nil, false
+		return false
 	}
 
 	//Run DFS
@@ -225,8 +225,29 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (path []*UPNode
 		visited[upNode] = false
 	}
 
+	var path []*UPNode
 	path, pathExist = getPathBetween(source, destination, visited)
+
+	upi.DefaultUserPlanePath[dnn] = path
 	return
+}
+
+func (upi *UserPlaneInformation) PrintDefaultDnnPath(dnn string) {
+
+	if upi.ExistDefaultPath(dnn) {
+		path := upi.DefaultUserPlanePath[dnn]
+		for idx, node := range path {
+
+			if node.Type == UPNODE_AN {
+				fmt.Println("Node ", idx, ": ", upi.GetUPFNameByIp(node.ANIP.String()))
+			} else if node.Type == UPNODE_UPF {
+				fmt.Println("Node ", idx, ": ", upi.GetUPFNameByIp(node.NodeID.ResolveNodeIdToIp().String()))
+			}
+		}
+	} else {
+		fmt.Println("There is not ", dnn, " default path!")
+	}
+
 }
 
 func (upi *UserPlaneInformation) PrintUserPlaneTopology() {

@@ -76,13 +76,12 @@ func HandlePfcpAssociationSetupResponse(msg *pfcpUdp.Message) {
 
 			if !userPlaneInformation.ExistDefaultPath(dnn) {
 
-				defaultPath, pathExist := userPlaneInformation.GenerateDefaultPath(dnn)
+				pathExist := userPlaneInformation.GenerateDefaultPath(dnn)
 
 				if !pathExist {
 					logger.PfcpLog.Errorf("UPF[%s] doesn't exist default path", upf.UPIPInfo.NetworkInstance)
 					return
 				}
-				userPlaneInformation.DefaultUserPlanePath[dnn] = defaultPath
 
 			}
 			logger.PfcpLog.Infof("UPF[%s]", upf.UPIPInfo.NetworkInstance)
