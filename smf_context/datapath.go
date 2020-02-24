@@ -22,6 +22,17 @@ type DataPathLink struct {
 	PDR *PDR
 }
 
+func NewDataPathNode() (node *DataPathNode) {
+
+	node = &DataPathNode{
+		UPF:              nil,
+		Next:             make(map[string]*DataPathLink),
+		Prev:             nil,
+		IsBranchingPoint: false,
+	}
+	return
+}
+
 func (node *DataPathNode) AddChild(child *DataPathNode) (err error) {
 
 	child_id, err := child.GetUPFID()

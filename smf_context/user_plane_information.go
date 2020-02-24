@@ -143,6 +143,40 @@ func (upi *UserPlaneInformation) GetUPFNodeIDByName(name string) pfcpType.NodeID
 	return upi.UPFs[name].NodeID
 }
 
+func (upi *UserPlaneInformation) GetDefaultUPFTopoByDNN(dnn string) (root *DataPathNode) {
+
+	path, path_exist := upi.DefaultUserPlanePath[dnn]
+
+	if !path_exist {
+
+		return nil
+	}
+
+	path = path[1:]
+	var lowerBound = 0
+	var parent *DataPathNode
+
+	for idx, node := range path {
+
+		dataPathNode := NewDataPathNode()
+		dataPathNode.UPF = node.UPF
+		switch idx {
+		case lowerBound:
+			root = dataPathNode
+			parent = dataPathNode
+		default:
+
+			dataPathNode.AddParent(parent)
+			parent.AddChild(dataPathNode)
+			parent = dataPathNode
+
+		}
+	}
+
+	return
+
+}
+
 func (upi *UserPlaneInformation) ExistDefaultPath(dnn string) bool {
 
 	_, exist := upi.DefaultUserPlanePath[dnn]

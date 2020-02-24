@@ -43,13 +43,15 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	}
 
 	var upfRoot *smf_context.DataPathNode
-	if smf_context.CheckUEHasPreConfig(createData.Supi) {
+	// if smf_context.CheckUEHasPreConfig(createData.Supi) {
 
-		ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
-		upfRoot = ueRoutingGraph.GetGraphRoot()
-	} else {
+	// 	ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
+	// 	upfRoot = ueRoutingGraph.GetGraphRoot()
+	// } else {
 
-	}
+	// }
+
+	upfRoot = smf_context.GetUserPlaneInformation().GetDefaultUPFTopoByDNN(createData.Dnn)
 
 	if upfRoot == nil {
 

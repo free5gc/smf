@@ -254,22 +254,3 @@ func GetUERoutingGraph(SUPI string) *UEDataPathGraph {
 
 	return smfContext.UERoutingGraphs[SUPI]
 }
-
-func ConstructUserPlaneTopoByPath(upPath []*UPNode) (root *DataPathNode) {
-
-	var lowerBound = 0
-	var upperBound = len(upPath) - 1
-
-	for idx, node := range upPath {
-
-		switch idx {
-		case lowerBound:
-
-		case upperBound:
-
-		default:
-
-		}
-	}
-
-}
