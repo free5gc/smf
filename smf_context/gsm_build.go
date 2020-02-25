@@ -21,20 +21,26 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	pDUSessionEstablishmentAccept.SetPTI(0x00)
 	pDUSessionEstablishmentAccept.SetPDUSessionType(1)
 	pDUSessionEstablishmentAccept.SetSSCMode(1)
-	// pDUSessionEstablishmentAccept.SetQosRule()
-	// pDUSessionEstablishmentAccept.AuthorizedQosRules.SetLen()
 	pDUSessionEstablishmentAccept.SessionAMBR.SetSessionAMBRForDownlink([2]uint8{0x11, 0x11})
 	pDUSessionEstablishmentAccept.SessionAMBR.SetSessionAMBRForUplink([2]uint8{0x11, 0x11})
 	pDUSessionEstablishmentAccept.SessionAMBR.SetUnitForSessionAMBRForDownlink(10)
 	pDUSessionEstablishmentAccept.SessionAMBR.SetUnitForSessionAMBRForUplink(10)
 	pDUSessionEstablishmentAccept.SessionAMBR.SetLen(uint8(len(pDUSessionEstablishmentAccept.SessionAMBR.Octet)))
 
+	qosRulesBytes, err := smContext.QoSRules.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	pDUSessionEstablishmentAccept.AuthorizedQosRules.SetLen(uint16(len(qosRulesBytes)))
+	pDUSessionEstablishmentAccept.AuthorizedQosRules.SetQosRule(qosRulesBytes)
+
 	if smContext.PDUAddress != nil {
-		var pDUAddressBuffer [12]uint8
-		copy(pDUAddressBuffer[:], smContext.PDUAddress)
+		addr, addrLen := smContext.PDUAddressToNAS()
 		pDUSessionEstablishmentAccept.PDUAddress = nasType.NewPDUAddress(nasMessage.PDUSessionEstablishmentAcceptPDUAddressType)
+		pDUSessionEstablishmentAccept.PDUAddress.SetLen(addrLen)
 		pDUSessionEstablishmentAccept.PDUAddress.SetPDUSessionTypeValue(smContext.SelectedPDUSessionType)
-		pDUSessionEstablishmentAccept.PDUAddress.SetPDUAddressInformation(pDUAddressBuffer)
+		pDUSessionEstablishmentAccept.PDUAddress.SetPDUAddressInformation(addr)
 	}
 
 	// pDUSessionEstablishmentAccept.AuthorizedQosFlowDescriptions = nasType.NewAuthorizedQosFlowDescriptions(nasMessage.PDUSessionEstablishmentAcceptAuthorizedQosFlowDescriptionsType)
