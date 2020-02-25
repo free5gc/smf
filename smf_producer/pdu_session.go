@@ -122,7 +122,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	// TODO: UECM registration
 
-	//SetUpUplinkUserPlane(upfRoot, smContext)
+	SetUpUplinkUserPlane(upfRoot, smContext)
 
 	smContext.Tunnel = new(smf_context.UPTunnel)
 	smContext.Tunnel.Node = selectedUPF
@@ -194,7 +194,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	}
 
 	fmt.Println("[SMF] Send PFCP to UPF IP: ", addr.IP.String())
-	pfcp_message.SendPfcpSessionEstablishmentRequest(&addr, smContext)
+	//pfcp_message.SendPfcpSessionEstablishmentRequest(&addr, smContext)
 	//AddUEUpLinkRoutingInfo(smContext)
 
 	smf_consumer.SendNFDiscoveryServingAMF(smContext)

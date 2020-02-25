@@ -15,6 +15,12 @@ func SetUpUplinkUserPlane(root *smf_context.DataPathNode, smContext *smf_context
 	SendUplinkPFCPRule(root, smContext)
 }
 
+func SetUpDownLinkUserPlane(root *smf_context.DataPathNode, smContext *smf_context.SMContext) {
+
+	AllocateUpLinkPDRandTEID(root, smContext)
+	SendUplinkPFCPRule(root, smContext)
+}
+
 func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_context.SMContext) {
 
 	var err error
@@ -80,6 +86,10 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 
 }
 
+func AllocateDownLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_context.SMContext) {
+
+}
+
 func SendUplinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context.SMContext) {
 
 	addr := net.UDPAddr{
@@ -93,4 +103,8 @@ func SendUplinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context.S
 	bar_list := []*smf_context.BAR{}
 
 	pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdr_list, far_list, bar_list)
+}
+
+func SendDownLinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context.SMContext) {
+
 }
