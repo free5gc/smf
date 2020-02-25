@@ -2,11 +2,13 @@ package smf_context
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"gofree5gc/lib/Namf_Communication"
 	"gofree5gc/lib/Npcf_SMPolicyControl"
+	"gofree5gc/lib/nas/nasMessage"
 	"gofree5gc/lib/openapi/models"
 	"net"
+
+	"github.com/google/uuid"
 )
 
 var smContextPool map[string]*SMContext
@@ -63,6 +65,8 @@ type SMContext struct {
 
 	PDUAddress             net.IP
 	SelectedPDUSessionType uint8
+
+	QoSRules QoSRules
 
 	// Client
 	SMPolicyClient      *Npcf_SMPolicyControl.APIClient
@@ -142,5 +146,17 @@ func (smContext *SMContext) SetCreateData(createData *models.SmContextCreateData
 func (smContext *SMContext) BuildCreatedData() (createdData *models.SmContextCreatedData) {
 	createdData = new(models.SmContextCreatedData)
 	createdData.SNssai = smContext.Snssai
+	return
+}
+
+func (smContext *SMContext) PDUAddressToNAS() (addr [12]byte, addrLen uint8) {
+	copy(addr[:], smContext.PDUAddress)
+	switch smContext.SelectedPDUSessionType {
+	case nasMessage.PDUSessionTypeIPv4:
+		addrLen = 4 + 1
+	case nasMessage.PDUSessionTypeIPv6:
+	case nasMessage.PDUSessionTypeIPv4IPv6:
+		addrLen = 12 + 1
+	}
 	return
 }

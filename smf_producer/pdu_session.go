@@ -128,6 +128,25 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	// TODO: PCF Selection
 
+	// TODO: Recieve Qos from PCF
+
+	// Setup Default QoS Parameters
+	smContext.QoSRules = smf_context.QoSRules{
+		smf_context.QoSRule{
+			Identifier:    0x01,
+			DQR:           0x01,
+			OperationCode: smf_context.OperationCodeCreateNewQoSRule,
+			QFI:           0x01,
+			PacketFilterList: []smf_context.PacketFilter{
+				smf_context.PacketFilter{
+					Identifier:    0x01,
+					Direction:     smf_context.PacketFilterDirectionBidirectional,
+					ComponentType: smf_context.PacketFilterComponentTypeMatchAll,
+				},
+			},
+		},
+	}
+
 	addr := net.UDPAddr{
 		IP:   smContext.Tunnel.Node.NodeID.NodeIdValue,
 		Port: pfcpUdp.PFCP_PORT,
