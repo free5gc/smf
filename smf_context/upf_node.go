@@ -119,7 +119,7 @@ func RemoveUPFNodeByNodeId(nodeId pfcpType.NodeID) {
 
 func SelectUPFByDnn(Dnn string) *UPF {
 	for _, upf := range upfPool {
-		if !upf.UPIPInfo.Assoni || string(upf.UPIPInfo.NetworkInstance) == Dnn {
+		if upf.UPIPInfo.Assoni && string(upf.UPIPInfo.NetworkInstance) == Dnn {
 			return upf
 		}
 	}
