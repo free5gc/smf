@@ -60,6 +60,7 @@ func AddUPF(nodeId *pfcpType.NodeID) (upf *UPFInformation) {
 	upf.barPool = make(map[uint8]*BAR)
 	upf.qerPool = make(map[uint32]*QER)
 	upf.urrPool = make(map[uint32]*URR)
+	upf.teidPool = make(map[uint32]bool)
 	upf.pdrIdReuseQueue = NewIDQueue(PDRType)
 	upf.farIdReuseQueue = NewIDQueue(FARType)
 	upf.barIdReuseQueue = NewIDQueue(BARType)
