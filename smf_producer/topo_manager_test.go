@@ -1,6 +1,7 @@
 package smf_producer_test
 
 import (
+	"fmt"
 	"gofree5gc/lib/path_util"
 	"gofree5gc/src/smf/factory"
 	"gofree5gc/src/smf/smf_context"
@@ -29,11 +30,14 @@ func init() {
 	}
 
 	userPlaneInfo.GenerateDefaultPath("internet")
+	userPlaneInfo.PrintDefaultDnnPath("internet")
 
-	smfContext := smf_context.SMF_Self()
+	test_map := make(map[int]bool)
+	fmt.Println(test_map[2])
+	//smfContext := smf_context.SMF_Self()
 
-	smfContext.CPNodeID.NodeIdType = 0
-	smfContext.CPNodeID.NodeIdValue = net.ParseIP("127.0.0.1").To4()
+	// smfContext.CPNodeID.NodeIdType = 0
+	// smfContext.CPNodeID.NodeIdValue = net.ParseIP("127.0.0.1").To4()
 
 	pfcp_udp.Run()
 }

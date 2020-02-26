@@ -156,3 +156,18 @@ func (node *DataPathNode) IsAnchorUPF() bool {
 	}
 
 }
+
+func (node *DataPathNode) GetUpLinkPDR() (pdr *PDR) {
+
+	return node.Prev.PDR
+}
+
+func (node *DataPathNode) GetUpLinkFAR() (far *FAR) {
+
+	return node.Prev.PDR.FAR
+}
+
+func (node *DataPathNode) GetParent() (parent *DataPathNode) {
+
+	return node.Prev.To
+}
