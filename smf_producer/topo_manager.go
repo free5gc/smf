@@ -31,6 +31,12 @@ func SetUpDownLinkUserPlane(root *smf_context.DataPathNode, smContext *smf_conte
 		visited[node] = false
 	}
 
+	AllocateDownLinkTEID(root, smContext, visited)
+
+	for node, _ := range visited {
+		visited[node] = false
+	}
+
 	SendDownLinkPFCPRule(root, smContext, visited)
 }
 

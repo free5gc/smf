@@ -341,11 +341,11 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			SourceInterface: pfcpType.SourceInterface{
 				InterfaceValue: pfcpType.SourceInterfaceSgiLanN6Lan,
 			},
-			// LocalFTeid: pfcpType.FTEID{
-			// 	V4:          true,
-			// 	Teid:        tunnel.ULTEID,
-			// 	Ipv4Address: tunnel.Node.UPIPInfo.Ipv4Address,
-			// },
+			LocalFTeid: pfcpType.FTEID{
+				V4:          true,
+				Teid:        tunnel.ULTEID,
+				Ipv4Address: tunnel.Node.UPIPInfo.Ipv4Address,
+			},
 			NetworkInstance: []byte(smContext.Dnn),
 			UEIPAddress: &pfcpType.UEIPAddress{
 				V4:          true,

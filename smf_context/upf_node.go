@@ -22,6 +22,10 @@ type UPTunnel struct {
 	DLTEID uint32
 }
 
+// type NewUPTunnel struct {
+// 	UpfRoot *DataPathNode
+// }
+
 type UPFStatus int
 
 const (

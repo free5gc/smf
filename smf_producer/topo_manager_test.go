@@ -56,6 +56,7 @@ func TestSetUpDownlinkUserPlane(t *testing.T) {
 func SetUpAllUPF(node *smf_context.DataPathNode) {
 
 	node.UPF.UPFStatus = smf_context.AssociatedSetUpSuccess
+	node.UPF.UPIPInfo.Ipv4Address = net.ParseIP("10.200.200.50").To4()
 
 	for _, child_link := range node.Next {
 
