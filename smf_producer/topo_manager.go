@@ -25,7 +25,7 @@ func SetUpUplinkUserPlane(root *smf_context.DataPathNode, smContext *smf_context
 func SetUpDownLinkUserPlane(root *smf_context.DataPathNode, smContext *smf_context.SMContext) {
 
 	visited := make(map[*smf_context.DataPathNode]bool)
-	AllocateDownLinkPDRandTEID(root, smContext, visited)
+	AllocateDownLinkPDR(root, smContext, visited)
 
 	for node, _ := range visited {
 		visited[node] = false
@@ -117,7 +117,7 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 
 }
 
-func AllocateDownLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_context.SMContext, visited map[*smf_context.DataPathNode]bool) {
+func AllocateDownLinkPDR(node *smf_context.DataPathNode, smContext *smf_context.SMContext, visited map[*smf_context.DataPathNode]bool) {
 	var err error
 	var teid uint32
 
@@ -174,15 +174,35 @@ func AllocateDownLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_c
 
 	}
 
-	parent := node.GetParent()
-	if parent != nil {
+	for _, upf_link := range node.Next {
 
-		parentUpLinkFAR := parent.GetUpLinkFAR()
+		child := upf_link.To
+		if !visited[child] {
+			AllocateDownLinkPDR(child, smContext, visited)
+		}
 
-		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
-		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation.Teid = uint32(teid)
-		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address = node.UPF.UPIPInfo.Ipv4Address
+	}
+}
+
+func AllocateDownLinkTEID(node *smf_context.DataPathNode, smContext *smf_context.SMContext, visited map[*smf_context.DataPathNode]bool) {
+
+	if !visited[node] {
+		visited[node] = true
+	}
+
+	for _, downLink := range node.Next {
+
+		child := downLink.To
+		allocatedDownLinkTEID := downLink.PDR.PDI.LocalFTeid.Teid
+
+		for _, child_downLink := range child.Next {
+
+			childDownLinkFAR := child_downLink.PDR.FAR
+			childDownLinkFAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
+			childDownLinkFAR.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+			childDownLinkFAR.ForwardingParameters.OuterHeaderCreation.Teid = uint32(allocatedDownLinkTEID)
+			childDownLinkFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address = node.UPF.UPIPInfo.Ipv4Address
+		}
 
 	}
 
@@ -190,7 +210,7 @@ func AllocateDownLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_c
 
 		child := upf_link.To
 		if !visited[child] {
-			AllocateUpLinkPDRandTEID(child, smContext, visited)
+			AllocateDownLinkTEID(child, smContext, visited)
 		}
 
 	}
@@ -214,14 +234,6 @@ func SendUplinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context.S
 	far_list := []*smf_context.FAR{upLink.PDR.FAR}
 	bar_list := []*smf_context.BAR{}
 
-	//parent := node.GetParent()
-
-	// if parent != nil {
-	// 	fmt.Println("My IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
-	// 	fmt.Println("Parent IP: ", parent.UPF.NodeID.ResolveNodeIdToIp().String())
-	// 	fmt.Println("Parent UpLink FAR: ", upLink.PDR.FAR)
-	// }
-
 	pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdr_list, far_list, bar_list)
 
 	for _, upf_link := range node.Next {
@@ -235,4 +247,30 @@ func SendUplinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context.S
 
 func SendDownLinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context.SMContext, visited map[*smf_context.DataPathNode]bool) {
 
+	if !visited[node] {
+		visited[node] = true
+	}
+
+	addr := net.UDPAddr{
+		IP:   node.UPF.NodeID.NodeIdValue,
+		Port: pfcpUdp.PFCP_PORT,
+	}
+
+	fmt.Println("Send to upf addr: ", addr.String())
+
+	for _, down_link := range node.Next {
+
+		pdr_list := []*smf_context.PDR{down_link.PDR}
+		far_list := []*smf_context.FAR{down_link.PDR.FAR}
+		bar_list := []*smf_context.BAR{}
+		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
+	}
+
+	for _, upf_link := range node.Next {
+
+		child := upf_link.To
+		if !visited[child] {
+			SendDownLinkPFCPRule(upf_link.To, smContext, visited)
+		}
+	}
 }
