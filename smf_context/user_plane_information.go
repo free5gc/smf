@@ -153,6 +153,7 @@ func (upi *UserPlaneInformation) GetDefaultUPFTopoByDNN(dnn string) (root *DataP
 
 	path = path[1:]
 	var lowerBound = 0
+	var upperBound = len(path) - 1
 	var parent *DataPathNode
 
 	for idx, node := range path {
@@ -165,6 +166,11 @@ func (upi *UserPlaneInformation) GetDefaultUPFTopoByDNN(dnn string) (root *DataP
 			root = dataPathNode
 			root.Prev = NewDataPathLink()
 			parent = dataPathNode
+		case upperBound:
+			dataPathNode.AddParent(parent)
+			dataPathNode.DLDataPathLinkForPSA = NewDataPathLink()
+			parent.AddChild(dataPathNode)
+
 		default:
 
 			dataPathNode.AddParent(parent)

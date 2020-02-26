@@ -19,10 +19,11 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 	}
 
 	node = &DataPathNode{
-		UPF:              upNodes[name].UPF,
-		Next:             make(map[string]*DataPathLink),
-		Prev:             nil,
-		IsBranchingPoint: false,
+		UPF:                  upNodes[name].UPF,
+		Next:                 make(map[string]*DataPathLink),
+		Prev:                 nil,
+		IsBranchingPoint:     false,
+		DLDataPathLinkForPSA: nil,
 	}
 	return
 }

@@ -8,7 +8,10 @@ type DataPathNode struct {
 	Next map[string]*DataPathLink //uuid to DataPathLink
 
 	//for UE Routing Topology
-	IsBranchingPoint bool
+	//for special case:
+	//branching & leafnode
+	IsBranchingPoint     bool
+	DLDataPathLinkForPSA *DataPathLink
 }
 
 type DataPathLink struct {
@@ -25,10 +28,11 @@ type DataPathLink struct {
 func NewDataPathNode() (node *DataPathNode) {
 
 	node = &DataPathNode{
-		UPF:              nil,
-		Next:             make(map[string]*DataPathLink),
-		Prev:             nil,
-		IsBranchingPoint: false,
+		UPF:                  nil,
+		Next:                 make(map[string]*DataPathLink),
+		Prev:                 nil,
+		IsBranchingPoint:     false,
+		DLDataPathLinkForPSA: nil,
 	}
 	return
 }
