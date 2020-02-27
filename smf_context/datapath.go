@@ -131,15 +131,14 @@ func (node *DataPathNode) GetNodeIP() (ip string) {
 	return
 }
 
-func (node *DataPathNode) PrintPath() {
-
+func (node *DataPathNode) PrintPath() (str string) {
 	upi := smfContext.UserPlaneInformation
-	fmt.Println(upi.GetUPFNameByIp(node.GetNodeIP()))
+	str = upi.GetUPFNameByIp(node.GetNodeIP()) + "\n"
 
 	for _, node := range node.Next {
-
-		node.To.PrintPath()
+		str += node.To.PrintPath()
 	}
+	return
 }
 
 func (node *DataPathNode) IsANUPF() bool {
