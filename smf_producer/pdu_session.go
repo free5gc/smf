@@ -177,7 +177,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	// TODO: UECM registration
 	smContext.Tunnel = new(smf_context.UPTunnel)
-	// SetUpUplinkUserPlane(upfRoot, smContext)
+	SetUpUplinkUserPlane(upfRoot, smContext)
 	smContext.Tunnel.UpfRoot = upfRoot
 
 	smContext.Tunnel.Node = selectedUPF
