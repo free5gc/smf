@@ -49,7 +49,7 @@ type SMFContext struct {
 	UserPlaneInformation UserPlaneInformation
 	//*** For ULCL ** //
 	UERoutingPaths  map[string][]factory.Path
-	UERoutingGraphs map[string]*UEPathGraph
+	UERoutingGraphs map[string]*UEDataPathGraph
 }
 
 func AllocUEIP() net.IP {
@@ -136,7 +136,7 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 
 	UERoutingInfo := routingConfig.UERoutingInfo
 	smfContext.UERoutingPaths = make(map[string][]factory.Path)
-	smfContext.UERoutingGraphs = make(map[string]*UEPathGraph)
+	smfContext.UERoutingGraphs = make(map[string]*UEDataPathGraph)
 
 	for _, routingInfo := range UERoutingInfo {
 
@@ -147,7 +147,12 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 
 	for supi := range smfContext.UERoutingPaths {
 
-		graph := NewUEPathGraph(supi)
+		graph, err := NewUEDataPathGraph(supi)
+
+		if err != nil {
+			logger.CtxLog.Errorln(err)
+		}
+
 		graph.FindBranchingPoints()
 		smfContext.UERoutingGraphs[supi] = graph
 		graph.PrintGraph()

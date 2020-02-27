@@ -42,6 +42,37 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		return
 	}
 
+	var upfRoot *smf_context.DataPathNode
+	// if smf_context.CheckUEHasPreConfig(createData.Supi) {
+
+	// 	ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
+	// 	upfRoot = ueRoutingGraph.GetGraphRoot()
+	// } else {
+
+	// }
+
+	//smf_context.GetUserPlaneInformation().PrintDefaultDnnPath(createData.Dnn)
+	upfRoot = smf_context.GetUserPlaneInformation().GetDefaultUPFTopoByDNN(createData.Dnn)
+	upfRoot.PrintPath()
+
+	if upfRoot == nil {
+
+		logger.PduSessLog.Errorf("UPF for serve DNN[%s] not found\n", createData.Dnn)
+		rspChan <- smf_message.HandlerResponseMessage{
+			HTTPResponse: &http_wrapper.Response{
+				Header: nil,
+				Status: http.StatusForbidden,
+				Body: models.PostSmContextsErrorResponse{
+					JsonData: &models.SmContextCreateError{
+						Error:   &Nsmf_PDUSession.DnnNotSupported,
+						N1SmMsg: &models.RefToBinaryData{ContentId: "N1Msg"},
+					},
+				},
+			},
+		}
+
+	}
+
 	selectedUPF := smf_context.SelectUPFByDnn(createData.Dnn)
 	if selectedUPF == nil {
 		logger.PduSessLog.Errorf("UPF for serve DNN[%s] not found\n", createData.Dnn)
@@ -91,14 +122,25 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	// TODO: UECM registration
 
+	SetUpUplinkUserPlane(upfRoot, smContext)
+	smContext.Tunnel.UpfRoot = upfRoot
+
 	smContext.Tunnel = new(smf_context.UPTunnel)
 	smContext.Tunnel.Node = selectedUPF
 	tunnel := smContext.Tunnel
 	// Establish UP
+	tunnel.ULTEID, err = tunnel.Node.GenerateTEID()
 
-	tunnel.ULTEID = tunnel.Node.GenerateTEID()
+	if err != nil {
+		logger.PduSessLog.Error(err)
+	}
 
-	tunnel.ULPDR = smContext.Tunnel.Node.AddPDR()
+	tunnel.ULPDR, err = smContext.Tunnel.Node.AddPDR()
+
+	if err != nil {
+		logger.PduSessLog.Error(err)
+	}
+
 	tunnel.ULPDR.Precedence = 32
 	tunnel.ULPDR.PDI = smf_context.PDI{
 		SourceInterface: pfcpType.SourceInterface{
@@ -153,8 +195,8 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	}
 
 	fmt.Println("[SMF] Send PFCP to UPF IP: ", addr.IP.String())
-	pfcp_message.SendPfcpSessionEstablishmentRequest(&addr, smContext)
-	AddUEUpLinkRoutingInfo(smContext)
+	//pfcp_message.SendPfcpSessionEstablishmentRequest(&addr, smContext)
+	//AddUEUpLinkRoutingInfo(smContext)
 
 	smf_consumer.SendNFDiscoveryServingAMF(smContext)
 
@@ -264,7 +306,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			tunnel.DLPDR.FAR.ApplyAction.Nocp = true
 
 			if tunnel.DLPDR.FAR.BAR == nil {
-				tunnel.DLPDR.FAR.BAR = smContext.Tunnel.Node.AddBAR()
+				tunnel.DLPDR.FAR.BAR, _ = smContext.Tunnel.Node.AddBAR()
 				bar_list = []*smf_context.BAR{tunnel.DLPDR.FAR.BAR}
 			}
 
@@ -278,22 +320,22 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 	switch smContextUpdateData.N2SmInfoType {
 	case models.N2SmInfoType_PDU_RES_SETUP_RSP:
 		if tunnel.DLPDR == nil {
-			tunnel.DLPDR = smContext.Tunnel.Node.AddPDR()
+			tunnel.DLPDR, _ = smContext.Tunnel.Node.AddPDR()
 		} else {
 			tunnel.DLPDR.State = smf_context.RULE_UPDATE
 		}
 
-		NodeID := tunnel.Node.NodeID
-		if CheckUEUpLinkRoutingStatus(smContext) == Uninitialized {
-			fmt.Println("[SMF] ======= In HandlePDUSessionSMContextUpdate ======")
-			fmt.Println("[SMF] Initialized UE UPLink Routing !")
-			fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate Supi: ", smContext.Supi)
-			fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate NodeID: ", NodeID.ResolveNodeIdToIp().String())
+		//NodeID := tunnel.Node.NodeID
+		// if CheckUEUpLinkRoutingStatus(smContext) == Uninitialized {
+		// 	fmt.Println("[SMF] ======= In HandlePDUSessionSMContextUpdate ======")
+		// 	fmt.Println("[SMF] Initialized UE UPLink Routing !")
+		// 	fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate Supi: ", smContext.Supi)
+		// 	fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate NodeID: ", NodeID.ResolveNodeIdToIp().String())
 
-			// TODO: Setup Uplink Routing
-			// InitializeUEUplinkRouting(smContext)
-			SetUeRoutingInitializeState(smContext, HasSendPFCPMsg)
-		}
+		// 	// TODO: Setup Uplink Routing
+		// 	// InitializeUEUplinkRouting(smContext)
+		// 	SetUeRoutingInitializeState(smContext, HasSendPFCPMsg)
+		// }
 
 		tunnel.DLPDR.Precedence = 32
 		tunnel.DLPDR.PDI = smf_context.PDI{

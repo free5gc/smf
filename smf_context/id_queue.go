@@ -10,10 +10,10 @@ type IDQueue struct {
 type IDType int
 
 const (
-	PDRType  IDType = 0
-	FARType  IDType = 1
-	BARType  IDType = 2
-	TEIDType IDType = 3
+	PDRType  IDType = iota
+	FARType  
+	BARType  
+	TEIDType 
 )
 
 func NewIDQueue(idType IDType) (idQueue *IDQueue) {
@@ -27,7 +27,6 @@ func NewIDQueue(idType IDType) (idQueue *IDQueue) {
 }
 
 func (q *IDQueue) Push(item int) {
-
 	q.Queue = append(q.Queue, item)
 }
 
