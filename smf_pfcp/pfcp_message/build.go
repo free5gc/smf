@@ -73,7 +73,7 @@ func pdrToCreatePDR(pdr *smf_context.PDR) *pfcp.CreatePDR {
 
 	createPDR.PDI = &pfcp.PDI{
 		SourceInterface: &pdr.PDI.SourceInterface,
-		LocalFTEID:      &pdr.PDI.LocalFTeid,
+		LocalFTEID:      pdr.PDI.LocalFTeid,
 		NetworkInstance: &pdr.PDI.NetworkInstance,
 		UEIPAddress:     pdr.PDI.UEIPAddress,
 	}
@@ -141,7 +141,7 @@ func pdrToUpdatePDR(pdr *smf_context.PDR) *pfcp.UpdatePDR {
 
 	updatePDR.PDI = &pfcp.PDI{
 		SourceInterface: &pdr.PDI.SourceInterface,
-		LocalFTEID:      &pdr.PDI.LocalFTeid,
+		LocalFTEID:      pdr.PDI.LocalFTeid,
 		NetworkInstance: &pdr.PDI.NetworkInstance,
 		UEIPAddress:     pdr.PDI.UEIPAddress,
 	}
