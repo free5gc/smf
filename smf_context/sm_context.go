@@ -86,7 +86,8 @@ type SMContext struct {
 
 	SMState SMState
 
-	Tunnel *UPTunnel
+	Tunnel    *UPTunnel
+	BPManager *BPManager
 }
 
 func canonicalName(identifier string, pduSessID int32) (canonical string) {

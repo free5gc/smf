@@ -7,6 +7,8 @@ import (
 type UEDataPathGraph struct {
 	SUPI  string
 	Graph []*DataPathNode
+	ANUPF map[*DataPathNode]bool
+	PSA   map[*DataPathNode]bool
 }
 
 func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
@@ -33,11 +35,15 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 	UEPGraph = new(UEDataPathGraph)
 	UEPGraph.Graph = make([]*DataPathNode, 0)
 	UEPGraph.SUPI = SUPI
+	UEPGraph.ANUPF = make(map[*DataPathNode]bool)
+	UEPGraph.PSA = make(map[*DataPathNode]bool)
 
 	paths := smfContext.UERoutingPaths[SUPI]
 	lowerBound := 0
 
 	NodeCreated := make(map[string]*DataPathNode)
+
+	//RANRoot := NewDataPathNode()
 
 	for _, path := range paths {
 		upperBound := len(path.UPF) - 1
@@ -80,7 +86,7 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddChild(child_node)
 				ue_node.AddDestinationOfChild(child_node, DataEndPoint)
-
+				UEPGraph.AddANUPF(ue_node)
 			case upperBound:
 				parent_name := path.UPF[idx-1]
 
@@ -96,6 +102,7 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 
 				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddParent(parent_node)
+				UEPGraph.AddPSA(ue_node)
 			default:
 				child_name := path.UPF[idx+1]
 
@@ -162,6 +169,32 @@ func (uepg *UEDataPathGraph) PrintGraph() {
 				fmt.Println("\t\tDestination Port: ", child_link.DestinationPort)
 			}
 		}
+	}
+
+	fmt.Println("ANUPF: ")
+	for node, _ := range uepg.ANUPF {
+		node_ip := node.GetNodeIP()
+		fmt.Println("\t\tNode: ", upi.GetUPFNameByIp(node_ip))
+	}
+
+	fmt.Println("PSA: ")
+	for node, _ := range uepg.PSA {
+		node_ip := node.GetNodeIP()
+		fmt.Println("\t\tNode: ", upi.GetUPFNameByIp(node_ip))
+	}
+}
+
+func (uepg *UEDataPathGraph) AddANUPF(node *DataPathNode) {
+
+	if _, exist := uepg.ANUPF[node]; !exist {
+		uepg.ANUPF[node] = false
+	}
+}
+
+func (uepg *UEDataPathGraph) AddPSA(node *DataPathNode) {
+
+	if _, exist := uepg.PSA[node]; !exist {
+		uepg.PSA[node] = false
 	}
 }
 

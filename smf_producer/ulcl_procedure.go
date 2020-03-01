@@ -1,5 +1,7 @@
 package smf_producer
 
+import "gofree5gc/src/smf/smf_context"
+
 // import (
 // 	"fmt"
 // 	"gofree5gc/lib/flowdesc"
@@ -14,14 +16,48 @@ package smf_producer
 
 // var ueRoutingInitialized map[string]UeRoutingInitializeState
 
-// type UeRoutingInitializeState int
+func AddPDUSessionAnchorAndULCL(smContext *smf_context.SMContext) {
 
-// const (
-// 	Uninitialized      UeRoutingInitializeState = 0
-// 	HasSendPFCPMsg     UeRoutingInitializeState = 1
-// 	InitializedSuccess UeRoutingInitializeState = 2
-// 	InitializedFail    UeRoutingInitializeState = 3
-// )
+	bpManager := smContext.BPManager
+	//select PSA2
+	psa2_path := bpManager.SelectPSA2()
+	psa1_path := bpManager.PSA1Path
+
+	ulcl := bpManager.FindULCL(psa1_path, psa2_path)
+
+	//Establish PSA2
+	establishPSA2()
+
+	//Establish ULCL
+	establishULCL()
+
+	//updatePSA1 downlink
+
+	//updatePSA2 downlink
+
+	//update AN for new CN Info
+
+}
+
+func selectPSA2() (psa2_path []*smf_context.DataPathNode) {
+
+}
+
+func establishPSA2(psa2_path []*smf_context.DataPathNode) {
+
+}
+
+func selectULCL() (ulcl *smf_context.DataPathNode) {
+
+}
+
+func updatePSA1() {
+
+}
+
+func establishULCL(ulcl *smf_context.DataPathNode) {
+
+}
 
 // func init() {
 // 	ueRoutingInitialized = make(map[string]UeRoutingInitializeState)
@@ -42,14 +78,14 @@ package smf_producer
 // 	return ueRoutingInitialized[supi]
 // }
 
-// func CheckBranchingPoint(nodeID *pfcpType.NodeID, smContext *smf_context.SMContext) bool {
-// 	upfIP := nodeID.ResolveNodeIdToIp().String()
-// 	upfName := smf_context.SMF_Self().UserPlaneInformation.UPFIPToName[upfIP]
+// // func CheckBranchingPoint(nodeID *pfcpType.NodeID, smContext *smf_context.SMContext) bool {
+// // 	upfIP := nodeID.ResolveNodeIdToIp().String()
+// // 	upfName := smf_context.SMF_Self().UserPlaneInformation.UPFIPToName[upfIP]
 
-// 	ueRoutingGraph := smf_context.SMF_Self().UERoutingGraphs[smContext.Supi]
+// // 	ueRoutingGraph := smf_context.SMF_Self().UERoutingGraphs[smContext.Supi]
 
-// 	return ueRoutingGraph.IsBranchingPoint(upfName)
-// }
+// // 	return ueRoutingGraph.IsBranchingPoint(upfName)
+// // }
 
 // func SetUeRoutingInitializeState(smContext *smf_context.SMContext, status UeRoutingInitializeState) {
 
