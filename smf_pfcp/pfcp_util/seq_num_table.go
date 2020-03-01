@@ -13,14 +13,14 @@ type SeqNumTableItem struct {
 }
 
 type SeqNumTable struct {
-	from_smf_seq_table map[uint32]*SeqNumTableItem
-	to_smf_seq_table   map[uint32]*SeqNumTableItem
+	fromSMF map[uint32]*SeqNumTableItem
+	toSMF   map[uint32]*SeqNumTableItem
 }
 
 func NewSeqNumTable() *SeqNumTable {
 	var snt SeqNumTable
-	snt.from_smf_seq_table = make(map[uint32]*SeqNumTableItem)
-	snt.to_smf_seq_table = make(map[uint32]*SeqNumTableItem)
+	snt.fromSMF = make(map[uint32]*SeqNumTableItem)
+	snt.toSMF = make(map[uint32]*SeqNumTableItem)
 	return &snt
 }
 
@@ -83,9 +83,9 @@ func (snt SeqNumTable) RecvCheckAndPutItem(msg *pfcp.Message) (Success bool) {
 
 	}
 
-	_, exist := snt.to_smf_seq_table[seqNum]
+	_, exist := snt.toSMF[seqNum]
 	if !exist {
-		snt.to_smf_seq_table[seqNum] = Item
+		snt.toSMF[seqNum] = Item
 		Success = true
 	} else {
 		logger.PfcpLog.Errorf("\n[SMF PFCP]Sequence Number %d already exists.\n", seqNum)
@@ -140,9 +140,9 @@ func (snt SeqNumTable) SendCheckAndPutItem(msg *pfcp.Message) (Success bool) {
 
 	}
 
-	_, exist := snt.from_smf_seq_table[seqNum]
+	_, exist := snt.fromSMF[seqNum]
 	if !exist {
-		snt.from_smf_seq_table[seqNum] = Item
+		snt.fromSMF[seqNum] = Item
 		Success = true
 	} else {
 		logger.PfcpLog.Errorf("\n[SMF PFCP]Sequence Number %d already exists.\n", seqNum)
@@ -160,7 +160,7 @@ func (snt SeqNumTable) RemoveItem(seqNum uint32, newStateInInt uint8) (Success b
 	var exist bool
 
 	if newState == SEND_RESPONSE {
-		item, exist = snt.to_smf_seq_table[seqNum]
+		item, exist = snt.toSMF[seqNum]
 
 		if !exist {
 			logger.PfcpLog.Warnf("\n[SMF PFCP] Can't send response without having corresponding request.\n")
@@ -168,7 +168,7 @@ func (snt SeqNumTable) RemoveItem(seqNum uint32, newStateInInt uint8) (Success b
 			return
 		}
 	} else if newState == RECV_RESPONSE {
-		item, exist = snt.from_smf_seq_table[seqNum]
+		item, exist = snt.fromSMF[seqNum]
 
 		if !exist {
 			logger.PfcpLog.Warnf("\n[SMF PFCP] Can't receive response without having corresponding request.\n")
@@ -187,7 +187,7 @@ func (snt SeqNumTable) RemoveItem(seqNum uint32, newStateInInt uint8) (Success b
 			return
 		}
 
-		delete(snt.to_smf_seq_table, seqNum)
+		delete(snt.toSMF, seqNum)
 		Success = true
 	case RECV_RESPONSE:
 		if item.PacketState != SEND_REQUEST {
@@ -198,7 +198,7 @@ func (snt SeqNumTable) RemoveItem(seqNum uint32, newStateInInt uint8) (Success b
 			return
 		}
 
-		delete(snt.from_smf_seq_table, seqNum)
+		delete(snt.fromSMF, seqNum)
 		Success = true
 	default:
 		logger.PfcpLog.Errorf("\nWrong Packet State: %d\n", newState)
@@ -210,13 +210,13 @@ func (snt SeqNumTable) RemoveItem(seqNum uint32, newStateInInt uint8) (Success b
 func (snt SeqNumTable) PrintTable() {
 	fmt.Println("Table from smf")
 	fmt.Printf("Seq Num\tMsg Type\tPacket State\n")
-	for seqNum, item := range snt.from_smf_seq_table {
+	for seqNum, item := range snt.fromSMF {
 		fmt.Printf("%d\t%d\t%d\n", seqNum, item.MessageType, item.PacketState)
 	}
 
 	fmt.Println("Table to smf")
 	fmt.Printf("Seq Num\tMsg Type\tPacket State\n")
-	for seqNum, item := range snt.to_smf_seq_table {
+	for seqNum, item := range snt.toSMF {
 		fmt.Printf("%d\t%d\t%d\n", seqNum, item.MessageType, item.PacketState)
 	}
 }
