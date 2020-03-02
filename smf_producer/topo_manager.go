@@ -67,7 +67,7 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 			//Have to change source interface for different upf
 			InterfaceValue: pfcpType.SourceInterfaceAccess,
 		},
-		LocalFTeid: pfcpType.FTEID{
+		LocalFTeid: &pfcpType.FTEID{
 			V4:          true,
 			Teid:        teid,
 			Ipv4Address: node.UPF.UPIPInfo.Ipv4Address,
@@ -142,7 +142,7 @@ func AllocateDownLinkPDR(node *smf_context.DataPathNode, smContext *smf_context.
 				//Have to change source interface for different upf
 				InterfaceValue: pfcpType.SourceInterfaceAccess,
 			},
-			LocalFTeid: pfcpType.FTEID{
+			LocalFTeid: &pfcpType.FTEID{
 				V4:          true,
 				Teid:        teid,
 				Ipv4Address: node.UPF.UPIPInfo.Ipv4Address,
@@ -192,7 +192,7 @@ func AllocateDownLinkPDR(node *smf_context.DataPathNode, smContext *smf_context.
 				//Have to change source interface for different upf
 				InterfaceValue: pfcpType.SourceInterfaceAccess,
 			},
-			LocalFTeid: pfcpType.FTEID{
+			LocalFTeid: &pfcpType.FTEID{
 				V4:          true,
 				Teid:        0,
 				Ipv4Address: node.UPF.UPIPInfo.Ipv4Address,

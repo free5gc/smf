@@ -254,7 +254,7 @@ func (pdr *PDR) InitializePDR(smContext *SMContext) {
 		SourceInterface: pfcpType.SourceInterface{
 			InterfaceValue: pfcpType.SourceInterfaceAccess,
 		},
-		LocalFTeid: pfcpType.FTEID{
+		LocalFTeid: &pfcpType.FTEID{
 			V4:          true,
 			Teid:        tunnel.ULTEID,
 			Ipv4Address: tunnel.Node.UPIPInfo.Ipv4Address,
