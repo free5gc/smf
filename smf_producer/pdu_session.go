@@ -119,18 +119,19 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	}
 
 	var upfRoot *smf_context.DataPathNode
-	// if smf_context.CheckUEHasPreConfig(createData.Supi) {
+	if smf_context.CheckUEHasPreConfig(createData.Supi) {
 
-	// 	ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
-	// 	upfRoot = ueRoutingGraph.GetGraphRoot()
-	// } else {
+		ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
+		upfRoot = ueRoutingGraph.GetGraphRoot()
+		psaPath := smf_context.GetUserPlaneInformation().DefaultUserPlanePath[createData.Dnn]
+		upfRoot.EnableUserPlanePath(psaPath)
 
-	// }
-
-	//smf_context.GetUserPlaneInformation().PrintDefaultDnnPath(createData.Dnn)
-	upfRoot = smf_context.GetUserPlaneInformation().GetDefaultUPFTopoByDNN(createData.Dnn)
-	upfRoot.PrintPath()
-	psaPath := smf_context.GetUserPlaneInformation().DefaultUserPlanePath[createData.Dnn]
+		smContext.BPManager = NewBPManager(createData.Supi)
+		smContext.BPManager.SetPSAStatus(psaPath)
+		smContext.BPManager.PSA1Path = psaPath
+	} else {
+		upfRoot = smf_context.GetUserPlaneInformation().GetDefaultUPFTopoByDNN(createData.Dnn)
+	}
 
 	if upfRoot == nil {
 
@@ -178,13 +179,6 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	// TODO: UECM registration
 	smContext.Tunnel = new(smf_context.UPTunnel)
-
-	if smf_context.CheckUEHasPreConfig(createData.Supi) {
-
-		smContext.BPManager = NewBPManager(createData.Supi)
-		smContext.BPManager.SetPSAStatus(psaPath)
-		smContext.BPManager.PSA1Path = psaPath
-	}
 
 	SetUpUplinkUserPlane(upfRoot, smContext)
 	smContext.Tunnel.UpfRoot = upfRoot

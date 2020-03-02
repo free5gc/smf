@@ -167,6 +167,7 @@ func (upi *UserPlaneInformation) GetDefaultUPFTopoByDNN(dnn string) (root *DataP
 
 		dataPathNode := NewDataPathNode()
 		dataPathNode.UPF = node.UPF
+		dataPathNode.InUse = true
 		switch idx {
 		case lowerBound:
 

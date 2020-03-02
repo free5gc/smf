@@ -1,32 +1,39 @@
 package smf_producer
 
-import "gofree5gc/src/smf/smf_context"
-
-// import (
-// 	"fmt"
-// 	"gofree5gc/lib/flowdesc"
-// 	"gofree5gc/lib/pfcp/pfcpType"
-// 	"gofree5gc/lib/pfcp/pfcpUdp"
-// 	"gofree5gc/src/smf/logger"
-// 	"gofree5gc/src/smf/smf_context"
-// 	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
-// 	"net"
-// 	"strconv"
-// )
+import (
+	"fmt"
+	"gofree5gc/src/smf/logger"
+	"gofree5gc/src/smf/smf_context"
+	// 	"gofree5gc/lib/flowdesc"
+	// 	"gofree5gc/lib/pfcp/pfcpType"
+	// 	"gofree5gc/lib/pfcp/pfcpUdp"
+	// 	"gofree5gc/src/smf/logger"
+	// 	"gofree5gc/src/smf/smf_context"
+	// 	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
+	// 	"net"
+	// 	"strconv"
+)
 
 // var ueRoutingInitialized map[string]UeRoutingInitializeState
 
 func AddPDUSessionAnchorAndULCL(smContext *smf_context.SMContext) {
 
 	bpManager := smContext.BPManager
+	upfRoot := smContext.Tunnel.UpfRoot
 	//select PSA2
-	psa2_path := bpManager.SelectPSA2()
-	psa1_path := bpManager.PSA1Path
+	bpManager.SelectPSA2()
+	upfRoot.EnableUserPlanePath(bpManager.PSA2Path)
 
-	ulcl := bpManager.FindULCL(psa1_path, psa2_path)
+	//select an upf as ULCL
+	bpManager.FindULCL()
+	if bpManager.ULCL == nil {
+		fmt.Println("Can't find ULCL!")
+		logger.PduSessLog.Errorln("Can't find ULCL!")
+		return
+	}
 
 	//Establish PSA2
-	establishPSA2()
+	bpManager.EstablishPSA2(smContext)
 
 	//Establish ULCL
 	establishULCL()
@@ -40,10 +47,6 @@ func AddPDUSessionAnchorAndULCL(smContext *smf_context.SMContext) {
 }
 
 func selectPSA2() (psa2_path []*smf_context.DataPathNode) {
-
-}
-
-func establishPSA2(psa2_path []*smf_context.DataPathNode) {
 
 }
 

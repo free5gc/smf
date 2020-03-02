@@ -10,6 +10,7 @@ type DataPathNode struct {
 	//for UE Routing Topology
 	//for special case:
 	//branching & leafnode
+	InUse                bool
 	IsBranchingPoint     bool
 	DLDataPathLinkForPSA *DataPathUpLink
 }

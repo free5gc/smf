@@ -3,7 +3,13 @@ package smf_context
 type BPManager struct {
 	ANUPFState map[*DataPathNode]bool
 	PSAState   map[*DataPathNode]PDUSessionAnchorState
-	PSA1Path   []*UPNode
+
+	//Need these variable conducting Add addtional PSA (TS23.502 4.3.5.4)
+	//There value will change from time to time
+	PSA1Path []*UPNode
+	PSA2Path []*UPNode
+	ULCL     *UPNode
+	ULCLIdx  int
 }
 
 type PDUSessionAnchorState int
@@ -47,10 +53,10 @@ func (bpMGR *BPManager) SetPSAStatus(psa_path []*UPNode) {
 
 }
 
-func (bpMGR *BPManager) SelectPSA2() (psa2_path []*UPNode) {
+func (bpMGR *BPManager) SelectPSA2() {
 
 	var psa2, curNode *DataPathNode
-	psa2_path = make([]*UPNode, 0)
+	psa2_path := make([]*UPNode, 0)
 	upInfo := GetUserPlaneInformation()
 
 	for dataPathNode, status := range bpMGR.PSAState {
@@ -63,44 +69,60 @@ func (bpMGR *BPManager) SelectPSA2() (psa2_path []*UPNode) {
 
 	for curNode = psa2; curNode != nil; curNode = psa2.Prev.To {
 
-		curNodeIP := curNode.UPF.NodeID.ResolveNodeIdToIp().String()
+		curNodeIP := curNode.UPF.GetUPFIP()
 		curUPNode := upInfo.GetUPFNodeByIP(curNodeIP)
-
 		psa2_path = append([]*UPNode{curUPNode}, psa2_path...)
 	}
 
+	bpMGR.PSA2Path = psa2_path
 	return
 }
 
-func (bpMGR *BPManager) FindULCL(psa1_path []*UPNode, psa2_path []*UPNode) (ulcl *UPNode) {
+func (bpMGR *BPManager) FindULCL() {
 
+	psa1_path := bpMGR.PSA1Path
+	psa2_path := bpMGR.PSA2Path
 	len_psa1_path := len(psa1_path)
 	len_psa2_path := len(psa2_path)
-	ulcl = nil
+	bpMGR.ULCL = nil
 
 	if len_psa1_path > len_psa2_path {
 
 		for idx, node := range psa1_path {
 
-			if psa1_path[idx] != psa2_path[idx] {
+			node1_ip := psa1_path[idx].UPF.GetUPFIP()
+			node2_ip := psa2_path[idx].UPF.GetUPFIP()
+
+			if node1_ip == node2_ip {
+				bpMGR.ULCL = node
+				bpMGR.ULCLIdx = idx
+			} else {
 				break
 			}
 
-			ulcl = node
 		}
 
 	} else {
 
 		for idx, node := range psa2_path {
 
-			if psa1_path[idx] != psa2_path[idx] {
+			node1_ip := psa1_path[idx].UPF.GetUPFIP()
+			node2_ip := psa2_path[idx].UPF.GetUPFIP()
+
+			if node1_ip == node2_ip {
+				bpMGR.ULCL = node
+				bpMGR.ULCLIdx = idx
+			} else {
 				break
 			}
-
-			ulcl = node
 		}
 
 	}
 
 	return
+}
+
+func (bpMGR *BPManager) EstablishPSA2(smContext *SMContext) {
+
+	upfRoot := smContext.Tunnel.UpfRoot
 }

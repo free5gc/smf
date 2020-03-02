@@ -105,7 +105,7 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 	for _, upf_link := range node.DataPathToDN {
 
 		child := upf_link.To
-		if !visited[child] {
+		if !visited[child] && child.InUse {
 			AllocateUpLinkPDRandTEID(child, smContext, visited)
 		}
 
@@ -172,7 +172,7 @@ func AllocateDownLinkPDR(node *smf_context.DataPathNode, smContext *smf_context.
 	for _, upf_link := range node.DataPathToDN {
 
 		child := upf_link.To
-		if !visited[child] {
+		if !visited[child] && child.InUse {
 			AllocateDownLinkPDR(child, smContext, visited)
 		}
 
@@ -244,7 +244,7 @@ func AllocateDownLinkTEID(node *smf_context.DataPathNode, smContext *smf_context
 	for _, upf_link := range node.DataPathToDN {
 
 		child := upf_link.To
-		if !visited[child] {
+		if !visited[child] && child.InUse {
 			AllocateDownLinkTEID(child, smContext, visited)
 		}
 
@@ -274,7 +274,7 @@ func SendUplinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context.S
 	for _, upf_link := range node.DataPathToDN {
 
 		child := upf_link.To
-		if !visited[child] {
+		if !visited[child] && child.InUse {
 			SendUplinkPFCPRule(upf_link.To, smContext, visited)
 		}
 	}
@@ -314,7 +314,7 @@ func SendDownLinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context
 	for _, upf_link := range node.DataPathToDN {
 
 		child := upf_link.To
-		if !visited[child] {
+		if !visited[child] && child.InUse {
 			SendDownLinkPFCPRule(upf_link.To, smContext, visited)
 		}
 	}
