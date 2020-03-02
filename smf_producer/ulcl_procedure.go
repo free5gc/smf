@@ -1,7 +1,6 @@
 package smf_producer
 
 import (
-	"fmt"
 	"gofree5gc/src/smf/logger"
 	"gofree5gc/src/smf/smf_context"
 	// 	"gofree5gc/lib/flowdesc"
@@ -22,14 +21,15 @@ func AddPDUSessionAnchorAndULCL(smContext *smf_context.SMContext) {
 	upfRoot := smContext.Tunnel.UpfRoot
 	//select PSA2
 	bpManager.SelectPSA2()
-	upfRoot.EnableUserPlanePath(bpManager.PSA2Path)
+	err := upfRoot.EnableUserPlanePath(bpManager.PSA2Path)
+	if err != nil {
+		logger.PduSessLog.Errorln(err)
+	}
 
 	//select an upf as ULCL
-	bpManager.FindULCL()
-	if bpManager.ULCL == nil {
-		fmt.Println("Can't find ULCL!")
-		logger.PduSessLog.Errorln("Can't find ULCL!")
-		return
+	err = bpManager.FindULCL(smContext)
+	if err != nil {
+		logger.PduSessLog.Errorln(err)
 	}
 
 	//Establish PSA2

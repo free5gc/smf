@@ -1,15 +1,19 @@
 package smf_context
 
+import "fmt"
+
 type BPManager struct {
 	ANUPFState map[*DataPathNode]bool
 	PSAState   map[*DataPathNode]PDUSessionAnchorState
 
 	//Need these variable conducting Add addtional PSA (TS23.502 4.3.5.4)
 	//There value will change from time to time
-	PSA1Path []*UPNode
-	PSA2Path []*UPNode
-	ULCL     *UPNode
-	ULCLIdx  int
+	PSA1Path         []*UPNode
+	PSA2Path         []*UPNode
+	ULCL             *UPNode
+	ULCLIdx          int
+	ULCLDataPathNode *DataPathNode
+	ULCLState        ULCLState
 }
 
 type PDUSessionAnchorState int
@@ -21,6 +25,14 @@ const (
 	AddPSAFail     PDUSessionAnchorState = 3
 )
 
+type ULCLState int
+
+const (
+	IsOnlyULCL    ULCLState = 0
+	IsULCLAndPSA1 ULCLState = 1
+	IsULCLAndPSA2 ULCLState = 2
+)
+
 func NewBPManager(supi string) (bpManager *BPManager) {
 	ueRoutingGraph := SMF_Self().UERoutingGraphs[supi]
 
@@ -28,6 +40,7 @@ func NewBPManager(supi string) (bpManager *BPManager) {
 		ANUPFState: ueRoutingGraph.ANUPF,
 		PSAState:   make(map[*DataPathNode]PDUSessionAnchorState),
 		PSA1Path:   make([]*UPNode, 0),
+		ULCLState:  IsOnlyULCL,
 	}
 
 	for node, _ := range ueRoutingGraph.PSA {
@@ -78,13 +91,14 @@ func (bpMGR *BPManager) SelectPSA2() {
 	return
 }
 
-func (bpMGR *BPManager) FindULCL() {
+func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 
 	psa1_path := bpMGR.PSA1Path
 	psa2_path := bpMGR.PSA2Path
 	len_psa1_path := len(psa1_path)
 	len_psa2_path := len(psa2_path)
 	bpMGR.ULCL = nil
+	bpMGR.ULCLDataPathNode = nil
 
 	if len_psa1_path > len_psa2_path {
 
@@ -99,9 +113,7 @@ func (bpMGR *BPManager) FindULCL() {
 			} else {
 				break
 			}
-
 		}
-
 	} else {
 
 		for idx, node := range psa2_path {
@@ -116,7 +128,43 @@ func (bpMGR *BPManager) FindULCL() {
 				break
 			}
 		}
+	}
 
+	if bpMGR.ULCL == nil {
+		fmt.Errorf("Can't find ULCL!")
+		return
+	}
+
+	upfRoot := smContext.Tunnel.UpfRoot
+	upperBound := len(psa2_path) - 1
+
+	curDataPathNode := upfRoot
+
+	for idx, _ := range psa2_path {
+
+		if idx == bpMGR.ULCLIdx {
+
+			bpMGR.ULCLDataPathNode = curDataPathNode
+			break
+		}
+
+		if idx < upperBound {
+			nextUPPathNodeIP := psa2_path[idx+1].UPF.GetUPFIP()
+			for _, child_link := range curDataPathNode.Next {
+
+				childIP := child_link.To.UPF.GetUPFIP()
+				if nextUPPathNodeIP == childIP {
+					curDataPathNode = child_link.To
+					break
+				}
+			}
+		}
+
+	}
+
+	if bpMGR.ULCLDataPathNode == nil {
+		fmt.Errorf("Can't find ULCLDataPathNode!")
+		return
 	}
 
 	return
@@ -125,4 +173,36 @@ func (bpMGR *BPManager) FindULCL() {
 func (bpMGR *BPManager) EstablishPSA2(smContext *SMContext) {
 
 	upfRoot := smContext.Tunnel.UpfRoot
+	psa2_path := bpMGR.PSA2Path
+
+	curDataPathNode := bpMGR.ULCLDataPathNode
+	upperBound := len(psa2_path) - 1
+
+	for idx := bpMGR.ULCLIdx; idx <= upperBound; idx++ {
+
+		if idx == bpMGR.ULCLIdx && idx == upperBound {
+			//This upf is both ULCL and PSA2
+			//So do nothing we will establish it ulcl rule later
+			bpMGR.ULCLState = IsULCLAndPSA2
+			break
+		} else if idx == bpMGR.ULCLIdx {
+
+			nextUPPathNodeIP := psa2_path[idx+1].UPF.GetUPFIP()
+			for _, child_link := range curDataPathNode.Next {
+
+				childIP := child_link.To.UPF.GetUPFIP()
+				if nextUPPathNodeIP == childIP {
+					curDataPathNode = child_link.To
+					break
+				}
+			}
+
+		} else {
+
+			//SetUpPath()
+		}
+
+	}
+
+	return
 }

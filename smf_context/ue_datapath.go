@@ -296,19 +296,23 @@ func (root *DataPathNode) EnableUserPlanePath(path []*UPNode) (err error) {
 			if idx < upperBound {
 
 				nextUPPathNodeIP := path[idx+1].UPF.GetUPFIP()
+				findNextChild := false
 				for _, child_link := range curDataPathNode.Next {
 
 					childIP := child_link.To.UPF.GetUPFIP()
 					if nextUPPathNodeIP == childIP {
 						curDataPathNode = child_link.To
+						findNextChild = true
 						break
 					}
 				}
 
 				//didn't find next child from the path pattern
 				//path and UE Topo doesn't match
-				err = fmt.Errorf("UE default topo have no ", nextUPPathNodeIP, "!")
-				return
+				if !findNextChild {
+					err = fmt.Errorf("UE default topo have no ", nextUPPathNodeIP, "!")
+					return
+				}
 			}
 
 		}
