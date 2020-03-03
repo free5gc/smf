@@ -3,18 +3,18 @@ package smf_context
 import "fmt"
 
 type DataPathNode struct {
-	UPF  *UPF
-	Prev *DataPathLink
-	Next map[string]*DataPathLink //uuid to DataPathLink
+	UPF          *UPF
+	DataPathToAN *DataPathDownLink
+	DataPathToDN map[string]*DataPathUpLink //uuid to DataPathLink
 
 	//for UE Routing Topology
 	//for special case:
 	//branching & leafnode
 	IsBranchingPoint     bool
-	DLDataPathLinkForPSA *DataPathLink
+	DLDataPathLinkForPSA *DataPathUpLink
 }
 
-type DataPathLink struct {
+type DataPathDownLink struct {
 	To *DataPathNode
 
 	// Filter Rules
@@ -22,28 +22,50 @@ type DataPathLink struct {
 	DestinationPort string
 
 	// related context
-	PDR *PDR
+	UpLinkPDR *PDR
+}
+
+type DataPathUpLink struct {
+	To *DataPathNode
+
+	// Filter Rules
+	DestinationIP   string
+	DestinationPort string
+
+	// related context
+	DownLinkPDR *PDR
 }
 
 func NewDataPathNode() (node *DataPathNode) {
 
 	node = &DataPathNode{
 		UPF:                  nil,
-		Next:                 make(map[string]*DataPathLink),
-		Prev:                 nil,
+		DataPathToDN:         make(map[string]*DataPathUpLink),
+		DataPathToAN:         nil,
 		IsBranchingPoint:     false,
 		DLDataPathLinkForPSA: nil,
 	}
 	return
 }
 
-func NewDataPathLink() (link *DataPathLink) {
+func NewDataPathDownLink() (link *DataPathDownLink) {
 
-	link = &DataPathLink{
+	link = &DataPathDownLink{
 		To:              nil,
 		DestinationIP:   "",
 		DestinationPort: "",
-		PDR:             nil,
+		UpLinkPDR:       nil,
+	}
+	return
+}
+
+func NewDataPathUpLink() (link *DataPathUpLink) {
+
+	link = &DataPathUpLink{
+		To:              nil,
+		DestinationIP:   "",
+		DestinationPort: "",
+		DownLinkPDR:     nil,
 	}
 	return
 }
@@ -56,15 +78,15 @@ func (node *DataPathNode) AddChild(child *DataPathNode) (err error) {
 		return err
 	}
 
-	if _, exist := node.Next[child_id]; !exist {
+	if _, exist := node.DataPathToDN[child_id]; !exist {
 
-		child_link := &DataPathLink{
+		child_link := &DataPathUpLink{
 			To:              child,
 			DestinationIP:   "",
 			DestinationPort: "",
-			PDR:             nil,
+			DownLinkPDR:     nil,
 		}
-		node.Next[child_id] = child_link
+		node.DataPathToDN[child_id] = child_link
 	}
 
 	return
@@ -80,29 +102,29 @@ func (node *DataPathNode) AddParent(parent *DataPathNode) (err error) {
 		return err
 	}
 
-	if node.Prev == nil {
+	if node.DataPathToAN == nil {
 
-		parent_link := &DataPathLink{
+		parent_link := &DataPathDownLink{
 			To:              parent,
 			DestinationIP:   "",
 			DestinationPort: "",
-			PDR:             nil,
+			UpLinkPDR:       nil,
 		}
 
-		node.Prev = parent_link
+		node.DataPathToAN = parent_link
 	}
 
 	return
 }
 
-func (node *DataPathNode) AddDestinationOfChild(child *DataPathNode, Dest *DataPathLink) (err error) {
+func (node *DataPathNode) AddDestinationOfChild(child *DataPathNode, Dest *DataPathUpLink) (err error) {
 
 	child_id, err := child.GetUPFID()
 
 	if err != nil {
 		return err
 	}
-	if child_link, exist := node.Next[child_id]; exist {
+	if child_link, exist := node.DataPathToDN[child_id]; exist {
 
 		child_link.DestinationIP = Dest.DestinationIP
 		child_link.DestinationPort = Dest.DestinationPort
@@ -135,7 +157,7 @@ func (node *DataPathNode) PrintPath() (str string) {
 	upi := smfContext.UserPlaneInformation
 	str = upi.GetUPFNameByIp(node.GetNodeIP()) + "\n"
 
-	for _, node := range node.Next {
+	for _, node := range node.DataPathToDN {
 		str += node.To.PrintPath()
 	}
 	return
@@ -143,7 +165,7 @@ func (node *DataPathNode) PrintPath() (str string) {
 
 func (node *DataPathNode) IsANUPF() bool {
 
-	if node.Prev.To == nil {
+	if node.DataPathToAN.To == nil {
 		return true
 	} else {
 		return false
@@ -152,7 +174,7 @@ func (node *DataPathNode) IsANUPF() bool {
 
 func (node *DataPathNode) IsAnchorUPF() bool {
 
-	if len(node.Next) == 0 {
+	if len(node.DataPathToDN) == 0 {
 		return true
 	} else {
 		return false
@@ -161,16 +183,13 @@ func (node *DataPathNode) IsAnchorUPF() bool {
 }
 
 func (node *DataPathNode) GetUpLinkPDR() (pdr *PDR) {
-
-	return node.Prev.PDR
+	return node.DataPathToAN.UpLinkPDR
 }
 
 func (node *DataPathNode) GetUpLinkFAR() (far *FAR) {
-
-	return node.Prev.PDR.FAR
+	return node.DataPathToAN.UpLinkPDR.FAR
 }
 
 func (node *DataPathNode) GetParent() (parent *DataPathNode) {
-
-	return node.Prev.To
+	return node.DataPathToAN.To
 }

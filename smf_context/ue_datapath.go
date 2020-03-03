@@ -20,8 +20,8 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 
 	node = &DataPathNode{
 		UPF:                  upNodes[name].UPF,
-		Next:                 make(map[string]*DataPathLink),
-		Prev:                 nil,
+		DataPathToDN:         make(map[string]*DataPathUpLink),
+		DataPathToAN:         nil,
 		IsBranchingPoint:     false,
 		DLDataPathLinkForPSA: nil,
 	}
@@ -42,7 +42,7 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 	for _, path := range paths {
 		upperBound := len(path.UPF) - 1
 
-		DataEndPoint := &DataPathLink{
+		DataEndPoint := &DataPathUpLink{
 			DestinationIP:   path.DestinationIP,
 			DestinationPort: path.DestinationPort,
 		}
@@ -146,15 +146,15 @@ func (uepg *UEDataPathGraph) PrintGraph() {
 		fmt.Println("\tBranching Point: ")
 		fmt.Println("\t\t", node.IsBranchingPoint)
 
-		if node.Prev != nil {
+		if node.DataPathToAN != nil {
 			fmt.Println("\tParent Name: ")
-			parent_ip := node.Prev.To.GetNodeIP()
+			parent_ip := node.DataPathToAN.To.GetNodeIP()
 			fmt.Println("\t\t", upi.GetUPFNameByIp(parent_ip))
 		}
 
-		if node.Next != nil {
+		if node.DataPathToDN != nil {
 			fmt.Println("\tChildren Name: ")
-			for _, child_link := range node.Next {
+			for _, child_link := range node.DataPathToDN {
 
 				child_ip := child_link.To.GetNodeIP()
 				fmt.Println("\t\t", upi.GetUPFNameByIp(child_ip))
@@ -198,7 +198,7 @@ func (uepg *UEDataPathGraph) FindBranchingPoints() {
 			for len(queue) > 0 {
 				node := <-queue
 				branchingCount := 0
-				for child_id, child_link := range node.Next {
+				for child_id, child_link := range node.DataPathToDN {
 
 					if color[child_id] == WHITE {
 						color[child_id] = GREY
@@ -211,10 +211,10 @@ func (uepg *UEDataPathGraph) FindBranchingPoints() {
 					}
 				}
 
-				if node.Prev != nil {
+				if node.DataPathToAN != nil {
 
-					parent := node.Prev.To
-					parent_id, _ := node.Prev.To.GetUPFID()
+					parent := node.DataPathToAN.To
+					parent_id, _ := node.DataPathToAN.To.GetUPFID()
 
 					if color[parent_id] == WHITE {
 						color[parent_id] = GREY
