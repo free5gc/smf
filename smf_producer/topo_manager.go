@@ -47,7 +47,7 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 	}
 
 	var err error
-	upLink := node.Prev
+	upLink := node.DataPathToAN
 
 	teid, err := node.UPF.GenerateTEID()
 
@@ -55,13 +55,13 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 		logger.PduSessLog.Error(err)
 	}
 
-	upLink.PDR, err = node.UPF.AddPDR()
+	upLink.UpLinkPDR, err = node.UPF.AddPDR()
 	if err != nil {
 		logger.PduSessLog.Error(err)
 	}
 
-	upLink.PDR.Precedence = 32
-	upLink.PDR.PDI = smf_context.PDI{
+	upLink.UpLinkPDR.Precedence = 32
+	upLink.UpLinkPDR.PDI = smf_context.PDI{
 		SourceInterface: pfcpType.SourceInterface{
 			//Todo:
 			//Have to change source interface for different upf
@@ -78,13 +78,13 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 			Ipv4Address: smContext.PDUAddress.To4(),
 		},
 	}
-	upLink.PDR.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
-	upLink.PDR.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
-	upLink.PDR.State = smf_context.RULE_INITIAL
+	upLink.UpLinkPDR.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
+	upLink.UpLinkPDR.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
+	upLink.UpLinkPDR.State = smf_context.RULE_INITIAL
 
-	upLink.PDR.FAR.ApplyAction.Forw = true
-	upLink.PDR.FAR.State = smf_context.RULE_INITIAL
-	upLink.PDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
+	upLink.UpLinkPDR.FAR.ApplyAction.Forw = true
+	upLink.UpLinkPDR.FAR.State = smf_context.RULE_INITIAL
+	upLink.UpLinkPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
 		DestinationInterface: pfcpType.DestinationInterface{
 			InterfaceValue: pfcpType.DestinationInterfaceCore,
 		},
@@ -102,7 +102,7 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address = node.UPF.UPIPInfo.Ipv4Address
 	}
 
-	for _, upf_link := range node.Next {
+	for _, upf_link := range node.DataPathToDN {
 
 		child := upf_link.To
 		if !visited[child] {
@@ -121,9 +121,9 @@ func AllocateDownLinkPDR(node *smf_context.DataPathNode, smContext *smf_context.
 		visited[node] = true
 	}
 
-	for _, downLink := range node.Next {
+	for _, downLink := range node.DataPathToDN {
 
-		downLink.PDR, err = node.UPF.AddPDR()
+		downLink.DownLinkPDR, err = node.UPF.AddPDR()
 
 		if err != nil {
 			logger.PduSessLog.Error(err)
@@ -135,8 +135,8 @@ func AllocateDownLinkPDR(node *smf_context.DataPathNode, smContext *smf_context.
 			logger.PduSessLog.Error(err)
 		}
 
-		downLink.PDR.Precedence = 32
-		downLink.PDR.PDI = smf_context.PDI{
+		downLink.DownLinkPDR.Precedence = 32
+		downLink.DownLinkPDR.PDI = smf_context.PDI{
 			SourceInterface: pfcpType.SourceInterface{
 				//Todo:
 				//Have to change source interface for different upf
@@ -154,13 +154,13 @@ func AllocateDownLinkPDR(node *smf_context.DataPathNode, smContext *smf_context.
 			},
 		}
 
-		downLink.PDR.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
-		downLink.PDR.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
-		downLink.PDR.State = smf_context.RULE_INITIAL
+		downLink.DownLinkPDR.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
+		downLink.DownLinkPDR.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
+		downLink.DownLinkPDR.State = smf_context.RULE_INITIAL
 
-		downLink.PDR.FAR.ApplyAction.Forw = true
-		downLink.PDR.FAR.State = smf_context.RULE_INITIAL
-		downLink.PDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
+		downLink.DownLinkPDR.FAR.ApplyAction.Forw = true
+		downLink.DownLinkPDR.FAR.State = smf_context.RULE_INITIAL
+		downLink.DownLinkPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
 			DestinationInterface: pfcpType.DestinationInterface{
 				InterfaceValue: pfcpType.DestinationInterfaceCore,
 			},
@@ -169,7 +169,7 @@ func AllocateDownLinkPDR(node *smf_context.DataPathNode, smContext *smf_context.
 
 	}
 
-	for _, upf_link := range node.Next {
+	for _, upf_link := range node.DataPathToDN {
 
 		child := upf_link.To
 		if !visited[child] {
@@ -181,12 +181,12 @@ func AllocateDownLinkPDR(node *smf_context.DataPathNode, smContext *smf_context.
 	if node.IsAnchorUPF() {
 
 		downLink := node.DLDataPathLinkForPSA
-		downLink.PDR, err = node.UPF.AddPDR()
+		downLink.DownLinkPDR, err = node.UPF.AddPDR()
 		if err != nil {
 			logger.PduSessLog.Error(err)
 		}
-		downLink.PDR.Precedence = 32
-		downLink.PDR.PDI = smf_context.PDI{
+		downLink.DownLinkPDR.Precedence = 32
+		downLink.DownLinkPDR.PDI = smf_context.PDI{
 			SourceInterface: pfcpType.SourceInterface{
 				//Todo:
 				//Have to change source interface for different upf
@@ -204,13 +204,13 @@ func AllocateDownLinkPDR(node *smf_context.DataPathNode, smContext *smf_context.
 			},
 		}
 
-		downLink.PDR.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
-		downLink.PDR.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
-		downLink.PDR.State = smf_context.RULE_INITIAL
+		downLink.DownLinkPDR.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
+		downLink.DownLinkPDR.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
+		downLink.DownLinkPDR.State = smf_context.RULE_INITIAL
 
-		downLink.PDR.FAR.ApplyAction.Forw = true
-		downLink.PDR.FAR.State = smf_context.RULE_INITIAL
-		downLink.PDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
+		downLink.DownLinkPDR.FAR.ApplyAction.Forw = true
+		downLink.DownLinkPDR.FAR.State = smf_context.RULE_INITIAL
+		downLink.DownLinkPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
 			DestinationInterface: pfcpType.DestinationInterface{
 				InterfaceValue: pfcpType.DestinationInterfaceCore,
 			},
@@ -225,14 +225,14 @@ func AllocateDownLinkTEID(node *smf_context.DataPathNode, smContext *smf_context
 		visited[node] = true
 	}
 
-	for _, downLink := range node.Next {
+	for _, downLink := range node.DataPathToDN {
 
 		child := downLink.To
-		allocatedDownLinkTEID := downLink.PDR.PDI.LocalFTeid.Teid
+		allocatedDownLinkTEID := downLink.DownLinkPDR.PDI.LocalFTeid.Teid
 
-		for _, child_downLink := range child.Next {
+		for _, child_downLink := range child.DataPathToDN {
 
-			childDownLinkFAR := child_downLink.PDR.FAR
+			childDownLinkFAR := child_downLink.DownLinkPDR.FAR
 			childDownLinkFAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
 			childDownLinkFAR.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
 			childDownLinkFAR.ForwardingParameters.OuterHeaderCreation.Teid = uint32(allocatedDownLinkTEID)
@@ -241,7 +241,7 @@ func AllocateDownLinkTEID(node *smf_context.DataPathNode, smContext *smf_context
 
 	}
 
-	for _, upf_link := range node.Next {
+	for _, upf_link := range node.DataPathToDN {
 
 		child := upf_link.To
 		if !visited[child] {
@@ -264,14 +264,14 @@ func SendUplinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context.S
 
 	fmt.Println("Send to upf addr: ", addr.String())
 
-	upLink := node.Prev
-	pdr_list := []*smf_context.PDR{upLink.PDR}
-	far_list := []*smf_context.FAR{upLink.PDR.FAR}
+	upLink := node.DataPathToAN
+	pdr_list := []*smf_context.PDR{upLink.UpLinkPDR}
+	far_list := []*smf_context.FAR{upLink.UpLinkPDR.FAR}
 	bar_list := []*smf_context.BAR{}
 
 	pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdr_list, far_list, bar_list)
 
-	for _, upf_link := range node.Next {
+	for _, upf_link := range node.DataPathToDN {
 
 		child := upf_link.To
 		if !visited[child] {
@@ -294,10 +294,10 @@ func SendDownLinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context
 
 	fmt.Println("Send to upf addr: ", addr.String())
 
-	for _, down_link := range node.Next {
+	for _, down_link := range node.DataPathToDN {
 
-		pdr_list := []*smf_context.PDR{down_link.PDR}
-		far_list := []*smf_context.FAR{down_link.PDR.FAR}
+		pdr_list := []*smf_context.PDR{down_link.DownLinkPDR}
+		far_list := []*smf_context.FAR{down_link.DownLinkPDR.FAR}
 		bar_list := []*smf_context.BAR{}
 		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
 	}
@@ -305,13 +305,13 @@ func SendDownLinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context
 	if node.IsAnchorUPF() {
 
 		down_link := node.DLDataPathLinkForPSA
-		pdr_list := []*smf_context.PDR{down_link.PDR}
-		far_list := []*smf_context.FAR{down_link.PDR.FAR}
+		pdr_list := []*smf_context.PDR{down_link.DownLinkPDR}
+		far_list := []*smf_context.FAR{down_link.DownLinkPDR.FAR}
 		bar_list := []*smf_context.BAR{}
 		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
 	}
 
-	for _, upf_link := range node.Next {
+	for _, upf_link := range node.DataPathToDN {
 
 		child := upf_link.To
 		if !visited[child] {

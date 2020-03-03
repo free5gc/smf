@@ -2,12 +2,13 @@ package smf_context
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/src/smf/factory"
 	"gofree5gc/src/smf/logger"
 	"net"
 	"reflect"
+
+	"github.com/google/uuid"
 )
 
 type UserPlaneInformation struct {
@@ -164,11 +165,11 @@ func (upi *UserPlaneInformation) GetDefaultUPFTopoByDNN(dnn string) (root *DataP
 		case lowerBound:
 
 			root = dataPathNode
-			root.Prev = NewDataPathLink()
+			root.DataPathToAN = NewDataPathDownLink()
 			parent = dataPathNode
 		case upperBound:
 			dataPathNode.AddParent(parent)
-			dataPathNode.DLDataPathLinkForPSA = NewDataPathLink()
+			dataPathNode.DLDataPathLinkForPSA = NewDataPathUpLink()
 			parent.AddChild(dataPathNode)
 
 		default:
