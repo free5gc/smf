@@ -124,7 +124,11 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
 		upfRoot = ueRoutingGraph.GetGraphRoot()
 		psaPath := smf_context.GetUserPlaneInformation().DefaultUserPlanePath[createData.Dnn]
-		upfRoot.EnableUserPlanePath(psaPath)
+
+		err := upfRoot.EnableUserPlanePath(psaPath)
+		if err != nil {
+			logger.PduSessLog.Error(err)
+		}
 
 		smContext.BPManager = NewBPManager(createData.Supi)
 		smContext.BPManager.SetPSAStatus(psaPath)

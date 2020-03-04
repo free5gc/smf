@@ -34,7 +34,8 @@ type SMF struct{}
 type (
 	// Config information.
 	Config struct {
-		smfcfg string
+		smfcfg    string
+		uerouting string
 	}
 )
 
@@ -47,6 +48,10 @@ var smfCLi = []cli.Flag{
 	},
 	cli.StringFlag{
 		Name:  "smfcfg",
+		Usage: "config file",
+	},
+	cli.StringFlag{
+		Name:  "uerouting",
 		Usage: "config file",
 	},
 }
@@ -64,7 +69,8 @@ func (*SMF) GetCliCmd() (flags []cli.Flag) {
 func (*SMF) Initialize(c *cli.Context) {
 
 	config = Config{
-		smfcfg: c.String("smfcfg"),
+		smfcfg:    c.String("smfcfg"),
+		uerouting: c.String("uerouting"),
 	}
 
 	if config.smfcfg != "" {
@@ -74,8 +80,12 @@ func (*SMF) Initialize(c *cli.Context) {
 		factory.InitConfigFactory(DefaultSmfConfigPath)
 	}
 
-	DefaultUERoutingPath := path_util.Gofree5gcPath("gofree5gc/config/uerouting.yaml")
-	factory.InitRoutingConfigFactory(DefaultUERoutingPath)
+	if config.uerouting != "" {
+		factory.InitRoutingConfigFactory(config.uerouting)
+	} else {
+		DefaultUERoutingPath := path_util.Gofree5gcPath("gofree5gc/config/uerouting.yaml")
+		factory.InitRoutingConfigFactory(DefaultUERoutingPath)
+	}
 
 	initLog.Traceln("SMF debug level(string):", app.ContextSelf().Logger.SMF.DebugLevel)
 	if app.ContextSelf().Logger.SMF.DebugLevel != "" {

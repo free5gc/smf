@@ -137,6 +137,14 @@ func (upf *UPF) GetUPFIP() string {
 	return upf.NodeID.ResolveNodeIdToIp().String()
 }
 
+func (upf *UPF) GetUPFID() string {
+
+	upInfo := GetUserPlaneInformation()
+	upfIP := upf.NodeID.ResolveNodeIdToIp().String()
+	return upInfo.GetUPFIDByIP(upfIP)
+
+}
+
 func (upf *UPF) pdrID() (pdrID uint16, err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
 		err := fmt.Errorf("UPF didn't Setup!")

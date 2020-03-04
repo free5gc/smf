@@ -149,6 +149,11 @@ func (upi *UserPlaneInformation) GetUPFNodeByIP(ip string) *UPNode {
 	return upi.UPFs[upf_name]
 }
 
+func (upi *UserPlaneInformation) GetUPFIDByIP(ip string) string {
+
+	return upi.UPFsIPtoID[ip]
+}
+
 func (upi *UserPlaneInformation) GetDefaultUPFTopoByDNN(dnn string) (root *DataPathNode) {
 
 	path, path_exist := upi.DefaultUserPlanePath[dnn]

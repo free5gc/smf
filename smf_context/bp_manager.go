@@ -104,10 +104,10 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 
 		for idx, node := range psa1_path {
 
-			node1_ip := psa1_path[idx].UPF.GetUPFIP()
-			node2_ip := psa2_path[idx].UPF.GetUPFIP()
+			node1_id := psa1_path[idx].UPF.GetUPFID()
+			node2_id := psa2_path[idx].UPF.GetUPFID()
 
-			if node1_ip == node2_ip {
+			if node1_id == node2_id {
 				bpMGR.ULCL = node
 				bpMGR.ULCLIdx = idx
 			} else {
@@ -118,10 +118,10 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 
 		for idx, node := range psa2_path {
 
-			node1_ip := psa1_path[idx].UPF.GetUPFIP()
-			node2_ip := psa2_path[idx].UPF.GetUPFIP()
+			node1_id := psa1_path[idx].UPF.GetUPFID()
+			node2_id := psa2_path[idx].UPF.GetUPFID()
 
-			if node1_ip == node2_ip {
+			if node1_id == node2_id {
 				bpMGR.ULCL = node
 				bpMGR.ULCLIdx = idx
 			} else {
@@ -131,7 +131,7 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 	}
 
 	if bpMGR.ULCL == nil {
-		fmt.Errorf("Can't find ULCL!")
+		err = fmt.Errorf("Can't find ULCL!")
 		return
 	}
 
@@ -149,60 +149,53 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 		}
 
 		if idx < upperBound {
-			nextUPPathNodeIP := psa2_path[idx+1].UPF.GetUPFIP()
-			for _, child_link := range curDataPathNode.Next {
+			nextUPFID := psa2_path[idx+1].UPF.GetUPFID()
 
-				childIP := child_link.To.UPF.GetUPFIP()
-				if nextUPPathNodeIP == childIP {
-					curDataPathNode = child_link.To
-					break
-				}
+			if nextDataPathLink, exist := curDataPathNode.Next[nextUPFID]; exist {
+
+				curDataPathNode = nextDataPathLink.To
+			} else {
+
+				err = fmt.Errorf("PSA2 Path doesn't match UE Topo! error node: ", psa2_path[idx+1].UPF.GetUPFIP())
+				return
 			}
 		}
 
 	}
 
 	if bpMGR.ULCLDataPathNode == nil {
-		fmt.Errorf("Can't find ULCLDataPathNode!")
+		err = fmt.Errorf("Can't find ULCLDataPathNode!")
 		return
 	}
 
 	return
 }
 
-func (bpMGR *BPManager) EstablishPSA2(smContext *SMContext) {
+// func (bpMGR *BPManager) EstablishPSA2(smContext *SMContext) {
 
-	upfRoot := smContext.Tunnel.UpfRoot
-	psa2_path := bpMGR.PSA2Path
+// 	//upfRoot := smContext.Tunnel.UpfRoot
+// 	psa2_path := bpMGR.PSA2Path
 
-	curDataPathNode := bpMGR.ULCLDataPathNode
-	upperBound := len(psa2_path) - 1
+// 	curDataPathNode := bpMGR.ULCLDataPathNode
+// 	upperBound := len(psa2_path) - 1
 
-	for idx := bpMGR.ULCLIdx; idx <= upperBound; idx++ {
+// 	for idx := bpMGR.ULCLIdx; idx <= upperBound; idx++ {
 
-		if idx == bpMGR.ULCLIdx && idx == upperBound {
-			//This upf is both ULCL and PSA2
-			//So do nothing we will establish it ulcl rule later
-			bpMGR.ULCLState = IsULCLAndPSA2
-			break
-		} else if idx == bpMGR.ULCLIdx {
+// 		if idx == bpMGR.ULCLIdx && idx == upperBound {
+// 			//This upf is both ULCL and PSA2
+// 			//So do nothing we will establish it ulcl rule later
+// 			bpMGR.ULCLState = IsULCLAndPSA2
+// 			break
+// 		} else if idx == bpMGR.ULCLIdx {
 
-			nextUPPathNodeIP := psa2_path[idx+1].UPF.GetUPFIP()
-			for _, child_link := range curDataPathNode.Next {
+// 			nextUPFID := psa2_path[idx+1].UPF.GetUPFID()
+// 			curDataPathNode = curDataPathNode.Next[nextUPFID].To
+// 		} else {
 
-				childIP := child_link.To.UPF.GetUPFIP()
-				if nextUPPathNodeIP == childIP {
-					curDataPathNode = child_link.To
-					break
-				}
-			}
+// 			SetUPPSA2Path(smContext, psa2_path[idx:], curDataPathNode)
+// 		}
 
-		} else {
+// 	}
 
-			//SetUpPath()
-		}
-
-	}
-
-	return
-}
+// 	return
+// }
