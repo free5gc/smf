@@ -53,11 +53,13 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 
 	if err != nil {
 		logger.PduSessLog.Error(err)
+		return
 	}
 
 	upLink.UpLinkPDR, err = node.UPF.AddPDR()
 	if err != nil {
 		logger.PduSessLog.Error(err)
+		return
 	}
 
 	upLink.UpLinkPDR.Precedence = 32
@@ -268,6 +270,10 @@ func SendUplinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context.S
 	pdr_list := []*smf_context.PDR{upLink.UpLinkPDR}
 	far_list := []*smf_context.FAR{upLink.UpLinkPDR.FAR}
 	bar_list := []*smf_context.BAR{}
+
+	// fmt.Println("Send to upf addr: ", addr.String())
+	// fmt.Println("Send to uplink pdr: ", upLink.PDR)
+	// fmt.Println("Send to uplink far: ", upLink.PDR.FAR)
 
 	pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdr_list, far_list, bar_list)
 

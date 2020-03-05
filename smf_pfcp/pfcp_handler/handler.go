@@ -70,7 +70,7 @@ func HandlePfcpAssociationSetupResponse(msg *pfcpUdp.Message) {
 			//upf := smf_context.AddUPF(req.NodeID)
 			upf := smf_context.RetrieveUPFNodeByNodeId(*req.NodeID)
 			upf.UPFStatus = smf_context.AssociatedSetUpSuccess
-			logger.PfcpLog.Infoln("UPF) ", upf.NodeID.ResolveNodeIdToIp().String(), " has set UPFStatus to AssociatedSetUpSuccess")
+			logger.PfcpLog.Infoln("(UPF) ", upf.NodeID.ResolveNodeIdToIp().String(), " has set UPFStatus to AssociatedSetUpSuccess")
 			upf.UPIPInfo = *req.UserPlaneIPResourceInformation
 
 			userPlaneInformation := smf_context.SMF_Self().UserPlaneInformation

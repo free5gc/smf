@@ -283,7 +283,15 @@ func (root *DataPathNode) EnableUserPlanePath(path []*UPNode) (err error) {
 	curDataPathNode := root
 	upperBound := len(path) - 1
 
+	fmt.Println("In EnableUserPlanePath")
+	fmt.Println(curDataPathNode)
+	fmt.Println(path[0])
+
 	for idx, node := range path {
+
+		if node.Type == UPNODE_AN {
+			continue
+		}
 
 		curDataPathNodeIP := curDataPathNode.UPF.GetUPFIP()
 		UPPathNodeIP := node.UPF.GetUPFIP()

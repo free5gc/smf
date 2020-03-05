@@ -2,6 +2,8 @@ package smf_context
 
 import "fmt"
 
+import "gofree5gc/src/smf/logger"
+
 type BPManager struct {
 	ANUPFState map[*DataPathNode]bool
 	PSAState   map[*DataPathNode]PDUSessionAnchorState
@@ -60,6 +62,8 @@ func (bpMGR *BPManager) SetPSAStatus(psa_path []*UPNode) {
 
 		if psa_ip == dataPathNode.UPF.NodeID.ResolveNodeIdToIp().String() {
 			bpMGR.PSAState[dataPathNode] = AddPSASuccess
+			fmt.Println("Add PSA ", dataPathNode.UPF.GetUPFIP(), "Success")
+			logger.PduSessLog.Traceln("Add PSA ", dataPathNode.UPF.GetUPFIP(), "Success")
 			break
 		}
 	}

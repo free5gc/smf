@@ -155,7 +155,7 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 			logger.CtxLog.Errorln(err)
 		}
 
-		graph.FindBranchingPoints()
+		//graph.FindBranchingPoints()
 		smfContext.UERoutingGraphs[supi] = graph
 		graph.PrintGraph()
 	}

@@ -128,9 +128,10 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		err := upfRoot.EnableUserPlanePath(psaPath)
 		if err != nil {
 			logger.PduSessLog.Error(err)
+			return
 		}
 
-		smContext.BPManager = NewBPManager(createData.Supi)
+		smContext.BPManager = smf_context.NewBPManager(createData.Supi)
 		smContext.BPManager.SetPSAStatus(psaPath)
 		smContext.BPManager.PSA1Path = psaPath
 	} else {
@@ -514,3 +515,14 @@ func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMe
 	// 	Body:   nil,
 	// }}
 }
+
+// func SetUpAllUPF(node *smf_context.DataPathNode) {
+
+// 	node.UPF.UPFStatus = smf_context.AssociatedSetUpSuccess
+// 	//node.UPF.UPIPInfo.Ipv4Address = net.ParseIP("10.200.200.50").To4()
+
+// 	for _, child_link := range node.Next {
+
+// 		SetUpAllUPF(child_link.To)
+// 	}
+// }

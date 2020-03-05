@@ -36,7 +36,7 @@ func AddPDUSessionAnchorAndULCL(smContext *smf_context.SMContext) {
 	EstablishPSA2(smContext)
 
 	//Establish ULCL
-	establishULCL()
+	//establishULCL()
 
 	//updatePSA1 downlink
 
@@ -79,17 +79,17 @@ func EstablishPSA2(smContext *smf_context.SMContext) {
 	return
 }
 
-func selectULCL() (ulcl *smf_context.DataPathNode) {
+// func selectULCL() (ulcl *smf_context.DataPathNode) {
 
-}
+// }
 
-func updatePSA1() {
+// func updatePSA1() {
 
-}
+// }
 
-func establishULCL(ulcl *smf_context.DataPathNode) {
+// func establishULCL(ulcl *smf_context.DataPathNode) {
 
-}
+// }
 
 // func init() {
 // 	ueRoutingInitialized = make(map[string]UeRoutingInitializeState)
