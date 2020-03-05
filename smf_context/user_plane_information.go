@@ -163,7 +163,6 @@ func (upi *UserPlaneInformation) GetDefaultUPFTopoByDNN(dnn string) (root *DataP
 		return nil
 	}
 
-	path = path[1:]
 	var lowerBound = 0
 	var upperBound = len(path) - 1
 	var parent *DataPathNode
@@ -248,6 +247,9 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (pathExist bool
 	var path []*UPNode
 	path, pathExist = getPathBetween(source, destination, visited)
 
+	if path[0].Type == UPNODE_AN {
+		path = path[1:]
+	}
 	upi.DefaultUserPlanePath[dnn] = path
 	return
 }

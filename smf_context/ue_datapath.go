@@ -25,7 +25,7 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 		DataPathToDN:         make(map[string]*DataPathUpLink),
 		DataPathToAN:         nil,
 		IsBranchingPoint:     false,
-		DLDataPathLinkForPSA: nil,
+		DLDataPathLinkForPSA: NewDataPathLink(),
 	}
 	return
 }
@@ -83,7 +83,6 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 					UEPGraph.Graph = append(UEPGraph.Graph, child_node)
 				}
 
-				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddChild(child_node)
 				ue_node.AddDestinationOfChild(child_node, DataEndPoint)
 				UEPGraph.AddANUPF(ue_node)
@@ -100,7 +99,6 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 					UEPGraph.Graph = append(UEPGraph.Graph, parent_node)
 				}
 
-				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddParent(parent_node)
 				UEPGraph.AddPSA(ue_node)
 			default:
@@ -128,7 +126,6 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 					UEPGraph.Graph = append(UEPGraph.Graph, parent_node)
 				}
 
-				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddChild(child_node)
 				ue_node.AddDestinationOfChild(child_node, DataEndPoint)
 				ue_node.AddParent(parent_node)
@@ -284,8 +281,6 @@ func (root *DataPathNode) EnableUserPlanePath(path []*UPNode) (err error) {
 	upperBound := len(path) - 1
 
 	fmt.Println("In EnableUserPlanePath")
-	fmt.Println(curDataPathNode)
-	fmt.Println(path[0])
 
 	for idx, node := range path {
 
@@ -297,6 +292,9 @@ func (root *DataPathNode) EnableUserPlanePath(path []*UPNode) (err error) {
 		UPPathNodeIP := node.UPF.GetUPFIP()
 
 		if curDataPathNodeIP != UPPathNodeIP {
+			fmt.Println("curDataPathNodeIP != UPPathNodeIP")
+			fmt.Println("curDataPathNodeIP: ", curDataPathNodeIP)
+			fmt.Println("UPPathNodeIP: ", UPPathNodeIP)
 			err = fmt.Errorf("UE default topo have no ", UPPathNodeIP, "!")
 			return
 		} else {

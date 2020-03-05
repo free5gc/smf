@@ -103,17 +103,13 @@ func (node *DataPathNode) AddParent(parent *DataPathNode) (err error) {
 		return err
 	}
 
-	if node.DataPathToAN == nil {
-
-		parent_link := &DataPathDownLink{
-			To:              parent,
-			DestinationIP:   "",
-			DestinationPort: "",
-			UpLinkPDR:       nil,
-		}
-
-		node.DataPathToAN = parent_link
+	parent_link := &DataPathDownLink{
+		To:              parent,
+		DestinationIP:   "",
+		DestinationPort: "",
+		UpLinkPDR:       nil,
 	}
+	node.DataPathToAN = parent_link
 
 	return
 }
@@ -181,6 +177,11 @@ func (node *DataPathNode) IsAnchorUPF() bool {
 		return false
 	}
 
+}
+
+func (node *DataPathNode) GetUpLink() (link *DataPathLink) {
+
+	return node.Prev
 }
 
 func (node *DataPathNode) GetUpLinkPDR() (pdr *PDR) {

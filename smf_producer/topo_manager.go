@@ -335,9 +335,14 @@ func SetUPPSA2Path(smContext *smf_context.SMContext, psa2_path_after_ulcl []*smf
 	var downLink *smf_context.DataPathLink
 
 	//Allocate upLink and downLink PDR
+	logger.PduSessLog.Traceln("In SetUPPSA2Path")
+	for i, node := range psa2_path_after_ulcl {
+
+		logger.PduSessLog.Traceln("Node ", i, ": ", node.UPF.GetUPFIP())
+	}
 	for idx, _ := range psa2_path_after_ulcl {
 
-		upLinkPDR := curDataPathNode.GetUpLinkPDR()
+		upLink := curDataPathNode.GetUpLink()
 
 		teid, err := curDataPathNode.UPF.GenerateTEID()
 
@@ -345,13 +350,13 @@ func SetUPPSA2Path(smContext *smf_context.SMContext, psa2_path_after_ulcl []*smf
 			logger.PduSessLog.Error(err)
 		}
 
-		upLinkPDR, err = curDataPathNode.UPF.AddPDR()
+		upLink.PDR, err = curDataPathNode.UPF.AddPDR()
 		if err != nil {
 			logger.PduSessLog.Error(err)
 		}
 
-		upLinkPDR.Precedence = 32
-		upLinkPDR.PDI = smf_context.PDI{
+		upLink.PDR.Precedence = 32
+		upLink.PDR.PDI = smf_context.PDI{
 			SourceInterface: pfcpType.SourceInterface{
 				//Todo:
 				//Have to change source interface for different upf
@@ -368,13 +373,13 @@ func SetUPPSA2Path(smContext *smf_context.SMContext, psa2_path_after_ulcl []*smf
 				Ipv4Address: smContext.PDUAddress.To4(),
 			},
 		}
-		upLinkPDR.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
-		upLinkPDR.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
-		upLinkPDR.State = smf_context.RULE_INITIAL
+		upLink.PDR.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
+		upLink.PDR.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
+		upLink.PDR.State = smf_context.RULE_INITIAL
 
-		upLinkPDR.FAR.ApplyAction.Forw = true
-		upLinkPDR.FAR.State = smf_context.RULE_INITIAL
-		upLinkPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
+		upLink.PDR.FAR.ApplyAction.Forw = true
+		upLink.PDR.FAR.State = smf_context.RULE_INITIAL
+		upLink.PDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
 			DestinationInterface: pfcpType.DestinationInterface{
 				InterfaceValue: pfcpType.DestinationInterfaceCore,
 			},
@@ -440,13 +445,14 @@ func SetUPPSA2Path(smContext *smf_context.SMContext, psa2_path_after_ulcl []*smf
 	}
 
 	curDataPathNode = start_node
+
 	//Allocate upLink and downLink TEID
 	for idx, _ := range psa2_path_after_ulcl {
 
 		switch idx {
 		case lowerBound:
 
-			if !curDataPathNode.IsANUPF() {
+			if !curDataPathNode.IsAnchorUPF() {
 				nextUPFID := psa2_path_after_ulcl[idx+1].UPF.GetUPFID()
 				downLink = curDataPathNode.Next[nextUPFID]
 				allocatedDownLinkTEID := downLink.PDR.PDI.LocalFTeid.Teid
@@ -454,7 +460,7 @@ func SetUPPSA2Path(smContext *smf_context.SMContext, psa2_path_after_ulcl []*smf
 
 				var childDownLinkFAR *smf_context.FAR
 
-				if child.IsANUPF() {
+				if child.IsAnchorUPF() {
 
 					childDownLinkFAR = child.DLDataPathLinkForPSA.PDR.FAR
 				} else {
@@ -490,7 +496,7 @@ func SetUPPSA2Path(smContext *smf_context.SMContext, psa2_path_after_ulcl []*smf
 
 			var childDownLinkFAR *smf_context.FAR
 
-			if child.IsANUPF() {
+			if child.IsAnchorUPF() {
 
 				childDownLinkFAR = child.DLDataPathLinkForPSA.PDR.FAR
 			} else {
@@ -522,6 +528,7 @@ func SetUPPSA2Path(smContext *smf_context.SMContext, psa2_path_after_ulcl []*smf
 	}
 
 	curDataPathNode = start_node
+	logger.PduSessLog.Traceln("Start Node is PSA: ", curDataPathNode.IsAnchorUPF())
 	for idx, _ := range psa2_path_after_ulcl {
 
 		addr := net.UDPAddr{
@@ -529,11 +536,11 @@ func SetUPPSA2Path(smContext *smf_context.SMContext, psa2_path_after_ulcl []*smf
 			Port: pfcpUdp.PFCP_PORT,
 		}
 
-		fmt.Println("Send to upf addr: ", addr.String())
+		logger.PduSessLog.Traceln("Send to upf addr: ", addr.String())
 
 		upLink := curDataPathNode.Prev
 
-		if curDataPathNode.IsANUPF() {
+		if curDataPathNode.IsAnchorUPF() {
 
 			downLink = curDataPathNode.DLDataPathLinkForPSA
 		} else {

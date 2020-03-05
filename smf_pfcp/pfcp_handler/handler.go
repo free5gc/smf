@@ -13,6 +13,7 @@ import (
 	"gofree5gc/src/smf/smf_context"
 	"gofree5gc/src/smf/smf_handler/smf_message"
 	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
+	"gofree5gc/src/smf/smf_producer"
 	"net/http"
 )
 
@@ -204,7 +205,15 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 
 			resQueueItem.RspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &resQueueItem.Response}
 
+			smContext := smf_context.GetSMContextBySEID(SEID)
+
+			if smContext.BPManager.BPStatus == smf_context.UnInitialized {
+				smf_producer.AddPDUSessionAnchorAndULCL(smContext)
+				smContext.BPManager.BPStatus = smf_context.HasSendPFCPMsg
+			}
+
 			HttpResponseQueue.DeleteItem(seqNum)
+
 			//if smContext.SMState == smf_context.PDUSessionInactive {
 			//	smNasBuf, _ := smf_context.BuildGSMPDUSessionEstablishmentAccept(smContext)
 			//		n1n2Request := models.N1N2MessageTransferRequest{}

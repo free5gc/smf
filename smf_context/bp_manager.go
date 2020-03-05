@@ -5,6 +5,7 @@ import "fmt"
 import "gofree5gc/src/smf/logger"
 
 type BPManager struct {
+	BPStatus   BPStatus
 	ANUPFState map[*DataPathNode]bool
 	PSAState   map[*DataPathNode]PDUSessionAnchorState
 
@@ -18,21 +19,29 @@ type BPManager struct {
 	ULCLState        ULCLState
 }
 
+type BPStatus int
+
+const (
+	UnInitialized BPStatus = iota
+	HasSendPFCPMsg
+	InitializedSuccess
+	InitializedFail
+)
+
 type PDUSessionAnchorState int
 
 const (
-	NotAdded       PDUSessionAnchorState = 0
-	HasSendPFCPMsg PDUSessionAnchorState = 1
-	AddPSASuccess  PDUSessionAnchorState = 2
-	AddPSAFail     PDUSessionAnchorState = 3
+	NotAdded PDUSessionAnchorState = iota
+	AddPSASuccess
+	AddPSAFail
 )
 
 type ULCLState int
 
 const (
-	IsOnlyULCL    ULCLState = 0
-	IsULCLAndPSA1 ULCLState = 1
-	IsULCLAndPSA2 ULCLState = 2
+	IsOnlyULCL ULCLState = iota
+	IsULCLAndPSA1
+	IsULCLAndPSA2
 )
 
 func NewBPManager(supi string) (bpManager *BPManager) {
@@ -54,6 +63,10 @@ func NewBPManager(supi string) (bpManager *BPManager) {
 }
 
 func (bpMGR *BPManager) SetPSAStatus(psa_path []*UPNode) {
+
+	if len(psa_path) == 0 {
+		return
+	}
 
 	psa := psa_path[len(psa_path)-1]
 	psa_ip := psa.NodeID.ResolveNodeIdToIp().String()
@@ -84,7 +97,7 @@ func (bpMGR *BPManager) SelectPSA2() {
 		}
 	}
 
-	for curNode = psa2; curNode != nil; curNode = psa2.Prev.To {
+	for curNode = psa2; curNode != nil; curNode = curNode.Prev.To {
 
 		curNodeIP := curNode.UPF.GetUPFIP()
 		curUPNode := upInfo.GetUPFNodeByIP(curNodeIP)
@@ -92,6 +105,12 @@ func (bpMGR *BPManager) SelectPSA2() {
 	}
 
 	bpMGR.PSA2Path = psa2_path
+
+	logger.PduSessLog.Traceln("SelectPSA2")
+	for i, node := range psa2_path {
+
+		logger.PduSessLog.Traceln("Node ", i, ": ", node.UPF.GetUPFIP())
+	}
 	return
 }
 
@@ -106,7 +125,7 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 
 	if len_psa1_path > len_psa2_path {
 
-		for idx, node := range psa1_path {
+		for idx, node := range psa2_path {
 
 			node1_id := psa1_path[idx].UPF.GetUPFID()
 			node2_id := psa2_path[idx].UPF.GetUPFID()
@@ -120,7 +139,7 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 		}
 	} else {
 
-		for idx, node := range psa2_path {
+		for idx, node := range psa1_path {
 
 			node1_id := psa1_path[idx].UPF.GetUPFID()
 			node2_id := psa2_path[idx].UPF.GetUPFID()
@@ -171,6 +190,8 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 		err = fmt.Errorf("Can't find ULCLDataPathNode!")
 		return
 	}
+
+	logger.PduSessLog.Traceln("ULCL is : ", bpMGR.ULCLDataPathNode.UPF.GetUPFIP())
 
 	return
 }
