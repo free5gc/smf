@@ -26,6 +26,7 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 		DataPathToAN:         nil,
 		IsBranchingPoint:     false,
 		DLDataPathLinkForPSA: NewDataPathLink(),
+		BPUpLinkPDRs:         make(map[string]*DataPathLink),
 	}
 	return
 }

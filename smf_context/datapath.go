@@ -13,6 +13,7 @@ type DataPathNode struct {
 	InUse                bool
 	IsBranchingPoint     bool
 	DLDataPathLinkForPSA *DataPathUpLink
+	BPUpLinkPDRs         map[string]*DataPathDownLink // uuid to UpLink
 }
 
 type DataPathDownLink struct {
@@ -42,9 +43,10 @@ func NewDataPathNode() (node *DataPathNode) {
 	node = &DataPathNode{
 		UPF:                  nil,
 		DataPathToDN:         make(map[string]*DataPathUpLink),
-		DataPathToAN:         nil,
+		DataPathToAN:         NewDataPathDownLink(),
 		IsBranchingPoint:     false,
 		DLDataPathLinkForPSA: nil,
+		BPUpLinkPDRs:         make(map[string]*DataPathDownLink),
 	}
 	return
 }
@@ -150,7 +152,7 @@ func (node *DataPathNode) GetNodeIP() (ip string) {
 	return
 }
 
-func (node *DataPathNode) PrintPath() {
+func (node *DataPathNode) PrintPath() (str string) {
 	upi := smfContext.UserPlaneInformation
 	fmt.Println(upi.GetUPFNameByIp(node.GetNodeIP()))
 
@@ -179,9 +181,9 @@ func (node *DataPathNode) IsAnchorUPF() bool {
 
 }
 
-func (node *DataPathNode) GetUpLink() (link *DataPathLink) {
+func (node *DataPathNode) GetUpLink() (link *DataPathDownLink) {
 
-	return node.Prev
+	return node.DataPathToAN
 }
 
 func (node *DataPathNode) GetUpLinkPDR() (pdr *PDR) {

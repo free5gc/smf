@@ -1,8 +1,9 @@
 package smf_context
 
-import "fmt"
-
-import "gofree5gc/src/smf/logger"
+import (
+	"fmt"
+	"gofree5gc/src/smf/logger"
+)
 
 type BPManager struct {
 	BPStatus   BPStatus
@@ -154,7 +155,7 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 	}
 
 	if bpMGR.ULCL == nil {
-		err = fmt.Errorf("Can't find ULCL!")
+		err = fmt.Errorf("Can't find ULCL for PSA: ", psa2_path[len_psa2_path-1].UPF.GetUPFIP())
 		return
 	}
 
@@ -187,40 +188,23 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 	}
 
 	if bpMGR.ULCLDataPathNode == nil {
-		err = fmt.Errorf("Can't find ULCLDataPathNode!")
+		err = fmt.Errorf("Can't find ULCLDataPathNode for PSA: ", psa2_path[len_psa2_path-1].UPF.GetUPFIP())
 		return
 	}
 
 	logger.PduSessLog.Traceln("ULCL is : ", bpMGR.ULCLDataPathNode.UPF.GetUPFIP())
+	bpMGR.ULCLDataPathNode.IsBranchingPoint = true
+
+	ulclIdx := bpMGR.ULCLIdx
+	if ulclIdx+1 >= len(psa1_path) {
+
+		bpMGR.ULCLState = IsULCLAndPSA1
+	} else if ulclIdx+1 >= len(psa2_path) {
+
+		bpMGR.ULCLState = IsULCLAndPSA2
+	} else {
+		bpMGR.ULCLState = IsOnlyULCL
+	}
 
 	return
 }
-
-// func (bpMGR *BPManager) EstablishPSA2(smContext *SMContext) {
-
-// 	//upfRoot := smContext.Tunnel.UpfRoot
-// 	psa2_path := bpMGR.PSA2Path
-
-// 	curDataPathNode := bpMGR.ULCLDataPathNode
-// 	upperBound := len(psa2_path) - 1
-
-// 	for idx := bpMGR.ULCLIdx; idx <= upperBound; idx++ {
-
-// 		if idx == bpMGR.ULCLIdx && idx == upperBound {
-// 			//This upf is both ULCL and PSA2
-// 			//So do nothing we will establish it ulcl rule later
-// 			bpMGR.ULCLState = IsULCLAndPSA2
-// 			break
-// 		} else if idx == bpMGR.ULCLIdx {
-
-// 			nextUPFID := psa2_path[idx+1].UPF.GetUPFID()
-// 			curDataPathNode = curDataPathNode.Next[nextUPFID].To
-// 		} else {
-
-// 			SetUPPSA2Path(smContext, psa2_path[idx:], curDataPathNode)
-// 		}
-
-// 	}
-
-// 	return
-// }
