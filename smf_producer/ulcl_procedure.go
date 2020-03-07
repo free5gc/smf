@@ -1,6 +1,7 @@
 package smf_producer
 
 import (
+	"fmt"
 	"gofree5gc/lib/flowdesc"
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/lib/pfcp/pfcpUdp"
@@ -8,17 +9,7 @@ import (
 	"gofree5gc/src/smf/smf_context"
 	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
 	"net"
-	// 	"gofree5gc/lib/flowdesc"
-	// 	"gofree5gc/lib/pfcp/pfcpType"
-	// 	"gofree5gc/lib/pfcp/pfcpUdp"
-	// 	"gofree5gc/src/smf/logger"
-	// 	"gofree5gc/src/smf/smf_context"
-	// 	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
-	// 	"net"
-	// 	"strconv"
 )
-
-// var ueRoutingInitialized map[string]UeRoutingInitializeState
 
 func AddPDUSessionAnchorAndULCL(smContext *smf_context.SMContext) {
 
@@ -75,10 +66,14 @@ func EstablishPSA2(smContext *smf_context.SMContext) {
 		}
 	}
 
+	logger.PduSessLog.Traceln("End of EstablishPSA2")
+
 	return
 }
 
 func EstablishULCL(smContext *smf_context.SMContext) {
+
+	logger.PduSessLog.Traceln("In EstablishULCL")
 
 	bpMGR := smContext.BPManager
 	ulcl := bpMGR.ULCLDataPathNode
@@ -101,12 +96,12 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 
 		//Get the UPlinkPDR for PSA1
 		var UpLinkForPSA1, UpLinkForPSA2, DownLinkForPSA1, DownLinkForPSA2 *smf_context.DataPathLink
+		//Todo:
+		//Put every uplink to BPUplink
 		upLinkIP := ulcl.Prev.PDR.FAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address.String()
-		if upLinkIP != psa1NodeAfterUlcl.UPF.GetUPFIP() {
-
+		if upLinkIP != psa1NodeAfterUlcl.UPF.UPIPInfo.Ipv4Address.String() {
 			UpLinkForPSA1 = ulcl.BPUpLinkPDRs[psa1NodeAfterUlcl.UPF.GetUPFID()]
 		} else {
-
 			UpLinkForPSA1 = ulcl.Prev
 			UpLinkForPSA1.DestinationIP = ulcl.Next[psa1NodeAfterUlcl.UPF.GetUPFID()].DestinationIP
 			UpLinkForPSA1.DestinationPort = ulcl.Next[psa1NodeAfterUlcl.UPF.GetUPFID()].DestinationPort
@@ -242,7 +237,7 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 		DownLinkForPSA2.PDR.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
 		DownLinkForPSA2.PDR.State = smf_context.RULE_INITIAL
 
-		DownLinkFarForPSA2 := UpLinkForPSA2.PDR.FAR
+		DownLinkFarForPSA2 := DownLinkForPSA2.PDR.FAR
 		DownLinkFarForPSA2.ApplyAction.Forw = true
 		DownLinkFarForPSA2.State = smf_context.RULE_INITIAL
 		DownLinkFarForPSA2.ForwardingParameters = &smf_context.ForwardingParameters{
@@ -252,11 +247,20 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 			NetworkInstance: []byte(smContext.Dnn),
 		}
 
-		DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
-		DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-		DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation.Teid = DownLinkForPSA1.PDR.PDI.LocalFTeid.Teid
-		DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation.Ipv4Address = DownLinkForPSA1.PDR.FAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address
+		//Todo:
+		//Delete this after finishing new downlinking userplane
+		fmt.Println(DownLinkForPSA1)
+		//Todo:
+		//Uncommemt after finishing new downlinking userplane
+		//DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
+		//DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+		// DownLinkFarFoDPSA2.ForwardingParameters.OuterHeaderCreation.Teid = DownLinkForPSA1.PDR.PDI.LocalFTeid.Teid
+		// DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation.Ipv4Address = DownLinkForPSA1.PDR.FAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address
 
+		// addr := net.UDPAddr{
+		// 	IP:   ulcl.Next[psa1NodeAfterUlcl.UPF.GetUPFID()].To.UPF.NodeID.NodeIdValue,
+		// 	Port: pfcpUdp.PFCP_PORT,
+		// }
 		addr := net.UDPAddr{
 			IP:   ulcl.UPF.NodeID.NodeIdValue,
 			Port: pfcpUdp.PFCP_PORT,
@@ -268,7 +272,6 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
 		logger.PfcpLog.Info("[SMF] Establish ULCL msg has been send")
 	}
-
 }
 
 // func selectULCL() (ulcl *smf_context.DataPathNode) {

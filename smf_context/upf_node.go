@@ -223,7 +223,6 @@ func (upf *UPF) AddPDR() (pdr *PDR, err error) {
 	pdr.PDRID = uint16(PDRID)
 	upf.pdrPool[pdr.PDRID] = pdr
 	pdr.FAR, _ = upf.AddFAR()
-	fmt.Println("Add PDR success!")
 	return pdr, nil
 }
 

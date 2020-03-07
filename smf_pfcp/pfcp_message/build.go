@@ -79,10 +79,7 @@ func pdrToCreatePDR(pdr *smf_context.PDR) *pfcp.CreatePDR {
 	}
 
 	if pdr.PDI.SDFFilter != nil {
-		fmt.Println("[SMF] In pdrToCreatePDR create SDFFilter!")
 		createPDR.PDI.SDFFilter = pdr.PDI.SDFFilter
-	} else {
-		fmt.Println("[SMF] In pdrToCreatePDR no SDFFilter!")
 	}
 
 	createPDR.OuterHeaderRemoval = pdr.OuterHeaderRemoval
@@ -147,10 +144,7 @@ func pdrToUpdatePDR(pdr *smf_context.PDR) *pfcp.UpdatePDR {
 	}
 
 	if pdr.PDI.SDFFilter != nil {
-		fmt.Println("[SMF] In pdrToUpdatePDR create SDFFilter!")
 		updatePDR.PDI.SDFFilter = pdr.PDI.SDFFilter
-	} else {
-		fmt.Println("[SMF] In pdrToUpdatePDR no SDFFilter!")
 	}
 
 	updatePDR.OuterHeaderRemoval = pdr.OuterHeaderRemoval

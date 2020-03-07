@@ -2,6 +2,7 @@ package smf_context
 
 import (
 	"fmt"
+	"gofree5gc/src/smf/logger"
 )
 
 type UEDataPathGraph struct {
@@ -281,7 +282,7 @@ func (root *DataPathNode) EnableUserPlanePath(path []*UPNode) (err error) {
 	curDataPathNode := root
 	upperBound := len(path) - 1
 
-	fmt.Println("In EnableUserPlanePath")
+	logger.PduSessLog.Traceln("In EnableUserPlanePath")
 
 	for idx, node := range path {
 
