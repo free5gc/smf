@@ -292,6 +292,7 @@ func UpdatePSA2DownLink(smContext *smf_context.SMContext) {
 		if psa2NodeAfterUlcl.IsAnchorUPF() {
 
 			updateDownLinkFAR := psa2NodeAfterUlcl.DLDataPathLinkForPSA.PDR.FAR
+			updateDownLinkFAR.State = smf_context.RULE_UPDATE
 			updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
 			updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
 			updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation.Teid = ulcl.Next[psa2NodeAfterUlcl.UPF.GetUPFID()].PDR.PDI.LocalFTeid.Teid
@@ -304,6 +305,7 @@ func UpdatePSA2DownLink(smContext *smf_context.SMContext) {
 
 				if updateDownLink.PDR != nil {
 					updateDownLinkFAR := updateDownLink.PDR.FAR
+					updateDownLinkFAR.State = smf_context.RULE_UPDATE
 					updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
 					updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
 					updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation.Teid = ulcl.Next[psa2NodeAfterUlcl.UPF.GetUPFID()].PDR.PDI.LocalFTeid.Teid
