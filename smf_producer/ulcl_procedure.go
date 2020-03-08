@@ -35,9 +35,9 @@ func AddPDUSessionAnchorAndULCL(smContext *smf_context.SMContext) {
 	EstablishULCL(smContext)
 
 	//updatePSA1 downlink
-
+	//UpdatePSA1DownLink(smContext)
 	//updatePSA2 downlink
-
+	UpdatePSA2DownLink(smContext)
 	//update AN for new CN Info
 
 }
@@ -274,47 +274,60 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 	}
 }
 
-// func selectULCL() (ulcl *smf_context.DataPathNode) {
+func UpdatePSA2DownLink(smContext *smf_context.SMContext) {
+	logger.PduSessLog.Traceln("In UpdatePSA2DownLink")
 
-// }
+	bpMGR := smContext.BPManager
+	ulcl := bpMGR.ULCLDataPathNode
 
-// func updatePSA1() {
+	if bpMGR.ULCLState == smf_context.IsOnlyULCL {
+		psa2Path := bpMGR.PSA2Path
 
-// }
+		var psa2NodeAfterUlcl *smf_context.DataPathNode
 
-// func InitializeUEUplinkRouting(smContext *smf_context.SMContext) {
+		ulclIdx := bpMGR.ULCLIdx
+		psa2NodeAfterUlcl = ulcl.Next[psa2Path[ulclIdx+1].UPF.GetUPFID()].To
+		far_list := []*smf_context.FAR{}
 
-// 	supi := smContext.Supi
-// 	ueRoutingGraph := smf_context.SMF_Self().UERoutingGraphs[supi]
-// 	// ANUPFIP := smContext.Tunnel.Node.NodeID.ResolveNodeIdToIp().String()
-// 	// ANUPFName := smf_context.SMF_Self().UserPlaneInformation.UPFIPToName[ANUPFIP]
+		if psa2NodeAfterUlcl.IsAnchorUPF() {
 
-// 	for _, upfNode := range ueRoutingGraph.Graph {
+			updateDownLinkFAR := psa2NodeAfterUlcl.DLDataPathLinkForPSA.PDR.FAR
+			updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
+			updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+			updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation.Teid = ulcl.Next[psa2NodeAfterUlcl.UPF.GetUPFID()].PDR.PDI.LocalFTeid.Teid
+			updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address = ulcl.UPF.UPIPInfo.Ipv4Address
 
-// 		upfName := upfNode.UPFName
-// 		fmt.Println("[SMF] Initializing UPF: ", upfName)
-// 		//if upfName == ANUPFName {
+			far_list = append(far_list, updateDownLinkFAR)
+		} else {
 
-// 		if upfNode.IsBranchingPoint {
-// 			AddBranchingRule(smContext, upfNode)
-// 		} else {
-// 			AddRoutingRule(smContext, upfNode)
-// 		}
+			for _, updateDownLink := range psa2NodeAfterUlcl.Next {
 
-// 		//} //else {
-// 		// 	pdr = smContext.Tunnel.Node.AddPDR()
+				if updateDownLink.PDR != nil {
+					updateDownLinkFAR := updateDownLink.PDR.FAR
+					updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
+					updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+					updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation.Teid = ulcl.Next[psa2NodeAfterUlcl.UPF.GetUPFID()].PDR.PDI.LocalFTeid.Teid
+					updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address = ulcl.UPF.UPIPInfo.Ipv4Address
 
-// 		// 	pdr.InitializePDR(smContext)
+					far_list = append(far_list, updateDownLinkFAR)
+				}
+			}
+		}
 
-// 		// }
+		addr := net.UDPAddr{
+			IP:   psa2NodeAfterUlcl.UPF.NodeID.NodeIdValue,
+			Port: pfcpUdp.PFCP_PORT,
+		}
+		pdr_list := []*smf_context.PDR{}
+		bar_list := []*smf_context.BAR{}
 
-// 		// if ueRoutingGraph.IsBranchingPoint(upfName) {
-// 		// 	AddBranchingRule(smContext, upfNode)
-// 		// } else {
-// 		// 	AddRoutingRule(smContext, upfNode)
-// 		// }
+		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
+		logger.PfcpLog.Info("[SMF] Update PSA2 downlink msg has been send")
+	}
+}
 
-// 	}
+// func UpdatePSA1DownLink(smContext *smf_context.SMContext) {
+
 // }
 
 // func AddRoutingRule(smContext *smf_context.SMContext, upfNode *smf_context.UEPathNode) {
