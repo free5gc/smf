@@ -24,10 +24,10 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 	node = &DataPathNode{
 		UPF:                  upNodes[name].UPF,
 		DataPathToDN:         make(map[string]*DataPathUpLink),
-		DataPathToAN:         nil,
+		DataPathToAN:         NewDataPathDownLink(),
 		IsBranchingPoint:     false,
-		DLDataPathLinkForPSA: NewDataPathLink(),
-		BPUpLinkPDRs:         make(map[string]*DataPathLink),
+		DLDataPathLinkForPSA: NewDataPathUpLink(),
+		BPUpLinkPDRs:         make(map[string]*DataPathDownLink),
 	}
 	return
 }
@@ -305,7 +305,7 @@ func (root *DataPathNode) EnableUserPlanePath(path []*UPNode) (err error) {
 
 				nextUPPathNodeIP := path[idx+1].UPF.GetUPFIP()
 				findNextChild := false
-				for _, child_link := range curDataPathNode.Next {
+				for _, child_link := range curDataPathNode.DataPathToDN {
 
 					childIP := child_link.To.UPF.GetUPFIP()
 					if nextUPPathNodeIP == childIP {

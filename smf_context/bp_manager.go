@@ -98,7 +98,7 @@ func (bpMGR *BPManager) SelectPSA2() {
 		}
 	}
 
-	for curNode = psa2; curNode != nil; curNode = curNode.Prev.To {
+	for curNode = psa2; curNode != nil; curNode = curNode.DataPathToAN.To {
 
 		curNodeIP := curNode.UPF.GetUPFIP()
 		curUPNode := upInfo.GetUPFNodeByIP(curNodeIP)
@@ -175,7 +175,7 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 		if idx < upperBound {
 			nextUPFID := psa2_path[idx+1].UPF.GetUPFID()
 
-			if nextDataPathLink, exist := curDataPathNode.Next[nextUPFID]; exist {
+			if nextDataPathLink, exist := curDataPathNode.DataPathToDN[nextUPFID]; exist {
 
 				curDataPathNode = nextDataPathLink.To
 			} else {

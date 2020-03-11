@@ -243,7 +243,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	fmt.Println("[SMF] Send PFCP to UPF IP: ", addr.IP.String())
 	// TODO: remove it when UL/CL apply
-	pfcp_message.SendPfcpSessionEstablishmentRequest(&addr, smContext)
+	//pfcp_message.SendPfcpSessionEstablishmentRequest(&addr, smContext)
 	//AddUEUpLinkRoutingInfo(smContext)
 
 	smf_consumer.SendNFDiscoveryServingAMF(smContext)
@@ -265,9 +265,6 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 			smContext.CommunicationClient = Namf_Communication.NewAPIClient(communicationConf)
 		}
 	}
-
-	//check branching points
-	//smf_producer.CheckBranchingPoint()
 }
 
 func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMessage, smContextRef string, body models.UpdateSmContextRequest) (seqNum uint32, resBody models.UpdateSmContextResponse) {
@@ -520,7 +517,7 @@ func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMe
 
 // 	node.UPF.UPFStatus = smf_context.AssociatedSetUpSuccess
 
-// 	for _, child_link := range node.Next {
+// 	for _, child_link := range node.DataPathToDN {
 
 // 		SetUpAllUPF(child_link.To)
 // 	}
