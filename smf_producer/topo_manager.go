@@ -106,6 +106,8 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
 		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation.Teid = uint32(teid)
 		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address = node.UPF.UPIPInfo.Ipv4Address
+		fmt.Println("Parent IP: ", node.UPF.GetUPFIP())
+		fmt.Println("My UserPlane IP: ", node.UPF.UPIPInfo.Ipv4Address.String())
 	}
 
 	for _, upf_link := range node.DataPathToDN {

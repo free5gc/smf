@@ -1,6 +1,7 @@
 package pfcp_message
 
 import (
+	"fmt"
 	"gofree5gc/lib/pfcp"
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/src/smf/logger"
@@ -133,6 +134,8 @@ func SendPfcpSessionEstablishmentRequestForULCL(raddr *net.UDPAddr, ctx *smf_con
 
 	logger.PduSessLog.Traceln("PFCP MSG: ")
 	logger.PduSessLog.Traceln(pfcpMsg)
+	fmt.Println("PFCP MSG: ")
+	fmt.Println(pfcpMsg)
 	message := pfcp.Message{
 		Header: pfcp.Header{
 			Version:         pfcp.PfcpVersion,
@@ -148,6 +151,8 @@ func SendPfcpSessionEstablishmentRequestForULCL(raddr *net.UDPAddr, ctx *smf_con
 
 	logger.PduSessLog.Traceln("[SMF] Send SendPfcpSessionEstablishmentRequestForULCL")
 	logger.PduSessLog.Traceln("Send to addr ", raddr.String())
+	fmt.Println("[SMF] Send SendPfcpSessionEstablishmentRequestForULCL")
+	fmt.Println("Send to addr ", raddr.String())
 	pfcp_udp.SendPfcp(message, raddr)
 }
 

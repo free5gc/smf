@@ -125,6 +125,11 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		upfRoot = ueRoutingGraph.GetGraphRoot()
 		psaPath := smf_context.GetUserPlaneInformation().DefaultUserPlanePath[createData.Dnn]
 
+		//------for test ----------//
+		upInfo := smf_context.GetUserPlaneInformation()
+		psaPath = append(psaPath, upInfo.GetUPFNodeByIP("10.200.200.103"))
+		//-------------------------//
+
 		err := upfRoot.EnableUserPlanePath(psaPath)
 		if err != nil {
 			logger.PduSessLog.Error(err)
@@ -172,6 +177,8 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 			},
 		}
 	}
+
+	SetUpAllUPF(upfRoot)
 
 	response.JsonData = smContext.BuildCreatedData()
 	rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
@@ -513,12 +520,13 @@ func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMe
 	// }}
 }
 
-// func SetUpAllUPF(node *smf_context.DataPathNode) {
+func SetUpAllUPF(node *smf_context.DataPathNode) {
 
-// 	node.UPF.UPFStatus = smf_context.AssociatedSetUpSuccess
+	node.UPF.UPFStatus = smf_context.AssociatedSetUpSuccess
+	node.UPF.UPIPInfo.Ipv4Address = net.ParseIP("192.168.1.1")
 
-// 	for _, child_link := range node.DataPathToDN {
+	for _, child_link := range node.DataPathToDN {
 
-// 		SetUpAllUPF(child_link.To)
-// 	}
-// }
+		SetUpAllUPF(child_link.To)
+	}
+}
