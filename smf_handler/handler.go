@@ -1,10 +1,12 @@
 package smf_handler
 
 import (
+	"gofree5gc/lib/http_wrapper"
 	"gofree5gc/lib/openapi/models"
 	"gofree5gc/src/smf/smf_handler/smf_message"
 	"gofree5gc/src/smf/smf_pfcp"
 	"gofree5gc/src/smf/smf_producer"
+	"net/http"
 	"time"
 )
 
@@ -23,13 +25,21 @@ func Handle() {
 					smContextRef := msg.HTTPRequest.Params["smContextRef"]
 					seqNum, ResBody := smf_producer.HandlePDUSessionSMContextUpdate(
 						msg.ResponseChan, smContextRef, msg.HTTPRequest.Body.(models.UpdateSmContextRequest))
-
-					smf_message.RspQueue.PutItem(
-						seqNum, msg.ResponseChan, ResBody)
+					response := http_wrapper.Response{
+						Status: http.StatusOK,
+						Body:   ResBody,
+					}
+					smf_message.RspQueue.PutItem(seqNum, msg.ResponseChan, response)
 				case smf_message.PDUSessionSMContextRelease:
 					smContextRef := msg.HTTPRequest.Params["smContextRef"]
-					smf_producer.HandlePDUSessionSMContextRelease(
+					seqNum := smf_producer.HandlePDUSessionSMContextRelease(
 						msg.ResponseChan, smContextRef, msg.HTTPRequest.Body.(models.ReleaseSmContextRequest))
+					response := http_wrapper.Response{
+						Status: http.StatusNoContent,
+						Body:   nil,
+					}
+					smf_message.RspQueue.PutItem(seqNum, msg.ResponseChan, response)
+
 				}
 			}
 		case <-time.After(time.Second * 1):

@@ -9,6 +9,7 @@ import (
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/lib/pfcp/pfcpUdp"
 	"gofree5gc/src/smf/logger"
+	"gofree5gc/src/smf/smf_consumer"
 	"gofree5gc/src/smf/smf_context"
 	"gofree5gc/src/smf/smf_handler/smf_message"
 	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
@@ -201,11 +202,7 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 		if pfcpRsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
 			resQueueItem := HttpResponseQueue.GetItem(seqNum)
 
-			resQueueItem.RspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
-				Header: nil,
-				Status: http.StatusOK,
-				Body:   resQueueItem.ResponseBody,
-			}}
+			resQueueItem.RspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &resQueueItem.Response}
 
 			HttpResponseQueue.DeleteItem(seqNum)
 			//if smContext.SMState == smf_context.PDUSessionInactive {
@@ -241,7 +238,62 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 }
 
 func HandlePfcpSessionDeletionResponse(msg *pfcpUdp.Message) {
-	logger.PfcpLog.Warnf("PFCP Session Deletion Response handling is not implemented")
+	logger.PfcpLog.Infof("Handle PFCP Session Deletion Response")
+	pfcpRsp := msg.PfcpMessage.Body.(pfcp.PFCPSessionDeletionResponse)
+	SEID := msg.PfcpMessage.Header.SEID
+	seqNum := msg.PfcpMessage.Header.SequenceNumber
+	HttpResponseQueue := smf_message.RspQueue
+
+	smContext := smf_context.GetSMContextBySEID(SEID)
+
+	if HttpResponseQueue.CheckItemExist(seqNum) {
+		resQueueItem := HttpResponseQueue.GetItem(seqNum)
+		if pfcpRsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
+
+			if smContext == nil {
+				logger.PfcpLog.Warnf("PFCP Session Deletion Response Found SM Context NULL, Request Rejected")
+				// TODO fix: SEID should be the value sent by UPF but now the SEID value is from sm context
+			} else {
+
+				resQueueItem.RspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &resQueueItem.Response}
+				HttpResponseQueue.DeleteItem(seqNum)
+				// Send Release Notify to AMF
+				smf_consumer.SendSMContextStatusNotification(smContext.SmStatusNotifyUri)
+				smf_context.RemoveSMContext(smContext.Ref)
+				logger.PfcpLog.Infof("PFCP Session Deletion Success[%d]\n", SEID)
+				return
+
+			}
+		}
+		problemDetail := models.ProblemDetails{
+			Status: http.StatusInternalServerError,
+			Cause:  "SYSTEM_FAILULE",
+		}
+		response := http_wrapper.Response{
+			Status: int(problemDetail.Status),
+		}
+		if resQueueItem.Response.Status == http.StatusOK {
+			// Update SmContext Request(N1 PDU Session Release Request)
+			// Send PDU Session Release Reject
+			errResponse := models.UpdateSmContextErrorResponse{
+				JsonData: &models.SmContextUpdateError{
+					Error: &problemDetail,
+				},
+			}
+			buf, _ := smf_context.BuildGSMPDUSessionReleaseReject(smContext)
+			errResponse.BinaryDataN1SmMessage = buf
+			errResponse.JsonData.N1SmMsg = &models.RefToBinaryData{ContentId: "PDUSessionReleaseReject"}
+			response.Body = errResponse
+		} else {
+			// Release SmContext Request
+			response.Body = problemDetail
+		}
+		resQueueItem.RspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &response}
+		logger.PfcpLog.Infof("PFCP Session Deletion Failed[%d]\n", SEID)
+	} else {
+		logger.PfcpLog.Infof("[PFCP Deletion RSP] Can't find corresponding seq num[%d]\n", seqNum)
+	}
+
 }
 
 func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
