@@ -224,12 +224,13 @@ func SendPfcpSessionModificationResponse(addr *net.UDPAddr) {
 	pfcp_udp.SendPfcp(message, addr)
 }
 
-func SendPfcpSessionDeletionRequest(addr *net.UDPAddr, ctx *smf_context.SMContext) {
+func SendPfcpSessionDeletionRequest(addr *net.UDPAddr, ctx *smf_context.SMContext) (seqNum uint32) {
 	pfcpMsg, err := BuildPfcpSessionDeletionRequest()
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Deletion Request failed: %v", err)
 		return
 	}
+	seqNum = getSeqNumber()
 	message := pfcp.Message{
 		Header: pfcp.Header{
 			Version:         pfcp.PfcpVersion,
@@ -244,6 +245,8 @@ func SendPfcpSessionDeletionRequest(addr *net.UDPAddr, ctx *smf_context.SMContex
 	}
 
 	pfcp_udp.SendPfcp(message, addr)
+
+	return seqNum
 }
 
 // Deprecated: PFCP Session Deletion Procedure should be initiated by the CP function

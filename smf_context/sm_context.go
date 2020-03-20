@@ -72,7 +72,8 @@ type SMContext struct {
 	SMPolicyClient      *Npcf_SMPolicyControl.APIClient
 	CommunicationClient *Namf_Communication.APIClient
 
-	AMFProfile models.NfProfile
+	AMFProfile        models.NfProfile
+	SmStatusNotifyUri string
 
 	SMState SMState
 

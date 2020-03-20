@@ -2,6 +2,7 @@ package smf_context
 
 import (
 	"gofree5gc/lib/nas/nasMessage"
+	"gofree5gc/src/smf/logger"
 )
 
 func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage.PDUSessionEstablishmentRequest) {
@@ -18,4 +19,5 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 }
 
 func (smContext *SMContext) HandlePDUSessionReleaseRequest(req *nasMessage.PDUSessionReleaseRequest) {
+	logger.GsmLog.Infof("Handle Pdu Session Release Request")
 }

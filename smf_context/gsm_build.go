@@ -15,7 +15,7 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	m.PDUSessionEstablishmentAccept = nasMessage.NewPDUSessionEstablishmentAccept(0x0)
 	pDUSessionEstablishmentAccept := m.PDUSessionEstablishmentAccept
 
-	pDUSessionEstablishmentAccept.SetPDUSessionID(uint8(10))
+	pDUSessionEstablishmentAccept.SetPDUSessionID(uint8(smContext.PDUSessionID))
 	pDUSessionEstablishmentAccept.SetMessageType(nas.MsgTypePDUSessionEstablishmentAccept)
 	pDUSessionEstablishmentAccept.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
 	pDUSessionEstablishmentAccept.SetPTI(0x00)
@@ -86,6 +86,25 @@ func BuildGSMPDUSessionModificationCommand(smContext *SMContext) ([]byte, error)
 	// pDUSessionModificationCommand.SessionAMBR.SetUnitForSessionAMBRForDownlink(10)
 	// pDUSessionModificationCommand.SessionAMBR.SetUnitForSessionAMBRForUplink(10)
 	// pDUSessionModificationCommand.SessionAMBR.SetLen(uint8(len(pDUSessionModificationCommand.SessionAMBR.Octet)))
+
+	return m.PlainNasEncode()
+}
+
+func BuildGSMPDUSessionReleaseReject(smContext *SMContext) ([]byte, error) {
+
+	m := nas.NewMessage()
+	m.GsmMessage = nas.NewGsmMessage()
+	m.GsmHeader.SetMessageType(nas.MsgTypePDUSessionReleaseReject)
+	m.GsmHeader.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
+	m.PDUSessionReleaseReject = nasMessage.NewPDUSessionReleaseReject(0x0)
+	pDUSessionReleaseReject := m.PDUSessionReleaseReject
+
+	pDUSessionReleaseReject.SetMessageType(nas.MsgTypePDUSessionReleaseReject)
+	pDUSessionReleaseReject.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
+	pDUSessionReleaseReject.SetPDUSessionID(uint8(smContext.PDUSessionID))
+	pDUSessionReleaseReject.SetPTI(0x00)
+	// TODO: fix to real value
+	pDUSessionReleaseReject.SetCauseValue(nasMessage.Cause5GSMRequestRejectedUnspecified)
 
 	return m.PlainNasEncode()
 }

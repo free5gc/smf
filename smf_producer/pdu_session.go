@@ -24,6 +24,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	createData := request.JsonData
 	smContext := smf_context.NewSMContext(createData.Supi, createData.PduSessionId)
+	smContext.SmStatusNotifyUri = createData.SmContextStatusUri
 
 	smContext.PDUAddress = smf_context.AllocUEIP()
 
@@ -270,6 +271,13 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			if err != nil {
 				logger.PduSessLog.Error(err)
 			}
+			addr := net.UDPAddr{
+				IP:   smContext.Tunnel.Node.NodeID.NodeIdValue,
+				Port: pfcpUdp.PFCP_PORT,
+			}
+
+			seqNum = pfcp_message.SendPfcpSessionDeletionRequest(&addr, smContext)
+			return seqNum, response
 		}
 
 	}
@@ -441,21 +449,22 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 	return seqNum, response
 }
 
-func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMessage, smContextRef string, body models.ReleaseSmContextRequest) {
+func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMessage, smContextRef string, body models.ReleaseSmContextRequest) (seqNum uint32) {
 	smContext := smf_context.GetSMContext(smContextRef)
 
-	smf_context.RemoveSMContext(smContext.Ref)
+	// smf_context.RemoveSMContext(smContext.Ref)
 
 	addr := net.UDPAddr{
 		IP:   smContext.Tunnel.Node.NodeID.NodeIdValue,
 		Port: pfcpUdp.PFCP_PORT,
 	}
 
-	pfcp_message.SendPfcpSessionDeletionRequest(&addr, smContext)
+	seqNum = pfcp_message.SendPfcpSessionDeletionRequest(&addr, smContext)
+	return seqNum
 
-	rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
-		Header: nil,
-		Status: http.StatusNoContent,
-		Body:   nil,
-	}}
+	// rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
+	// 	Header: nil,
+	// 	Status: http.StatusNoContent,
+	// 	Body:   nil,
+	// }}
 }

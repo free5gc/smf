@@ -1,7 +1,7 @@
 package smf_message
 
 import (
-	"gofree5gc/lib/openapi/models"
+	"gofree5gc/lib/http_wrapper"
 )
 
 var RspQueue *ResponseQueue
@@ -20,11 +20,11 @@ func NewQueue() *ResponseQueue {
 	return &rq
 }
 
-func (rq ResponseQueue) PutItem(seqNum uint32, rspChan chan HandlerResponseMessage, responseBody models.UpdateSmContextResponse) {
+func (rq ResponseQueue) PutItem(seqNum uint32, rspChan chan HandlerResponseMessage, response http_wrapper.Response) {
 
 	Item := new(ResponseQueueItem)
 	Item.RspChan = rspChan
-	Item.ResponseBody = responseBody
+	Item.Response = response
 	rq.RspQueue[seqNum] = Item
 }
 
