@@ -126,9 +126,15 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		psaPath := smf_context.GetUserPlaneInformation().DefaultUserPlanePath[createData.Dnn]
 
 		//------for test ----------//
-		upInfo := smf_context.GetUserPlaneInformation()
-		psaPath = append(psaPath, upInfo.GetUPFNodeByIP("10.200.200.103"))
+		//upInfo := smf_context.GetUserPlaneInformation()
+		//psaPath = append(psaPath, upInfo.GetUPFNodeByIP("10.200.200.103"))
 		//-------------------------//
+
+		fmt.Println("PSA PATH:　")
+		for i, node := range psaPath {
+
+			fmt.Println("Node ", i, ": ", node.NodeID.ResolveNodeIdToIp().String())
+		}
 
 		err := upfRoot.EnableUserPlanePath(psaPath)
 		if err != nil {
