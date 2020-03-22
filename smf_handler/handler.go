@@ -39,7 +39,9 @@ func Handle() {
 						Body:   nil,
 					}
 					smf_message.RspQueue.PutItem(seqNum, msg.ResponseChan, response)
-
+				case smf_message.OAMGetUEPDUSessionInfo:
+					smContextRef := msg.HTTPRequest.Params["smContextRef"]
+					smf_producer.HandleOAMGetUEPDUSessionInfo(msg.ResponseChan, smContextRef)
 				}
 			}
 		case <-time.After(time.Second * 1):
