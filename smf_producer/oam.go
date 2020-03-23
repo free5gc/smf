@@ -5,19 +5,20 @@ import (
 	"gofree5gc/lib/openapi/models"
 	"gofree5gc/src/smf/smf_context"
 	"gofree5gc/src/smf/smf_handler/smf_message"
-	"net"
 	"net/http"
+	"strconv"
 )
 
 type PDUSessionInfo struct {
 	Supi         string
-	PDUSessionID int32
-	LocalSEID    uint64
-	RemoteSEID   uint64
+	PDUSessionID string
+	LocalSEID    string
+	RemoteSEID   string
 	Dnn          string
-	Snssai       *models.Snssai
+	Sst          string
+	Sd           string
 	AnType       models.AccessType
-	PDUAddress   net.IP
+	PDUAddress   string
 	QosRules     smf_context.QoSRules
 	UpCnxState   models.UpCnxState
 	Tunnel       *smf_context.UPTunnel
@@ -42,13 +43,14 @@ func HandleOAMGetUEPDUSessionInfo(rspChan chan smf_message.HandlerResponseMessag
 			Status: http.StatusOK,
 			Body: PDUSessionInfo{
 				Supi:         smContext.Supi,
-				PDUSessionID: smContext.PDUSessionID,
-				LocalSEID:    smContext.LocalSEID,
-				RemoteSEID:   smContext.RemoteSEID,
+				PDUSessionID: strconv.Itoa(int(smContext.PDUSessionID)),
+				LocalSEID:    strconv.FormatUint(smContext.LocalSEID, 10),
+				RemoteSEID:   strconv.FormatUint(smContext.RemoteSEID, 10),
 				Dnn:          smContext.Dnn,
-				Snssai:       smContext.Snssai,
+				Sst:          strconv.Itoa(int(smContext.Snssai.Sst)),
+				Sd:           smContext.Snssai.Sd,
 				AnType:       smContext.AnType,
-				PDUAddress:   smContext.PDUAddress,
+				PDUAddress:   smContext.PDUAddress.String(),
 				QosRules:     smContext.QoSRules,
 				UpCnxState:   smContext.UpCnxState,
 				Tunnel:       smContext.Tunnel,
