@@ -7,26 +7,26 @@ import (
 	"gofree5gc/src/smf/logger"
 )
 
-type SeqNumTblItem struct {
+type SeqNumTableItem struct {
 	PacketState PacketState
 	MessageType pfcp.MessageType
 }
 
-type SeqNumTbl struct {
-	from_smf_seq_tbl map[uint32]*SeqNumTblItem
-	to_smf_seq_tbl   map[uint32]*SeqNumTblItem
+type SeqNumTable struct {
+	from_smf_seq_table map[uint32]*SeqNumTableItem
+	to_smf_seq_table   map[uint32]*SeqNumTableItem
 }
 
-func NewSeqNumTbl() *SeqNumTbl {
-	var snt SeqNumTbl
-	snt.from_smf_seq_tbl = make(map[uint32]*SeqNumTblItem)
-	snt.to_smf_seq_tbl = make(map[uint32]*SeqNumTblItem)
+func NewSeqNumTable() *SeqNumTable {
+	var snt SeqNumTable
+	snt.from_smf_seq_table = make(map[uint32]*SeqNumTableItem)
+	snt.to_smf_seq_table = make(map[uint32]*SeqNumTableItem)
 	return &snt
 }
 
-func (snt SeqNumTbl) RecvCheckAndPutItem(msg *pfcp.Message) (Success bool) {
+func (snt SeqNumTable) RecvCheckAndPutItem(msg *pfcp.Message) (Success bool) {
 
-	Item := new(SeqNumTblItem)
+	Item := new(SeqNumTableItem)
 	seqNum := msg.Header.SequenceNumber
 	Success = false
 	switch msg.Header.MessageType {
@@ -83,9 +83,9 @@ func (snt SeqNumTbl) RecvCheckAndPutItem(msg *pfcp.Message) (Success bool) {
 
 	}
 
-	_, exist := snt.to_smf_seq_tbl[seqNum]
+	_, exist := snt.to_smf_seq_table[seqNum]
 	if !exist {
-		snt.to_smf_seq_tbl[seqNum] = Item
+		snt.to_smf_seq_table[seqNum] = Item
 		Success = true
 	} else {
 		logger.PfcpLog.Errorf("\n[SMF PFCP]Sequence Number %d already exists.\n", seqNum)
@@ -95,8 +95,8 @@ func (snt SeqNumTbl) RecvCheckAndPutItem(msg *pfcp.Message) (Success bool) {
 	return
 }
 
-func (snt SeqNumTbl) SendCheckAndPutItem(msg *pfcp.Message) (Success bool) {
-	Item := new(SeqNumTblItem)
+func (snt SeqNumTable) SendCheckAndPutItem(msg *pfcp.Message) (Success bool) {
+	Item := new(SeqNumTableItem)
 	seqNum := msg.Header.SequenceNumber
 	Success = false
 
@@ -140,9 +140,9 @@ func (snt SeqNumTbl) SendCheckAndPutItem(msg *pfcp.Message) (Success bool) {
 
 	}
 
-	_, exist := snt.from_smf_seq_tbl[seqNum]
+	_, exist := snt.from_smf_seq_table[seqNum]
 	if !exist {
-		snt.from_smf_seq_tbl[seqNum] = Item
+		snt.from_smf_seq_table[seqNum] = Item
 		Success = true
 	} else {
 		logger.PfcpLog.Errorf("\n[SMF PFCP]Sequence Number %d already exists.\n", seqNum)
@@ -152,15 +152,15 @@ func (snt SeqNumTbl) SendCheckAndPutItem(msg *pfcp.Message) (Success bool) {
 	return
 }
 
-func (snt SeqNumTbl) RemoveItem(seqNum uint32, newStateInInt uint8) (Success bool) {
+func (snt SeqNumTable) RemoveItem(seqNum uint32, newStateInInt uint8) (Success bool) {
 	newState := PacketState(newStateInInt)
 	Success = false
 
-	var item *SeqNumTblItem
+	var item *SeqNumTableItem
 	var exist bool
 
 	if newState == SEND_RESPONSE {
-		item, exist = snt.to_smf_seq_tbl[seqNum]
+		item, exist = snt.to_smf_seq_table[seqNum]
 
 		if !exist {
 			logger.PfcpLog.Warnf("\n[SMF PFCP] Can't send response without having corresponding request.\n")
@@ -168,7 +168,7 @@ func (snt SeqNumTbl) RemoveItem(seqNum uint32, newStateInInt uint8) (Success boo
 			return
 		}
 	} else if newState == RECV_RESPONSE {
-		item, exist = snt.from_smf_seq_tbl[seqNum]
+		item, exist = snt.from_smf_seq_table[seqNum]
 
 		if !exist {
 			logger.PfcpLog.Warnf("\n[SMF PFCP] Can't receive response without having corresponding request.\n")
@@ -187,7 +187,7 @@ func (snt SeqNumTbl) RemoveItem(seqNum uint32, newStateInInt uint8) (Success boo
 			return
 		}
 
-		delete(snt.to_smf_seq_tbl, seqNum)
+		delete(snt.to_smf_seq_table, seqNum)
 		Success = true
 	case RECV_RESPONSE:
 		if item.PacketState != SEND_REQUEST {
@@ -198,7 +198,7 @@ func (snt SeqNumTbl) RemoveItem(seqNum uint32, newStateInInt uint8) (Success boo
 			return
 		}
 
-		delete(snt.from_smf_seq_tbl, seqNum)
+		delete(snt.from_smf_seq_table, seqNum)
 		Success = true
 	default:
 		logger.PfcpLog.Errorf("\nWrong Packet State: %d\n", newState)
@@ -207,16 +207,16 @@ func (snt SeqNumTbl) RemoveItem(seqNum uint32, newStateInInt uint8) (Success boo
 	return
 }
 
-func (snt SeqNumTbl) PrintTable() {
+func (snt SeqNumTable) PrintTable() {
 	fmt.Println("Table from smf")
 	fmt.Printf("Seq Num\tMsg Type\tPacket State\n")
-	for seqNum, item := range snt.from_smf_seq_tbl {
+	for seqNum, item := range snt.from_smf_seq_table {
 		fmt.Printf("%d\t%d\t%d\n", seqNum, item.MessageType, item.PacketState)
 	}
 
 	fmt.Println("Table to smf")
 	fmt.Printf("Seq Num\tMsg Type\tPacket State\n")
-	for seqNum, item := range snt.to_smf_seq_tbl {
+	for seqNum, item := range snt.to_smf_seq_table {
 		fmt.Printf("%d\t%d\t%d\n", seqNum, item.MessageType, item.PacketState)
 	}
 }
