@@ -18,10 +18,10 @@ var Server pfcpUdp.PfcpServer
 
 var ServerStartTime time.Time
 
-var SeqNumberTbl *pfcp_util.SeqNumTbl
+var SeqNumberTable *pfcp_util.SeqNumTable
 
 func init() {
-	SeqNumberTbl = pfcp_util.NewSeqNumTbl()
+	SeqNumberTable = pfcp_util.NewSeqNumTable()
 }
 
 func Run() {
@@ -44,7 +44,7 @@ func Run() {
 				continue
 			}
 
-			seq_num_check_pass := SeqNumberTbl.RecvCheckAndPutItem(&pfcpMessage)
+			seq_num_check_pass := SeqNumberTable.RecvCheckAndPutItem(&pfcpMessage)
 			if !seq_num_check_pass {
 				logger.PfcpLog.Errorf("\nSequence Number checking error.\n")
 				continue
@@ -61,7 +61,7 @@ func Run() {
 }
 
 func SendPfcp(msg pfcp.Message, addr *net.UDPAddr) {
-	seq_num_check_pass := SeqNumberTbl.SendCheckAndPutItem(&msg)
+	seq_num_check_pass := SeqNumberTable.SendCheckAndPutItem(&msg)
 	if !seq_num_check_pass {
 		logger.PfcpLog.Errorf("\nSequence Number checking error.\n")
 		return
