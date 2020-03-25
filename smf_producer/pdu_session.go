@@ -168,7 +168,11 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		NetworkInstance: []byte(smContext.Dnn),
 	}
 
-	// TODO: PCF Selection
+	logger.PduSessLog.Infof("PCF Selection for SMContext SUPI[%s] PDUSessionID[%d]\n", smContext.Supi, smContext.PDUSessionID)
+	err = smContext.PCFSelection()
+	if err != nil {
+		logger.PduSessLog.Warnf("PCF Select failed: %s", err)
+	}
 
 	// TODO: Recieve Qos from PCF
 

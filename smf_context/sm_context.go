@@ -1,12 +1,18 @@
 package smf_context
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"gofree5gc/lib/Namf_Communication"
+	"gofree5gc/lib/Nnrf_NFDiscovery"
 	"gofree5gc/lib/Npcf_SMPolicyControl"
 	"gofree5gc/lib/nas/nasMessage"
+	"gofree5gc/lib/openapi/common"
 	"gofree5gc/lib/openapi/models"
+	"gofree5gc/src/smf/logger"
 	"net"
+	"net/http"
 
 	"github.com/google/uuid"
 )
@@ -72,8 +78,9 @@ type SMContext struct {
 	SMPolicyClient      *Npcf_SMPolicyControl.APIClient
 	CommunicationClient *Namf_Communication.APIClient
 
-	AMFProfile        models.NfProfile
-	SmStatusNotifyUri string
+	AMFProfile         models.NfProfile
+	SelectedPCFProfile models.NfProfile
+	SmStatusNotifyUri  string
 
 	SMState SMState
 
@@ -159,5 +166,45 @@ func (smContext *SMContext) PDUAddressToNAS() (addr [12]byte, addrLen uint8) {
 	case nasMessage.PDUSessionTypeIPv4IPv6:
 		addrLen = 12 + 1
 	}
+	return
+}
+
+// PCFSelection will select PCF for this SM Context
+func (smContext *SMContext) PCFSelection() (err error) {
+
+	// Send NFDiscovery for find PCF
+	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
+
+	rep, res, err := SMF_Self().NFDiscoveryClient.NFInstancesStoreApi.SearchNFInstances(context.TODO(), models.NfType_PCF, models.NfType_SMF, &localVarOptionals)
+	if err != nil {
+		return
+	}
+
+	if res != nil {
+		if status := res.StatusCode; status != http.StatusOK {
+			apiError := err.(common.GenericOpenAPIError)
+			problemDetails := apiError.Model().(models.ProblemDetails)
+
+			logger.CtxLog.Warningf("NFDiscovery PCF return status: %d\n", status)
+			logger.CtxLog.Warningf("Detail: %v\n", problemDetails)
+		}
+	}
+
+	// Select PCF from available PCF
+
+	smContext.SelectedPCFProfile = rep.NfInstances[0]
+
+	SelectedPCFProfileString, _ := json.MarshalIndent(smContext.SelectedPCFProfile, "", "  ")
+	logger.CtxLog.Tracef("Select PCF Profile: %s\n", SelectedPCFProfileString)
+
+	// Create SMPolicyControl Client for this SM Context
+	for _, service := range *smContext.SelectedPCFProfile.NfServices {
+		if service.ServiceName == models.ServiceName_NPCF_SMPOLICYCONTROL {
+			SmPolicyControlConf := Npcf_SMPolicyControl.NewConfiguration()
+			SmPolicyControlConf.SetBasePath(service.ApiPrefix)
+			smContext.SMPolicyClient = Npcf_SMPolicyControl.NewAPIClient(SmPolicyControlConf)
+		}
+	}
+
 	return
 }
