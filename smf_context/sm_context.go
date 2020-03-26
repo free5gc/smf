@@ -74,6 +74,8 @@ type SMContext struct {
 
 	QoSRules QoSRules
 
+	SessionManagementSubscriptionDatas []models.SessionManagementSubscriptionData
+
 	// Client
 	SMPolicyClient      *Npcf_SMPolicyControl.APIClient
 	CommunicationClient *Namf_Communication.APIClient
@@ -186,7 +188,7 @@ func (smContext *SMContext) PCFSelection() (err error) {
 			problemDetails := apiError.Model().(models.ProblemDetails)
 
 			logger.CtxLog.Warningf("NFDiscovery PCF return status: %d\n", status)
-			logger.CtxLog.Warningf("Detail: %v\n", problemDetails)
+			logger.CtxLog.Warningf("Detail: %v\n", problemDetails.Title)
 		}
 	}
 

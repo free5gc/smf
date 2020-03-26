@@ -1,11 +1,14 @@
 package smf_producer
 
 import (
+	"context"
 	"fmt"
 	"gofree5gc/lib/Namf_Communication"
 	"gofree5gc/lib/Nsmf_PDUSession"
+	"gofree5gc/lib/Nudm_SubscriberDataManagement"
 	"gofree5gc/lib/http_wrapper"
 	"gofree5gc/lib/nas"
+	"gofree5gc/lib/openapi"
 	"gofree5gc/lib/openapi/models"
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/lib/pfcp/pfcpUdp"
@@ -16,15 +19,63 @@ import (
 	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
 	"net"
 	"net/http"
+
+	"github.com/antihax/optional"
 )
 
 func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMessage, request models.PostSmContextsRequest) {
+	var err error
 	var response models.PostSmContextsResponse
 	response.JsonData = new(models.SmContextCreatedData)
 
 	createData := request.JsonData
 	smContext := smf_context.NewSMContext(createData.Supi, createData.PduSessionId)
+	smContext.SetCreateData(createData)
 	smContext.SmStatusNotifyUri = createData.SmContextStatusUri
+
+	// Query UDM
+	smf_consumer.SendNFDiscoveryUDM()
+
+	smPlmnID := createData.Guami.PlmnId
+
+	smDataParams := &Nudm_SubscriberDataManagement.GetSmDataParamOpts{
+		Dnn:         optional.NewString(createData.Dnn),
+		PlmnId:      optional.NewInterface(smPlmnID.Mcc + smPlmnID.Mnc),
+		SingleNssai: optional.NewInterface(openapi.MarshToJsonString(smContext.Snssai)),
+	}
+
+	SubscriberDataManagementClient := smf_context.SMF_Self().SubscriberDataManagementClient
+
+	sessSubData, _, err := SubscriberDataManagementClient.SessionManagementSubscriptionDataRetrievalApi.GetSmData(context.Background(), smContext.Supi, smDataParams)
+
+	if err != nil {
+		logger.PduSessLog.Errorln("Get SessionManagementSubscriptionData error:", err)
+	}
+
+	if sessSubData != nil {
+		smContext.SessionManagementSubscriptionDatas = sessSubData
+	} else {
+		logger.PduSessLog.Errorln("SessionManagementSubscriptionData from UDM is nil")
+	}
+
+	// TODO: Recieve Qos from PCF
+
+	// Setup Default QoS Parameters
+	smContext.QoSRules = smf_context.QoSRules{
+		smf_context.QoSRule{
+			Identifier:    0x01,
+			DQR:           0x01,
+			OperationCode: smf_context.OperationCodeCreateNewQoSRule,
+			QFI:           0x01,
+			PacketFilterList: []smf_context.PacketFilter{
+				smf_context.PacketFilter{
+					Identifier:    0x01,
+					Direction:     smf_context.PacketFilterDirectionBidirectional,
+					ComponentType: smf_context.PacketFilterComponentTypeMatchAll,
+				},
+			},
+		},
+	}
 
 	smContext.PDUAddress = smf_context.AllocUEIP()
 
@@ -92,7 +143,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	}
 
 	m := nas.NewMessage()
-	err := m.GsmMessageDecode(&request.BinaryDataN1SmMessage)
+	err = m.GsmMessageDecode(&request.BinaryDataN1SmMessage)
 	if err != nil || m.GsmHeader.GetMessageType() != nas.MsgTypePDUSessionEstablishmentRequest {
 		rspChan <- smf_message.HandlerResponseMessage{
 			HTTPResponse: &http_wrapper.Response{
@@ -111,7 +162,6 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	establishmentRequest := m.PDUSessionEstablishmentRequest
 
 	smContext.HandlePDUSessionEstablishmentRequest(establishmentRequest)
-	smContext.SetCreateData(createData)
 	response.JsonData = smContext.BuildCreatedData()
 	rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
 		Header: http.Header{
@@ -172,25 +222,6 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	err = smContext.PCFSelection()
 	if err != nil {
 		logger.PduSessLog.Warnf("PCF Select failed: %s", err)
-	}
-
-	// TODO: Recieve Qos from PCF
-
-	// Setup Default QoS Parameters
-	smContext.QoSRules = smf_context.QoSRules{
-		smf_context.QoSRule{
-			Identifier:    0x01,
-			DQR:           0x01,
-			OperationCode: smf_context.OperationCodeCreateNewQoSRule,
-			QFI:           0x01,
-			PacketFilterList: []smf_context.PacketFilter{
-				smf_context.PacketFilter{
-					Identifier:    0x01,
-					Direction:     smf_context.PacketFilterDirectionBidirectional,
-					ComponentType: smf_context.PacketFilterComponentTypeMatchAll,
-				},
-			},
-		},
 	}
 
 	addr := net.UDPAddr{
