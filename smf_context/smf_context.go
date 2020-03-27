@@ -6,13 +6,15 @@ import (
 
 	"gofree5gc/lib/Nnrf_NFDiscovery"
 	"gofree5gc/lib/Nnrf_NFManagement"
+	"gofree5gc/lib/Nudm_SubscriberDataManagement"
 	"gofree5gc/src/smf/factory"
 	"gofree5gc/src/smf/logger"
 
-	"github.com/google/uuid"
 	"gofree5gc/lib/openapi/models"
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/lib/pfcp/pfcpUdp"
+
+	"github.com/google/uuid"
 )
 
 func init() {
@@ -31,8 +33,7 @@ type SMFContext struct {
 
 	CPNodeID pfcpType.NodeID
 
-	UDMProfiles []models.NfProfile
-	PCFProfiles []models.NfProfile
+	UDMProfile models.NfProfile
 
 	UPNodeIDs []pfcpType.NodeID
 	Key       string
@@ -42,9 +43,10 @@ type SMFContext struct {
 	UESubNet      *net.IPNet
 	UEAddressTemp net.IP
 
-	NrfUri             string
-	NFManagementClient *Nnrf_NFManagement.APIClient
-	NFDiscoveryClient  *Nnrf_NFDiscovery.APIClient
+	NrfUri                         string
+	NFManagementClient             *Nnrf_NFManagement.APIClient
+	NFDiscoveryClient              *Nnrf_NFDiscovery.APIClient
+	SubscriberDataManagementClient *Nudm_SubscriberDataManagement.APIClient
 
 	UserPlaneInformation UserPlaneInformation
 	//*** For ULCL ** //

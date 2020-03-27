@@ -1,11 +1,16 @@
 package smf_producer
 
 import (
+	"context"
 	"fmt"
 	"gofree5gc/lib/Namf_Communication"
 	"gofree5gc/lib/Nsmf_PDUSession"
+	"gofree5gc/lib/Nudm_SubscriberDataManagement"
 	"gofree5gc/lib/http_wrapper"
 	"gofree5gc/lib/nas"
+	"gofree5gc/lib/nas/nasConvert"
+	"gofree5gc/lib/openapi"
+	"gofree5gc/lib/openapi/common"
 	"gofree5gc/lib/openapi/models"
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/lib/pfcp/pfcpUdp"
@@ -16,19 +21,19 @@ import (
 	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
 	"net"
 	"net/http"
+
+	"github.com/antihax/optional"
 )
 
 func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMessage, request models.PostSmContextsRequest) {
+	var err error
 	var response models.PostSmContextsResponse
 	response.JsonData = new(models.SmContextCreatedData)
 
-	createData := request.JsonData
-	smContext := smf_context.NewSMContext(createData.Supi, createData.PduSessionId)
-	smContext.SmStatusNotifyUri = createData.SmContextStatusUri
-
-	smContext.PDUAddress = smf_context.AllocUEIP()
-
-	if request.BinaryDataN1SmMessage == nil {
+	// Check has PDU Session Establishment Request
+	m := nas.NewMessage()
+	err = m.GsmMessageDecode(&request.BinaryDataN1SmMessage)
+	if err != nil || m.GsmHeader.GetMessageType() != nas.MsgTypePDUSessionEstablishmentRequest {
 		rspChan <- smf_message.HandlerResponseMessage{
 			HTTPResponse: &http_wrapper.Response{
 				Header: nil,
@@ -41,6 +46,76 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 			},
 		}
 		return
+	}
+
+	createData := request.JsonData
+	smContext := smf_context.NewSMContext(createData.Supi, createData.PduSessionId)
+	smContext.SetCreateData(createData)
+	smContext.SmStatusNotifyUri = createData.SmContextStatusUri
+
+	// Query UDM
+	smf_consumer.SendNFDiscoveryUDM()
+
+	smPlmnID := createData.Guami.PlmnId
+
+	smDataParams := &Nudm_SubscriberDataManagement.GetSmDataParamOpts{
+		Dnn:         optional.NewString(createData.Dnn),
+		PlmnId:      optional.NewInterface(smPlmnID.Mcc + smPlmnID.Mnc),
+		SingleNssai: optional.NewInterface(openapi.MarshToJsonString(smContext.Snssai)),
+	}
+
+	SubscriberDataManagementClient := smf_context.SMF_Self().SubscriberDataManagementClient
+
+	sessSubData, _, err := SubscriberDataManagementClient.SessionManagementSubscriptionDataRetrievalApi.GetSmData(context.Background(), smContext.Supi, smDataParams)
+
+	if err != nil {
+		logger.PduSessLog.Errorln("Get SessionManagementSubscriptionData error:", err)
+	}
+
+	if sessSubData != nil && len(sessSubData) > 0 {
+		smContext.DnnConfiguration = sessSubData[0].DnnConfigurations[smContext.Dnn]
+	} else {
+		logger.PduSessLog.Errorln("SessionManagementSubscriptionData from UDM is nil")
+	}
+
+	establishmentRequest := m.PDUSessionEstablishmentRequest
+	smContext.HandlePDUSessionEstablishmentRequest(establishmentRequest)
+
+	smPolicyData := models.SmPolicyContextData{}
+
+	smPolicyData.Supi = smContext.Supi
+	smPolicyData.PduSessionId = smContext.PDUSessionID
+	smPolicyData.NotificationUri = fmt.Sprintf("https://%s:%d/", smf_context.SMF_Self().HTTPAddress, smf_context.SMF_Self().HTTPPort)
+	smPolicyData.Dnn = smContext.Dnn
+	smPolicyData.PduSessionType = nasConvert.PDUSessionTypeToModels(smContext.SelectedPDUSessionType)
+	smPolicyData.AccessType = smContext.AnType
+	smPolicyData.RatType = smContext.RatType
+	smPolicyData.Ipv4Address = smContext.PDUAddress.To4().String()
+	smPolicyData.SubsSessAmbr = smContext.DnnConfiguration.SessionAmbr
+	smPolicyData.SubsDefQos = smContext.DnnConfiguration.Var5gQosProfile
+	smPolicyData.SliceInfo = smContext.Snssai
+	smPolicyData.ServingNetwork = &models.NetworkId{
+		Mcc: smContext.ServingNetwork.Mcc,
+		Mnc: smContext.ServingNetwork.Mnc,
+	}
+
+	err = smContext.PCFSelection()
+
+	if err != nil {
+		logger.PduSessLog.Errorln("pcf selection error:", err)
+	}
+
+	smPolicyDicirion, _, err := smContext.SMPolicyClient.DefaultApi.SmPoliciesPost(context.Background(), smPolicyData)
+
+	if err != nil {
+		openapiError := err.(common.GenericOpenAPIError)
+		problemDetails := openapiError.Model().(models.ProblemDetails)
+		logger.PduSessLog.Errorln("setup sm policy association failed:", err, problemDetails)
+	}
+
+	for _, sessRule := range smPolicyDicirion.SessRules {
+		smContext.SessionRule = sessRule
+		break
 	}
 
 	var upfRoot *smf_context.DataPathNode
@@ -91,27 +166,6 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		}
 	}
 
-	m := nas.NewMessage()
-	err := m.GsmMessageDecode(&request.BinaryDataN1SmMessage)
-	if err != nil || m.GsmHeader.GetMessageType() != nas.MsgTypePDUSessionEstablishmentRequest {
-		rspChan <- smf_message.HandlerResponseMessage{
-			HTTPResponse: &http_wrapper.Response{
-				Header: nil,
-				Status: http.StatusForbidden,
-				Body: models.PostSmContextsErrorResponse{
-					JsonData: &models.SmContextCreateError{
-						Error: &Nsmf_PDUSession.N1SmError,
-					},
-				},
-			},
-		}
-		return
-	}
-
-	establishmentRequest := m.PDUSessionEstablishmentRequest
-
-	smContext.HandlePDUSessionEstablishmentRequest(establishmentRequest)
-	smContext.SetCreateData(createData)
 	response.JsonData = smContext.BuildCreatedData()
 	rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
 		Header: http.Header{
@@ -168,25 +222,10 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		NetworkInstance: []byte(smContext.Dnn),
 	}
 
-	// TODO: PCF Selection
-
-	// TODO: Recieve Qos from PCF
-
-	// Setup Default QoS Parameters
-	smContext.QoSRules = smf_context.QoSRules{
-		smf_context.QoSRule{
-			Identifier:    0x01,
-			DQR:           0x01,
-			OperationCode: smf_context.OperationCodeCreateNewQoSRule,
-			QFI:           0x01,
-			PacketFilterList: []smf_context.PacketFilter{
-				smf_context.PacketFilter{
-					Identifier:    0x01,
-					Direction:     smf_context.PacketFilterDirectionBidirectional,
-					ComponentType: smf_context.PacketFilterComponentTypeMatchAll,
-				},
-			},
-		},
+	logger.PduSessLog.Infof("PCF Selection for SMContext SUPI[%s] PDUSessionID[%d]\n", smContext.Supi, smContext.PDUSessionID)
+	err = smContext.PCFSelection()
+	if err != nil {
+		logger.PduSessLog.Warnf("PCF Select failed: %s", err)
 	}
 
 	addr := net.UDPAddr{

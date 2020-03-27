@@ -3,9 +3,6 @@ package smf_service
 import (
 	"bufio"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli"
 	"gofree5gc/lib/http2_util"
 	"gofree5gc/lib/openapi/models"
 	"gofree5gc/lib/path_util"
@@ -25,6 +22,10 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli"
 )
 
 type SMF struct{}

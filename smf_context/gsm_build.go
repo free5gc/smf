@@ -2,6 +2,7 @@ package smf_context
 
 import (
 	"gofree5gc/lib/nas"
+	"gofree5gc/lib/nas/nasConvert"
 	"gofree5gc/lib/nas/nasMessage"
 	"gofree5gc/lib/nas/nasType"
 	// "gofree5gc/lib/nas/nasType"
@@ -15,19 +16,34 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	m.PDUSessionEstablishmentAccept = nasMessage.NewPDUSessionEstablishmentAccept(0x0)
 	pDUSessionEstablishmentAccept := m.PDUSessionEstablishmentAccept
 
+	authDefQos := smContext.SessionRule.AuthDefQos
+
 	pDUSessionEstablishmentAccept.SetPDUSessionID(uint8(smContext.PDUSessionID))
 	pDUSessionEstablishmentAccept.SetMessageType(nas.MsgTypePDUSessionEstablishmentAccept)
 	pDUSessionEstablishmentAccept.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
 	pDUSessionEstablishmentAccept.SetPTI(0x00)
-	pDUSessionEstablishmentAccept.SetPDUSessionType(1)
+	pDUSessionEstablishmentAccept.SetPDUSessionType(smContext.SelectedPDUSessionType)
 	pDUSessionEstablishmentAccept.SetSSCMode(1)
-	pDUSessionEstablishmentAccept.SessionAMBR.SetSessionAMBRForDownlink([2]uint8{0x11, 0x11})
-	pDUSessionEstablishmentAccept.SessionAMBR.SetSessionAMBRForUplink([2]uint8{0x11, 0x11})
-	pDUSessionEstablishmentAccept.SessionAMBR.SetUnitForSessionAMBRForDownlink(10)
-	pDUSessionEstablishmentAccept.SessionAMBR.SetUnitForSessionAMBRForUplink(10)
+	pDUSessionEstablishmentAccept.SessionAMBR = nasConvert.ModelsToSessionAMBR(smContext.SessionRule.AuthSessAmbr)
 	pDUSessionEstablishmentAccept.SessionAMBR.SetLen(uint8(len(pDUSessionEstablishmentAccept.SessionAMBR.Octet)))
 
-	qosRulesBytes, err := smContext.QoSRules.MarshalBinary()
+	qoSRules := QoSRules{
+		QoSRule{
+			Identifier:    0x01,
+			DQR:           0x01,
+			OperationCode: OperationCodeCreateNewQoSRule,
+			QFI:           uint8(authDefQos.Var5qi),
+			PacketFilterList: []PacketFilter{
+				PacketFilter{
+					Identifier:    0x01,
+					Direction:     PacketFilterDirectionBidirectional,
+					ComponentType: PacketFilterComponentTypeMatchAll,
+				},
+			},
+		},
+	}
+
+	qosRulesBytes, err := qoSRules.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}

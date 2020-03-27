@@ -1,6 +1,7 @@
 package smf_context
 
 import (
+	"gofree5gc/lib/nas/nasConvert"
 	"gofree5gc/lib/nas/nasMessage"
 	"gofree5gc/src/smf/logger"
 )
@@ -11,11 +12,19 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 
 	// Handle PDUSessionType
 	if req.PDUSessionType != nil {
-		smContext.SelectedPDUSessionType = req.PDUSessionType.GetPDUSessionTypeValue()
+		requestedPDUSessionType := req.PDUSessionType.GetPDUSessionTypeValue()
+		if smContext.isAllowedPDUSessionType(requestedPDUSessionType) {
+			smContext.SelectedPDUSessionType = requestedPDUSessionType
+		} else {
+			logger.CtxLog.Errorf("requested pdu session type [%s] is not in allowed type\n", nasConvert.PDUSessionTypeToModels(requestedPDUSessionType))
+		}
 	} else {
 		// Default to IPv4
-		//smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4
+		// TODO: use Default PDU Session Type
+		smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4
 	}
+
+	smContext.PDUAddress = AllocUEIP()
 }
 
 func (smContext *SMContext) HandlePDUSessionReleaseRequest(req *nasMessage.PDUSessionReleaseRequest) {
