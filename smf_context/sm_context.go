@@ -7,6 +7,7 @@ import (
 	"gofree5gc/lib/Namf_Communication"
 	"gofree5gc/lib/Nnrf_NFDiscovery"
 	"gofree5gc/lib/Npcf_SMPolicyControl"
+	"gofree5gc/lib/nas/nasConvert"
 	"gofree5gc/lib/nas/nasMessage"
 	"gofree5gc/lib/openapi/common"
 	"gofree5gc/lib/openapi/models"
@@ -72,9 +73,8 @@ type SMContext struct {
 	PDUAddress             net.IP
 	SelectedPDUSessionType uint8
 
-	QoSRules QoSRules
-
-	SessionManagementSubscriptionDatas []models.SessionManagementSubscriptionData
+	DnnConfiguration models.DnnConfiguration
+	SessionRule      models.SessionRule
 
 	// Client
 	SMPolicyClient      *Npcf_SMPolicyControl.APIClient
@@ -209,4 +209,19 @@ func (smContext *SMContext) PCFSelection() (err error) {
 	}
 
 	return
+}
+
+func (smContext *SMContext) isAllowedPDUSessionType(nasPDUSessionType uint8) bool {
+	dnnPDUSessionType := smContext.DnnConfiguration.PduSessionTypes
+	if dnnPDUSessionType == nil {
+		logger.CtxLog.Errorf("this SMContext[%s] has no subscription pdu session type info\n", smContext.Ref)
+		return false
+	}
+
+	for _, allowedPDUSessionType := range smContext.DnnConfiguration.PduSessionTypes.AllowedSessionTypes {
+		if allowedPDUSessionType == nasConvert.PDUSessionTypeToModels(nasPDUSessionType) {
+			return true
+		}
+	}
+	return false
 }
