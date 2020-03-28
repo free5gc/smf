@@ -125,8 +125,8 @@ func SendPfcpSessionEstablishmentRequest(raddr *net.UDPAddr, ctx *smf_context.SM
 	pfcp_udp.SendPfcp(message, raddr)
 }
 
-func SendPfcpSessionEstablishmentRequestForULCL(raddr *net.UDPAddr, ctx *smf_context.SMContext, pdr_list []*smf_context.PDR, far_list []*smf_context.FAR, bar_list []*smf_context.BAR) {
-	pfcpMsg, err := BuildPfcpSessionEstablishmentRequestForULCL(ctx, pdr_list, far_list, bar_list)
+func SendPfcpSessionEstablishmentRequestForULCL(raddr *net.UDPAddr, ctx *smf_context.SMContext, pdrList []*smf_context.PDR, farList []*smf_context.FAR, barList []*smf_context.BAR) {
+	pfcpMsg, err := BuildPfcpSessionEstablishmentRequestForULCL(ctx, pdrList, farList, barList)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Establishment Request failed: %v", err)
 		return
@@ -180,9 +180,9 @@ func SendPfcpSessionEstablishmentResponse(addr *net.UDPAddr) {
 	pfcp_udp.SendPfcp(message, addr)
 }
 
-func SendPfcpSessionModificationRequest(raddr *net.UDPAddr, ctx *smf_context.SMContext, pdr_list []*smf_context.PDR, far_list []*smf_context.FAR, bar_list []*smf_context.BAR) (seqNum uint32) {
+func SendPfcpSessionModificationRequest(raddr *net.UDPAddr, ctx *smf_context.SMContext, pdrList []*smf_context.PDR, farList []*smf_context.FAR, barList []*smf_context.BAR) (seqNum uint32) {
 
-	pfcpMsg, err := BuildPfcpSessionModificationRequest(ctx, pdr_list, far_list, bar_list)
+	pfcpMsg, err := BuildPfcpSessionModificationRequest(ctx, pdrList, farList, barList)
 
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Modification Request failed: %v", err)

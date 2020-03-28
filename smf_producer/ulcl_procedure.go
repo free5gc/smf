@@ -266,11 +266,11 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 			IP:   ulcl.UPF.NodeID.NodeIdValue,
 			Port: pfcpUdp.PFCP_PORT,
 		}
-		pdr_list := []*smf_context.PDR{UpLinkForPSA1.UpLinkPDR, UpLinkForPSA2.UpLinkPDR, DownLinkForPSA2.DownLinkPDR}
-		far_list := []*smf_context.FAR{UpLinkForPSA1.UpLinkPDR.FAR, UpLinkForPSA2.UpLinkPDR.FAR, DownLinkForPSA2.DownLinkPDR.FAR}
-		bar_list := []*smf_context.BAR{}
+		pdrList := []*smf_context.PDR{UpLinkForPSA1.UpLinkPDR, UpLinkForPSA2.UpLinkPDR, DownLinkForPSA2.DownLinkPDR}
+		farList := []*smf_context.FAR{UpLinkForPSA1.UpLinkPDR.FAR, UpLinkForPSA2.UpLinkPDR.FAR, DownLinkForPSA2.DownLinkPDR.FAR}
+		barList := []*smf_context.BAR{}
 
-		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
+		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
 		logger.PfcpLog.Info("[SMF] Establish ULCL msg has been send")
 	}
 }
@@ -288,7 +288,7 @@ func UpdatePSA2DownLink(smContext *smf_context.SMContext) {
 
 		ulclIdx := bpMGR.ULCLIdx
 		psa2NodeAfterUlcl = ulcl.DataPathToDN[psa2Path[ulclIdx+1].UPF.GetUPFID()].To
-		far_list := []*smf_context.FAR{}
+		farList := []*smf_context.FAR{}
 
 		if psa2NodeAfterUlcl.IsAnchorUPF() {
 
@@ -299,7 +299,7 @@ func UpdatePSA2DownLink(smContext *smf_context.SMContext) {
 			updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation.Teid = ulcl.DataPathToDN[psa2NodeAfterUlcl.UPF.GetUPFID()].DownLinkPDR.PDI.LocalFTeid.Teid
 			updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address = ulcl.UPF.UPIPInfo.Ipv4Address
 
-			far_list = append(far_list, updateDownLinkFAR)
+			farList = append(farList, updateDownLinkFAR)
 		} else {
 
 			for _, updateDownLink := range psa2NodeAfterUlcl.DataPathToDN {
@@ -312,7 +312,7 @@ func UpdatePSA2DownLink(smContext *smf_context.SMContext) {
 					updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation.Teid = ulcl.DataPathToDN[psa2NodeAfterUlcl.UPF.GetUPFID()].DownLinkPDR.PDI.LocalFTeid.Teid
 					updateDownLinkFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address = ulcl.UPF.UPIPInfo.Ipv4Address
 
-					far_list = append(far_list, updateDownLinkFAR)
+					farList = append(farList, updateDownLinkFAR)
 				}
 			}
 		}
@@ -321,10 +321,10 @@ func UpdatePSA2DownLink(smContext *smf_context.SMContext) {
 			IP:   psa2NodeAfterUlcl.UPF.NodeID.NodeIdValue,
 			Port: pfcpUdp.PFCP_PORT,
 		}
-		pdr_list := []*smf_context.PDR{}
-		bar_list := []*smf_context.BAR{}
+		pdrList := []*smf_context.PDR{}
+		barList := []*smf_context.BAR{}
 
-		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
+		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
 		logger.PfcpLog.Info("[SMF] Update PSA2 downlink msg has been send")
 	}
 }
@@ -358,16 +358,16 @@ func UpdatePSA2DownLink(smContext *smf_context.SMContext) {
 // 		fp.OuterHeaderCreation.Ipv4Address = childIP
 // 	}
 
-// 	pdr_list := []*smf_context.PDR{newULPDR}
-// 	far_list := []*smf_context.FAR{newULPDR.FAR}
-// 	bar_list := []*smf_context.BAR{}
+// 	pdrList := []*smf_context.PDR{newULPDR}
+// 	farList := []*smf_context.FAR{newULPDR.FAR}
+// 	barList := []*smf_context.BAR{}
 
 // 	addr := net.UDPAddr{
 // 		IP:   upfNodeID.NodeIdValue,
 // 		Port: pfcpUdp.PFCP_PORT,
 // 	}
 
-// 	pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdr_list, far_list, bar_list)
+// 	pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdrList, farList, barList)
 // 	fmt.Println("[SMF] Add Routing Rule msg has been send")
 // }
 
@@ -378,9 +378,9 @@ func UpdatePSA2DownLink(smContext *smf_context.SMContext) {
 
 // 	//tunnel := smContext.Tunnel
 
-// 	pdr_list := make([]*smf_context.PDR, 0)
-// 	far_list := make([]*smf_context.FAR, 0)
-// 	bar_list := make([]*smf_context.BAR, 0)
+// 	pdrList := make([]*smf_context.PDR, 0)
+// 	farList := make([]*smf_context.FAR, 0)
+// 	barList := make([]*smf_context.BAR, 0)
 
 // 	//upfULPDR := tunnel.ULPDR
 
@@ -447,8 +447,8 @@ func UpdatePSA2DownLink(smContext *smf_context.SMContext) {
 // 		fp.OuterHeaderCreation.Teid = 10 //?
 // 		fp.OuterHeaderCreation.Ipv4Address = smf_context.GetUserPlaneInformation().GetUPFIPByName(child_name)
 
-// 		pdr_list = append(pdr_list, newULPDR)
-// 		far_list = append(far_list, newULPDR.FAR)
+// 		pdrList = append(pdrList, newULPDR)
+// 		farList = append(farList, newULPDR.FAR)
 // 		//has change to: Modify existing pdr first, and then create new pdr.
 // 		// if len(upfULPDR) > idx {
 // 		// 	// modify existing pdr
@@ -465,6 +465,6 @@ func UpdatePSA2DownLink(smContext *smf_context.SMContext) {
 // 		Port: pfcpUdp.PFCP_PORT,
 // 	}
 
-// 	pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
+// 	pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
 // 	fmt.Println("[SMF] Add Branching Rule msg has been send")
 // }

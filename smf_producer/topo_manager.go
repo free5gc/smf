@@ -271,15 +271,15 @@ func SendUplinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context.S
 	}
 
 	upLink := node.DataPathToAN
-	pdr_list := []*smf_context.PDR{upLink.UpLinkPDR}
-	far_list := []*smf_context.FAR{upLink.UpLinkPDR.FAR}
-	bar_list := []*smf_context.BAR{}
+	pdrList := []*smf_context.PDR{upLink.UpLinkPDR}
+	farList := []*smf_context.FAR{upLink.UpLinkPDR.FAR}
+	barList := []*smf_context.BAR{}
 
 	// fmt.Println("Send to upf addr: ", addr.String())
 	// fmt.Println("Send to uplink pdr: ", upLink.PDR)
 	// fmt.Println("Send to uplink far: ", upLink.PDR.FAR)
 
-	pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdr_list, far_list, bar_list)
+	pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdrList, farList, barList)
 
 	for _, upf_link := range node.DataPathToDN {
 
@@ -306,19 +306,19 @@ func SendDownLinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context
 
 	for _, down_link := range node.DataPathToDN {
 
-		pdr_list := []*smf_context.PDR{down_link.DownLinkPDR}
-		far_list := []*smf_context.FAR{down_link.DownLinkPDR.FAR}
-		bar_list := []*smf_context.BAR{}
-		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
+		pdrList := []*smf_context.PDR{down_link.DownLinkPDR}
+		farList := []*smf_context.FAR{down_link.DownLinkPDR.FAR}
+		barList := []*smf_context.BAR{}
+		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
 	}
 
 	if node.IsAnchorUPF() {
 
 		down_link := node.DLDataPathLinkForPSA
-		pdr_list := []*smf_context.PDR{down_link.DownLinkPDR}
-		far_list := []*smf_context.FAR{down_link.DownLinkPDR.FAR}
-		bar_list := []*smf_context.BAR{}
-		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
+		pdrList := []*smf_context.PDR{down_link.DownLinkPDR}
+		farList := []*smf_context.FAR{down_link.DownLinkPDR.FAR}
+		barList := []*smf_context.BAR{}
+		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
 	}
 
 	for _, upf_link := range node.DataPathToDN {
@@ -553,11 +553,11 @@ func SetUPPSA2Path(smContext *smf_context.SMContext, psa2_path_after_ulcl []*smf
 			downLink = curDataPathNode.DataPathToDN[nextUPFID]
 		}
 
-		pdr_list := []*smf_context.PDR{upLink.UpLinkPDR, downLink.DownLinkPDR}
-		far_list := []*smf_context.FAR{upLink.UpLinkPDR.FAR, downLink.DownLinkPDR.FAR}
-		bar_list := []*smf_context.BAR{}
+		pdrList := []*smf_context.PDR{upLink.UpLinkPDR, downLink.DownLinkPDR}
+		farList := []*smf_context.FAR{upLink.UpLinkPDR.FAR, downLink.DownLinkPDR.FAR}
+		barList := []*smf_context.BAR{}
 
-		pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdr_list, far_list, bar_list)
+		pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdrList, farList, barList)
 	}
 
 }

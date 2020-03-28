@@ -340,9 +340,9 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 	}
 
 	tunnel := smContext.Tunnel
-	pdr_list := []*smf_context.PDR{}
-	far_list := []*smf_context.FAR{}
-	bar_list := []*smf_context.BAR{}
+	pdrList := []*smf_context.PDR{}
+	farList := []*smf_context.FAR{}
+	barList := []*smf_context.BAR{}
 
 	switch smContextUpdateData.UpCnxState {
 	case models.UpCnxState_ACTIVATING:
@@ -372,12 +372,12 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 
 			if tunnel.DLPDR.FAR.BAR == nil {
 				tunnel.DLPDR.FAR.BAR, _ = smContext.Tunnel.Node.AddBAR()
-				bar_list = []*smf_context.BAR{tunnel.DLPDR.FAR.BAR}
+				barList = []*smf_context.BAR{tunnel.DLPDR.FAR.BAR}
 			}
 
 		}
 
-		far_list = []*smf_context.FAR{tunnel.DLPDR.FAR}
+		farList = []*smf_context.FAR{tunnel.DLPDR.FAR}
 	}
 
 	var err error
@@ -432,8 +432,8 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		}
 		err = smf_context.HandlePDUSessionResourceSetupResponseTransfer(body.BinaryDataN2SmInformation, smContext)
 
-		pdr_list = []*smf_context.PDR{tunnel.DLPDR}
-		far_list = []*smf_context.FAR{tunnel.DLPDR.FAR}
+		pdrList = []*smf_context.PDR{tunnel.DLPDR}
+		farList = []*smf_context.FAR{tunnel.DLPDR.FAR}
 
 	case models.N2SmInfoType_PATH_SWITCH_REQ:
 		err = smf_context.HandlePathSwitchRequestTransfer(body.BinaryDataN2SmInformation, smContext)
@@ -448,8 +448,8 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			ContentId: "PATH_SWITCH_REQ_ACK",
 		}
 
-		pdr_list = []*smf_context.PDR{tunnel.DLPDR}
-		far_list = []*smf_context.FAR{tunnel.DLPDR.FAR}
+		pdrList = []*smf_context.PDR{tunnel.DLPDR}
+		farList = []*smf_context.FAR{tunnel.DLPDR.FAR}
 
 	case models.N2SmInfoType_PATH_SWITCH_SETUP_FAIL:
 		err = smf_context.HandlePathSwitchRequestSetupFailedTransfer(body.BinaryDataN2SmInformation, smContext)
@@ -501,7 +501,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		Port: pfcpUdp.PFCP_PORT,
 	}
 
-	seqNum = pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdr_list, far_list, bar_list)
+	seqNum = pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
 
 	return seqNum, response
 }
