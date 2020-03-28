@@ -19,7 +19,7 @@ type PDUSessionInfo struct {
 	Sd           string
 	AnType       models.AccessType
 	PDUAddress   string
-	QosRules     smf_context.QoSRules
+	SessionRule  models.SessionRule
 	UpCnxState   models.UpCnxState
 	Tunnel       *smf_context.UPTunnel
 }
@@ -51,7 +51,7 @@ func HandleOAMGetUEPDUSessionInfo(rspChan chan smf_message.HandlerResponseMessag
 				Sd:           smContext.Snssai.Sd,
 				AnType:       smContext.AnType,
 				PDUAddress:   smContext.PDUAddress.String(),
-				QosRules:     smContext.QoSRules,
+				SessionRule:  smContext.SessionRule,
 				UpCnxState:   smContext.UpCnxState,
 				Tunnel:       smContext.Tunnel,
 			},
