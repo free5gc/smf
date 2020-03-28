@@ -1,9 +1,5 @@
 package smf_context
 
-import (
-	"fmt"
-)
-
 type UEPathGraph struct {
 	SUPI  string
 	Graph []*UEPathNode
@@ -91,35 +87,6 @@ func (uepg *UEPathGraph) IsBranchingPoint(name string) bool {
 	return false
 }
 
-func (uepg *UEPathGraph) PrintGraph() {
-
-	fmt.Println("SUPI: ", uepg.SUPI)
-	for _, node := range uepg.Graph {
-		fmt.Println("\tUPF: ")
-		fmt.Println("\t\t", node.UPFName)
-
-		fmt.Println("\tBranching Point: ")
-		fmt.Println("\t\t", node.IsBranchingPoint)
-
-		fmt.Println("\tParent: ")
-		fmt.Println("\t\t", node.Parent)
-
-		fmt.Println("\tNeighbors: ")
-		for neighbor_name := range node.Neighbors {
-
-			fmt.Println("\t\t", neighbor_name)
-		}
-
-		fmt.Println("\tEndPoint Of Child: ")
-		for child_name, ep := range node.EndPointOfEachChild {
-
-			fmt.Println("\t\t", child_name)
-			fmt.Println("\t\tDestination IP: ", ep.EndPointIP)
-			fmt.Println("\t\tDestination Port: ", ep.EndPointPort)
-		}
-	}
-}
-
 func NewUEPathGraph(SUPI string) (UEPGraph *UEPathGraph) {
 
 	UEPGraph = new(UEPathGraph)
@@ -161,7 +128,6 @@ func NewUEPathGraph(SUPI string) (UEPGraph *UEPathGraph) {
 					UEPGraph.Graph = append(UEPGraph.Graph, child_node)
 				}
 
-				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddNeighbor(child_node)
 				ue_node.AddEndPointOfChild(child_node, pathEndPoint)
 
@@ -174,7 +140,6 @@ func NewUEPathGraph(SUPI string) (UEPGraph *UEPathGraph) {
 					UEPGraph.Graph = append(UEPGraph.Graph, parent_node)
 				}
 
-				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddNeighbor(parent_node)
 				ue_node.AddEndPointOfChild(ue_node, pathEndPoint)
 				ue_node.RmbParent(parent_name)
@@ -195,7 +160,6 @@ func NewUEPathGraph(SUPI string) (UEPGraph *UEPathGraph) {
 					UEPGraph.Graph = append(UEPGraph.Graph, parent_node)
 				}
 
-				//fmt.Printf("%+v\n", ue_node)
 				ue_node.AddNeighbor(child_node)
 				ue_node.AddEndPointOfChild(child_node, pathEndPoint)
 				ue_node.AddNeighbor(parent_node)

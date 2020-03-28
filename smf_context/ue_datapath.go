@@ -139,50 +139,6 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 	return
 }
 
-func (uepg *UEDataPathGraph) PrintGraph() {
-
-	fmt.Println("SUPI: ", uepg.SUPI)
-	upi := smfContext.UserPlaneInformation
-
-	for _, node := range uepg.Graph {
-		fmt.Println("\tUPF Name: ")
-		node_ip := node.GetNodeIP()
-		fmt.Println("\t\t", upi.GetUPFNameByIp(node_ip))
-
-		fmt.Println("\tBranching Point: ")
-		fmt.Println("\t\t", node.IsBranchingPoint)
-
-		if node.DataPathToAN != nil {
-			fmt.Println("\tParent Name: ")
-			parent_ip := node.DataPathToAN.To.GetNodeIP()
-			fmt.Println("\t\t", upi.GetUPFNameByIp(parent_ip))
-		}
-
-		if node.DataPathToDN != nil {
-			fmt.Println("\tChildren Name: ")
-			for _, child_link := range node.DataPathToDN {
-
-				child_ip := child_link.To.GetNodeIP()
-				fmt.Println("\t\t", upi.GetUPFNameByIp(child_ip))
-				fmt.Println("\t\tDestination IP: ", child_link.DestinationIP)
-				fmt.Println("\t\tDestination Port: ", child_link.DestinationPort)
-			}
-		}
-	}
-
-	fmt.Println("ANUPF: ")
-	for node, _ := range uepg.ANUPF {
-		node_ip := node.GetNodeIP()
-		fmt.Println("\t\tNode: ", upi.GetUPFNameByIp(node_ip))
-	}
-
-	fmt.Println("PSA: ")
-	for node, _ := range uepg.PSA {
-		node_ip := node.GetNodeIP()
-		fmt.Println("\t\tNode: ", upi.GetUPFNameByIp(node_ip))
-	}
-}
-
 func (uepg *UEDataPathGraph) AddANUPF(node *DataPathNode) {
 
 	if _, exist := uepg.ANUPF[node]; !exist {
@@ -294,10 +250,7 @@ func (root *DataPathNode) EnableUserPlanePath(path []*UPNode) (err error) {
 		UPPathNodeIP := node.UPF.GetUPFIP()
 
 		if curDataPathNodeIP != UPPathNodeIP {
-			fmt.Println("curDataPathNodeIP != UPPathNodeIP")
-			fmt.Println("curDataPathNodeIP: ", curDataPathNodeIP)
-			fmt.Println("UPPathNodeIP: ", UPPathNodeIP)
-			err = fmt.Errorf("UE default topo have no ", UPPathNodeIP, "!")
+			err = fmt.Errorf("UE default topo have no %s", UPPathNodeIP)
 			return
 		} else {
 			curDataPathNode.InUse = true
@@ -318,7 +271,7 @@ func (root *DataPathNode) EnableUserPlanePath(path []*UPNode) (err error) {
 				//didn't find next child from the path pattern
 				//path and UE Topo doesn't match
 				if !findNextChild {
-					err = fmt.Errorf("UE default topo have no ", nextUPPathNodeIP, "!")
+					err = fmt.Errorf("UE default topo have no %s", nextUPPathNodeIP)
 					return
 				}
 			}

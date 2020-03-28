@@ -156,29 +156,8 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 		}
 
 		smfContext.UERoutingGraphs[supi] = graph
-		//graph.PrintGraph()
 	}
 
-}
-
-func PrintSMFUERouting() {
-
-	for supi, paths := range smfContext.UERoutingPaths {
-		fmt.Println("SUPI: ", supi)
-
-		for idx, path := range paths {
-			fmt.Println("Path ", idx, ":")
-			fmt.Println("\tDestIP ", path.DestinationIP)
-			fmt.Println("\tDestPort ", path.DestinationPort)
-			fmt.Printf("\t")
-
-			for _, node := range path.UPF {
-				fmt.Printf("%s->", node)
-			}
-			fmt.Printf("\n")
-		}
-
-	}
 }
 
 func SMF_Self() *SMFContext {

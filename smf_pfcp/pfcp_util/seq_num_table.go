@@ -1,7 +1,7 @@
 package pfcp_util
 
 import (
-	"fmt"
+
 	//"gofree5gc/src/smf/smf_pfcp/pfcp_udp"
 	"gofree5gc/lib/pfcp"
 	"gofree5gc/src/smf/logger"
@@ -205,18 +205,4 @@ func (snt SeqNumTable) RemoveItem(seqNum uint32, newStateInInt uint8) (Success b
 	}
 
 	return
-}
-
-func (snt SeqNumTable) PrintTable() {
-	fmt.Println("Table from smf")
-	fmt.Printf("Seq Num\tMsg Type\tPacket State\n")
-	for seqNum, item := range snt.fromSMF {
-		fmt.Printf("%d\t%d\t%d\n", seqNum, item.MessageType, item.PacketState)
-	}
-
-	fmt.Println("Table to smf")
-	fmt.Printf("Seq Num\tMsg Type\tPacket State\n")
-	for seqNum, item := range snt.toSMF {
-		fmt.Printf("%d\t%d\t%d\n", seqNum, item.MessageType, item.PacketState)
-	}
 }

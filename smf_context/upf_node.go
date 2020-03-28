@@ -3,6 +3,7 @@ package smf_context
 import (
 	"fmt"
 	"gofree5gc/lib/pfcp/pfcpType"
+	"gofree5gc/src/smf/logger"
 	"net"
 	"reflect"
 )
@@ -63,7 +64,7 @@ func AddUPF(nodeId *pfcpType.NodeID) (upf *UPF) {
 	key, err := generateUpfIdFromNodeId(nodeId)
 
 	if err != nil {
-		fmt.Println("[SMF] Error occurs while calling AddUPF")
+		logger.CtxLog.Errorln("generate upf id error:", err)
 		return
 	}
 
@@ -158,7 +159,7 @@ func (upf *UPF) pdrID() (pdrID uint16, err error) {
 		id, err := upf.pdrIdReuseQueue.Pop()
 
 		if err != nil {
-			fmt.Println(err)
+			logger.CtxLog.Errorln("allocate id error:", err)
 		}
 
 		pdrID = uint16(id)
@@ -181,7 +182,7 @@ func (upf *UPF) farID() (farID uint32, err error) {
 		id, err := upf.farIdReuseQueue.Pop()
 
 		if err != nil {
-			fmt.Println(err)
+			logger.CtxLog.Errorln("allocate id error:", err)
 		}
 		farID = uint32(id)
 	}
@@ -203,7 +204,7 @@ func (upf *UPF) barID() (barID uint8, err error) {
 		id, err := upf.barIdReuseQueue.Pop()
 
 		if err != nil {
-			fmt.Println(err)
+			logger.CtxLog.Errorln("allocate id error:", err)
 		}
 		barID = uint8(id)
 	}
@@ -362,24 +363,6 @@ func (upf *UPF) GetValidID(idType IDType) (id int) {
 		id = int(upf.TEIDCount)
 	}
 	return
-}
-
-func (upf *UPF) PrintPDRPoolStatus() {
-	for k := range upf.pdrPool {
-		fmt.Println("PDR ID: ", k, " using")
-	}
-}
-
-func (upf *UPF) PrintFARPoolStatus() {
-	for k := range upf.farPool {
-		fmt.Println("FAR ID: ", k, " using")
-	}
-}
-
-func (upf *UPF) PrintBARPoolStatus() {
-	for k := range upf.barPool {
-		fmt.Println("BAR ID: ", k, " using")
-	}
 }
 
 func (upf *UPF) CheckPDRIDExist(id int) (exist bool) {

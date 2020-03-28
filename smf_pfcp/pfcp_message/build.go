@@ -1,7 +1,6 @@
 package pfcp_message
 
 import (
-	"fmt"
 	"net"
 
 	"gofree5gc/lib/pfcp"
@@ -339,26 +338,6 @@ func BuildPfcpSessionModificationRequest(smContext *smf_context.SMContext, pdrLi
 	// }
 
 	return msg, nil
-}
-
-func printCreateFAR(far *pfcp.CreateFAR) {
-
-	fmt.Println("FARID: ", far.FARID.FarIdValue)
-	fmt.Println("ApplyAction Duplicate:　", far.ApplyAction.Dupl)
-	fmt.Println("ApplyAction Forward:　", far.ApplyAction.Forw)
-	fmt.Println("ApplyAction Buffering:　", far.ApplyAction.Buff)
-	fmt.Println("ApplyAction Nocp:　", far.ApplyAction.Nocp)
-	fmt.Println("ApplyAction Dropping:　", far.ApplyAction.Drop)
-	fmt.Println("ForwardingParameters DestinationInterface: ", far.ForwardingParameters.DestinationInterface.InterfaceValue)
-	fmt.Println("ForwardingParameters NetworkInstance: ", far.ForwardingParameters.NetworkInstance)
-
-	if far.ForwardingParameters.OuterHeaderCreation != nil {
-		fmt.Println("ForwardingParameters OuterHeaderCreation Description: ", far.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription)
-		fmt.Println("ForwardingParameters OuterHeaderCreation TEID: ", far.ForwardingParameters.OuterHeaderCreation.Teid)
-		fmt.Println("ForwardingParameters OuterHeaderCreation IPv4 addr: ", far.ForwardingParameters.OuterHeaderCreation.Ipv4Address.String())
-		fmt.Println("ForwardingParameters OuterHeaderCreation Port Number: ", far.ForwardingParameters.OuterHeaderCreation.PortNumber)
-	}
-
 }
 
 // TODO: Replace dummy value in PFCP message

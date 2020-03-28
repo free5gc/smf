@@ -1,7 +1,6 @@
 package smf_producer
 
 import (
-	"fmt"
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/lib/pfcp/pfcpUdp"
 	"gofree5gc/src/smf/logger"
@@ -56,10 +55,6 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 		return
 	}
 
-	fmt.Println("In AllocateUpLinkPDRandTEID")
-	fmt.Println("UPF node IP: ", node.UPF.GetUPFIP())
-	fmt.Println(node.DataPathToAN)
-
 	upLink.UpLinkPDR, err = node.UPF.AddPDR()
 	if err != nil {
 		logger.PduSessLog.Error(err)
@@ -106,8 +101,6 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
 		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation.Teid = uint32(teid)
 		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address = node.UPF.UPIPInfo.Ipv4Address
-		fmt.Println("Parent IP: ", node.UPF.GetUPFIP())
-		fmt.Println("My UserPlane IP: ", node.UPF.UPIPInfo.Ipv4Address.String())
 	}
 
 	for _, upf_link := range node.DataPathToDN {
@@ -275,10 +268,6 @@ func SendUplinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context.S
 	farList := []*smf_context.FAR{upLink.UpLinkPDR.FAR}
 	barList := []*smf_context.BAR{}
 
-	// fmt.Println("Send to upf addr: ", addr.String())
-	// fmt.Println("Send to uplink pdr: ", upLink.PDR)
-	// fmt.Println("Send to uplink far: ", upLink.PDR.FAR)
-
 	pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdrList, farList, barList)
 
 	for _, upf_link := range node.DataPathToDN {
@@ -301,8 +290,6 @@ func SendDownLinkPFCPRule(node *smf_context.DataPathNode, smContext *smf_context
 		IP:   node.UPF.NodeID.NodeIdValue,
 		Port: pfcpUdp.PFCP_PORT,
 	}
-
-	fmt.Println("Send to upf addr: ", addr.String())
 
 	for _, down_link := range node.DataPathToDN {
 

@@ -130,12 +130,6 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		//psaPath = append(psaPath, upInfo.GetUPFNodeByIP("10.200.200.103"))
 		//-------------------------//
 
-		fmt.Println("PSA PATH:　")
-		for i, node := range psaPath {
-
-			fmt.Println("Node ", i, ": ", node.NodeID.ResolveNodeIdToIp().String())
-		}
-
 		err := upfRoot.EnableUserPlanePath(psaPath)
 		if err != nil {
 			logger.PduSessLog.Error(err)
@@ -248,13 +242,6 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	if err != nil {
 		logger.PduSessLog.Warnf("PCF Select failed: %s", err)
 	}
-
-	addr := net.UDPAddr{
-		IP:   smContext.Tunnel.Node.NodeID.NodeIdValue,
-		Port: pfcpUdp.PFCP_PORT,
-	}
-
-	fmt.Println("[SMF] Send PFCP to UPF IP: ", addr.IP.String())
 	// TODO: remove it when UL/CL apply
 	//pfcp_message.SendPfcpSessionEstablishmentRequest(&addr, smContext)
 	//AddUEUpLinkRoutingInfo(smContext)
@@ -390,28 +377,13 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			tunnel.DLPDR.State = smf_context.RULE_UPDATE
 		}
 
-		//NodeID := tunnel.Node.NodeID
-		// if CheckUEUpLinkRoutingStatus(smContext) == Uninitialized {
-		// 	fmt.Println("[SMF] ======= In HandlePDUSessionSMContextUpdate ======")
-		// 	fmt.Println("[SMF] Initialized UE UPLink Routing !")
-		// 	fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate Supi: ", smContext.Supi)
-		// 	fmt.Println("[SMF] In HandlePDUSessionSMContextUpdate NodeID: ", NodeID.ResolveNodeIdToIp().String())
-
-		// 	// TODO: Setup Uplink Routing
-		// 	// InitializeUEUplinkRouting(smContext)
-		// 	SetUeRoutingInitializeState(smContext, HasSendPFCPMsg)
-		// }
+		// TODO: Setup Uplink Routing
 
 		tunnel.DLPDR.Precedence = 32
 		tunnel.DLPDR.PDI = smf_context.PDI{
 			SourceInterface: pfcpType.SourceInterface{
 				InterfaceValue: pfcpType.SourceInterfaceSgiLanN6Lan,
 			},
-			// LocalFTeid: &pfcpType.FTEID{
-			// 	V4:          true,
-			// 	Teid:        tunnel.ULTEID,
-			// 	Ipv4Address: tunnel.Node.UPIPInfo.Ipv4Address,
-			// },
 			NetworkInstance: []byte(smContext.Dnn),
 			UEIPAddress: &pfcpType.UEIPAddress{
 				V4:          true,

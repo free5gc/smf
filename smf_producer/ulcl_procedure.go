@@ -1,7 +1,6 @@
 package smf_producer
 
 import (
-	"fmt"
 	"gofree5gc/lib/flowdesc"
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/lib/pfcp/pfcpUdp"
@@ -96,7 +95,7 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 
 		//Get the UPlinkPDR for PSA1
 		var UpLinkForPSA1, UpLinkForPSA2 *smf_context.DataPathDownLink
-		var DownLinkForPSA1, DownLinkForPSA2 *smf_context.DataPathUpLink
+		var DownLinkForPSA2 *smf_context.DataPathUpLink
 		//Todo:
 		//Put every uplink to BPUplink
 		upLinkIP := ulcl.DataPathToAN.UpLinkPDR.FAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address.String()
@@ -207,7 +206,6 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 
 		}
 
-		DownLinkForPSA1 = ulcl.DataPathToDN[psa1NodeAfterUlcl.UPF.GetUPFID()]
 		DownLinkForPSA2 = ulcl.DataPathToDN[psa2NodeAfterUlcl.UPF.GetUPFID()]
 
 		DownLinkForPSA2.DownLinkPDR, err = ulcl.UPF.AddPDR()
@@ -250,7 +248,6 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 
 		//Todo:
 		//Delete this after finishing new downlinking userplane
-		fmt.Println(DownLinkForPSA1)
 		//Todo:
 		//Uncommemt after finishing new downlinking userplane
 		//DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
@@ -328,143 +325,3 @@ func UpdatePSA2DownLink(smContext *smf_context.SMContext) {
 		logger.PfcpLog.Info("[SMF] Update PSA2 downlink msg has been send")
 	}
 }
-
-// func UpdatePSA1DownLink(smContext *smf_context.SMContext) {
-
-// }
-
-// func AddRoutingRule(smContext *smf_context.SMContext, upfNode *smf_context.UEPathNode) {
-// 	upfName := upfNode.UPFName
-// 	upfNodeID := smf_context.GetUserPlaneInformation().GetUPFNodeIDByName(upfName)
-
-// 	var newULPDR *smf_context.PDR
-// 	if upfNode.IsLeafNode() {
-// 		newULPDR = smContext.Tunnel.Node.AddPDR()
-// 		newULPDR.InitializePDR(smContext)
-
-// 	} else {
-// 		newULPDR = smContext.Tunnel.Node.AddPDR()
-// 		newULPDR.InitializePDR(smContext)
-
-// 		// has only one child
-// 		var childIP []byte
-// 		for _, child_node := range upfNode.GetChild() {
-// 			childIP = smf_context.GetUserPlaneInformation().GetUPFIPByName(child_node.UPFName)
-// 		}
-
-// 		fp := newULPDR.FAR.ForwardingParameters
-// 		fp.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-// 		fp.OuterHeaderCreation.Teid = 10 //?
-// 		fp.OuterHeaderCreation.Ipv4Address = childIP
-// 	}
-
-// 	pdrList := []*smf_context.PDR{newULPDR}
-// 	farList := []*smf_context.FAR{newULPDR.FAR}
-// 	barList := []*smf_context.BAR{}
-
-// 	addr := net.UDPAddr{
-// 		IP:   upfNodeID.NodeIdValue,
-// 		Port: pfcpUdp.PFCP_PORT,
-// 	}
-
-// 	pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdrList, farList, barList)
-// 	fmt.Println("[SMF] Add Routing Rule msg has been send")
-// }
-
-// func AddBranchingRule(smContext *smf_context.SMContext, upfNode *smf_context.UEPathNode) {
-// 	upfName := upfNode.UPFName
-// 	upfNodeID := smf_context.GetUserPlaneInformation().GetUPFNodeIDByName(upfName)
-// 	upfIP := upfNodeID.ResolveNodeIdToIp().String()
-
-// 	//tunnel := smContext.Tunnel
-
-// 	pdrList := make([]*smf_context.PDR, 0)
-// 	farList := make([]*smf_context.FAR, 0)
-// 	barList := make([]*smf_context.BAR, 0)
-
-// 	//upfULPDR := tunnel.ULPDR
-
-// 	for _, child_node := range upfNode.GetChild() {
-// 		var err error
-// 		child_name := child_node.UPFName
-// 		childEndPoint := upfNode.EndPointOfEachChild[child_name]
-// 		FlowDespcription := flowdesc.NewIPFilterRule()
-
-// 		err = FlowDespcription.SetAction(true) //permit
-// 		if err != nil {
-// 			logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-// 		}
-// 		err = FlowDespcription.SetDirection(true) //uplink
-// 		if err != nil {
-// 			logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-// 		}
-// 		err = FlowDespcription.SetDestinationIp(childEndPoint.EndPointIP)
-// 		if err != nil {
-// 			logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-// 		}
-// 		err = FlowDespcription.SetDestinationPorts(childEndPoint.EndPointPort)
-// 		if err != nil {
-// 			logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-// 		}
-// 		err = FlowDespcription.SetSourceIp(upfIP)
-// 		if err != nil {
-// 			logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-// 		}
-
-// 		fmt.Println("[SMF] PFCP port: ", strconv.Itoa(pfcpUdp.PFCP_PORT))
-
-// 		err = FlowDespcription.SetSourcePorts(strconv.Itoa(pfcpUdp.PFCP_PORT))
-// 		if err != nil {
-// 			logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-// 		}
-// 		err = FlowDespcription.SetProtocal(0xfc)
-// 		if err != nil {
-// 			logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
-// 		}
-
-// 		FlowDespcriptionStr, err := FlowDespcription.Encode()
-
-// 		if err != nil {
-// 			logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
-// 		}
-
-// 		newULPDR := smContext.Tunnel.Node.AddPDR()
-// 		newULPDR.InitializePDR(smContext)
-// 		newULPDR.Precedence = 30
-// 		newULPDR.PDI.SDFFilter = &pfcpType.SDFFilter{
-// 			Bid:                     false,
-// 			Fl:                      false,
-// 			Spi:                     false,
-// 			Ttc:                     false,
-// 			Fd:                      true,
-// 			LengthOfFlowDescription: uint16(len(FlowDespcriptionStr)),
-// 			FlowDescription:         []byte(FlowDespcriptionStr),
-// 		}
-
-// 		fp := newULPDR.FAR.ForwardingParameters
-// 		fp.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
-// 		fp.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-// 		fp.OuterHeaderCreation.Teid = 10 //?
-// 		fp.OuterHeaderCreation.Ipv4Address = smf_context.GetUserPlaneInformation().GetUPFIPByName(child_name)
-
-// 		pdrList = append(pdrList, newULPDR)
-// 		farList = append(farList, newULPDR.FAR)
-// 		//has change to: Modify existing pdr first, and then create new pdr.
-// 		// if len(upfULPDR) > idx {
-// 		// 	// modify existing pdr
-
-// 		// } else {
-// 		// 	// create new pdr
-
-// 	}
-
-// 	//PDR2
-
-// 	addr := net.UDPAddr{
-// 		IP:   upfNodeID.NodeIdValue,
-// 		Port: pfcpUdp.PFCP_PORT,
-// 	}
-
-// 	pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
-// 	fmt.Println("[SMF] Add Branching Rule msg has been send")
-// }
