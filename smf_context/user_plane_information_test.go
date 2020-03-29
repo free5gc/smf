@@ -33,7 +33,6 @@ func TestGenerateDefaultPath(t *testing.T) {
 	//userPlaneInfo.PrintUserPlaneTopology()
 	pathExist := userPlaneInfo.GenerateDefaultPath("internet")
 	assertEqual(pathExist, true)
-	userPlaneInfo.PrintDefaultDnnPath("internet")
 }
 
 func TestGetDefaultUPFTopoByDNN(t *testing.T) {
@@ -56,5 +55,4 @@ func TestGetDefaultUPFTopoByDNN(t *testing.T) {
 	if root == nil {
 		panic("There is no default upf topo")
 	}
-	root.PrintPath()
 }

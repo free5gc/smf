@@ -29,7 +29,6 @@ func init() {
 	}
 
 	userPlaneInfo.GenerateDefaultPath("internet")
-	userPlaneInfo.PrintDefaultDnnPath("internet")
 	pfcp_udp.Run()
 }
 
