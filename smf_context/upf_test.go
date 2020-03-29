@@ -14,7 +14,7 @@ var barQueue []*smf_context.BAR
 
 func init() {
 	NodeID := new(pfcpType.NodeID)
-	upf = smf_context.AddUPF(NodeID)
+	upf = smf_context.NewUPF(NodeID)
 	pdrQueue = make([]*smf_context.PDR, 0)
 	farQueue = make([]*smf_context.FAR, 0)
 	barQueue = make([]*smf_context.BAR, 0)

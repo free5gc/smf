@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/src/smf/logger"
-	"net"
 	"reflect"
+
+	"github.com/google/uuid"
 )
 
 var upfPool map[string]*UPF
@@ -38,6 +39,7 @@ const (
 )
 
 type UPF struct {
+	uuid      uuid.UUID
 	NodeID    pfcpType.NodeID
 	UPIPInfo  pfcpType.UserPlaneIPResourceInformation
 	UPFStatus UPFStatus
@@ -54,50 +56,43 @@ type UPF struct {
 	urrCount        uint32
 	qerCount        uint32
 	TEIDCount       uint32
-	pdrIdReuseQueue *IDQueue
-	farIdReuseQueue *IDQueue
-	barIdReuseQueue *IDQueue
+	pdrIDReuseQueue *IDQueue
+	farIDReuseQueue *IDQueue
+	barIDReuseQueue *IDQueue
 }
 
-func AddUPF(nodeId *pfcpType.NodeID) (upf *UPF) {
+// UUID return this UPF UUID (allocate by SMF in this time)
+// Maybe allocate by UPF in future
+func (upf *UPF) UUID() string {
+	return upf.uuid.String()
+}
+
+// NewUPF returns a new UPF context in SMF
+func NewUPF(nodeID *pfcpType.NodeID) (upf *UPF) {
 	upf = new(UPF)
-	key, err := generateUpfIdFromNodeId(nodeId)
+	upf.uuid = uuid.New()
 
-	if err != nil {
-		logger.CtxLog.Errorln("generate upf id error:", err)
-		return
-	}
+	upfPool[upf.UUID()] = upf
 
-	upfPool[key] = upf
+	// Initialize context
 	upf.UPFStatus = NotAssociated
-	upf.NodeID = *nodeId
+	upf.NodeID = *nodeID
 	upf.pdrPool = make(map[uint16]*PDR)
 	upf.farPool = make(map[uint32]*FAR)
 	upf.barPool = make(map[uint8]*BAR)
 	upf.qerPool = make(map[uint32]*QER)
 	upf.urrPool = make(map[uint32]*URR)
 	upf.teidPool = make(map[uint32]bool)
-	upf.pdrIdReuseQueue = NewIDQueue(PDRType)
-	upf.farIdReuseQueue = NewIDQueue(FARType)
-	upf.barIdReuseQueue = NewIDQueue(BARType)
+	upf.pdrIDReuseQueue = NewIDQueue(PDRType)
+	upf.farIDReuseQueue = NewIDQueue(FARType)
+	upf.barIDReuseQueue = NewIDQueue(BARType)
 
-	return
-}
-
-func generateUpfIdFromNodeId(nodeId *pfcpType.NodeID) (string, error) {
-	switch nodeId.NodeIdType {
-	case pfcpType.NodeIdTypeIpv4Address, pfcpType.NodeIdTypeIpv6Address:
-		return net.IP(nodeId.NodeIdValue).String(), nil
-	case pfcpType.NodeIdTypeFqdn:
-		return string(nodeId.NodeIdValue), nil
-	default:
-		return "", fmt.Errorf("Invalid Node ID type: %v", nodeId.NodeIdType)
-	}
+	return upf
 }
 
 func (upf *UPF) GenerateTEID() (id uint32, err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF didn't Setup!")
+		err := fmt.Errorf("this upf not associate with smf")
 		return 0, err
 	}
 	id = uint32(upf.GetValidID(TEIDType))
@@ -105,19 +100,18 @@ func (upf *UPF) GenerateTEID() (id uint32, err error) {
 	return
 }
 
-func RetrieveUPFNodeByNodeId(nodeId pfcpType.NodeID) (upf *UPF) {
-
+func RetrieveUPFNodeByNodeID(nodeID pfcpType.NodeID) (upf *UPF) {
 	for _, upf := range upfPool {
-		if reflect.DeepEqual(upf.NodeID, nodeId) {
+		if reflect.DeepEqual(upf.NodeID, nodeID) {
 			return upf
 		}
 	}
 	return nil
 }
 
-func RemoveUPFNodeByNodeId(nodeId pfcpType.NodeID) {
+func RemoveUPFNodeByNodeId(nodeID pfcpType.NodeID) {
 	for upfID, upf := range upfPool {
-		if reflect.DeepEqual(upf.NodeID, nodeId) {
+		if reflect.DeepEqual(upf.NodeID, nodeID) {
 			delete(upfPool, upfID)
 			break
 		}
@@ -134,7 +128,6 @@ func SelectUPFByDnn(Dnn string) *UPF {
 }
 
 func (upf *UPF) GetUPFIP() string {
-
 	return upf.NodeID.ResolveNodeIdToIp().String()
 }
 
@@ -148,15 +141,15 @@ func (upf *UPF) GetUPFID() string {
 
 func (upf *UPF) pdrID() (pdrID uint16, err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF didn't Setup!")
+		err := fmt.Errorf("this upf not associate with smf")
 		return 0, err
 	}
 
-	if upf.pdrIdReuseQueue.IsEmpty() {
+	if upf.pdrIDReuseQueue.IsEmpty() {
 		id := upf.GetValidID(PDRType)
 		pdrID = uint16(id)
 	} else {
-		id, err := upf.pdrIdReuseQueue.Pop()
+		id, err := upf.pdrIDReuseQueue.Pop()
 
 		if err != nil {
 			logger.CtxLog.Errorln("allocate id error:", err)
@@ -170,16 +163,16 @@ func (upf *UPF) pdrID() (pdrID uint16, err error) {
 
 func (upf *UPF) farID() (farID uint32, err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF didn't Setup!")
+		err := fmt.Errorf("this upf not associate with smf")
 		return 0, err
 	}
 
-	if upf.farIdReuseQueue.IsEmpty() {
+	if upf.farIDReuseQueue.IsEmpty() {
 
 		id := upf.GetValidID(FARType)
 		farID = uint32(id)
 	} else {
-		id, err := upf.farIdReuseQueue.Pop()
+		id, err := upf.farIDReuseQueue.Pop()
 
 		if err != nil {
 			logger.CtxLog.Errorln("allocate id error:", err)
@@ -192,16 +185,16 @@ func (upf *UPF) farID() (farID uint32, err error) {
 
 func (upf *UPF) barID() (barID uint8, err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF didn't Setup!")
+		err := fmt.Errorf("this upf not associate with smf")
 		return 0, err
 	}
 
-	if upf.barIdReuseQueue.IsEmpty() {
+	if upf.barIDReuseQueue.IsEmpty() {
 
 		id := upf.GetValidID(BARType)
 		barID = uint8(id)
 	} else {
-		id, err := upf.barIdReuseQueue.Pop()
+		id, err := upf.barIDReuseQueue.Pop()
 
 		if err != nil {
 			logger.CtxLog.Errorln("allocate id error:", err)
@@ -215,7 +208,7 @@ func (upf *UPF) barID() (barID uint8, err error) {
 func (upf *UPF) AddPDR() (pdr *PDR, err error) {
 
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("UPF didn't Setup!")
+		err = fmt.Errorf("this upf not associate with smf")
 		return nil, err
 	}
 
@@ -230,7 +223,7 @@ func (upf *UPF) AddPDR() (pdr *PDR, err error) {
 func (upf *UPF) AddFAR() (far *FAR, err error) {
 
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("UPF didn't Setup!")
+		err = fmt.Errorf("this upf not associate with smf")
 		return nil, err
 	}
 
@@ -243,7 +236,7 @@ func (upf *UPF) AddFAR() (far *FAR, err error) {
 func (upf *UPF) AddBAR() (bar *BAR, err error) {
 
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("UPF didn't Setup!")
+		err = fmt.Errorf("this upf not associate with smf")
 		return nil, err
 	}
 
@@ -294,18 +287,18 @@ func (far *FAR) InitializeFAR(smContext *SMContext) {
 func (upf *UPF) RemovePDR(pdr *PDR) (err error) {
 
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("UPF didn't Setup!")
+		err = fmt.Errorf("this upf not associate with smf")
 		return err
 	}
 
-	upf.pdrIdReuseQueue.Push(int(pdr.PDRID))
+	upf.pdrIDReuseQueue.Push(int(pdr.PDRID))
 	delete(upf.pdrPool, pdr.PDRID)
 	return nil
 }
 
 func (upf *UPF) RemoveFAR(far *FAR) (err error) {
 
-	upf.farIdReuseQueue.Push(int(far.FARID))
+	upf.farIDReuseQueue.Push(int(far.FARID))
 	delete(upf.farPool, far.FARID)
 	return nil
 }
@@ -313,11 +306,11 @@ func (upf *UPF) RemoveFAR(far *FAR) (err error) {
 func (upf *UPF) RemoveBAR(bar *BAR) (err error) {
 
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("UPF didn't Setup!")
+		err = fmt.Errorf("this upf not associate with smf")
 		return err
 	}
 
-	upf.barIdReuseQueue.Push(int(bar.BARID))
+	upf.barIDReuseQueue.Push(int(bar.BARID))
 	delete(upf.barPool, bar.BARID)
 	return nil
 }
