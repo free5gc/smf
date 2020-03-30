@@ -123,12 +123,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 		ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
 		upfRoot = ueRoutingGraph.GetGraphRoot()
-		psaPath := smf_context.GetUserPlaneInformation().DefaultUserPlanePath[createData.Dnn]
-
-		//------for test ----------//
-		//upInfo := smf_context.GetUserPlaneInformation()
-		//psaPath = append(psaPath, upInfo.GetUPFNodeByIP("10.200.200.103"))
-		//-------------------------//
+		psaPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
 
 		err := upfRoot.EnableUserPlanePath(psaPath)
 		if err != nil {
@@ -140,7 +135,8 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		smContext.BPManager.SetPSAStatus(psaPath)
 		smContext.BPManager.PSA1Path = psaPath
 	} else {
-		upfRoot = smf_context.GetUserPlaneInformation().GetDefaultUPFTopoByDNN(createData.Dnn)
+		caca := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
+		logger.PduSessLog.Debugln(caca)
 	}
 
 	if upfRoot == nil {
@@ -177,8 +173,6 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 			},
 		}
 	}
-
-	SetUpAllUPF(upfRoot)
 
 	response.JsonData = smContext.BuildCreatedData()
 	rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{

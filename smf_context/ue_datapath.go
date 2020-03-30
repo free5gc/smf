@@ -32,112 +32,112 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 	return
 }
 
-func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
+// func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 
-	UEPGraph = new(UEDataPathGraph)
-	UEPGraph.Graph = make([]*DataPathNode, 0)
-	UEPGraph.SUPI = SUPI
-	UEPGraph.ANUPF = make(map[*DataPathNode]bool)
-	UEPGraph.PSA = make(map[*DataPathNode]bool)
+// 	UEPGraph = new(UEDataPathGraph)
+// 	UEPGraph.Graph = make([]*DataPathNode, 0)
+// 	UEPGraph.SUPI = SUPI
+// 	UEPGraph.ANUPF = make(map[*DataPathNode]bool)
+// 	UEPGraph.PSA = make(map[*DataPathNode]bool)
 
-	paths := smfContext.UERoutingPaths[SUPI]
-	lowerBound := 0
+// 	paths := smfContext.UERoutingPaths[SUPI]
+// 	lowerBound := 0
 
-	NodeCreated := make(map[string]*DataPathNode)
+// 	NodeCreated := make(map[string]*DataPathNode)
 
-	//RANRoot := NewDataPathNode()
+// 	//RANRoot := NewDataPathNode()
 
-	for _, path := range paths {
-		upperBound := len(path.UPF) - 1
+// 	for _, path := range paths {
+// 		upperBound := len(path.UPF) - 1
 
-		DataEndPoint := &DataPathUpLink{
-			DestinationIP:   path.DestinationIP,
-			DestinationPort: path.DestinationPort,
-		}
-		for idx, node_name := range path.UPF {
+// 		DataEndPoint := &DataPathUpLink{
+// 			DestinationIP:   path.DestinationIP,
+// 			DestinationPort: path.DestinationPort,
+// 		}
+// 		for idx, node_name := range path.UPF {
 
-			var ue_node, child_node, parent_node *DataPathNode
-			var exist bool
-			var err error
+// 			var ue_node, child_node, parent_node *DataPathNode
+// 			var exist bool
+// 			var err error
 
-			if ue_node, exist = NodeCreated[node_name]; !exist {
+// 			if ue_node, exist = NodeCreated[node_name]; !exist {
 
-				ue_node, err = NewUEDataPathNode(node_name)
+// 				ue_node, err = NewUEDataPathNode(node_name)
 
-				if err != nil {
-					return nil, err
-				}
-				NodeCreated[node_name] = ue_node
-				UEPGraph.Graph = append(UEPGraph.Graph, ue_node)
-			}
+// 				if err != nil {
+// 					return nil, err
+// 				}
+// 				NodeCreated[node_name] = ue_node
+// 				UEPGraph.Graph = append(UEPGraph.Graph, ue_node)
+// 			}
 
-			switch idx {
-			case lowerBound:
-				child_name := path.UPF[idx+1]
+// 			switch idx {
+// 			case lowerBound:
+// 				child_name := path.UPF[idx+1]
 
-				if child_node, exist = NodeCreated[child_name]; !exist {
-					child_node, err = NewUEDataPathNode(child_name)
+// 				if child_node, exist = NodeCreated[child_name]; !exist {
+// 					child_node, err = NewUEDataPathNode(child_name)
 
-					if err != nil {
-						return nil, err
-					}
-					NodeCreated[child_name] = child_node
-					UEPGraph.Graph = append(UEPGraph.Graph, child_node)
-				}
+// 					if err != nil {
+// 						return nil, err
+// 					}
+// 					NodeCreated[child_name] = child_node
+// 					UEPGraph.Graph = append(UEPGraph.Graph, child_node)
+// 				}
 
-				ue_node.AddChild(child_node)
-				ue_node.AddDestinationOfChild(child_node, DataEndPoint)
-				UEPGraph.AddANUPF(ue_node)
-			case upperBound:
-				parent_name := path.UPF[idx-1]
+// 				ue_node.AddChild(child_node)
+// 				ue_node.AddDestinationOfChild(child_node, DataEndPoint)
+// 				UEPGraph.AddANUPF(ue_node)
+// 			case upperBound:
+// 				parent_name := path.UPF[idx-1]
 
-				if parent_node, exist = NodeCreated[parent_name]; !exist {
-					parent_node, err = NewUEDataPathNode(parent_name)
+// 				if parent_node, exist = NodeCreated[parent_name]; !exist {
+// 					parent_node, err = NewUEDataPathNode(parent_name)
 
-					if err != nil {
-						return nil, err
-					}
-					NodeCreated[parent_name] = parent_node
-					UEPGraph.Graph = append(UEPGraph.Graph, parent_node)
-				}
+// 					if err != nil {
+// 						return nil, err
+// 					}
+// 					NodeCreated[parent_name] = parent_node
+// 					UEPGraph.Graph = append(UEPGraph.Graph, parent_node)
+// 				}
 
-				ue_node.AddParent(parent_node)
-				UEPGraph.AddPSA(ue_node)
-			default:
-				child_name := path.UPF[idx+1]
+// 				ue_node.AddParent(parent_node)
+// 				UEPGraph.AddPSA(ue_node)
+// 			default:
+// 				child_name := path.UPF[idx+1]
 
-				if child_node, exist = NodeCreated[child_name]; !exist {
-					child_node, err = NewUEDataPathNode(child_name)
+// 				if child_node, exist = NodeCreated[child_name]; !exist {
+// 					child_node, err = NewUEDataPathNode(child_name)
 
-					if err != nil {
-						return nil, err
-					}
-					NodeCreated[child_name] = child_node
-					UEPGraph.Graph = append(UEPGraph.Graph, child_node)
-				}
+// 					if err != nil {
+// 						return nil, err
+// 					}
+// 					NodeCreated[child_name] = child_node
+// 					UEPGraph.Graph = append(UEPGraph.Graph, child_node)
+// 				}
 
-				parent_name := path.UPF[idx-1]
+// 				parent_name := path.UPF[idx-1]
 
-				if parent_node, exist = NodeCreated[parent_name]; !exist {
-					parent_node, err = NewUEDataPathNode(parent_name)
+// 				if parent_node, exist = NodeCreated[parent_name]; !exist {
+// 					parent_node, err = NewUEDataPathNode(parent_name)
 
-					if err != nil {
-						return nil, err
-					}
-					NodeCreated[parent_name] = parent_node
-					UEPGraph.Graph = append(UEPGraph.Graph, parent_node)
-				}
+// 					if err != nil {
+// 						return nil, err
+// 					}
+// 					NodeCreated[parent_name] = parent_node
+// 					UEPGraph.Graph = append(UEPGraph.Graph, parent_node)
+// 				}
 
-				ue_node.AddChild(child_node)
-				ue_node.AddDestinationOfChild(child_node, DataEndPoint)
-				ue_node.AddParent(parent_node)
-			}
+// 				ue_node.AddChild(child_node)
+// 				ue_node.AddDestinationOfChild(child_node, DataEndPoint)
+// 				ue_node.AddParent(parent_node)
+// 			}
 
-		}
-	}
+// 		}
+// 	}
 
-	return
-}
+// 	return
+// }
 
 func (uepg *UEDataPathGraph) AddANUPF(node *DataPathNode) {
 

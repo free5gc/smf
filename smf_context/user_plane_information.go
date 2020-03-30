@@ -6,8 +6,6 @@ import (
 	"gofree5gc/src/smf/logger"
 	"net"
 	"reflect"
-
-	"github.com/google/uuid"
 )
 
 type UserPlaneInformation struct {
@@ -42,11 +40,11 @@ func AllocateUPFID() {
 	UPFsID := smfContext.UserPlaneInformation.UPFsID
 	UPFsIPtoID := smfContext.UserPlaneInformation.UPFsIPtoID
 
-	for upf_name, upf_node := range smfContext.UserPlaneInformation.UPFs {
-		upfid := uuid.New().String()
-		upfip := upf_node.NodeID.ResolveNodeIdToIp().String()
+	for upfName, upfNode := range smfContext.UserPlaneInformation.UPFs {
+		upfid := upfNode.UPF.UUID()
+		upfip := upfNode.NodeID.ResolveNodeIdToIp().String()
 
-		UPFsID[upf_name] = upfid
+		UPFsID[upfName] = upfid
 		UPFsIPtoID[upfip] = upfid
 	}
 }
@@ -55,7 +53,7 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 	nodePool := make(map[string]*UPNode)
 	upfPool := make(map[string]*UPNode)
 	anPool := make(map[string]*UPNode)
-	upfIpMap := make(map[string]string)
+	upfIPMap := make(map[string]string)
 
 	for name, node := range upTopology.UPNodes {
 		upNode := new(UPNode)
@@ -103,7 +101,7 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 		nodePool[name] = upNode
 
 		ipStr := upNode.NodeID.ResolveNodeIdToIp().String()
-		upfIpMap[ipStr] = name
+		upfIPMap[ipStr] = name
 	}
 
 	for _, link := range upTopology.Links {
@@ -125,7 +123,7 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 	smfContext.UserPlaneInformation.UPNodes = nodePool
 	smfContext.UserPlaneInformation.UPFs = upfPool
 	smfContext.UserPlaneInformation.AccessNetwork = anPool
-	smfContext.UserPlaneInformation.UPFIPToName = upfIpMap
+	smfContext.UserPlaneInformation.UPFIPToName = upfIPMap
 	smfContext.UserPlaneInformation.UPFsID = make(map[string]string)
 	smfContext.UserPlaneInformation.UPFsIPtoID = make(map[string]string)
 	smfContext.UserPlaneInformation.DefaultUserPlanePath = make(map[string][]*UPNode)
@@ -142,9 +140,8 @@ func (upi *UserPlaneInformation) GetUPFNodeIDByName(name string) pfcpType.NodeID
 }
 
 func (upi *UserPlaneInformation) GetUPFNodeByIP(ip string) *UPNode {
-
-	upf_name := upi.GetUPFNameByIp(ip)
-	return upi.UPFs[upf_name]
+	upfName := upi.GetUPFNameByIp(ip)
+	return upi.UPFs[upfName]
 }
 
 func (upi *UserPlaneInformation) GetUPFIDByIP(ip string) string {
@@ -152,42 +149,12 @@ func (upi *UserPlaneInformation) GetUPFIDByIP(ip string) string {
 	return upi.UPFsIPtoID[ip]
 }
 
-func (upi *UserPlaneInformation) GetDefaultUPFTopoByDNN(dnn string) (root *DataPathNode) {
+func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNN(dnn string) (path []*UPNode) {
 
-	path, path_exist := upi.DefaultUserPlanePath[dnn]
+	path, pathExist := upi.DefaultUserPlanePath[dnn]
 
-	if !path_exist {
-
+	if !pathExist {
 		return nil
-	}
-
-	var lowerBound = 0
-	var upperBound = len(path) - 1
-	var parent *DataPathNode
-
-	for idx, node := range path {
-
-		dataPathNode := NewDataPathNode()
-		dataPathNode.UPF = node.UPF
-		dataPathNode.InUse = true
-		switch idx {
-		case lowerBound:
-
-			root = dataPathNode
-			root.DataPathToAN = NewDataPathDownLink()
-			parent = dataPathNode
-		case upperBound:
-			dataPathNode.AddParent(parent)
-			dataPathNode.DLDataPathLinkForPSA = NewDataPathUpLink()
-			parent.AddChild(dataPathNode)
-
-		default:
-
-			dataPathNode.AddParent(parent)
-			parent.AddChild(dataPathNode)
-			parent = dataPathNode
-
-		}
 	}
 
 	return
@@ -198,6 +165,38 @@ func (upi *UserPlaneInformation) ExistDefaultPath(dnn string) bool {
 
 	_, exist := upi.DefaultUserPlanePath[dnn]
 	return exist
+}
+
+func GeneratePFCPByUPPath(upPath []*UPNode) (root *DataPathNode) {
+	var lowerBound = 0
+	var upperBound = len(upPath) - 1
+	var prevDataPathNode *DataPathNode
+
+	for idx, upNode := range upPath {
+
+		curDataPathNode := NewDataPathNode()
+		curDataPathNode.UPF = upNode.UPF
+		curDataPathNode.InUse = true
+		switch idx {
+		case lowerBound:
+			root = curDataPathNode
+			root.DataPathToAN = NewDataPathDownLink()
+			prevDataPathNode = curDataPathNode
+
+		case upperBound:
+			curDataPathNode.SetNextDownLinkNode(prevDataPathNode)
+			curDataPathNode.DLDataPathLinkForPSA = NewDataPathUpLink()
+			prevDataPathNode.SetNextUpLinkNode(curDataPathNode)
+
+		default:
+			curDataPathNode.SetNextDownLinkNode(prevDataPathNode)
+			prevDataPathNode.SetNextUpLinkNode(curDataPathNode)
+			prevDataPathNode = curDataPathNode
+
+		}
+	}
+
+	return
 }
 
 func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (pathExist bool) {

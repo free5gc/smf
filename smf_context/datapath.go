@@ -1,15 +1,29 @@
 package smf_context
 
-import "fmt"
+import (
+	"fmt"
+)
+
+// GTPTunnel represents the GTP tunnel information
+type GTPTunnel struct {
+	SrcEndPoint  *DataPathNode
+	DestEndPoint *DataPathNode
+
+	TEID       uint32
+	MatchedPDR *PDR
+}
 
 type DataPathNode struct {
 	UPF          *UPF
 	DataPathToAN *DataPathDownLink
 	DataPathToDN map[string]*DataPathUpLink //uuid to DataPathLink
 
+	UpLinkTunnel   *GTPTunnel
+	DownLinkTunnel *GTPTunnel
 	//for UE Routing Topology
 	//for special case:
 	//branching & leafnode
+
 	InUse                bool
 	IsBranchingPoint     bool
 	DLDataPathLinkForPSA *DataPathUpLink
@@ -73,45 +87,39 @@ func NewDataPathUpLink() (link *DataPathUpLink) {
 	return
 }
 
-func (node *DataPathNode) AddChild(child *DataPathNode) (err error) {
+func (node *DataPathNode) SetNextUpLinkNode(nextUpLinkNode *DataPathNode) (err error) {
 
-	child_id, err := child.GetUPFID()
+	node.UpLinkTunnel = new(GTPTunnel)
+	node.UpLinkTunnel.SrcEndPoint = node
+	node.UpLinkTunnel.DestEndPoint = nextUpLinkNode
 
-	if err != nil {
-		return err
-	}
+	destUPF := nextUpLinkNode.UPF
+	node.UpLinkTunnel.MatchedPDR, _ = destUPF.AddPDR()
 
-	if _, exist := node.DataPathToDN[child_id]; !exist {
-
-		child_link := &DataPathUpLink{
-			To:              child,
-			DestinationIP:   "",
-			DestinationPort: "",
-			DownLinkPDR:     nil,
-		}
-		node.DataPathToDN[child_id] = child_link
-	}
-
+	teid, _ := nextUpLinkNode.UPF.GenerateTEID()
+	node.UpLinkTunnel.TEID = teid
 	return
 }
 
-func (node *DataPathNode) AddParent(parent *DataPathNode) (err error) {
+func (node *DataPathNode) SetNextDownLinkNode(nextDownLinkNode *DataPathNode) (err error) {
 
-	parent_ip := parent.GetNodeIP()
+	downLinkIP := nextDownLinkNode.GetNodeIP()
 	var exist bool
 
-	if _, exist = smfContext.UserPlaneInformation.UPFsIPtoID[parent_ip]; !exist {
-		err = fmt.Errorf("UPNode IP %s doesn't exist in smfcfg.conf, please sync the config files!", parent_ip)
+	if _, exist = smfContext.UserPlaneInformation.UPFsIPtoID[downLinkIP]; !exist {
+		err = fmt.Errorf("UPNode IP %s doesn't exist in smfcfg.conf, please sync the config files", downLinkIP)
 		return err
 	}
 
-	parent_link := &DataPathDownLink{
-		To:              parent,
-		DestinationIP:   "",
-		DestinationPort: "",
-		UpLinkPDR:       nil,
-	}
-	node.DataPathToAN = parent_link
+	node.DownLinkTunnel = new(GTPTunnel)
+	node.DownLinkTunnel.SrcEndPoint = node
+	node.DownLinkTunnel.DestEndPoint = nextDownLinkNode
+
+	destUPF := nextDownLinkNode.UPF
+	node.DownLinkTunnel.MatchedPDR, _ = destUPF.AddPDR()
+
+	teid, _ := destUPF.GenerateTEID()
+	node.DownLinkTunnel.TEID = teid
 
 	return
 }
