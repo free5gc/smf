@@ -9,6 +9,7 @@ import (
 	"gofree5gc/lib/pfcp/pfcpUdp"
 	"gofree5gc/src/app"
 	"gofree5gc/src/smf/EventExposure"
+	"gofree5gc/src/smf/OAM"
 	"gofree5gc/src/smf/PDUSession"
 	"gofree5gc/src/smf/factory"
 	"gofree5gc/src/smf/logger"
@@ -120,6 +121,7 @@ func (smf *SMF) Start() {
 		}
 	}
 
+	Nsmf_OAM.AddService(router)
 	for _, serviceName := range factory.SmfConfig.Configuration.ServiceNameList {
 		switch models.ServiceName(serviceName) {
 		case models.ServiceName_NSMF_PDUSESSION:
