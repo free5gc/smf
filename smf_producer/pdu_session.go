@@ -119,29 +119,29 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		break
 	}
 
+	smContext.Tunnel = new(smf_context.UPTunnel)
+
 	var dataPathRoot *smf_context.DataPathNode
-	// if smf_context.CheckUEHasPreConfig(createData.Supi) {
-
-	// 	ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
-	// 	dataPathRoot = ueRoutingGraph.GetGraphRoot()
-	// 	psaPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
-
-	// 	err := dataPathRoot.EnableUserPlanePath(psaPath)
-	// 	if err != nil {
-	// 		logger.PduSessLog.Error(err)
-	// 		return
-	// 	}
-
-	// 	smContext.BPManager = smf_context.NewBPManager(createData.Supi)
-	// 	smContext.BPManager.SetPSAStatus(psaPath)
-	// 	smContext.BPManager.PSA1Path = psaPath
-	// } else {
-	// 	defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
-	// 	dataPathRoot = smf_context.GeneratePFCPByUPPath(defaultUPPath)
-	// }
-
 	defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
 	dataPathRoot = smf_context.GenerateDataPath(defaultUPPath, smContext)
+	smContext.Tunnel.UpfRoot = dataPathRoot
+	if smf_context.CheckUEHasPreConfig(createData.Supi) {
+		logger.PduSessLog.Infof("SUPI[%s] has pre-config route", createData.Supi)
+		ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
+		dataPathRoot = ueRoutingGraph.GetGraphRoot()
+		smContext.Tunnel.ULCLRoot = dataPathRoot
+		psaPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
+
+		err := dataPathRoot.EnableUserPlanePath(psaPath)
+		if err != nil {
+			logger.PduSessLog.Error(err)
+			return
+		}
+
+		smContext.BPManager = smf_context.NewBPManager(createData.Supi)
+		smContext.BPManager.SetPSAStatus(psaPath)
+		smContext.BPManager.PSA1Path = psaPath
+	}
 
 	if dataPathRoot == nil {
 		logger.PduSessLog.Errorf("Path for serve DNN[%s] not found\n", createData.Dnn)
@@ -160,8 +160,6 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	}
 
-	logger.PduSessLog.Infof("defalut path for DNN[%s]: %s", createData.Dnn, dataPathRoot.PathToString())
-
 	response.JsonData = smContext.BuildCreatedData()
 	rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
 		Header: http.Header{
@@ -172,10 +170,9 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	}}
 
 	// TODO: UECM registration
-	smContext.Tunnel = new(smf_context.UPTunnel)
-	smContext.Tunnel.UpfRoot = dataPathRoot
 
-	SendPFCPRule(smContext, dataPathRoot)
+	SendPFCPRule(smContext, smContext.Tunnel.UpfRoot)
+	SetUpUplinkUserPlane(smContext.Tunnel.ULCLRoot, smContext)
 
 	smf_consumer.SendNFDiscoveryServingAMF(smContext)
 
@@ -292,16 +289,12 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 
 	switch smContextUpdateData.N2SmInfoType {
 	case models.N2SmInfoType_PDU_RES_SETUP_RSP:
-		if tunnel.DLPDR == nil {
-			tunnel.DLPDR, _ = smContext.Tunnel.Node.AddPDR()
-		} else {
-			tunnel.DLPDR.State = smf_context.RULE_UPDATE
-		}
+		DLPDR := tunnel.UpfRoot.DownLinkTunnel.MatchedPDR
 
 		// TODO: Setup Uplink Routing
 
-		tunnel.DLPDR.Precedence = 32
-		tunnel.DLPDR.PDI = smf_context.PDI{
+		DLPDR.Precedence = 32
+		DLPDR.PDI = smf_context.PDI{
 			SourceInterface: pfcpType.SourceInterface{
 				InterfaceValue: pfcpType.SourceInterfaceSgiLanN6Lan,
 			},
@@ -312,12 +305,8 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			},
 		}
 
-		tunnel.DLPDR.FAR.ApplyAction.Forw = true
-		tunnel.DLPDR.FAR.ApplyAction.Nocp = false
-		tunnel.DLPDR.FAR.ApplyAction.Drop = false
-		tunnel.DLPDR.FAR.ApplyAction.Buff = false
-		tunnel.DLPDR.FAR.ApplyAction.Dupl = false
-		tunnel.DLPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
+		DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: true}
+		DLPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
 			DestinationInterface: pfcpType.DestinationInterface{
 				InterfaceValue: pfcpType.DestinationInterfaceAccess,
 			},
@@ -325,8 +314,10 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		}
 		err = smf_context.HandlePDUSessionResourceSetupResponseTransfer(body.BinaryDataN2SmInformation, smContext)
 
-		pdrList = []*smf_context.PDR{tunnel.DLPDR}
-		farList = []*smf_context.FAR{tunnel.DLPDR.FAR}
+		DLPDR.State = smf_context.RULE_UPDATE
+		DLPDR.FAR.State = smf_context.RULE_UPDATE
+		pdrList = []*smf_context.PDR{DLPDR}
+		farList = []*smf_context.FAR{DLPDR.FAR}
 
 	case models.N2SmInfoType_PATH_SWITCH_REQ:
 		err = smf_context.HandlePathSwitchRequestTransfer(body.BinaryDataN2SmInformation, smContext)
@@ -390,7 +381,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 	}
 
 	addr := net.UDPAddr{
-		IP:   smContext.Tunnel.Node.NodeID.NodeIdValue,
+		IP:   smContext.Tunnel.UpfRoot.UPF.NodeID.NodeIdValue,
 		Port: pfcpUdp.PFCP_PORT,
 	}
 

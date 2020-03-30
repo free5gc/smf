@@ -1,6 +1,7 @@
 package smf_producer
 
 import (
+	"fmt"
 	"gofree5gc/lib/flowdesc"
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/lib/pfcp/pfcpUdp"
@@ -13,7 +14,7 @@ import (
 func AddPDUSessionAnchorAndULCL(smContext *smf_context.SMContext) {
 
 	bpManager := smContext.BPManager
-	upfRoot := smContext.Tunnel.UpfRoot
+	upfRoot := smContext.Tunnel.ULCLRoot
 	//select PSA2
 	bpManager.SelectPSA2()
 	err := upfRoot.EnableUserPlanePath(bpManager.PSA2Path)
@@ -98,6 +99,7 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 		var DownLinkForPSA2 *smf_context.DataPathUpLink
 		//Todo:
 		//Put every uplink to BPUplink
+		fmt.Println(ulcl.DataPathToAN.UpLinkPDR)
 		upLinkIP := ulcl.DataPathToAN.UpLinkPDR.FAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address.String()
 		if upLinkIP != psa1NodeAfterUlcl.UPF.UPIPInfo.Ipv4Address.String() {
 			UpLinkForPSA1 = ulcl.BPUpLinkPDRs[psa1NodeAfterUlcl.UPF.GetUPFID()]

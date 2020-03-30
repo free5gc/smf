@@ -195,9 +195,13 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 
 			smContext := smf_context.GetSMContextBySEID(SEID)
 
-			if smContext.BPManager.BPStatus == smf_context.UnInitialized {
-				smf_producer.AddPDUSessionAnchorAndULCL(smContext)
-				smContext.BPManager.BPStatus = smf_context.HasSendPFCPMsg
+			if smContext.BPManager != nil {
+				logger.PfcpLog.Infoln("smContext.BPManager")
+				if smContext.BPManager.BPStatus == smf_context.UnInitialized {
+					logger.PfcpLog.Infoln("AddPDUSessionAnchorAndULCL")
+					smf_producer.AddPDUSessionAnchorAndULCL(smContext)
+					smContext.BPManager.BPStatus = smf_context.HasSendPFCPMsg
+				}
 			}
 
 			HttpResponseQueue.DeleteItem(seqNum)

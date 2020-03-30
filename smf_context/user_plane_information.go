@@ -193,7 +193,6 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 		case lowerBound:
 			root = curDataPathNode
 			root.DataPathToAN = NewDataPathDownLink()
-			root.SetUpLinkSrcNode(nil)
 
 		case upperBound:
 			curDataPathNode.SetDownLinkSrcNode(nil)
@@ -207,6 +206,7 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 		}
 		prevDataPathNode = curDataPathNode
 	}
+	root.SetUpLinkSrcNode(nil)
 
 	curDataPathNode = root
 	for curDataPathNode != nil {
@@ -287,7 +287,7 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 				}
 			}
 		}
-		if curDataPathNode.UpLinkTunnel == nil {
+		if curDataPathNode.DownLinkTunnel.SrcEndPoint == nil {
 			DNDLPDR := curDataPathNode.DownLinkTunnel.MatchedPDR
 			DNDLPDR.PDI = PDI{
 				SourceInterface: pfcpType.SourceInterface{InterfaceValue: pfcpType.SourceInterfaceCore},

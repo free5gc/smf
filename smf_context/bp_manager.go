@@ -158,7 +158,7 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 		return
 	}
 
-	upfRoot := smContext.Tunnel.UpfRoot
+	upfRoot := smContext.Tunnel.ULCLRoot
 	upperBound := len(psa2_path) - 1
 
 	curDataPathNode := upfRoot

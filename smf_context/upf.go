@@ -25,7 +25,8 @@ type UPTunnel struct {
 	ULTEID uint32
 	DLTEID uint32
 
-	UpfRoot *DataPathNode
+	UpfRoot  *DataPathNode
+	ULCLRoot *DataPathNode
 }
 
 // type NewUPTunnel struct {

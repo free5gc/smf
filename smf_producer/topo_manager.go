@@ -18,7 +18,7 @@ func SetUpUplinkUserPlane(root *smf_context.DataPathNode, smContext *smf_context
 		visited[node] = false
 	}
 
-	SendUplinkPFCPRule(root, smContext, visited)
+	// SendUplinkPFCPRule(root, smContext, visited)
 }
 
 func SetUpDownLinkUserPlane(root *smf_context.DataPathNode, smContext *smf_context.SMContext) {
@@ -60,6 +60,8 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 		logger.PduSessLog.Error(err)
 		return
 	}
+	upLink.UpLinkPDR.PDRID = upLink.UpLinkPDR.PDRID - 2
+	upLink.UpLinkPDR.FAR.FARID = upLink.UpLinkPDR.FAR.FARID - 2
 
 	upLink.UpLinkPDR.Precedence = 32
 	upLink.UpLinkPDR.PDI = smf_context.PDI{
@@ -70,7 +72,7 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 		},
 		LocalFTeid: &pfcpType.FTEID{
 			V4:          true,
-			Teid:        teid,
+			Teid:        teid - 2,
 			Ipv4Address: node.UPF.UPIPInfo.Ipv4Address,
 		},
 		NetworkInstance: []byte(smContext.Dnn),
@@ -99,7 +101,7 @@ func AllocateUpLinkPDRandTEID(node *smf_context.DataPathNode, smContext *smf_con
 
 		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
 		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation.Teid = uint32(teid)
+		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation.Teid = uint32(teid - 2)
 		parentUpLinkFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address = node.UPF.UPIPInfo.Ipv4Address
 	}
 

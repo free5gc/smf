@@ -89,6 +89,39 @@ func NewDataPathUpLink() (link *DataPathUpLink) {
 	return
 }
 
+func (node *DataPathNode) AddChild(child *DataPathNode) (err error) {
+	child_id, err := child.GetUPFID()
+	if err != nil {
+		return err
+	}
+	if _, exist := node.DataPathToDN[child_id]; !exist {
+		child_link := &DataPathUpLink{
+			To:              child,
+			DestinationIP:   "",
+			DestinationPort: "",
+			DownLinkPDR:     nil,
+		}
+		node.DataPathToDN[child_id] = child_link
+	}
+	return
+}
+func (node *DataPathNode) AddParent(parent *DataPathNode) (err error) {
+	parent_ip := parent.GetNodeIP()
+	var exist bool
+	if _, exist = smfContext.UserPlaneInformation.UPFsIPtoID[parent_ip]; !exist {
+		err = fmt.Errorf("UPNode IP %s doesn't exist in smfcfg.conf, please sync the config files!", parent_ip)
+		return err
+	}
+	parent_link := &DataPathDownLink{
+		To:              parent,
+		DestinationIP:   "",
+		DestinationPort: "",
+		UpLinkPDR:       nil,
+	}
+	node.DataPathToAN = parent_link
+	return
+}
+
 func (node *DataPathNode) SetUpLinkSrcNode(nextUpLinkNode *DataPathNode) (err error) {
 
 	node.UpLinkTunnel = new(GTPTunnel)

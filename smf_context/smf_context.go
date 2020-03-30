@@ -147,16 +147,16 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 		smfContext.UERoutingPaths[supi] = routingInfo.PathList
 	}
 
-	// for supi := range smfContext.UERoutingPaths {
+	for supi := range smfContext.UERoutingPaths {
 
-	// 	graph, err := NewUEDataPathGraph(supi)
+		graph, err := NewUEDataPathGraph(supi)
 
-	// 	if err != nil {
-	// 		logger.CtxLog.Errorln(err)
-	// 	}
+		if err != nil {
+			logger.CtxLog.Errorln(err)
+		}
 
-	// 	smfContext.UERoutingGraphs[supi] = graph
-	// }
+		smfContext.UERoutingGraphs[supi] = graph
+	}
 
 }
 
