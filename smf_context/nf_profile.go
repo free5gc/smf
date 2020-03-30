@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"gofree5gc/lib/openapi/models"
 	"gofree5gc/src/smf/factory"
-	"gofree5gc/src/smf/logger"
 	"time"
 )
 
@@ -31,7 +30,6 @@ func SetupNFProfile(config *factory.Config) {
 	//set NFServices
 	NFServices = new([]models.NfService)
 	for _, serviceName := range config.Configuration.ServiceNameList {
-		logger.InitLog.Errorf("service Name: %+v", serviceName)
 		*NFServices = append(*NFServices, models.NfService{
 			ServiceInstanceId: SMF_Self().NfInstanceID + serviceName,
 			ServiceName:       models.ServiceName(serviceName),
