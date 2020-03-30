@@ -72,24 +72,10 @@ func HandlePfcpAssociationSetupResponse(msg *pfcpUdp.Message) {
 		upf.UPFStatus = smf_context.AssociatedSetUpSuccess
 
 		if req.UserPlaneIPResourceInformation != nil {
-			logger.PfcpLog.Infoln("(UPF) ", upf.NodeID.ResolveNodeIdToIp().String(), " has set UPFStatus to AssociatedSetUpSuccess")
 			upf.UPIPInfo = *req.UserPlaneIPResourceInformation
-
-			userPlaneInformation := smf_context.SMF_Self().UserPlaneInformation
-			dnn := string(upf.UPIPInfo.NetworkInstance)
-
-			if !userPlaneInformation.ExistDefaultPath(dnn) {
-				pathExist := userPlaneInformation.GenerateDefaultPath(dnn)
-
-				if !pathExist {
-					logger.PfcpLog.Errorf("UPF[%s] doesn't exist default path", upf.UPIPInfo.NetworkInstance)
-					return
-				}
-
-			}
-			logger.PfcpLog.Infof("UPF[%s]", upf.UPIPInfo.NetworkInstance)
+			logger.PfcpLog.Infof("UPF(%s)[%s] setup association", upf.NodeID.ResolveNodeIdToIp().String(), upf.UPIPInfo.NetworkInstance)
 		} else {
-			logger.PfcpLog.Errorln("pfcp association setup response has no User Plane IP ResourceInformation")
+			logger.PfcpLog.Errorln("pfcp association setup response has no UserPlane IP Resource Information")
 		}
 	}
 }

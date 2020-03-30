@@ -28,6 +28,8 @@ type DataPathNode struct {
 	IsBranchingPoint     bool
 	DLDataPathLinkForPSA *DataPathUpLink
 	BPUpLinkPDRs         map[string]*DataPathDownLink // uuid to UpLink
+
+	HaveSession bool
 }
 
 type DataPathDownLink struct {
@@ -87,35 +89,27 @@ func NewDataPathUpLink() (link *DataPathUpLink) {
 	return
 }
 
-func (node *DataPathNode) SetNextUpLinkNode(nextUpLinkNode *DataPathNode) (err error) {
+func (node *DataPathNode) SetUpLinkSrcNode(nextUpLinkNode *DataPathNode) (err error) {
 
 	node.UpLinkTunnel = new(GTPTunnel)
-	node.UpLinkTunnel.SrcEndPoint = node
-	node.UpLinkTunnel.DestEndPoint = nextUpLinkNode
+	node.UpLinkTunnel.SrcEndPoint = nextUpLinkNode
+	node.UpLinkTunnel.DestEndPoint = node
 
-	destUPF := nextUpLinkNode.UPF
+	destUPF := node.UPF
 	node.UpLinkTunnel.MatchedPDR, _ = destUPF.AddPDR()
 
-	teid, _ := nextUpLinkNode.UPF.GenerateTEID()
+	teid, _ := destUPF.GenerateTEID()
 	node.UpLinkTunnel.TEID = teid
 	return
 }
 
-func (node *DataPathNode) SetNextDownLinkNode(nextDownLinkNode *DataPathNode) (err error) {
-
-	downLinkIP := nextDownLinkNode.GetNodeIP()
-	var exist bool
-
-	if _, exist = smfContext.UserPlaneInformation.UPFsIPtoID[downLinkIP]; !exist {
-		err = fmt.Errorf("UPNode IP %s doesn't exist in smfcfg.conf, please sync the config files", downLinkIP)
-		return err
-	}
+func (node *DataPathNode) SetDownLinkSrcNode(nextDownLinkNode *DataPathNode) (err error) {
 
 	node.DownLinkTunnel = new(GTPTunnel)
-	node.DownLinkTunnel.SrcEndPoint = node
-	node.DownLinkTunnel.DestEndPoint = nextDownLinkNode
+	node.DownLinkTunnel.SrcEndPoint = nextDownLinkNode
+	node.DownLinkTunnel.DestEndPoint = node
 
-	destUPF := nextDownLinkNode.UPF
+	destUPF := node.UPF
 	node.DownLinkTunnel.MatchedPDR, _ = destUPF.AddPDR()
 
 	teid, _ := destUPF.GenerateTEID()
@@ -194,4 +188,11 @@ func (node *DataPathNode) GetUpLinkFAR() (far *FAR) {
 
 func (node *DataPathNode) GetParent() (parent *DataPathNode) {
 	return node.DataPathToAN.To
+}
+
+func (node *DataPathNode) PathToString() string {
+	if node == nil {
+		return ""
+	}
+	return node.UPF.NodeID.ResolveNodeIdToIp().String() + " -> " + node.DownLinkTunnel.SrcEndPoint.PathToString()
 }

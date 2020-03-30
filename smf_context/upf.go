@@ -3,7 +3,9 @@ package smf_context
 import (
 	"fmt"
 	"gofree5gc/lib/pfcp/pfcpType"
+	"gofree5gc/lib/pfcp/pfcpUdp"
 	"gofree5gc/src/smf/logger"
+	"net"
 	"reflect"
 
 	"github.com/google/uuid"
@@ -98,6 +100,13 @@ func (upf *UPF) GenerateTEID() (id uint32, err error) {
 	id = uint32(upf.GetValidID(TEIDType))
 	upf.teidPool[id] = true
 	return
+}
+
+func (upf *UPF) PFCPAddr() *net.UDPAddr {
+	return &net.UDPAddr{
+		IP:   upf.NodeID.ResolveNodeIdToIp(),
+		Port: pfcpUdp.PFCP_PORT,
+	}
 }
 
 func RetrieveUPFNodeByNodeID(nodeID pfcpType.NodeID) (upf *UPF) {

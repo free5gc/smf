@@ -104,10 +104,12 @@ func farToCreateFAR(far *smf_context.FAR) *pfcp.CreateFAR {
 		createFAR.BARID.BarIdValue = far.BAR.BARID
 	}
 
-	createFAR.ForwardingParameters = new(pfcp.ForwardingParametersIEInFAR)
-	createFAR.ForwardingParameters.DestinationInterface = &far.ForwardingParameters.DestinationInterface
-	createFAR.ForwardingParameters.NetworkInstance = &far.ForwardingParameters.NetworkInstance
-	createFAR.ForwardingParameters.OuterHeaderCreation = far.ForwardingParameters.OuterHeaderCreation
+	if far.ForwardingParameters != nil {
+		createFAR.ForwardingParameters = new(pfcp.ForwardingParametersIEInFAR)
+		createFAR.ForwardingParameters.DestinationInterface = &far.ForwardingParameters.DestinationInterface
+		createFAR.ForwardingParameters.NetworkInstance = &far.ForwardingParameters.NetworkInstance
+		createFAR.ForwardingParameters.OuterHeaderCreation = far.ForwardingParameters.OuterHeaderCreation
+	}
 
 	return createFAR
 }

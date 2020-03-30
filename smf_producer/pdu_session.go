@@ -81,6 +81,13 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	establishmentRequest := m.PDUSessionEstablishmentRequest
 	smContext.HandlePDUSessionEstablishmentRequest(establishmentRequest)
 
+	logger.PduSessLog.Infof("PCF Selection for SMContext SUPI[%s] PDUSessionID[%d]\n", smContext.Supi, smContext.PDUSessionID)
+	err = smContext.PCFSelection()
+
+	if err != nil {
+		logger.PduSessLog.Errorln("pcf selection error:", err)
+	}
+
 	smPolicyData := models.SmPolicyContextData{}
 
 	smPolicyData.Supi = smContext.Supi
@@ -99,12 +106,6 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		Mnc: smContext.ServingNetwork.Mnc,
 	}
 
-	err = smContext.PCFSelection()
-
-	if err != nil {
-		logger.PduSessLog.Errorln("pcf selection error:", err)
-	}
-
 	smPolicyDecision, _, err := smContext.SMPolicyClient.DefaultApi.SmPoliciesPost(context.Background(), smPolicyData)
 
 	if err != nil {
@@ -118,30 +119,32 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		break
 	}
 
-	var upfRoot *smf_context.DataPathNode
-	if smf_context.CheckUEHasPreConfig(createData.Supi) {
+	var dataPathRoot *smf_context.DataPathNode
+	// if smf_context.CheckUEHasPreConfig(createData.Supi) {
 
-		ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
-		upfRoot = ueRoutingGraph.GetGraphRoot()
-		psaPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
+	// 	ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
+	// 	dataPathRoot = ueRoutingGraph.GetGraphRoot()
+	// 	psaPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
 
-		err := upfRoot.EnableUserPlanePath(psaPath)
-		if err != nil {
-			logger.PduSessLog.Error(err)
-			return
-		}
+	// 	err := dataPathRoot.EnableUserPlanePath(psaPath)
+	// 	if err != nil {
+	// 		logger.PduSessLog.Error(err)
+	// 		return
+	// 	}
 
-		smContext.BPManager = smf_context.NewBPManager(createData.Supi)
-		smContext.BPManager.SetPSAStatus(psaPath)
-		smContext.BPManager.PSA1Path = psaPath
-	} else {
-		caca := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
-		logger.PduSessLog.Debugln(caca)
-	}
+	// 	smContext.BPManager = smf_context.NewBPManager(createData.Supi)
+	// 	smContext.BPManager.SetPSAStatus(psaPath)
+	// 	smContext.BPManager.PSA1Path = psaPath
+	// } else {
+	// 	defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
+	// 	dataPathRoot = smf_context.GeneratePFCPByUPPath(defaultUPPath)
+	// }
 
-	if upfRoot == nil {
+	defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
+	dataPathRoot = smf_context.GenerateDataPath(defaultUPPath, smContext)
 
-		logger.PduSessLog.Errorf("UPF for serve DNN[%s] not found\n", createData.Dnn)
+	if dataPathRoot == nil {
+		logger.PduSessLog.Errorf("Path for serve DNN[%s] not found\n", createData.Dnn)
 		rspChan <- smf_message.HandlerResponseMessage{
 			HTTPResponse: &http_wrapper.Response{
 				Header: nil,
@@ -157,22 +160,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	}
 
-	selectedUPF := smf_context.SelectUPFByDnn(createData.Dnn)
-	if selectedUPF == nil {
-		logger.PduSessLog.Errorf("UPF for serve DNN[%s] not found\n", createData.Dnn)
-		rspChan <- smf_message.HandlerResponseMessage{
-			HTTPResponse: &http_wrapper.Response{
-				Header: nil,
-				Status: http.StatusForbidden,
-				Body: models.PostSmContextsErrorResponse{
-					JsonData: &models.SmContextCreateError{
-						Error:   &Nsmf_PDUSession.DnnNotSupported,
-						N1SmMsg: &models.RefToBinaryData{ContentId: "N1Msg"},
-					},
-				},
-			},
-		}
-	}
+	logger.PduSessLog.Infof("defalut path for DNN[%s]: %s", createData.Dnn, dataPathRoot.PathToString())
 
 	response.JsonData = smContext.BuildCreatedData()
 	rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
@@ -185,72 +173,11 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	// TODO: UECM registration
 	smContext.Tunnel = new(smf_context.UPTunnel)
+	smContext.Tunnel.UpfRoot = dataPathRoot
 
-	SetUpUplinkUserPlane(upfRoot, smContext)
-	smContext.Tunnel.UpfRoot = upfRoot
-
-	smContext.Tunnel.Node = selectedUPF
-	tunnel := smContext.Tunnel
-	// Establish UP
-	tunnel.ULTEID, err = tunnel.Node.GenerateTEID()
-
-	if err != nil {
-		logger.PduSessLog.Error(err)
-	}
-
-	tunnel.ULPDR, err = smContext.Tunnel.Node.AddPDR()
-
-	if err != nil {
-		logger.PduSessLog.Error(err)
-	}
-
-	tunnel.ULPDR.Precedence = 32
-	tunnel.ULPDR.PDI = smf_context.PDI{
-		SourceInterface: pfcpType.SourceInterface{
-			InterfaceValue: pfcpType.SourceInterfaceAccess,
-		},
-		LocalFTeid: &pfcpType.FTEID{
-			V4:          true,
-			Teid:        tunnel.ULTEID,
-			Ipv4Address: tunnel.Node.UPIPInfo.Ipv4Address,
-		},
-		NetworkInstance: []byte(smContext.Dnn),
-		UEIPAddress: &pfcpType.UEIPAddress{
-			V4:          true,
-			Ipv4Address: smContext.PDUAddress.To4(),
-		},
-	}
-	tunnel.ULPDR.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
-	tunnel.ULPDR.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
-
-	tunnel.ULPDR.FAR.ApplyAction.Forw = true
-	tunnel.ULPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
-		DestinationInterface: pfcpType.DestinationInterface{
-			InterfaceValue: pfcpType.DestinationInterfaceCore,
-		},
-		NetworkInstance: []byte(smContext.Dnn),
-	}
-
-	logger.PduSessLog.Infof("PCF Selection for SMContext SUPI[%s] PDUSessionID[%d]\n", smContext.Supi, smContext.PDUSessionID)
-	err = smContext.PCFSelection()
-	if err != nil {
-		logger.PduSessLog.Warnf("PCF Select failed: %s", err)
-	}
-	// TODO: remove it when UL/CL apply
-	//pfcp_message.SendPfcpSessionEstablishmentRequest(&addr, smContext)
-	//AddUEUpLinkRoutingInfo(smContext)
+	SendPFCPRule(smContext, dataPathRoot)
 
 	smf_consumer.SendNFDiscoveryServingAMF(smContext)
-
-	// Workaround AMF Profile
-	// smContext.AMFProfile = models.NfProfile{
-	// 	NfServices: &[]models.NfService{
-	// 		{
-	// 			ServiceName: models.ServiceName_NAMF_COMM,
-	// 			ApiPrefix:   "https://127.0.0.1:29518",
-	// 		},
-	// 	},
-	// }
 
 	for _, service := range *smContext.AMFProfile.NfServices {
 		if service.ServiceName == models.ServiceName_NAMF_COMM {
@@ -492,13 +419,37 @@ func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMe
 	// }}
 }
 
-func SetUpAllUPF(node *smf_context.DataPathNode) {
+func SendPFCPRule(smContext *smf_context.SMContext, root *smf_context.DataPathNode) {
+	curDataPathNode := root
+	for curDataPathNode != nil {
+		pdrList := make([]*smf_context.PDR, 0, 2)
+		farList := make([]*smf_context.FAR, 0, 2)
+		if !curDataPathNode.HaveSession {
+			if curDataPathNode.UpLinkTunnel != nil && curDataPathNode.UpLinkTunnel.MatchedPDR != nil {
+				pdrList = append(pdrList, curDataPathNode.UpLinkTunnel.MatchedPDR)
+				farList = append(farList, curDataPathNode.UpLinkTunnel.MatchedPDR.FAR)
+			}
+			if curDataPathNode.DownLinkTunnel != nil && curDataPathNode.DownLinkTunnel.MatchedPDR != nil {
+				pdrList = append(pdrList, curDataPathNode.DownLinkTunnel.MatchedPDR)
+				farList = append(farList, curDataPathNode.DownLinkTunnel.MatchedPDR.FAR)
+			}
 
-	node.UPF.UPFStatus = smf_context.AssociatedSetUpSuccess
-	node.UPF.UPIPInfo.Ipv4Address = net.ParseIP("192.168.1.1")
+			pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(curDataPathNode.UPF.PFCPAddr(), smContext, pdrList, farList, nil)
+		} else {
+			if curDataPathNode.UpLinkTunnel != nil && curDataPathNode.UpLinkTunnel.MatchedPDR != nil {
+				pdrList = append(pdrList, curDataPathNode.UpLinkTunnel.MatchedPDR)
+				farList = append(farList, curDataPathNode.UpLinkTunnel.MatchedPDR.FAR)
+			}
+			if curDataPathNode.DownLinkTunnel != nil && curDataPathNode.DownLinkTunnel.MatchedPDR != nil {
+				pdrList = append(pdrList, curDataPathNode.DownLinkTunnel.MatchedPDR)
+				farList = append(farList, curDataPathNode.DownLinkTunnel.MatchedPDR.FAR)
+			}
 
-	for _, child_link := range node.DataPathToDN {
-
-		SetUpAllUPF(child_link.To)
+			pfcp_message.SendPfcpSessionModificationRequest(curDataPathNode.UPF.PFCPAddr(), smContext, pdrList, farList, nil)
+		}
+		if curDataPathNode.DownLinkTunnel == nil {
+			break
+		}
+		curDataPathNode = curDataPathNode.DownLinkTunnel.DestEndPoint
 	}
 }
