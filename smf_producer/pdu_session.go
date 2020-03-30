@@ -125,24 +125,24 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
 	dataPathRoot = smf_context.GenerateDataPath(defaultUPPath, smContext)
 	smContext.Tunnel.UpfRoot = dataPathRoot
-	// if smf_context.CheckUEHasPreConfig(createData.Supi) {
-	// 	logger.PduSessLog.Infof("SUPI[%s] has pre-config route", createData.Supi)
-	// 	ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
-	// 	dataPathRoot = ueRoutingGraph.GetGraphRoot()
-	// 	smContext.Tunnel.ULCLRoot = dataPathRoot
-	// 	psaPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
+	if smf_context.CheckUEHasPreConfig(createData.Supi) {
+		logger.PduSessLog.Infof("SUPI[%s] has pre-config route", createData.Supi)
+		ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
+		dataPathRoot = ueRoutingGraph.GetGraphRoot()
+		smContext.Tunnel.ULCLRoot = dataPathRoot
+		psaPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
 
-	// 	err := dataPathRoot.EnableUserPlanePath(psaPath)
-	// 	if err != nil {
-	// 		logger.PduSessLog.Error(err)
-	// 		return
-	// 	}
+		err := dataPathRoot.EnableUserPlanePath(psaPath)
+		if err != nil {
+			logger.PduSessLog.Error(err)
+			return
+		}
 
-	// 	smContext.BPManager = smf_context.NewBPManager(createData.Supi)
-	// 	smContext.BPManager.SetPSAStatus(psaPath)
-	// 	smContext.BPManager.PSA1Path = psaPath
-	// 	SetUpUplinkUserPlane(smContext.Tunnel.ULCLRoot, smContext)
-	// }
+		smContext.BPManager = smf_context.NewBPManager(createData.Supi)
+		smContext.BPManager.SetPSAStatus(psaPath)
+		smContext.BPManager.PSA1Path = psaPath
+		SetUpUplinkUserPlane(smContext.Tunnel.ULCLRoot, smContext)
+	}
 
 	if dataPathRoot == nil {
 		logger.PduSessLog.Errorf("Path for serve DNN[%s] not found\n", createData.Dnn)

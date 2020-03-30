@@ -188,20 +188,16 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 		curDataPathNode := NewDataPathNode()
 		curDataPathNode.UPF = upNode.UPF
 		curDataPathNode.InUse = true
-
-		switch idx {
-		case lowerBound:
+		if idx == lowerBound {
 			root = curDataPathNode
 			root.DataPathToAN = NewDataPathDownLink()
 			root.SetUpLinkSrcNode(nil)
-
-		case upperBound:
+		}
+		if idx == upperBound {
 			curDataPathNode.SetDownLinkSrcNode(nil)
 			curDataPathNode.DLDataPathLinkForPSA = NewDataPathUpLink()
-			prevDataPathNode.SetDownLinkSrcNode(curDataPathNode)
-			curDataPathNode.SetUpLinkSrcNode(prevDataPathNode)
-
-		default:
+		}
+		if prevDataPathNode != nil {
 			prevDataPathNode.SetDownLinkSrcNode(curDataPathNode)
 			curDataPathNode.SetUpLinkSrcNode(prevDataPathNode)
 		}
@@ -236,16 +232,18 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 
 			ULFAR := ULPDR.FAR
 
-			if nextULDest := curDLTunnel.SrcEndPoint; nextULDest != nil {
-				nextULTunnel := nextULDest.UpLinkTunnel
-				ULFAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
-				ULFAR.ForwardingParameters = &ForwardingParameters{
-					DestinationInterface: pfcpType.DestinationInterface{InterfaceValue: pfcpType.DestinationInterfaceCore},
-					OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
-						OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
-						Ipv4Address:                    nextULTunnel.DestEndPoint.UPF.UPIPInfo.Ipv4Address,
-						Teid:                           nextULTunnel.TEID,
-					},
+			if curDLTunnel != nil {
+				if nextULDest := curDLTunnel.SrcEndPoint; nextULDest != nil {
+					nextULTunnel := nextULDest.UpLinkTunnel
+					ULFAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
+					ULFAR.ForwardingParameters = &ForwardingParameters{
+						DestinationInterface: pfcpType.DestinationInterface{InterfaceValue: pfcpType.DestinationInterfaceCore},
+						OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
+							OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
+							Ipv4Address:                    nextULTunnel.DestEndPoint.UPF.UPIPInfo.Ipv4Address,
+							Teid:                           nextULTunnel.TEID,
+						},
+					}
 				}
 			}
 
@@ -287,19 +285,24 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 				}
 			}
 		}
-		if curDataPathNode.DownLinkTunnel.SrcEndPoint == nil {
-			DNDLPDR := curDataPathNode.DownLinkTunnel.MatchedPDR
-			DNDLPDR.PDI = PDI{
-				SourceInterface: pfcpType.SourceInterface{InterfaceValue: pfcpType.SourceInterfaceCore},
-				NetworkInstance: util_3gpp.Dnn(smContext.Dnn),
-				UEIPAddress: &pfcpType.UEIPAddress{
-					V4:          true,
-					Ipv4Address: smContext.PDUAddress.To4(),
-				},
+		if curDataPathNode.DownLinkTunnel != nil {
+			if curDataPathNode.DownLinkTunnel.SrcEndPoint == nil {
+				DNDLPDR := curDataPathNode.DownLinkTunnel.MatchedPDR
+				DNDLPDR.PDI = PDI{
+					SourceInterface: pfcpType.SourceInterface{InterfaceValue: pfcpType.SourceInterfaceCore},
+					NetworkInstance: util_3gpp.Dnn(smContext.Dnn),
+					UEIPAddress: &pfcpType.UEIPAddress{
+						V4:          true,
+						Ipv4Address: smContext.PDUAddress.To4(),
+					},
+				}
+				break
 			}
-			break
 		}
 
+		if curDataPathNode.DownLinkTunnel == nil {
+			break
+		}
 		curDataPathNode = curDataPathNode.DownLinkTunnel.SrcEndPoint
 	}
 
