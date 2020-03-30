@@ -124,7 +124,7 @@ func InitSmfContext(config *factory.Config) {
 
 	processUPTopology(&configuration.UserPlaneInformation)
 
-	SetupNFProfile()
+	SetupNFProfile(config)
 }
 
 func InitSMFUERouting(routingConfig *factory.RoutingConfig) {

@@ -3,6 +3,8 @@ package smf_context
 import (
 	"fmt"
 	"gofree5gc/lib/openapi/models"
+	"gofree5gc/src/smf/factory"
+	"gofree5gc/src/smf/logger"
 	"time"
 )
 
@@ -12,7 +14,7 @@ var NfServiceVersion *[]models.NfServiceVersion
 
 var SmfInfo *models.SmfInfo
 
-func SetupNFProfile() {
+func SetupNFProfile(config *factory.Config) {
 	//Set time
 	date := time.Now()
 	dateFormat, _ := time.Parse(time.RFC3339, date.Format(time.RFC3339))
@@ -27,15 +29,17 @@ func SetupNFProfile() {
 	}
 
 	//set NFServices
-	NFServices = &[]models.NfService{
-		{
-			ServiceInstanceId: SMF_Self().NfInstanceID + "nsmf-pdusession",
-			ServiceName:       models.ServiceName_NSMF_PDUSESSION,
+	NFServices = new([]models.NfService)
+	for _, serviceName := range config.Configuration.ServiceNameList {
+		logger.InitLog.Errorf("service Name: %+v", serviceName)
+		*NFServices = append(*NFServices, models.NfService{
+			ServiceInstanceId: SMF_Self().NfInstanceID + serviceName,
+			ServiceName:       models.ServiceName(serviceName),
 			Versions:          NfServiceVersion,
 			Scheme:            models.UriScheme_HTTPS,
 			NfServiceStatus:   models.NfServiceStatus_REGISTERED,
 			ApiPrefix:         fmt.Sprintf("%s://%s:%d", SMF_Self().URIScheme, SMF_Self().HTTPAddress, SMF_Self().HTTPPort),
-		},
+		})
 	}
 
 	//set smfInfo
