@@ -322,7 +322,8 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 			logger.PfcpLog.Warnf("PFCP Session Report Request DownlinkDataServiceInformation handling is not implemented")
 		}
 
-		if smContext.Tunnel.DLPDR.PDRID == pdrID {
+		DLPDR := smContext.Tunnel.UpfRoot.DownLinkTunnel.MatchedPDR
+		if DLPDR.PDRID == pdrID {
 			// TS 23.502 4.2.3.3 2b. Send Data Notification Ack, SMF->UPF
 			cause.CauseValue = pfcpType.CauseRequestAccepted
 			// TODO fix: SEID should be the value sent by UPF but now the SEID value is from sm context

@@ -315,6 +315,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		farList = []*smf_context.FAR{DLPDR.FAR}
 
 	case models.N2SmInfoType_PATH_SWITCH_REQ:
+		DLPDR := tunnel.UpfRoot.DownLinkTunnel.MatchedPDR
 		err = smf_context.HandlePathSwitchRequestTransfer(body.BinaryDataN2SmInformation, smContext)
 		n2Buf, err := smf_context.BuildPathSwitchRequestAcknowledgeTransfer(smContext)
 		if err != nil {
@@ -327,8 +328,8 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			ContentId: "PATH_SWITCH_REQ_ACK",
 		}
 
-		pdrList = []*smf_context.PDR{tunnel.DLPDR}
-		farList = []*smf_context.FAR{tunnel.DLPDR.FAR}
+		pdrList = []*smf_context.PDR{DLPDR}
+		farList = []*smf_context.FAR{DLPDR.FAR}
 
 	case models.N2SmInfoType_PATH_SWITCH_SETUP_FAIL:
 		err = smf_context.HandlePathSwitchRequestSetupFailedTransfer(body.BinaryDataN2SmInformation, smContext)
