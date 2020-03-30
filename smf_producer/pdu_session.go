@@ -125,23 +125,24 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
 	dataPathRoot = smf_context.GenerateDataPath(defaultUPPath, smContext)
 	smContext.Tunnel.UpfRoot = dataPathRoot
-	if smf_context.CheckUEHasPreConfig(createData.Supi) {
-		logger.PduSessLog.Infof("SUPI[%s] has pre-config route", createData.Supi)
-		ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
-		dataPathRoot = ueRoutingGraph.GetGraphRoot()
-		smContext.Tunnel.ULCLRoot = dataPathRoot
-		psaPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
+	// if smf_context.CheckUEHasPreConfig(createData.Supi) {
+	// 	logger.PduSessLog.Infof("SUPI[%s] has pre-config route", createData.Supi)
+	// 	ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
+	// 	dataPathRoot = ueRoutingGraph.GetGraphRoot()
+	// 	smContext.Tunnel.ULCLRoot = dataPathRoot
+	// 	psaPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
 
-		err := dataPathRoot.EnableUserPlanePath(psaPath)
-		if err != nil {
-			logger.PduSessLog.Error(err)
-			return
-		}
+	// 	err := dataPathRoot.EnableUserPlanePath(psaPath)
+	// 	if err != nil {
+	// 		logger.PduSessLog.Error(err)
+	// 		return
+	// 	}
 
-		smContext.BPManager = smf_context.NewBPManager(createData.Supi)
-		smContext.BPManager.SetPSAStatus(psaPath)
-		smContext.BPManager.PSA1Path = psaPath
-	}
+	// 	smContext.BPManager = smf_context.NewBPManager(createData.Supi)
+	// 	smContext.BPManager.SetPSAStatus(psaPath)
+	// 	smContext.BPManager.PSA1Path = psaPath
+	// 	SetUpUplinkUserPlane(smContext.Tunnel.ULCLRoot, smContext)
+	// }
 
 	if dataPathRoot == nil {
 		logger.PduSessLog.Errorf("Path for serve DNN[%s] not found\n", createData.Dnn)
@@ -172,7 +173,6 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	// TODO: UECM registration
 
 	SendPFCPRule(smContext, smContext.Tunnel.UpfRoot)
-	SetUpUplinkUserPlane(smContext.Tunnel.ULCLRoot, smContext)
 
 	smf_consumer.SendNFDiscoveryServingAMF(smContext)
 
@@ -267,22 +267,17 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		smContext.UeLocation = body.JsonData.UeLocation
 		// TODO: Deactivate N2 downlink tunnel
 		//Set FAR and An, N3 Release Info
-		if tunnel.DLPDR == nil {
+		DLPDR := tunnel.UpfRoot.DownLinkTunnel.MatchedPDR
+		if DLPDR == nil {
 			logger.PduSessLog.Errorf("Release Error")
 		} else {
-			tunnel.DLPDR.FAR.State = smf_context.RULE_UPDATE
-			tunnel.DLPDR.FAR.ApplyAction.Forw = false
-			tunnel.DLPDR.FAR.ApplyAction.Buff = true
-			tunnel.DLPDR.FAR.ApplyAction.Nocp = true
-
-			if tunnel.DLPDR.FAR.BAR == nil {
-				tunnel.DLPDR.FAR.BAR, _ = smContext.Tunnel.Node.AddBAR()
-				barList = []*smf_context.BAR{tunnel.DLPDR.FAR.BAR}
-			}
-
+			DLPDR.FAR.State = smf_context.RULE_UPDATE
+			DLPDR.FAR.ApplyAction.Forw = false
+			DLPDR.FAR.ApplyAction.Buff = true
+			DLPDR.FAR.ApplyAction.Nocp = true
 		}
 
-		farList = []*smf_context.FAR{tunnel.DLPDR.FAR}
+		farList = []*smf_context.FAR{DLPDR.FAR}
 	}
 
 	var err error

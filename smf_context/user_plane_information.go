@@ -193,6 +193,7 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 		case lowerBound:
 			root = curDataPathNode
 			root.DataPathToAN = NewDataPathDownLink()
+			root.SetUpLinkSrcNode(nil)
 
 		case upperBound:
 			curDataPathNode.SetDownLinkSrcNode(nil)
@@ -206,7 +207,6 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 		}
 		prevDataPathNode = curDataPathNode
 	}
-	root.SetUpLinkSrcNode(nil)
 
 	curDataPathNode = root
 	for curDataPathNode != nil {
