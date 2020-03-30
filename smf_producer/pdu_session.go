@@ -300,7 +300,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			},
 		}
 
-		DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: true}
+		DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
 		DLPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
 			DestinationInterface: pfcpType.DestinationInterface{
 				InterfaceValue: pfcpType.DestinationInterfaceAccess,
