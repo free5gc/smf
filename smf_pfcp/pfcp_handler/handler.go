@@ -142,7 +142,7 @@ func HandlePfcpSessionEstablishmentResponse(msg *pfcpUdp.Message) {
 		smContext.RemoteSEID = UPFSEID.Seid
 	}
 
-	if rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
+	if rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted && smContext.Tunnel.UpfRoot.UPF.NodeID.ResolveNodeIdToIp().Equal(rsp.NodeID.ResolveNodeIdToIp()) {
 		smNasBuf, _ := smf_context.BuildGSMPDUSessionEstablishmentAccept(smContext)
 		n2Pdu, _ := smf_context.BuildPDUSessionResourceSetupRequestTransfer(smContext)
 		n1n2Request := models.N1N2MessageTransferRequest{}

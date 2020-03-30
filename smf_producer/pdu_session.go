@@ -435,6 +435,7 @@ func SendPFCPRule(smContext *smf_context.SMContext, root *smf_context.DataPathNo
 			}
 
 			pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(curDataPathNode.UPF.PFCPAddr(), smContext, pdrList, farList, nil)
+			curDataPathNode.HaveSession = true
 		} else {
 			if curDataPathNode.UpLinkTunnel != nil && curDataPathNode.UpLinkTunnel.MatchedPDR != nil {
 				pdrList = append(pdrList, curDataPathNode.UpLinkTunnel.MatchedPDR)
@@ -450,6 +451,6 @@ func SendPFCPRule(smContext *smf_context.SMContext, root *smf_context.DataPathNo
 		if curDataPathNode.DownLinkTunnel == nil {
 			break
 		}
-		curDataPathNode = curDataPathNode.DownLinkTunnel.DestEndPoint
+		curDataPathNode = curDataPathNode.DownLinkTunnel.SrcEndPoint
 	}
 }

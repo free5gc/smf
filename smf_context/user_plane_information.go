@@ -221,11 +221,15 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 
 			ULPDR.Precedence = 32
 			ULPDR.PDI = PDI{
-				SourceInterface: pfcpType.SourceInterface{InterfaceValue: pfcpType.SourceInterfaceCore},
+				SourceInterface: pfcpType.SourceInterface{InterfaceValue: pfcpType.SourceInterfaceAccess},
 				LocalFTeid: &pfcpType.FTEID{
 					V4:          true,
 					Ipv4Address: ULDestUPF.UPIPInfo.Ipv4Address,
 					Teid:        curULTunnel.TEID,
+				},
+				UEIPAddress: &pfcpType.UEIPAddress{
+					V4:          true,
+					Ipv4Address: smContext.PDUAddress.To4(),
 				},
 			}
 			ULPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4}
@@ -259,6 +263,10 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 					V4:          true,
 					Ipv4Address: DLDestUPF.UPIPInfo.Ipv4Address,
 					Teid:        curDLTunnel.TEID,
+				},
+				UEIPAddress: &pfcpType.UEIPAddress{
+					V4:          true,
+					Ipv4Address: smContext.PDUAddress.To4(),
 				},
 			}
 			DLPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4}
