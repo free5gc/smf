@@ -155,7 +155,8 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 		graph, err := NewUEDataPathGraph(supi)
 
 		if err != nil {
-			logger.CtxLog.Errorln(err)
+			logger.CtxLog.Warnln(err)
+			continue
 		}
 
 		smfContext.UERoutingGraphs[supi] = graph
