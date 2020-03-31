@@ -238,7 +238,7 @@ func SendPfcpSessionDeletionRequest(addr *net.UDPAddr, ctx *smf_context.SMContex
 			S:               pfcp.SEID_PRESENT,
 			MessageType:     pfcp.PFCP_SESSION_DELETION_REQUEST,
 			SEID:            ctx.RemoteSEID,
-			SequenceNumber:  getSeqNumber(),
+			SequenceNumber:  seqNum,
 			MessagePriority: 12,
 		},
 		Body: pfcpMsg,
