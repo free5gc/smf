@@ -274,12 +274,14 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 			nextDLTunnel := curDLTunnel.DestEndPoint.DownLinkTunnel
 
 			if nextDLDest := curULTunnel.SrcEndPoint; nextDLDest != nil {
+				fmt.Println("In GenerateDataPath")
+				fmt.Println(nextDLDest.GetNodeIP())
 				DLFAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
 				DLFAR.ForwardingParameters = &ForwardingParameters{
 					DestinationInterface: pfcpType.DestinationInterface{InterfaceValue: pfcpType.DestinationInterfaceAccess},
 					OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
 						OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
-						Ipv4Address:                    nextDLTunnel.DestEndPoint.UPF.UPIPInfo.Ipv4Address,
+						Ipv4Address:                    nextDLDest.UPF.NodeID.ResolveNodeIdToIp(),
 						Teid:                           nextDLTunnel.TEID,
 					},
 				}

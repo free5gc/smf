@@ -192,6 +192,7 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 	}
 
 	logger.PduSessLog.Traceln("ULCL is : ", bpMGR.ULCLDataPathNode.UPF.GetUPFIP())
+	fmt.Println("ULCL is : ", bpMGR.ULCLDataPathNode.UPF.GetUPFIP())
 	bpMGR.ULCLDataPathNode.IsBranchingPoint = true
 
 	ulclIdx := bpMGR.ULCLIdx

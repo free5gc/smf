@@ -208,6 +208,7 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 
 		}
 
+		//DownLinkForPSA1 = ulcl.DataPathToDN[psa1NodeAfterUlcl.UPF.GetUPFID()]
 		DownLinkForPSA2 = ulcl.DataPathToDN[psa2NodeAfterUlcl.UPF.GetUPFID()]
 
 		DownLinkForPSA2.DownLinkPDR, err = ulcl.UPF.AddPDR()
@@ -252,10 +253,14 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 		//Delete this after finishing new downlinking userplane
 		//Todo:
 		//Uncommemt after finishing new downlinking userplane
-		//DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
-		//DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-		// DownLinkFarFoDPSA2.ForwardingParameters.OuterHeaderCreation.Teid = DownLinkForPSA1.PDR.PDI.LocalFTeid.Teid
-		// DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation.Ipv4Address = DownLinkForPSA1.PDR.FAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address
+		DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
+		DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+		fmt.Println("In EstablishULCL")
+		fmt.Println(ulcl)
+		//TODO: Change this workaround after release 3.0
+		workAroundULCL := smContext.Tunnel.UpfRoot
+		DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation.Teid = workAroundULCL.DownLinkTunnel.MatchedPDR.FAR.ForwardingParameters.OuterHeaderCreation.Teid
+		DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation.Ipv4Address = workAroundULCL.DownLinkTunnel.MatchedPDR.FAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address //DownLinkForPSA1.DownLinkPDR.FAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address
 
 		// addr := net.UDPAddr{
 		// 	IP:   ulcl.Next[psa1NodeAfterUlcl.UPF.GetUPFID()].To.UPF.NodeID.NodeIdValue,
