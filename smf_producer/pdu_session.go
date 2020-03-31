@@ -233,12 +233,14 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			if err != nil {
 				logger.PduSessLog.Error(err)
 			}
-			addr := net.UDPAddr{
-				IP:   smContext.Tunnel.Node.NodeID.NodeIdValue,
-				Port: pfcpUdp.PFCP_PORT,
+
+			curDataPathNode := smContext.Tunnel.UpfRoot
+
+			for curDataPathNode != nil {
+				pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.PFCPAddr(), smContext)
+				curDataPathNode = curDataPathNode.DownLinkTunnel.SrcEndPoint
 			}
 
-			seqNum = pfcp_message.SendPfcpSessionDeletionRequest(&addr, smContext)
 			return seqNum, response
 		}
 
