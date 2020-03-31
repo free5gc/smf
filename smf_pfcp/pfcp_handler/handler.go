@@ -9,7 +9,6 @@ import (
 	"gofree5gc/lib/pfcp/pfcpType"
 	"gofree5gc/lib/pfcp/pfcpUdp"
 	"gofree5gc/src/smf/logger"
-	"gofree5gc/src/smf/smf_consumer"
 	"gofree5gc/src/smf/smf_context"
 	"gofree5gc/src/smf/smf_handler/smf_message"
 	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
@@ -258,9 +257,6 @@ func HandlePfcpSessionDeletionResponse(msg *pfcpUdp.Message) {
 
 				resQueueItem.RspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &resQueueItem.Response}
 				HttpResponseQueue.DeleteItem(seqNum)
-				// Send Release Notify to AMF
-				smf_consumer.SendSMContextStatusNotification(smContext.SmStatusNotifyUri)
-				smf_context.RemoveSMContext(smContext.Ref)
 				logger.PfcpLog.Infof("PFCP Session Deletion Success[%d]\n", SEID)
 				return
 
