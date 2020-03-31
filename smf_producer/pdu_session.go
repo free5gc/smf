@@ -237,7 +237,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			curDataPathNode := smContext.Tunnel.UpfRoot
 
 			for curDataPathNode != nil {
-				pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.PFCPAddr(), smContext)
+				seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.PFCPAddr(), smContext)
 				curDataPathNode = curDataPathNode.DownLinkTunnel.SrcEndPoint
 			}
 
