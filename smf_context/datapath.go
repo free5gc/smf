@@ -2,6 +2,7 @@ package smf_context
 
 import (
 	"fmt"
+	"gofree5gc/src/smf/logger"
 )
 
 // GTPTunnel represents the GTP tunnel information
@@ -129,7 +130,10 @@ func (node *DataPathNode) SetUpLinkSrcNode(nextUpLinkNode *DataPathNode) (err er
 	node.UpLinkTunnel.DestEndPoint = node
 
 	destUPF := node.UPF
-	node.UpLinkTunnel.MatchedPDR, _ = destUPF.AddPDR()
+	node.UpLinkTunnel.MatchedPDR, err = destUPF.AddPDR()
+	if err != nil {
+		logger.CtxLog.Errorln("allocate UpLinkTunnel.MatchedPDR", err)
+	}
 
 	teid, _ := destUPF.GenerateTEID()
 	node.UpLinkTunnel.TEID = teid
@@ -143,7 +147,10 @@ func (node *DataPathNode) SetDownLinkSrcNode(nextDownLinkNode *DataPathNode) (er
 	node.DownLinkTunnel.DestEndPoint = node
 
 	destUPF := node.UPF
-	node.DownLinkTunnel.MatchedPDR, _ = destUPF.AddPDR()
+	node.DownLinkTunnel.MatchedPDR, err = destUPF.AddPDR()
+	if err != nil {
+		logger.CtxLog.Errorln("allocate DownLinkTunnel.MatchedPDR", err)
+	}
 
 	teid, _ := destUPF.GenerateTEID()
 	node.DownLinkTunnel.TEID = teid
