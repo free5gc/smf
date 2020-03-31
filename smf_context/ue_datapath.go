@@ -229,7 +229,6 @@ func (uepg *UEDataPathGraph) FindBranchingPoints() {
 }
 
 func (uepg *UEDataPathGraph) GetGraphRoot() *DataPathNode {
-
 	return uepg.Graph[0]
 }
 

@@ -125,7 +125,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
 	dataPathRoot = smf_context.GenerateDataPath(defaultUPPath, smContext)
 	smContext.Tunnel.UpfRoot = dataPathRoot
-	if smf_context.CheckUEHasPreConfig(createData.Supi) {
+	if smf_context.SMF_Self().ULCLSupport && smf_context.CheckUEHasPreConfig(createData.Supi) {
 		logger.PduSessLog.Infof("SUPI[%s] has pre-config route", createData.Supi)
 		ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
 		dataPathRoot = ueRoutingGraph.GetGraphRoot()

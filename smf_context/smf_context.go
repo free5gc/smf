@@ -50,6 +50,7 @@ type SMFContext struct {
 
 	UserPlaneInformation UserPlaneInformation
 	//*** For ULCL ** //
+	ULCLSupport     bool
 	UERoutingPaths  map[string][]factory.Path
 	UERoutingGraphs map[string]*UEDataPathGraph
 }
@@ -121,6 +122,8 @@ func InitSmfContext(config *factory.Config) {
 	NFDiscovryConfig := Nnrf_NFDiscovery.NewConfiguration()
 	NFDiscovryConfig.SetBasePath(SMF_Self().NrfUri)
 	smfContext.NFDiscoveryClient = Nnrf_NFDiscovery.NewAPIClient(NFDiscovryConfig)
+
+	smfContext.ULCLSupport = configuration.ULCL
 
 	processUPTopology(&configuration.UserPlaneInformation)
 

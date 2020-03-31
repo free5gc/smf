@@ -18,4 +18,6 @@ type Configuration struct {
 	UESubnet string `yaml:"ue_subnet"`
 
 	ServiceNameList []string `yaml:"serviceNameList,omitempty"`
+
+	ULCL bool `yaml:"ulcl,omitempty"`
 }
