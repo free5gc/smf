@@ -195,9 +195,9 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 		}
 		if idx == upperBound {
 			curDataPathNode.SetDownLinkSrcNode(nil)
-			curDataPathNode.AddParent(prevDataPathNode)
+			// curDataPathNode.AddParent(prevDataPathNode)
 			curDataPathNode.DLDataPathLinkForPSA = NewDataPathUpLink()
-			prevDataPathNode.AddChild(curDataPathNode)
+			// prevDataPathNode.AddChild(curDataPathNode)
 		}
 		if prevDataPathNode != nil {
 			prevDataPathNode.SetDownLinkSrcNode(curDataPathNode)
