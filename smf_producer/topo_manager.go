@@ -418,9 +418,11 @@ func SetUPPSA2Path(smContext *smf_context.SMContext, psa2_path_after_ulcl []*smf
 			},
 		}
 
-		downLink.DownLinkPDR.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
-		downLink.DownLinkPDR.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
-		downLink.DownLinkPDR.State = smf_context.RULE_INITIAL
+		if !curDataPathNode.IsAnchorUPF() {
+			downLink.DownLinkPDR.OuterHeaderRemoval = new(pfcpType.OuterHeaderRemoval)
+			downLink.DownLinkPDR.OuterHeaderRemoval.OuterHeaderRemovalDescription = pfcpType.OuterHeaderRemovalGtpUUdpIpv4
+			downLink.DownLinkPDR.State = smf_context.RULE_INITIAL
+		}
 
 		downLink.DownLinkPDR.FAR.ApplyAction.Forw = true
 		downLink.DownLinkPDR.FAR.State = smf_context.RULE_INITIAL

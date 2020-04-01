@@ -195,11 +195,16 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 		}
 		if idx == upperBound {
 			curDataPathNode.SetDownLinkSrcNode(nil)
+			curDataPathNode.AddParent(prevDataPathNode)
 			curDataPathNode.DLDataPathLinkForPSA = NewDataPathUpLink()
+			prevDataPathNode.AddChild(curDataPathNode)
 		}
 		if prevDataPathNode != nil {
 			prevDataPathNode.SetDownLinkSrcNode(curDataPathNode)
 			curDataPathNode.SetUpLinkSrcNode(prevDataPathNode)
+
+			curDataPathNode.AddParent(prevDataPathNode)
+			prevDataPathNode.AddChild(curDataPathNode)
 		}
 		prevDataPathNode = curDataPathNode
 	}
@@ -267,11 +272,21 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 					Ipv4Address: smContext.PDUAddress.To4(),
 				},
 			}
-			DLPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4}
+
+			fmt.Println("In GenerateDataPath")
+			fmt.Println("curDataPathNode IP: ", curDataPathNode.GetNodeIP())
+			fmt.Println("Is anchor point: ", curDataPathNode.IsAnchorUPF())
+
+			if !curDataPathNode.IsAnchorUPF() {
+				DLPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4}
+			}
 
 			DLFAR := DLPDR.FAR
 
 			nextDLTunnel := curDLTunnel.DestEndPoint.DownLinkTunnel
+			fmt.Println("DestEndPoint TEID", nextDLTunnel.TEID)
+			fmt.Println("SrcEndPoint TEID", curDLTunnel.DestEndPoint.UpLinkTunnel.TEID)
+			//fmt.Println("SrcEndPoint IP", curDLTunnel.DestEndPoint.UpLinkTunnel.SrcEndPoint.GetNodeIP())
 
 			if nextDLDest := curULTunnel.SrcEndPoint; nextDLDest != nil {
 				fmt.Println("In GenerateDataPath")
@@ -282,7 +297,7 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 					OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
 						OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
 						Ipv4Address:                    nextDLDest.UPF.NodeID.ResolveNodeIdToIp(),
-						Teid:                           nextDLTunnel.TEID,
+						Teid:                           curDLTunnel.DestEndPoint.UpLinkTunnel.TEID,
 					},
 				}
 			}

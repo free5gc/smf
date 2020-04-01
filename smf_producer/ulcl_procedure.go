@@ -157,12 +157,12 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 		UpLinkFARForPSA2.ForwardingParameters.OuterHeaderCreation.Ipv4Address = psa2NodeAfterUlcl.UPF.UPIPInfo.Ipv4Address
 
 		UpLinkForPSA1.UpLinkPDR.State = smf_context.RULE_UPDATE
-		UpLinkFARForPSA1 := UpLinkForPSA1.UpLinkPDR.FAR
-		UpLinkFARForPSA1.State = smf_context.RULE_UPDATE
-		UpLinkFARForPSA1.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
-		UpLinkFARForPSA1.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-		UpLinkFARForPSA1.ForwardingParameters.OuterHeaderCreation.Teid = psa1NodeAfterUlcl.GetUpLinkPDR().PDI.LocalFTeid.Teid
-		UpLinkFARForPSA1.ForwardingParameters.OuterHeaderCreation.Ipv4Address = psa1NodeAfterUlcl.UPF.UPIPInfo.Ipv4Address
+		// UpLinkFARForPSA1 := UpLinkForPSA1.UpLinkPDR.FAR
+		// UpLinkFARForPSA1.State = smf_context.RULE_UPDATE
+		// UpLinkFARForPSA1.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
+		// UpLinkFARForPSA1.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+		// UpLinkFARForPSA1.ForwardingParameters.OuterHeaderCreation.Teid = psa1NodeAfterUlcl.GetUpLinkPDR().PDI.LocalFTeid.Teid
+		// UpLinkFARForPSA1.ForwardingParameters.OuterHeaderCreation.Ipv4Address = psa1NodeAfterUlcl.UPF.UPIPInfo.Ipv4Address
 
 		ulcl.BPUpLinkPDRs[psa2NodeAfterUlcl.UPF.GetUPFID()] = UpLinkForPSA2
 		upLinks := []*smf_context.DataPathDownLink{UpLinkForPSA1, UpLinkForPSA2}
@@ -206,6 +206,7 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 				FlowDescription:         []byte(FlowDespcriptionStr),
 			}
 
+			link.UpLinkPDR.Precedence = 30
 		}
 
 		//DownLinkForPSA1 = ulcl.DataPathToDN[psa1NodeAfterUlcl.UPF.GetUPFID()]
@@ -271,7 +272,7 @@ func EstablishULCL(smContext *smf_context.SMContext) {
 			Port: pfcpUdp.PFCP_PORT,
 		}
 		pdrList := []*smf_context.PDR{UpLinkForPSA1.UpLinkPDR, UpLinkForPSA2.UpLinkPDR, DownLinkForPSA2.DownLinkPDR}
-		farList := []*smf_context.FAR{UpLinkForPSA1.UpLinkPDR.FAR, UpLinkForPSA2.UpLinkPDR.FAR, DownLinkForPSA2.DownLinkPDR.FAR}
+		farList := []*smf_context.FAR{UpLinkForPSA2.UpLinkPDR.FAR, DownLinkForPSA2.DownLinkPDR.FAR}
 		barList := []*smf_context.BAR{}
 
 		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
