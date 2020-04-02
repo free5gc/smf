@@ -98,7 +98,7 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) (buf []byte, er
 func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) (buf []byte, err error) {
 	var UpNode = ctx.Tunnel.UpfRoot.UPF
 	var teidOct = make([]byte, 4)
-	binary.BigEndian.PutUint32(teidOct, ctx.Tunnel.ULTEID)
+	binary.BigEndian.PutUint32(teidOct, ctx.Tunnel.UpfRoot.UpLinkTunnel.TEID)
 
 	pathSwitchRequestAcknowledgeTransfer := ngapType.PathSwitchRequestAcknowledgeTransfer{}
 
@@ -187,7 +187,7 @@ func BuildPDUSessionResourceReleaseCommandTransfer(ctx *SMContext) (buf []byte, 
 func BuildHandoverCommandTransfer(ctx *SMContext) (buf []byte, err error) {
 	var UpNode = ctx.Tunnel.UpfRoot.UPF
 	var teidOct = make([]byte, 4)
-	binary.BigEndian.PutUint32(teidOct, ctx.Tunnel.ULTEID)
+	binary.BigEndian.PutUint32(teidOct, ctx.Tunnel.UpfRoot.UpLinkTunnel.TEID)
 	handoverCommandTransfer := ngapType.HandoverCommandTransfer{}
 
 	handoverCommandTransfer.DLForwardingUPTNLInformation = new(ngapType.UPTransportLayerInformation)
