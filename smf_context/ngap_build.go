@@ -9,7 +9,7 @@ import (
 func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) (buf []byte, err error) {
 	var UpNode = ctx.Tunnel.UpfRoot.UPF
 	var teidOct = make([]byte, 4)
-	binary.BigEndian.PutUint32(teidOct, ctx.Tunnel.ULTEID)
+	binary.BigEndian.PutUint32(teidOct, ctx.Tunnel.UpfRoot.UpLinkTunnel.TEID)
 
 	resourceSetupRequestTransfer := ngapType.PDUSessionResourceSetupRequestTransfer{}
 
