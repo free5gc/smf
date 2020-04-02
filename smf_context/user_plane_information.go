@@ -267,10 +267,20 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 					Ipv4Address: DLDestUPF.UPIPInfo.Ipv4Address,
 					Teid:        curDLTunnel.TEID,
 				},
-				UEIPAddress: &pfcpType.UEIPAddress{
+
+				// TODO: Should Uncomment this after FR5GC-1029 is solved
+				// UEIPAddress: &pfcpType.UEIPAddress{
+				// 	V4:          true,
+				// 	Ipv4Address: smContext.PDUAddress.To4(),
+				// },
+			}
+
+			// TODO: Should delete this after FR5GC-1029 is solved
+			if curDataPathNode.IsAnchorUPF() {
+				DLPDR.PDI.UEIPAddress = &pfcpType.UEIPAddress{
 					V4:          true,
 					Ipv4Address: smContext.PDUAddress.To4(),
-				},
+				}
 			}
 
 			fmt.Println("In GenerateDataPath")

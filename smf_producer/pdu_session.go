@@ -303,10 +303,11 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 				InterfaceValue: pfcpType.SourceInterfaceSgiLanN6Lan,
 			},
 			NetworkInstance: []byte(smContext.Dnn),
-			UEIPAddress: &pfcpType.UEIPAddress{
-				V4:          true,
-				Ipv4Address: smContext.PDUAddress.To4(),
-			},
+			// TODO: Should Uncomment this after FR5GC-1029 is solved
+			// UEIPAddress: &pfcpType.UEIPAddress{
+			// 	V4:          true,
+			// 	Ipv4Address: smContext.PDUAddress.To4(),
+			// },
 		}
 
 		DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
