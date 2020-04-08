@@ -42,15 +42,6 @@ func SetupNFProfile(config *factory.Config) {
 
 	//set smfInfo
 	SmfInfo = &models.SmfInfo{
-		SNssaiSmfInfoList: &[]models.SnssaiSmfInfoItem{
-			{
-				SNssai: &models.Snssai{},
-				DnnSmfInfoList: &[]models.DnnSmfInfoItem{
-					{
-						Dnn: "internet",
-					},
-				},
-			},
-		},
+		SNssaiSmfInfoList: &smfContext.SnssaiInfos,
 	}
 }

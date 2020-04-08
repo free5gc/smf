@@ -30,10 +30,11 @@ type SMFContext struct {
 	URIScheme   models.UriScheme
 	HTTPAddress string
 	HTTPPort    int
-
-	CPNodeID pfcpType.NodeID
+	CPNodeID    pfcpType.NodeID
 
 	UDMProfile models.NfProfile
+
+	SnssaiInfos []models.SnssaiSmfInfoItem
 
 	UPNodeIDs []pfcpType.NodeID
 	Key       string
@@ -124,6 +125,8 @@ func InitSmfContext(config *factory.Config) {
 	smfContext.NFDiscoveryClient = Nnrf_NFDiscovery.NewAPIClient(NFDiscovryConfig)
 
 	smfContext.ULCLSupport = configuration.ULCL
+
+	smfContext.SnssaiInfos = configuration.SNssaiInfo
 
 	processUPTopology(&configuration.UserPlaneInformation)
 
