@@ -4,6 +4,8 @@
 
 package factory
 
+import "gofree5gc/lib/openapi/models"
+
 type Configuration struct {
 	SmfName string `yaml:"smfName,omitempty"`
 
@@ -18,6 +20,8 @@ type Configuration struct {
 	UESubnet string `yaml:"ue_subnet"`
 
 	ServiceNameList []string `yaml:"serviceNameList,omitempty"`
+
+	SNssaiInfo []models.SnssaiSmfInfoItem `yaml:"snssai_info,omitempty"`
 
 	ULCL bool `yaml:"ulcl,omitempty"`
 }
