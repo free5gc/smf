@@ -29,10 +29,6 @@ type UPTunnel struct {
 	ULCLRoot *DataPathNode
 }
 
-// type NewUPTunnel struct {
-// 	UpfRoot *DataPathNode
-// }
-
 type UPFStatus int
 
 const (

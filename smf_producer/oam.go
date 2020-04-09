@@ -21,7 +21,7 @@ type PDUSessionInfo struct {
 	PDUAddress   string
 	SessionRule  models.SessionRule
 	UpCnxState   models.UpCnxState
-	Tunnel       *smf_context.UPTunnel
+	Tunnel       smf_context.UPTunnel
 }
 
 func HandleOAMGetUEPDUSessionInfo(rspChan chan smf_message.HandlerResponseMessage, smContextRef string) {
@@ -53,7 +53,10 @@ func HandleOAMGetUEPDUSessionInfo(rspChan chan smf_message.HandlerResponseMessag
 				PDUAddress:   smContext.PDUAddress.String(),
 				SessionRule:  smContext.SessionRule,
 				UpCnxState:   smContext.UpCnxState,
-				Tunnel:       smContext.Tunnel,
+				Tunnel: smf_context.UPTunnel{
+					//UpfRoot:  smContext.Tunnel.UpfRoot,
+					ULCLRoot: smContext.Tunnel.ULCLRoot,
+				},
 			},
 		},
 	}
