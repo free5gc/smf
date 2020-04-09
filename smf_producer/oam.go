@@ -54,7 +54,7 @@ func HandleOAMGetUEPDUSessionInfo(rspChan chan smf_message.HandlerResponseMessag
 				SessionRule:  smContext.SessionRule,
 				UpCnxState:   smContext.UpCnxState,
 				Tunnel: smf_context.UPTunnel{
-					UpfRoot:  smContext.Tunnel.UpfRoot,
+					//UpfRoot:  smContext.Tunnel.UpfRoot,
 					ULCLRoot: smContext.Tunnel.ULCLRoot,
 				},
 			},
