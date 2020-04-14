@@ -403,6 +403,12 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		response.JsonData.HoState = models.HoState_COMPLETED
 	}
 
+	switch smContextUpdateData.Cause {
+
+	case models.Cause_REL_DUE_TO_DUPLICATE_SESSION_ID:
+		//* release PDU Session Here
+	}
+
 	if err != nil {
 		logger.PduSessLog.Error(err)
 	}
