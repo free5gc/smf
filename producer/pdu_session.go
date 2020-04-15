@@ -407,6 +407,24 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 
 	case models.Cause_REL_DUE_TO_DUPLICATE_SESSION_ID:
 		//* release PDU Session Here
+
+		response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "PDUResourceReleaseCommand"}
+		response.JsonData.N2SmInfoType = models.N2SmInfoType_PDU_RES_REL_CMD
+
+		buf, err := smf_context.BuildPDUSessionResourceReleaseCommandTransfer(smContext)
+		response.BinaryDataN2SmInformation = buf
+		if err != nil {
+			logger.PduSessLog.Error(err)
+		}
+
+		curDataPathNode := smContext.Tunnel.UpfRoot
+
+		for curDataPathNode != nil {
+			seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.PFCPAddr(), smContext)
+			curDataPathNode = curDataPathNode.DownLinkTunnel.SrcEndPoint
+		}
+
+		return seqNum, response
 	}
 
 	if err != nil {
