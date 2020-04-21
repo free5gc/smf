@@ -9,7 +9,7 @@ import (
 	"gofree5gc/lib/pfcp/pfcpUdp"
 	"gofree5gc/src/app"
 	"gofree5gc/src/smf/EventExposure"
-	"gofree5gc/src/smf/OAM"
+	Nsmf_OAM "gofree5gc/src/smf/OAM"
 	"gofree5gc/src/smf/PDUSession"
 	"gofree5gc/src/smf/factory"
 	"gofree5gc/src/smf/logger"
@@ -20,8 +20,11 @@ import (
 	"gofree5gc/src/smf/smf_pfcp/pfcp_udp"
 	"gofree5gc/src/smf/smf_util"
 	"net"
+	"os"
 	"os/exec"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -131,6 +134,14 @@ func (smf *SMF) Start() {
 		}
 	}
 
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-signalChannel
+		smf.Terminate()
+		os.Exit(0)
+	}()
+
 	Nsmf_OAM.AddService(router)
 	for _, serviceName := range factory.SmfConfig.Configuration.ServiceNameList {
 		switch models.ServiceName(serviceName) {
@@ -159,6 +170,19 @@ func (smf *SMF) Start() {
 	server, _ := http2_util.NewServer(HTTPAddr, smf_util.SmfLogPath, router)
 
 	initLog.Infoln(server.ListenAndServeTLS(smf_util.SmfPemPath, smf_util.SmfKeyPath))
+}
+
+func (smf *SMF) Terminate() {
+	logger.InitLog.Infof("Terminating SMF...")
+	// deregister with NRF
+	problemDetails, err := smf_consumer.SendDeregisterNFInstance()
+	if problemDetails != nil {
+		logger.InitLog.Errorf("Deregister NF instance Failed Problem[%+v]", problemDetails)
+	} else if err != nil {
+		logger.InitLog.Errorf("Deregister NF instance Error[%+v]", err)
+	} else {
+		logger.InitLog.Infof("Deregister from NRF successfully")
+	}
 }
 
 func (smf *SMF) Exec(c *cli.Context) error {
