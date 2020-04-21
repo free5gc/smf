@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gofree5gc/lib/Nnrf_NFDiscovery"
 	"gofree5gc/lib/Nudm_SubscriberDataManagement"
+	"gofree5gc/lib/openapi/common"
 	"gofree5gc/lib/openapi/models"
 	"gofree5gc/src/smf/logger"
 	"gofree5gc/src/smf/smf_context"
@@ -170,4 +171,27 @@ func SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) {
 	logger.AppLog.Info("SendNFDiscoveryServingAMF ok")
 	smContext.AMFProfile = deepcopy.Copy(rep.NfInstances[0]).(models.NfProfile)
 
+}
+
+func SendDeregisterNFInstance() (problemDetails *models.ProblemDetails, err error) {
+	logger.AppLog.Infof("Send Deregister NFInstance")
+
+	smfSelf := smf_context.SMF_Self()
+	// Set client and set url
+
+	var res *http.Response
+
+	res, err = smfSelf.NFManagementClient.NFInstanceIDDocumentApi.DeregisterNFInstance(context.Background(), smfSelf.NfInstanceID)
+	if err == nil {
+		return
+	} else if res != nil {
+		if res.Status != err.Error() {
+			return
+		}
+		problem := err.(common.GenericOpenAPIError).Model().(models.ProblemDetails)
+		problemDetails = &problem
+	} else {
+		err = common.ReportError("server no response")
+	}
+	return
 }
