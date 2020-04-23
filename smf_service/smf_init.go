@@ -16,7 +16,7 @@ import (
 	"free5gc/src/smf/logger"
 	"free5gc/src/smf/oam"
 	"free5gc/src/smf/pdusession"
-	"free5gc/src/smf/pfcp/pfcp_message"
+	"free5gc/src/smf/pfcp/message"
 	"free5gc/src/smf/pfcp/pfcp_udp"
 	"free5gc/src/smf/smf_util"
 	"net"
@@ -160,7 +160,7 @@ func (smf *SMF) Start() {
 		addr.Port = pfcpUdp.PFCP_PORT
 
 		logger.AppLog.Infof("Send PFCP Association Request to UPF[%s]\n", addr.String())
-		pfcp_message.SendPfcpAssociationSetupRequest(addr)
+		message.SendPfcpAssociationSetupRequest(addr)
 	}
 
 	time.Sleep(1000 * time.Millisecond)

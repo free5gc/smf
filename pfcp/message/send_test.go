@@ -1,4 +1,4 @@
-package pfcp_message_test
+package message_test
 
 import (
 	"free5gc/src/smf/context"
@@ -8,7 +8,7 @@ import (
 
 	// "free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/pfcp/pfcpUdp"
-	"free5gc/src/smf/pfcp/pfcp_message"
+	"free5gc/src/smf/pfcp/message"
 	"free5gc/src/smf/pfcp/pfcp_udp"
 )
 
@@ -36,17 +36,17 @@ func init() {
 }
 
 func TestSendPfcpAssociationSetupRequest(t *testing.T) {
-	pfcp_message.SendPfcpAssociationSetupRequest(testAddr)
+	message.SendPfcpAssociationSetupRequest(testAddr)
 	time.Sleep(1000 * time.Millisecond)
 }
 
 func TestSendPfcpSessionEstablishmentResponse(t *testing.T) {
-	pfcp_message.SendPfcpSessionEstablishmentResponse(testAddr)
+	message.SendPfcpSessionEstablishmentResponse(testAddr)
 	time.Sleep(1000 * time.Millisecond)
 }
 
 func TestSendPfcpSessionEstablishmentRequest(t *testing.T) {
-	pfcp_message.SendPfcpSessionEstablishmentRequest(testAddr, dummyContext)
+	message.SendPfcpSessionEstablishmentRequest(testAddr, dummyContext)
 	time.Sleep(time.Duration(testWaitingTime) * time.Millisecond)
 }
 
@@ -54,12 +54,12 @@ func TestSendPfcpSessionEstablishmentRequest(t *testing.T) {
 // 	cause := pfcpType.Cause{
 // 		CauseValue: pfcpType.CauseRequestAccepted,
 // 	}
-// 	pfcp_message.SendPfcpAssociationSetupResponse(testAddr, cause)
+// 	message.SendPfcpAssociationSetupResponse(testAddr, cause)
 // 	time.Sleep(1000 * time.Millisecond)
 // }
 
 // func TestSendPfcpAssociationReleaseRequest(t *testing.T) {
-// 	pfcp_message.SendPfcpAssociationReleaseRequest(testAddr)
+// 	message.SendPfcpAssociationReleaseRequest(testAddr)
 // 	time.Sleep(1000 * time.Millisecond)
 // }
 
@@ -67,31 +67,31 @@ func TestSendPfcpSessionEstablishmentRequest(t *testing.T) {
 // 	cause := pfcpType.Cause{
 // 		CauseValue: pfcpType.CauseRequestAccepted,
 // 	}
-// 	pfcp_message.SendPfcpAssociationReleaseResponse(testAddr, cause)
+// 	message.SendPfcpAssociationReleaseResponse(testAddr, cause)
 // 	time.Sleep(1000 * time.Millisecond)
 // }
 
 // func TestSendPfcpSessionEstablishmentResponse(t *testing.T) {
-// 	pfcp_message.SendPfcpSessionEstablishmentResponse(testAddr)
+// 	message.SendPfcpSessionEstablishmentResponse(testAddr)
 // 	time.Sleep(1000 * time.Millisecond)
 // }
 
 // func TestSendPfcpSessionModificationRequest(t *testing.T) {
-// 	pfcp_message.SendPfcpSessionModificationRequest(testAddr, nil, nil, nil, nil)
+// 	message.SendPfcpSessionModificationRequest(testAddr, nil, nil, nil, nil)
 // 	time.Sleep(1000 * time.Millisecond)
 // }
 
 // func TestSendPfcpSessionModificationResponse(t *testing.T) {
-// 	pfcp_message.SendPfcpSessionModificationResponse(testAddr)
+// 	message.SendPfcpSessionModificationResponse(testAddr)
 // 	time.Sleep(1000 * time.Millisecond)
 // }
 
 // func TestSendPfcpSessionDeletionRequest(t *testing.T) {
-// 	pfcp_message.SendPfcpSessionDeletionRequest(testAddr)
+// 	message.SendPfcpSessionDeletionRequest(testAddr)
 // 	time.Sleep(1000 * time.Millisecond)
 // }
 
 // func TestSendPfcpSessionDeletionResponse(t *testing.T) {
-// 	pfcp_message.SendPfcpSessionDeletionResponse(testAddr)
+// 	message.SendPfcpSessionDeletionResponse(testAddr)
 // 	time.Sleep(1000 * time.Millisecond)
 // }

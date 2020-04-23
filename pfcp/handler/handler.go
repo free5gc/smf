@@ -11,7 +11,7 @@ import (
 	smf_context "gofree5gc/src/smf/context"
 	smf_message "gofree5gc/src/smf/handler/message"
 	"gofree5gc/src/smf/logger"
-	"gofree5gc/src/smf/pfcp/pfcp_message"
+	pfcp_message "gofree5gc/src/smf/pfcp/message"
 	"gofree5gc/src/smf/smf_producer"
 	"net/http"
 )

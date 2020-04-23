@@ -19,7 +19,7 @@ import (
 	smf_context "free5gc/src/smf/context"
 	smf_message "free5gc/src/smf/handler/message"
 	"free5gc/src/smf/logger"
-	"free5gc/src/smf/pfcp/pfcp_message"
+	pfcp_message "free5gc/src/smf/pfcp/message"
 	"github.com/antihax/optional"
 	"net"
 	"net/http"

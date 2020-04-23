@@ -7,7 +7,7 @@ import (
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/smf/context"
 	"free5gc/src/smf/logger"
-	"free5gc/src/smf/pfcp/pfcp_message"
+	"free5gc/src/smf/pfcp/message"
 	"net"
 )
 
@@ -275,7 +275,7 @@ func EstablishULCL(smContext *context.SMContext) {
 		farList := []*context.FAR{UpLinkForPSA2.UpLinkPDR.FAR, DownLinkForPSA2.DownLinkPDR.FAR}
 		barList := []*context.BAR{}
 
-		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
+		message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
 		logger.PfcpLog.Info("[SMF] Establish ULCL msg has been send")
 	}
 }
@@ -329,7 +329,7 @@ func UpdatePSA2DownLink(smContext *context.SMContext) {
 		pdrList := []*context.PDR{}
 		barList := []*context.BAR{}
 
-		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
+		message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
 		logger.PfcpLog.Info("[SMF] Update PSA2 downlink msg has been send")
 	}
 }

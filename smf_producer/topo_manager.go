@@ -5,7 +5,7 @@ import (
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/smf/context"
 	"free5gc/src/smf/logger"
-	"free5gc/src/smf/pfcp/pfcp_message"
+	"free5gc/src/smf/pfcp/message"
 	"net"
 )
 
@@ -270,7 +270,7 @@ func SendUplinkPFCPRule(node *context.DataPathNode, smContext *context.SMContext
 	farList := []*context.FAR{upLink.UpLinkPDR.FAR}
 	barList := []*context.BAR{}
 
-	pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdrList, farList, barList)
+	message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdrList, farList, barList)
 
 	for _, upf_link := range node.DataPathToDN {
 
@@ -298,7 +298,7 @@ func SendDownLinkPFCPRule(node *context.DataPathNode, smContext *context.SMConte
 		pdrList := []*context.PDR{down_link.DownLinkPDR}
 		farList := []*context.FAR{down_link.DownLinkPDR.FAR}
 		barList := []*context.BAR{}
-		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
+		message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
 	}
 
 	if node.IsAnchorUPF() {
@@ -307,7 +307,7 @@ func SendDownLinkPFCPRule(node *context.DataPathNode, smContext *context.SMConte
 		pdrList := []*context.PDR{down_link.DownLinkPDR}
 		farList := []*context.FAR{down_link.DownLinkPDR.FAR}
 		barList := []*context.BAR{}
-		pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
+		message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
 	}
 
 	for _, upf_link := range node.DataPathToDN {
@@ -548,7 +548,7 @@ func SetUPPSA2Path(smContext *context.SMContext, psa2_path_after_ulcl []*context
 		farList := []*context.FAR{upLink.UpLinkPDR.FAR, downLink.DownLinkPDR.FAR}
 		barList := []*context.BAR{}
 
-		pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdrList, farList, barList)
+		message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdrList, farList, barList)
 	}
 
 }

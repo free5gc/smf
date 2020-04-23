@@ -1,4 +1,4 @@
-package pfcp_message
+package message
 
 import (
 	"net"
