@@ -2,7 +2,7 @@ package smf_context
 
 import (
 	"fmt"
-	"gofree5gc/src/smf/logger"
+	"free5gc/src/smf/logger"
 )
 
 type UEDataPathGraph struct {

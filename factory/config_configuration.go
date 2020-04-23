@@ -4,7 +4,7 @@
 
 package factory
 
-import "gofree5gc/lib/openapi/models"
+import "free5gc/lib/openapi/models"
 
 type Configuration struct {
 	SmfName string `yaml:"smfName,omitempty"`

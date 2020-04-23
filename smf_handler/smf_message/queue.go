@@ -1,7 +1,7 @@
 package smf_message
 
 import (
-	"gofree5gc/lib/http_wrapper"
+	"free5gc/lib/http_wrapper"
 )
 
 var RspQueue *ResponseQueue

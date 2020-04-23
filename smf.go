@@ -13,10 +13,10 @@ import (
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
-	"gofree5gc/src/app"
-	"gofree5gc/src/smf/logger"
-	"gofree5gc/src/smf/smf_service"
-	"gofree5gc/src/smf/version"
+	"free5gc/src/app"
+	"free5gc/src/smf/logger"
+	"free5gc/src/smf/smf_service"
+	"free5gc/src/smf/version"
 	"os"
 )
 

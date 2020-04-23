@@ -2,8 +2,8 @@ package smf_context_test
 
 import (
 	"fmt"
-	"gofree5gc/lib/pfcp/pfcpType"
-	"gofree5gc/src/smf/smf_context"
+	"free5gc/lib/pfcp/pfcpType"
+	"free5gc/src/smf/smf_context"
 	"testing"
 )
 

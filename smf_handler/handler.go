@@ -1,11 +1,11 @@
 package smf_handler
 
 import (
-	"gofree5gc/lib/http_wrapper"
-	"gofree5gc/lib/openapi/models"
-	"gofree5gc/src/smf/smf_handler/smf_message"
-	"gofree5gc/src/smf/smf_pfcp"
-	"gofree5gc/src/smf/smf_producer"
+	"free5gc/lib/http_wrapper"
+	"free5gc/lib/openapi/models"
+	"free5gc/src/smf/smf_handler/smf_message"
+	"free5gc/src/smf/smf_pfcp"
+	"free5gc/src/smf/smf_producer"
 	"net/http"
 	"time"
 )

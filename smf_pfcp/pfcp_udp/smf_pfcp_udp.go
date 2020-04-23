@@ -4,12 +4,12 @@ import (
 	"net"
 	"time"
 
-	"gofree5gc/lib/pfcp"
-	"gofree5gc/lib/pfcp/pfcpUdp"
-	"gofree5gc/src/smf/logger"
-	"gofree5gc/src/smf/smf_context"
-	"gofree5gc/src/smf/smf_handler/smf_message"
-	"gofree5gc/src/smf/smf_pfcp/pfcp_util"
+	"free5gc/lib/pfcp"
+	"free5gc/lib/pfcp/pfcpUdp"
+	"free5gc/src/smf/logger"
+	"free5gc/src/smf/smf_context"
+	"free5gc/src/smf/smf_handler/smf_message"
+	"free5gc/src/smf/smf_pfcp/pfcp_util"
 )
 
 const MaxPfcpUdpDataSize = 1024

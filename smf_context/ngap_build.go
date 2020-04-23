@@ -2,8 +2,8 @@ package smf_context
 
 import (
 	"encoding/binary"
-	"gofree5gc/lib/aper"
-	"gofree5gc/lib/ngap/ngapType"
+	"free5gc/lib/aper"
+	"free5gc/lib/ngap/ngapType"
 )
 
 func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) (buf []byte, err error) {

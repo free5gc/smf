@@ -7,11 +7,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"gofree5gc/lib/pfcp"
-	"gofree5gc/lib/pfcp/pfcpType"
-	"gofree5gc/lib/pfcp/pfcpUdp"
-	"gofree5gc/src/smf/smf_handler"
-	"gofree5gc/src/smf/smf_pfcp/pfcp_udp"
+	"free5gc/lib/pfcp"
+	"free5gc/lib/pfcp/pfcpType"
+	"free5gc/lib/pfcp/pfcpUdp"
+	"free5gc/src/smf/smf_handler"
+	"free5gc/src/smf/smf_pfcp/pfcp_udp"
 )
 
 const testPfcpClientPort = 12345

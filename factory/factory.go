@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"gofree5gc/src/smf/logger"
+	"free5gc/src/smf/logger"
 )
 
 var SmfConfig Config

@@ -1,8 +1,8 @@
 package smf_message
 
 import (
-	"gofree5gc/lib/http_wrapper"
-	"gofree5gc/lib/pfcp/pfcpUdp"
+	"free5gc/lib/http_wrapper"
+	"free5gc/lib/pfcp/pfcpUdp"
 )
 
 type HandlerMessage struct {

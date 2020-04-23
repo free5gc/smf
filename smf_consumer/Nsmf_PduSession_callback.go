@@ -2,9 +2,9 @@ package smf_consumer
 
 import (
 	"context"
-	"gofree5gc/lib/Nsmf_PDUSession"
-	"gofree5gc/lib/openapi/models"
-	"gofree5gc/src/smf/logger"
+	"free5gc/lib/Nsmf_PDUSession"
+	"free5gc/lib/openapi/models"
+	"free5gc/src/smf/logger"
 	"net/http"
 )
 

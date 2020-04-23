@@ -1,15 +1,15 @@
 package pfcp_message_test
 
 import (
-	"gofree5gc/src/smf/smf_context"
+	"free5gc/src/smf/smf_context"
 	"net"
 	"testing"
 	"time"
 
-	// "gofree5gc/lib/pfcp/pfcpType"
-	"gofree5gc/lib/pfcp/pfcpUdp"
-	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
-	"gofree5gc/src/smf/smf_pfcp/pfcp_udp"
+	// "free5gc/lib/pfcp/pfcpType"
+	"free5gc/lib/pfcp/pfcpUdp"
+	"free5gc/src/smf/smf_pfcp/pfcp_message"
+	"free5gc/src/smf/smf_pfcp/pfcp_udp"
 )
 
 var testAddr *net.UDPAddr

@@ -2,9 +2,9 @@ package smf_context
 
 import (
 	"fmt"
-	"gofree5gc/lib/pfcp/pfcpType"
-	"gofree5gc/lib/pfcp/pfcpUdp"
-	"gofree5gc/src/smf/logger"
+	"free5gc/lib/pfcp/pfcpType"
+	"free5gc/lib/pfcp/pfcpUdp"
+	"free5gc/src/smf/logger"
 	"net"
 	"reflect"
 

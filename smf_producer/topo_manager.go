@@ -1,11 +1,11 @@
 package smf_producer
 
 import (
-	"gofree5gc/lib/pfcp/pfcpType"
-	"gofree5gc/lib/pfcp/pfcpUdp"
-	"gofree5gc/src/smf/logger"
-	"gofree5gc/src/smf/smf_context"
-	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
+	"free5gc/lib/pfcp/pfcpType"
+	"free5gc/lib/pfcp/pfcpUdp"
+	"free5gc/src/smf/logger"
+	"free5gc/src/smf/smf_context"
+	"free5gc/src/smf/smf_pfcp/pfcp_message"
 	"net"
 )
 

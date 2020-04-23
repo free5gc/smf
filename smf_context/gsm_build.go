@@ -1,11 +1,11 @@
 package smf_context
 
 import (
-	"gofree5gc/lib/nas"
-	"gofree5gc/lib/nas/nasConvert"
-	"gofree5gc/lib/nas/nasMessage"
-	"gofree5gc/lib/nas/nasType"
-	// "gofree5gc/lib/nas/nasType"
+	"free5gc/lib/nas"
+	"free5gc/lib/nas/nasConvert"
+	"free5gc/lib/nas/nasMessage"
+	"free5gc/lib/nas/nasType"
+	// "free5gc/lib/nas/nasType"
 )
 
 func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error) {

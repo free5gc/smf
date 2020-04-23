@@ -1,16 +1,16 @@
 package smf_context_test
 
 import (
-	"gofree5gc/lib/path_util"
-	"gofree5gc/src/smf/factory"
-	"gofree5gc/src/smf/smf_context"
+	"free5gc/lib/path_util"
+	"free5gc/src/smf/factory"
+	"free5gc/src/smf/smf_context"
 	"testing"
 )
 
 func init() {
 
 	//config path
-	DefaultSmfConfigPath := path_util.Gofree5gcPath("gofree5gc/config/smf.FR5GC858.cfg")
+	DefaultSmfConfigPath := path_util.Gofree5gcPath("free5gc/config/smf.FR5GC858.cfg")
 	factory.InitConfigFactory(DefaultSmfConfigPath)
 
 	//read config to data structure

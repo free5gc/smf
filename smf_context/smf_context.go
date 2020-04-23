@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"net"
 
-	"gofree5gc/lib/Nnrf_NFDiscovery"
-	"gofree5gc/lib/Nnrf_NFManagement"
-	"gofree5gc/lib/Nudm_SubscriberDataManagement"
-	"gofree5gc/src/smf/factory"
-	"gofree5gc/src/smf/logger"
+	"free5gc/lib/Nnrf_NFDiscovery"
+	"free5gc/lib/Nnrf_NFManagement"
+	"free5gc/lib/Nudm_SubscriberDataManagement"
+	"free5gc/src/smf/factory"
+	"free5gc/src/smf/logger"
 
-	"gofree5gc/lib/openapi/models"
-	"gofree5gc/lib/pfcp/pfcpType"
-	"gofree5gc/lib/pfcp/pfcpUdp"
+	"free5gc/lib/openapi/models"
+	"free5gc/lib/pfcp/pfcpType"
+	"free5gc/lib/pfcp/pfcpUdp"
 
 	"github.com/google/uuid"
 )

@@ -3,11 +3,11 @@ package PDUSession_test
 import (
 	"context"
 	"github.com/stretchr/testify/assert"
-	"gofree5gc/lib/CommonConsumerTestData/SMF/TestPDUSession"
-	"gofree5gc/lib/Nsmf_PDUSession"
-	"gofree5gc/lib/openapi/models"
-	"gofree5gc/src/smf/PDUSession"
-	"gofree5gc/src/smf/smf_handler"
+	"free5gc/lib/CommonConsumerTestData/SMF/TestPDUSession"
+	"free5gc/lib/Nsmf_PDUSession"
+	"free5gc/lib/openapi/models"
+	"free5gc/src/smf/PDUSession"
+	"free5gc/src/smf/smf_handler"
 	"testing"
 )
 
