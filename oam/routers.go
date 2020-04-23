@@ -1,4 +1,4 @@
-package Nsmf_OAM
+package oam
 
 import (
 	"net/http"

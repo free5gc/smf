@@ -8,10 +8,10 @@ import (
 	"free5gc/lib/path_util"
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/app"
-	Nsmf_OAM "free5gc/src/smf/OAM"
 	"free5gc/src/smf/eventexposure"
 	"free5gc/src/smf/factory"
 	"free5gc/src/smf/logger"
+	Nsmf_OAM "free5gc/src/smf/oam"
 	"free5gc/src/smf/pdusession"
 	"free5gc/src/smf/smf_consumer"
 	"free5gc/src/smf/smf_context"
@@ -142,7 +142,7 @@ func (smf *SMF) Start() {
 		os.Exit(0)
 	}()
 
-	Nsmf_OAM.AddService(router)
+	oam.AddService(router)
 	for _, serviceName := range factory.SmfConfig.Configuration.ServiceNameList {
 		switch models.ServiceName(serviceName) {
 		case models.ServiceName_NSMF_PDUSESSION:
