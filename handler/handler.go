@@ -1,9 +1,9 @@
-package smf_handler
+package handler
 
 import (
 	"free5gc/lib/http_wrapper"
 	"free5gc/lib/openapi/models"
-	"free5gc/src/smf/smf_handler/smf_message"
+	"free5gc/src/smf/handler/smf_message"
 	"free5gc/src/smf/smf_pfcp"
 	"free5gc/src/smf/smf_producer"
 	"net/http"

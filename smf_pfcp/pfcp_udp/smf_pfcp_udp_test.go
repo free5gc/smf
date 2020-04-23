@@ -10,7 +10,7 @@ import (
 	"free5gc/lib/pfcp"
 	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/pfcp/pfcpUdp"
-	"free5gc/src/smf/smf_handler"
+	"free5gc/src/smf/handler"
 	"free5gc/src/smf/smf_pfcp/pfcp_udp"
 )
 
@@ -23,7 +23,7 @@ func TestRun(t *testing.T) {
 		NodeIdValue: net.ParseIP("127.0.0.1").To4(),
 	}
 
-	go smf_handler.Handle()
+	go handler.Handle()
 	pfcp_udp.Run()
 
 	testPfcpReq := pfcp.Message{

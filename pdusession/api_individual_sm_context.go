@@ -10,12 +10,12 @@
 package pdusession
 
 import (
-	"github.com/gin-gonic/gin"
 	"free5gc/lib/http_wrapper"
 	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/models"
+	"free5gc/src/smf/handler/smf_message"
 	"free5gc/src/smf/logger"
-	"free5gc/src/smf/smf_handler/smf_message"
+	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
 	"strings"

@@ -2,16 +2,16 @@ package pdusession
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"free5gc/lib/CommonConsumerTestData/SMF/TestPDUSession"
 	"free5gc/lib/Nsmf_PDUSession"
 	"free5gc/lib/openapi/models"
-	"free5gc/src/smf/smf_handler"
+	"free5gc/src/smf/handler"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func TestPostSmContexts(t *testing.T) {
-	go smf_handler.Handle()
+	go handler.Handle()
 
 	go DummyServer()
 	configuration := Nsmf_PDUSession.NewConfiguration()

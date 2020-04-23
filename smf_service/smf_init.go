@@ -12,10 +12,10 @@ import (
 	"free5gc/src/smf/context"
 	"free5gc/src/smf/eventexposure"
 	"free5gc/src/smf/factory"
+	"free5gc/src/smf/handler"
 	"free5gc/src/smf/logger"
 	Nsmf_OAM "free5gc/src/smf/oam"
 	"free5gc/src/smf/pdusession"
-	"free5gc/src/smf/smf_handler"
 	"free5gc/src/smf/smf_pfcp/pfcp_message"
 	"free5gc/src/smf/smf_pfcp/pfcp_udp"
 	"free5gc/src/smf/smf_util"
@@ -165,8 +165,7 @@ func (smf *SMF) Start() {
 
 	time.Sleep(1000 * time.Millisecond)
 
-	go smf_handler.Handle()
-
+	go handler.Handle()
 	HTTPAddr := fmt.Sprintf("%s:%d", context.SMF_Self().HTTPAddress, context.SMF_Self().HTTPPort)
 	server, err := http2_util.NewServer(HTTPAddr, smf_util.SmfLogPath, router)
 	if err == nil && server != nil {

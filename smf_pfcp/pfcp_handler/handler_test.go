@@ -10,7 +10,7 @@ import (
 	"free5gc/lib/pfcp"
 	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/pfcp/pfcpUdp"
-	"free5gc/src/smf/smf_handler"
+	"free5gc/src/smf/handler"
 	"free5gc/src/smf/smf_pfcp/pfcp_udp"
 )
 
@@ -27,7 +27,7 @@ func init() {
 	// Reset start time of PFCP server
 	pfcp_udp.ServerStartTime = time.Date(1972, time.January, 1, 0, 0, 0, 0, time.UTC)
 
-	go smf_handler.Handle()
+	go handler.Handle()
 }
 
 func TestHandlePfcpAssociationSetupRequest(t *testing.T) {
