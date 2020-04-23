@@ -167,9 +167,12 @@ func (smf *SMF) Start() {
 
 	go smf_handler.Handle()
 	HTTPAddr := fmt.Sprintf("%s:%d", smf_context.SMF_Self().HTTPAddress, smf_context.SMF_Self().HTTPPort)
-	server, _ := http2_util.NewServer(HTTPAddr, smf_util.SmfLogPath, router)
-
-	initLog.Infoln(server.ListenAndServeTLS(smf_util.SmfPemPath, smf_util.SmfKeyPath))
+	server, err := http2_util.NewServer(HTTPAddr, smf_util.SmfLogPath, router)
+	if err == nil && server != nil {
+		initLog.Infoln(server.ListenAndServeTLS(smf_util.SmfPemPath, smf_util.SmfKeyPath))
+	} else {
+		initLog.Fatalf("Initialize http2 server failed: %+v", err)
+	}
 }
 
 func (smf *SMF) Terminate() {
