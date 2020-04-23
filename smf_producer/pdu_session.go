@@ -2,7 +2,9 @@ package smf_producer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/antihax/optional"
 	"gofree5gc/lib/Namf_Communication"
 	"gofree5gc/lib/Nsmf_PDUSession"
 	"gofree5gc/lib/Nudm_SubscriberDataManagement"
@@ -21,8 +23,6 @@ import (
 	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
 	"net"
 	"net/http"
-
-	"github.com/antihax/optional"
 )
 
 func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMessage, request models.PostSmContextsRequest) {
@@ -211,9 +211,13 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 
 	smContextUpdateData := body.JsonData
 
+	UpdateSmContextRequestJson, _ := json.Marshal(body.JsonData)
+	logger.PduSessLog.Traceln("[SMF] UpdateSmContextRequest JsonData: ", string(UpdateSmContextRequestJson))
+
 	if body.BinaryDataN1SmMessage != nil {
 		m := nas.NewMessage()
 		err := m.GsmMessageDecode(&body.BinaryDataN1SmMessage)
+		logger.PduSessLog.Traceln("[SMF] UpdateSmContextRequest N1SmMessage: ", m)
 		if err != nil {
 			logger.PduSessLog.Error(err)
 			return
@@ -324,6 +328,16 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		pdrList = []*smf_context.PDR{DLPDR}
 		farList = []*smf_context.FAR{DLPDR.FAR}
 
+	case models.N2SmInfoType_PDU_RES_REL_RSP:
+
+		logger.PduSessLog.Infoln("[SMF] Send Update SmContext Response")
+		SMContextUpdateResponse := http_wrapper.Response{
+			Status: http.StatusOK,
+			Body:   response,
+		}
+		rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &SMContextUpdateResponse}
+
+		return
 	case models.N2SmInfoType_PATH_SWITCH_REQ:
 		DLPDR := tunnel.UpfRoot.DownLinkTunnel.MatchedPDR
 		err = smf_context.HandlePathSwitchRequestTransfer(body.BinaryDataN2SmInformation, smContext)
