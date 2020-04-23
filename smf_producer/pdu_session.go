@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/antihax/optional"
 	"free5gc/lib/Namf_Communication"
 	"free5gc/lib/Nsmf_PDUSession"
 	"free5gc/lib/Nudm_SubscriberDataManagement"
@@ -16,11 +15,12 @@ import (
 	"free5gc/lib/openapi/models"
 	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/pfcp/pfcpUdp"
+	"free5gc/src/smf/consumer"
 	"free5gc/src/smf/logger"
-	"free5gc/src/smf/smf_consumer"
 	"free5gc/src/smf/smf_context"
 	"free5gc/src/smf/smf_handler/smf_message"
 	"free5gc/src/smf/smf_pfcp/pfcp_message"
+	"github.com/antihax/optional"
 	"net"
 	"net/http"
 )
@@ -54,7 +54,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	smContext.SmStatusNotifyUri = createData.SmContextStatusUri
 
 	// Query UDM
-	smf_consumer.SendNFDiscoveryUDM()
+	consumer.SendNFDiscoveryUDM()
 
 	smPlmnID := createData.Guami.PlmnId
 
@@ -174,7 +174,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	SendPFCPRule(smContext, smContext.Tunnel.UpfRoot)
 
-	smf_consumer.SendNFDiscoveryServingAMF(smContext)
+	consumer.SendNFDiscoveryServingAMF(smContext)
 
 	for _, service := range *smContext.AMFProfile.NfServices {
 		if service.ServiceName == models.ServiceName_NAMF_COMM {
@@ -257,7 +257,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &SMContextUpdateResponse}
 
 			smf_context.RemoveSMContext(smContext.Ref)
-			smf_consumer.SendSMContextStatusNotification(smContext.SmStatusNotifyUri)
+			consumer.SendSMContextStatusNotification(smContext.SmStatusNotifyUri)
 
 			return
 		}

@@ -8,12 +8,12 @@ import (
 	"free5gc/lib/path_util"
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/app"
+	"free5gc/src/smf/consumer"
 	"free5gc/src/smf/eventexposure"
 	"free5gc/src/smf/factory"
 	"free5gc/src/smf/logger"
 	Nsmf_OAM "free5gc/src/smf/oam"
 	"free5gc/src/smf/pdusession"
-	"free5gc/src/smf/smf_consumer"
 	"free5gc/src/smf/smf_context"
 	"free5gc/src/smf/smf_handler"
 	"free5gc/src/smf/smf_pfcp/pfcp_message"
@@ -124,10 +124,10 @@ func (smf *SMF) Start() {
 	initLog.Infoln("Server started")
 	router := gin.Default()
 
-	err := smf_consumer.SendNFRegistration()
+	err := consumer.SendNFRegistration()
 
 	if err != nil {
-		retry_err := smf_consumer.RetrySendNFRegistration(10)
+		retry_err := consumer.RetrySendNFRegistration(10)
 		if retry_err != nil {
 			logger.InitLog.Errorln(retry_err)
 			return
@@ -178,7 +178,7 @@ func (smf *SMF) Start() {
 func (smf *SMF) Terminate() {
 	logger.InitLog.Infof("Terminating SMF...")
 	// deregister with NRF
-	problemDetails, err := smf_consumer.SendDeregisterNFInstance()
+	problemDetails, err := consumer.SendDeregisterNFInstance()
 	if problemDetails != nil {
 		logger.InitLog.Errorf("Deregister NF instance Failed Problem[%+v]", problemDetails)
 	} else if err != nil {

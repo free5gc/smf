@@ -1,4 +1,4 @@
-package smf_consumer
+package consumer
 
 import (
 	"context"
