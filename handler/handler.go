@@ -4,7 +4,7 @@ import (
 	"free5gc/lib/http_wrapper"
 	"free5gc/lib/openapi/models"
 	"free5gc/src/smf/handler/message"
-	"free5gc/src/smf/smf_pfcp"
+	"free5gc/src/smf/pfcp"
 	"free5gc/src/smf/smf_producer"
 	"net/http"
 	"time"
@@ -18,7 +18,7 @@ func Handle() {
 			if ok {
 				switch msg.Event {
 				case message.PFCPMessage:
-					smf_pfcp.Dispatch(msg.PFCPRequest)
+					pfcp.Dispatch(msg.PFCPRequest)
 				case message.PDUSessionSMContextCreate:
 					smf_producer.HandlePDUSessionSMContextCreate(msg.ResponseChan, msg.HTTPRequest.Body.(models.PostSmContextsRequest))
 				case message.PDUSessionSMContextUpdate:

@@ -1,8 +1,6 @@
 package pfcp_util
 
 import (
-
-	//"free5gc/src/smf/smf_pfcp/pfcp_udp"
 	"free5gc/lib/pfcp"
 	"free5gc/src/smf/logger"
 )

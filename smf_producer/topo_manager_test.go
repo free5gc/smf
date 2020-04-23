@@ -4,7 +4,7 @@ import (
 	"free5gc/lib/path_util"
 	"free5gc/src/smf/context"
 	"free5gc/src/smf/factory"
-	"free5gc/src/smf/smf_pfcp/pfcp_udp"
+	"free5gc/src/smf/pfcp/pfcp_udp"
 	"free5gc/src/smf/smf_producer"
 	"net"
 	"testing"

@@ -1,10 +1,10 @@
 package pdusession
 
 import (
-	"github.com/gin-gonic/gin"
 	"free5gc/lib/http2_util"
 	"free5gc/lib/path_util"
-	"free5gc/src/smf/smf_pfcp/pfcp_udp"
+	"free5gc/src/smf/pfcp/pfcp_udp"
+	"github.com/gin-gonic/gin"
 	"log"
 )
 

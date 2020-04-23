@@ -8,8 +8,8 @@ import (
 
 	// "free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/pfcp/pfcpUdp"
-	"free5gc/src/smf/smf_pfcp/pfcp_message"
-	"free5gc/src/smf/smf_pfcp/pfcp_udp"
+	"free5gc/src/smf/pfcp/pfcp_message"
+	"free5gc/src/smf/pfcp/pfcp_udp"
 )
 
 var testAddr *net.UDPAddr
