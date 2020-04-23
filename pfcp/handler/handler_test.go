@@ -1,4 +1,4 @@
-package pfcp_handler_test
+package handler_test
 
 import (
 	"net"

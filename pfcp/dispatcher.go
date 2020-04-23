@@ -4,51 +4,51 @@ import (
 	"free5gc/lib/pfcp"
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/smf/logger"
-	"free5gc/src/smf/pfcp/pfcp_handler"
+	"free5gc/src/smf/pfcp/handler"
 )
 
 func Dispatch(msg *pfcpUdp.Message) {
 	switch msg.PfcpMessage.Header.MessageType {
 	case pfcp.PFCP_HEARTBEAT_REQUEST:
-		pfcp_handler.HandlePfcpHeartbeatRequest(msg)
+		handler.HandlePfcpHeartbeatRequest(msg)
 	case pfcp.PFCP_HEARTBEAT_RESPONSE:
-		pfcp_handler.HandlePfcpHeartbeatResponse(msg)
+		handler.HandlePfcpHeartbeatResponse(msg)
 	case pfcp.PFCP_PFD_MANAGEMENT_REQUEST:
-		pfcp_handler.HandlePfcpPfdManagementRequest(msg)
+		handler.HandlePfcpPfdManagementRequest(msg)
 	case pfcp.PFCP_PFD_MANAGEMENT_RESPONSE:
-		pfcp_handler.HandlePfcpPfdManagementResponse(msg)
+		handler.HandlePfcpPfdManagementResponse(msg)
 	case pfcp.PFCP_ASSOCIATION_SETUP_REQUEST:
-		pfcp_handler.HandlePfcpAssociationSetupRequest(msg)
+		handler.HandlePfcpAssociationSetupRequest(msg)
 	case pfcp.PFCP_ASSOCIATION_SETUP_RESPONSE:
-		pfcp_handler.HandlePfcpAssociationSetupResponse(msg)
+		handler.HandlePfcpAssociationSetupResponse(msg)
 	case pfcp.PFCP_ASSOCIATION_UPDATE_REQUEST:
-		pfcp_handler.HandlePfcpAssociationUpdateRequest(msg)
+		handler.HandlePfcpAssociationUpdateRequest(msg)
 	case pfcp.PFCP_ASSOCIATION_UPDATE_RESPONSE:
-		pfcp_handler.HandlePfcpAssociationUpdateResponse(msg)
+		handler.HandlePfcpAssociationUpdateResponse(msg)
 	case pfcp.PFCP_ASSOCIATION_RELEASE_REQUEST:
-		pfcp_handler.HandlePfcpAssociationReleaseRequest(msg)
+		handler.HandlePfcpAssociationReleaseRequest(msg)
 	case pfcp.PFCP_ASSOCIATION_RELEASE_RESPONSE:
-		pfcp_handler.HandlePfcpAssociationReleaseResponse(msg)
+		handler.HandlePfcpAssociationReleaseResponse(msg)
 	case pfcp.PFCP_VERSION_NOT_SUPPORTED_RESPONSE:
-		pfcp_handler.HandlePfcpVersionNotSupportedResponse(msg)
+		handler.HandlePfcpVersionNotSupportedResponse(msg)
 	case pfcp.PFCP_NODE_REPORT_REQUEST:
-		pfcp_handler.HandlePfcpNodeReportRequest(msg)
+		handler.HandlePfcpNodeReportRequest(msg)
 	case pfcp.PFCP_NODE_REPORT_RESPONSE:
-		pfcp_handler.HandlePfcpNodeReportResponse(msg)
+		handler.HandlePfcpNodeReportResponse(msg)
 	case pfcp.PFCP_SESSION_SET_DELETION_REQUEST:
-		pfcp_handler.HandlePfcpSessionSetDeletionRequest(msg)
+		handler.HandlePfcpSessionSetDeletionRequest(msg)
 	case pfcp.PFCP_SESSION_SET_DELETION_RESPONSE:
-		pfcp_handler.HandlePfcpSessionSetDeletionResponse(msg)
+		handler.HandlePfcpSessionSetDeletionResponse(msg)
 	case pfcp.PFCP_SESSION_ESTABLISHMENT_RESPONSE:
-		pfcp_handler.HandlePfcpSessionEstablishmentResponse(msg)
+		handler.HandlePfcpSessionEstablishmentResponse(msg)
 	case pfcp.PFCP_SESSION_MODIFICATION_RESPONSE:
-		pfcp_handler.HandlePfcpSessionModificationResponse(msg)
+		handler.HandlePfcpSessionModificationResponse(msg)
 	case pfcp.PFCP_SESSION_DELETION_RESPONSE:
-		pfcp_handler.HandlePfcpSessionDeletionResponse(msg)
+		handler.HandlePfcpSessionDeletionResponse(msg)
 	case pfcp.PFCP_SESSION_REPORT_REQUEST:
-		pfcp_handler.HandlePfcpSessionReportRequest(msg)
+		handler.HandlePfcpSessionReportRequest(msg)
 	case pfcp.PFCP_SESSION_REPORT_RESPONSE:
-		pfcp_handler.HandlePfcpSessionReportResponse(msg)
+		handler.HandlePfcpSessionReportResponse(msg)
 	default:
 		logger.PfcpLog.Errorf("Unknown PFCP message type: %d", msg.PfcpMessage.Header.MessageType)
 		return
