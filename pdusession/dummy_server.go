@@ -1,4 +1,4 @@
-package PDUSession
+package pdusession
 
 import (
 	"github.com/gin-gonic/gin"

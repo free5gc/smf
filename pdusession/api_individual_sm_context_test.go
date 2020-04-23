@@ -1,19 +1,19 @@
-package PDUSession_test
+package pdusession_test
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"free5gc/lib/CommonConsumerTestData/SMF/TestPDUSession"
 	"free5gc/lib/Nsmf_PDUSession"
 	"free5gc/lib/openapi/models"
-	"free5gc/src/smf/PDUSession"
+	"free5gc/src/smf/pdusession"
 	"free5gc/src/smf/smf_handler"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func TestUpdateSmContext(t *testing.T) {
 	go smf_handler.Handle()
-	go PDUSession.DummyServer()
+	go pdusession.DummyServer()
 	configuration := Nsmf_PDUSession.NewConfiguration()
 	configuration.SetBasePath("https://127.0.0.10:29502")
 	client := Nsmf_PDUSession.NewAPIClient(configuration)
