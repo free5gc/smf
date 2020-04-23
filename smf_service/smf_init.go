@@ -8,9 +8,9 @@ import (
 	"free5gc/lib/path_util"
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/app"
-	"free5gc/src/smf/EventExposure"
 	Nsmf_OAM "free5gc/src/smf/OAM"
 	"free5gc/src/smf/PDUSession"
+	"free5gc/src/smf/eventexposure"
 	"free5gc/src/smf/factory"
 	"free5gc/src/smf/logger"
 	"free5gc/src/smf/smf_consumer"
@@ -148,7 +148,7 @@ func (smf *SMF) Start() {
 		case models.ServiceName_NSMF_PDUSESSION:
 			PDUSession.AddService(router)
 		case models.ServiceName_NSMF_EVENT_EXPOSURE:
-			EventExposure.AddService(router)
+			eventexposure.AddService(router)
 		}
 	}
 	pfcp_udp.Run()
