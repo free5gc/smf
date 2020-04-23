@@ -3,8 +3,8 @@ package pfcp_message
 import (
 	"free5gc/lib/pfcp"
 	"free5gc/lib/pfcp/pfcpType"
+	"free5gc/src/smf/context"
 	"free5gc/src/smf/logger"
-	"free5gc/src/smf/smf_context"
 	"free5gc/src/smf/smf_pfcp/pfcp_udp"
 	"net"
 )
@@ -101,7 +101,7 @@ func SendPfcpAssociationReleaseResponse(addr *net.UDPAddr, cause pfcpType.Cause)
 	pfcp_udp.SendPfcp(message, addr)
 }
 
-func SendPfcpSessionEstablishmentRequest(raddr *net.UDPAddr, ctx *smf_context.SMContext) {
+func SendPfcpSessionEstablishmentRequest(raddr *net.UDPAddr, ctx *context.SMContext) {
 	pfcpMsg, err := BuildPfcpSessionEstablishmentRequest(ctx)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Establishment Request failed: %v", err)
@@ -124,7 +124,7 @@ func SendPfcpSessionEstablishmentRequest(raddr *net.UDPAddr, ctx *smf_context.SM
 	pfcp_udp.SendPfcp(message, raddr)
 }
 
-func SendPfcpSessionEstablishmentRequestForULCL(raddr *net.UDPAddr, ctx *smf_context.SMContext, pdrList []*smf_context.PDR, farList []*smf_context.FAR, barList []*smf_context.BAR) {
+func SendPfcpSessionEstablishmentRequestForULCL(raddr *net.UDPAddr, ctx *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) {
 	pfcpMsg, err := BuildPfcpSessionEstablishmentRequestForULCL(ctx, pdrList, farList, barList)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Establishment Request failed: %v", err)
@@ -173,7 +173,7 @@ func SendPfcpSessionEstablishmentResponse(addr *net.UDPAddr) {
 	pfcp_udp.SendPfcp(message, addr)
 }
 
-func SendPfcpSessionModificationRequest(raddr *net.UDPAddr, ctx *smf_context.SMContext, pdrList []*smf_context.PDR, farList []*smf_context.FAR, barList []*smf_context.BAR) (seqNum uint32) {
+func SendPfcpSessionModificationRequest(raddr *net.UDPAddr, ctx *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (seqNum uint32) {
 
 	pfcpMsg, err := BuildPfcpSessionModificationRequest(ctx, pdrList, farList, barList)
 
@@ -224,7 +224,7 @@ func SendPfcpSessionModificationResponse(addr *net.UDPAddr) {
 	pfcp_udp.SendPfcp(message, addr)
 }
 
-func SendPfcpSessionDeletionRequest(addr *net.UDPAddr, ctx *smf_context.SMContext) (seqNum uint32) {
+func SendPfcpSessionDeletionRequest(addr *net.UDPAddr, ctx *context.SMContext) (seqNum uint32) {
 	pfcpMsg, err := BuildPfcpSessionDeletionRequest()
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Deletion Request failed: %v", err)

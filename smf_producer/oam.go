@@ -3,7 +3,7 @@ package smf_producer
 import (
 	"free5gc/lib/http_wrapper"
 	"free5gc/lib/openapi/models"
-	"free5gc/src/smf/smf_context"
+	"free5gc/src/smf/context"
 	"free5gc/src/smf/smf_handler/smf_message"
 	"net/http"
 	"strconv"
@@ -21,11 +21,11 @@ type PDUSessionInfo struct {
 	PDUAddress   string
 	SessionRule  models.SessionRule
 	UpCnxState   models.UpCnxState
-	Tunnel       smf_context.UPTunnel
+	Tunnel       context.UPTunnel
 }
 
 func HandleOAMGetUEPDUSessionInfo(rspChan chan smf_message.HandlerResponseMessage, smContextRef string) {
-	smContext := smf_context.GetSMContext(smContextRef)
+	smContext := context.GetSMContext(smContextRef)
 	if smContext == nil {
 		rspChan <- smf_message.HandlerResponseMessage{
 			HTTPResponse: &http_wrapper.Response{
@@ -53,7 +53,7 @@ func HandleOAMGetUEPDUSessionInfo(rspChan chan smf_message.HandlerResponseMessag
 				PDUAddress:   smContext.PDUAddress.String(),
 				SessionRule:  smContext.SessionRule,
 				UpCnxState:   smContext.UpCnxState,
-				Tunnel: smf_context.UPTunnel{
+				Tunnel: context.UPTunnel{
 					//UpfRoot:  smContext.Tunnel.UpfRoot,
 					ULCLRoot: smContext.Tunnel.ULCLRoot,
 				},

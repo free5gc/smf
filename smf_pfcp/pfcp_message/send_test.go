@@ -1,7 +1,7 @@
 package pfcp_message_test
 
 import (
-	"free5gc/src/smf/smf_context"
+	"free5gc/src/smf/context"
 	"net"
 	"testing"
 	"time"
@@ -17,10 +17,10 @@ var testAddr *net.UDPAddr
 // Adjust waiting time in millisecond if PFCP packets are not captured
 var testWaitingTime int = 500
 
-var dummyContext *smf_context.SMContext
+var dummyContext *context.SMContext
 
 func init() {
-	smfContext := smf_context.SMF_Self()
+	smfContext := context.SMF_Self()
 
 	smfContext.CPNodeID.NodeIdType = 0
 	smfContext.CPNodeID.NodeIdValue = net.ParseIP("127.0.0.1").To4()
@@ -31,7 +31,7 @@ func init() {
 		IP:   net.ParseIP("127.0.0.1"),
 		Port: pfcpUdp.PFCP_PORT,
 	}
-	dummyContext = smf_context.NewSMContext("imsi-20893000000001", 3)
+	dummyContext = context.NewSMContext("imsi-20893000000001", 3)
 
 }
 

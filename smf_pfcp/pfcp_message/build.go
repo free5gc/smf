@@ -5,14 +5,14 @@ import (
 
 	"free5gc/lib/pfcp"
 	"free5gc/lib/pfcp/pfcpType"
-	"free5gc/src/smf/smf_context"
+	"free5gc/src/smf/context"
 	"free5gc/src/smf/smf_pfcp/pfcp_udp"
 )
 
 func BuildPfcpAssociationSetupRequest() (pfcp.PFCPAssociationSetupRequest, error) {
 	msg := pfcp.PFCPAssociationSetupRequest{}
 
-	msg.NodeID = &smf_context.SMF_Self().CPNodeID
+	msg.NodeID = &context.SMF_Self().CPNodeID
 
 	msg.RecoveryTimeStamp = &pfcpType.RecoveryTimeStamp{
 		RecoveryTimeStamp: pfcp_udp.ServerStartTime,
@@ -28,7 +28,7 @@ func BuildPfcpAssociationSetupRequest() (pfcp.PFCPAssociationSetupRequest, error
 func BuildPfcpAssociationSetupResponse(cause pfcpType.Cause) (pfcp.PFCPAssociationSetupResponse, error) {
 	msg := pfcp.PFCPAssociationSetupResponse{}
 
-	msg.NodeID = &smf_context.SMF_Self().CPNodeID
+	msg.NodeID = &context.SMF_Self().CPNodeID
 
 	msg.Cause = &cause
 
@@ -46,7 +46,7 @@ func BuildPfcpAssociationSetupResponse(cause pfcpType.Cause) (pfcp.PFCPAssociati
 func BuildPfcpAssociationReleaseRequest() (pfcp.PFCPAssociationReleaseRequest, error) {
 	msg := pfcp.PFCPAssociationReleaseRequest{}
 
-	msg.NodeID = &smf_context.SMF_Self().CPNodeID
+	msg.NodeID = &context.SMF_Self().CPNodeID
 
 	return msg, nil
 }
@@ -54,14 +54,14 @@ func BuildPfcpAssociationReleaseRequest() (pfcp.PFCPAssociationReleaseRequest, e
 func BuildPfcpAssociationReleaseResponse(cause pfcpType.Cause) (pfcp.PFCPAssociationReleaseResponse, error) {
 	msg := pfcp.PFCPAssociationReleaseResponse{}
 
-	msg.NodeID = &smf_context.SMF_Self().CPNodeID
+	msg.NodeID = &context.SMF_Self().CPNodeID
 
 	msg.Cause = &cause
 
 	return msg, nil
 }
 
-func pdrToCreatePDR(pdr *smf_context.PDR) *pfcp.CreatePDR {
+func pdrToCreatePDR(pdr *context.PDR) *pfcp.CreatePDR {
 	createPDR := new(pfcp.CreatePDR)
 
 	createPDR.PDRID = new(pfcpType.PacketDetectionRuleID)
@@ -90,7 +90,7 @@ func pdrToCreatePDR(pdr *smf_context.PDR) *pfcp.CreatePDR {
 	return createPDR
 }
 
-func farToCreateFAR(far *smf_context.FAR) *pfcp.CreateFAR {
+func farToCreateFAR(far *context.FAR) *pfcp.CreateFAR {
 	createFAR := new(pfcp.CreateFAR)
 
 	createFAR.FARID = new(pfcpType.FARID)
@@ -114,7 +114,7 @@ func farToCreateFAR(far *smf_context.FAR) *pfcp.CreateFAR {
 	return createFAR
 }
 
-func barToCreateBAR(bar *smf_context.BAR) *pfcp.CreateBAR {
+func barToCreateBAR(bar *context.BAR) *pfcp.CreateBAR {
 
 	createBAR := new(pfcp.CreateBAR)
 
@@ -128,7 +128,7 @@ func barToCreateBAR(bar *smf_context.BAR) *pfcp.CreateBAR {
 	return createBAR
 }
 
-func pdrToUpdatePDR(pdr *smf_context.PDR) *pfcp.UpdatePDR {
+func pdrToUpdatePDR(pdr *context.PDR) *pfcp.UpdatePDR {
 	updatePDR := new(pfcp.UpdatePDR)
 
 	updatePDR.PDRID = new(pfcpType.PacketDetectionRuleID)
@@ -161,7 +161,7 @@ func pdrToUpdatePDR(pdr *smf_context.PDR) *pfcp.UpdatePDR {
 	return updatePDR
 }
 
-func farToUpdateFAR(far *smf_context.FAR) *pfcp.UpdateFAR {
+func farToUpdateFAR(far *context.FAR) *pfcp.UpdateFAR {
 	updateFAR := new(pfcp.UpdateFAR)
 
 	updateFAR.FARID = new(pfcpType.FARID)
@@ -188,17 +188,17 @@ func farToUpdateFAR(far *smf_context.FAR) *pfcp.UpdateFAR {
 }
 
 // TODO: Replace dummy value in PFCP message
-func BuildPfcpSessionEstablishmentRequest(smContext *smf_context.SMContext) (pfcp.PFCPSessionEstablishmentRequest, error) {
+func BuildPfcpSessionEstablishmentRequest(smContext *context.SMContext) (pfcp.PFCPSessionEstablishmentRequest, error) {
 	msg := pfcp.PFCPSessionEstablishmentRequest{}
 
-	msg.NodeID = &smf_context.SMF_Self().CPNodeID
+	msg.NodeID = &context.SMF_Self().CPNodeID
 
-	isv4 := smf_context.SMF_Self().CPNodeID.NodeIdType == 0
+	isv4 := context.SMF_Self().CPNodeID.NodeIdType == 0
 	msg.CPFSEID = &pfcpType.FSEID{
 		V4:          isv4,
 		V6:          !isv4,
 		Seid:        smContext.LocalSEID,
-		Ipv4Address: smf_context.SMF_Self().CPNodeID.NodeIdValue,
+		Ipv4Address: context.SMF_Self().CPNodeID.NodeIdValue,
 	}
 
 	msg.CreatePDR = make([]*pfcp.CreatePDR, 0, 2)
@@ -214,36 +214,36 @@ func BuildPfcpSessionEstablishmentRequest(smContext *smf_context.SMContext) (pfc
 	return msg, nil
 }
 
-func BuildPfcpSessionEstablishmentRequestForULCL(smContext *smf_context.SMContext, pdrList []*smf_context.PDR, farList []*smf_context.FAR, barList []*smf_context.BAR) (pfcp.PFCPSessionEstablishmentRequest, error) {
+func BuildPfcpSessionEstablishmentRequestForULCL(smContext *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (pfcp.PFCPSessionEstablishmentRequest, error) {
 	msg := pfcp.PFCPSessionEstablishmentRequest{}
 
-	msg.NodeID = &smf_context.SMF_Self().CPNodeID
+	msg.NodeID = &context.SMF_Self().CPNodeID
 
-	isv4 := smf_context.SMF_Self().CPNodeID.NodeIdType == 0
+	isv4 := context.SMF_Self().CPNodeID.NodeIdType == 0
 	msg.CPFSEID = &pfcpType.FSEID{
 		V4:          isv4,
 		V6:          !isv4,
 		Seid:        smContext.LocalSEID,
-		Ipv4Address: smf_context.SMF_Self().CPNodeID.NodeIdValue,
+		Ipv4Address: context.SMF_Self().CPNodeID.NodeIdValue,
 	}
 
 	msg.CreatePDR = make([]*pfcp.CreatePDR, 0)
 	msg.CreateFAR = make([]*pfcp.CreateFAR, 0)
 
 	for _, pdr := range pdrList {
-		if pdr.State == smf_context.RULE_INITIAL {
+		if pdr.State == context.RULE_INITIAL {
 			msg.CreatePDR = append(msg.CreatePDR, pdrToCreatePDR(pdr))
 		}
 	}
 
 	for _, far := range farList {
-		if far.State == smf_context.RULE_INITIAL {
+		if far.State == context.RULE_INITIAL {
 			msg.CreateFAR = append(msg.CreateFAR, farToCreateFAR(far))
 		}
 	}
 
 	for _, bar := range barList {
-		if bar.State == smf_context.RULE_INITIAL {
+		if bar.State == context.RULE_INITIAL {
 			msg.CreateBAR = append(msg.CreateBAR, barToCreateBAR(bar))
 		}
 	}
@@ -262,7 +262,7 @@ func BuildPfcpSessionEstablishmentRequestForULCL(smContext *smf_context.SMContex
 func BuildPfcpSessionEstablishmentResponse() (pfcp.PFCPSessionEstablishmentResponse, error) {
 	msg := pfcp.PFCPSessionEstablishmentResponse{}
 
-	msg.NodeID = &smf_context.SMF_Self().CPNodeID
+	msg.NodeID = &context.SMF_Self().CPNodeID
 
 	msg.Cause = &pfcpType.Cause{
 		CauseValue: pfcpType.CauseRequestAccepted,
@@ -297,7 +297,7 @@ func BuildPfcpSessionEstablishmentResponse() (pfcp.PFCPSessionEstablishmentRespo
 }
 
 // TODO: Replace dummy value in PFCP message
-func BuildPfcpSessionModificationRequest(smContext *smf_context.SMContext, pdrList []*smf_context.PDR, farList []*smf_context.FAR, barList []*smf_context.BAR) (pfcp.PFCPSessionModificationRequest, error) {
+func BuildPfcpSessionModificationRequest(smContext *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (pfcp.PFCPSessionModificationRequest, error) {
 	msg := pfcp.PFCPSessionModificationRequest{}
 
 	msg.UpdatePDR = make([]*pfcp.UpdatePDR, 0, 2)
@@ -307,30 +307,30 @@ func BuildPfcpSessionModificationRequest(smContext *smf_context.SMContext, pdrLi
 		V4:          true,
 		V6:          false,
 		Seid:        smContext.LocalSEID,
-		Ipv4Address: smf_context.SMF_Self().CPNodeID.NodeIdValue,
+		Ipv4Address: context.SMF_Self().CPNodeID.NodeIdValue,
 	}
 
 	for _, pdr := range pdrList {
 		switch pdr.State {
-		case smf_context.RULE_INITIAL:
+		case context.RULE_INITIAL:
 			msg.CreatePDR = append(msg.CreatePDR, pdrToCreatePDR(pdr))
-		case smf_context.RULE_UPDATE:
+		case context.RULE_UPDATE:
 			msg.UpdatePDR = append(msg.UpdatePDR, pdrToUpdatePDR(pdr))
 		}
 	}
 
 	for _, far := range farList {
 		switch far.State {
-		case smf_context.RULE_INITIAL:
+		case context.RULE_INITIAL:
 			msg.CreateFAR = append(msg.CreateFAR, farToCreateFAR(far))
-		case smf_context.RULE_UPDATE:
+		case context.RULE_UPDATE:
 			msg.UpdateFAR = append(msg.UpdateFAR, farToUpdateFAR(far))
 		}
 	}
 
 	for _, bar := range barList {
 		switch bar.State {
-		case smf_context.RULE_INITIAL:
+		case context.RULE_INITIAL:
 			msg.CreateBAR = append(msg.CreateBAR, barToCreateBAR(bar))
 		}
 	}

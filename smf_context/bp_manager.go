@@ -1,4 +1,4 @@
-package smf_context
+package context
 
 import (
 	"fmt"

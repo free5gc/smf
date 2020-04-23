@@ -9,12 +9,12 @@ import (
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/app"
 	"free5gc/src/smf/consumer"
+	"free5gc/src/smf/context"
 	"free5gc/src/smf/eventexposure"
 	"free5gc/src/smf/factory"
 	"free5gc/src/smf/logger"
 	Nsmf_OAM "free5gc/src/smf/oam"
 	"free5gc/src/smf/pdusession"
-	"free5gc/src/smf/smf_context"
 	"free5gc/src/smf/smf_handler"
 	"free5gc/src/smf/smf_pfcp/pfcp_message"
 	"free5gc/src/smf/smf_pfcp/pfcp_udp"
@@ -116,10 +116,10 @@ func (smf *SMF) FilterCli(c *cli.Context) (args []string) {
 }
 
 func (smf *SMF) Start() {
-	smf_context.InitSmfContext(&factory.SmfConfig)
+	context.InitSmfContext(&factory.SmfConfig)
 	//allocate id for each upf
-	smf_context.AllocateUPFID()
-	smf_context.InitSMFUERouting(&factory.UERoutingConfig)
+	context.AllocateUPFID()
+	context.InitSMFUERouting(&factory.UERoutingConfig)
 
 	initLog.Infoln("Server started")
 	router := gin.Default()
@@ -153,7 +153,7 @@ func (smf *SMF) Start() {
 	}
 	pfcp_udp.Run()
 
-	for _, upf := range smf_context.SMF_Self().UserPlaneInformation.UPFs {
+	for _, upf := range context.SMF_Self().UserPlaneInformation.UPFs {
 		addr := new(net.UDPAddr)
 		addr.IP = net.IP(upf.NodeID.NodeIdValue)
 
@@ -166,13 +166,15 @@ func (smf *SMF) Start() {
 	time.Sleep(1000 * time.Millisecond)
 
 	go smf_handler.Handle()
-	HTTPAddr := fmt.Sprintf("%s:%d", smf_context.SMF_Self().HTTPAddress, smf_context.SMF_Self().HTTPPort)
+
+	HTTPAddr := fmt.Sprintf("%s:%d", context.SMF_Self().HTTPAddress, context.SMF_Self().HTTPPort)
 	server, err := http2_util.NewServer(HTTPAddr, smf_util.SmfLogPath, router)
 	if err == nil && server != nil {
 		initLog.Infoln(server.ListenAndServeTLS(smf_util.SmfPemPath, smf_util.SmfKeyPath))
 	} else {
 		initLog.Fatalf("Initialize http2 server failed: %+v", err)
 	}
+
 }
 
 func (smf *SMF) Terminate() {

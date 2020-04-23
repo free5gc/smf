@@ -6,8 +6,8 @@ import (
 
 	"free5gc/lib/pfcp"
 	"free5gc/lib/pfcp/pfcpUdp"
+	"free5gc/src/smf/context"
 	"free5gc/src/smf/logger"
-	"free5gc/src/smf/smf_context"
 	"free5gc/src/smf/smf_handler/smf_message"
 	"free5gc/src/smf/smf_pfcp/pfcp_util"
 )
@@ -25,7 +25,7 @@ func init() {
 }
 
 func Run() {
-	CPNodeID := smf_context.SMF_Self().CPNodeID
+	CPNodeID := context.SMF_Self().CPNodeID
 	if len(CPNodeID.NodeIdValue) != 0 {
 		Server.Addr = CPNodeID.ResolveNodeIdToIp().String()
 	}

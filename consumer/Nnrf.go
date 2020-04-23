@@ -7,8 +7,8 @@ import (
 	"free5gc/lib/Nudm_SubscriberDataManagement"
 	"free5gc/lib/openapi/common"
 	"free5gc/lib/openapi/models"
+	smf_context "free5gc/src/smf/context"
 	"free5gc/src/smf/logger"
-	"free5gc/src/smf/smf_context"
 	"net/http"
 
 	"strings"

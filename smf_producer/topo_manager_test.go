@@ -2,8 +2,8 @@ package smf_producer_test
 
 import (
 	"free5gc/lib/path_util"
+	"free5gc/src/smf/context"
 	"free5gc/src/smf/factory"
-	"free5gc/src/smf/smf_context"
 	"free5gc/src/smf/smf_pfcp/pfcp_udp"
 	"free5gc/src/smf/smf_producer"
 	"net"
@@ -17,9 +17,9 @@ func init() {
 	factory.InitConfigFactory(DefaultSmfConfigPath)
 
 	//read config to data structure
-	smf_context.InitSmfContext(&factory.SmfConfig)
-	smf_context.AllocateUPFID()
-	userPlaneInfo := smf_context.GetUserPlaneInformation()
+	context.InitSmfContext(&factory.SmfConfig)
+	context.AllocateUPFID()
+	userPlaneInfo := context.GetUserPlaneInformation()
 	for node_name, node := range userPlaneInfo.UPNodes {
 
 		if node_name == "AnchorUPF3" {
@@ -34,8 +34,8 @@ func init() {
 
 func TestSetUpUplinkUserPlane(t *testing.T) {
 
-	upfRoot := smf_context.GetUserPlaneInformation().GetDefaultUPFTopoByDNN("internet")
-	smContext := smf_context.NewSMContext("imsi-2089300007487", 20)
+	upfRoot := context.GetUserPlaneInformation().GetDefaultUPFTopoByDNN("internet")
+	smContext := context.NewSMContext("imsi-2089300007487", 20)
 	smContext.PDUAddress = net.ParseIP("60.60.0.1")
 	smContext.Dnn = "internet"
 	SetUpAllUPF(upfRoot)
@@ -44,17 +44,17 @@ func TestSetUpUplinkUserPlane(t *testing.T) {
 
 func TestSetUpDownlinkUserPlane(t *testing.T) {
 
-	upfRoot := smf_context.GetUserPlaneInformation().GetDefaultUPFTopoByDNN("internet")
-	smContext := smf_context.NewSMContext("imsi-2089300007487", 20)
+	upfRoot := context.GetUserPlaneInformation().GetDefaultUPFTopoByDNN("internet")
+	smContext := context.NewSMContext("imsi-2089300007487", 20)
 	smContext.PDUAddress = net.ParseIP("60.60.0.1")
 	smContext.Dnn = "internet"
 	SetUpAllUPF(upfRoot)
 	smf_producer.SetUpDownLinkUserPlane(upfRoot, smContext)
 }
 
-func SetUpAllUPF(node *smf_context.DataPathNode) {
+func SetUpAllUPF(node *context.DataPathNode) {
 
-	node.UPF.UPFStatus = smf_context.AssociatedSetUpSuccess
+	node.UPF.UPFStatus = context.AssociatedSetUpSuccess
 	node.UPF.UPIPInfo.Ipv4Address = net.ParseIP("10.200.200.50").To4()
 
 	for _, child_link := range node.DataPathToDN {
