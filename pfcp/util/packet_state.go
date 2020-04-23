@@ -1,4 +1,4 @@
-package pfcp_util
+package util
 
 type PacketState uint8
 

@@ -9,7 +9,7 @@ import (
 	"gofree5gc/src/smf/context"
 	"gofree5gc/src/smf/handler/message"
 	"gofree5gc/src/smf/logger"
-	"gofree5gc/src/smf/pfcp/pfcp_util"
+	"gofree5gc/src/smf/pfcp/util"
 )
 
 const MaxPfcpUdpDataSize = 1024
@@ -18,10 +18,10 @@ var Server pfcpUdp.PfcpServer
 
 var ServerStartTime time.Time
 
-var SeqNumTable *pfcp_util.SeqNumTable
+var SeqNumTable *util.SeqNumTable
 
 func init() {
-	SeqNumTable = pfcp_util.NewSeqNumTable()
+	SeqNumTable = util.NewSeqNumTable()
 }
 
 func Run() {
