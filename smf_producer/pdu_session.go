@@ -249,11 +249,11 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		case nas.MsgTypePDUSessionReleaseComplete:
 			// Send Release Notify to AMF
 			logger.PduSessLog.Infoln("[SMF] Send Update SmContext Response")
+			response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
 			SMContextUpdateResponse := http_wrapper.Response{
 				Status: http.StatusOK,
 				Body:   response,
 			}
-			response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
 			rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &SMContextUpdateResponse}
 
 			smf_context.RemoveSMContext(smContext.Ref)
