@@ -11,16 +11,16 @@ package main
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli"
 	"free5gc/src/app"
 	"free5gc/src/smf/logger"
-	"free5gc/src/smf/smf_service"
+	"free5gc/src/smf/service"
 	"free5gc/src/smf/version"
+	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli"
 	"os"
 )
 
-var SMF = &smf_service.SMF{}
+var SMF = &service.SMF{}
 
 var appLog *logrus.Entry
 
