@@ -1,4 +1,4 @@
-package pfcp_udp_test
+package udp_test
 
 import (
 	"net"
@@ -11,20 +11,20 @@ import (
 	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/smf/handler"
-	"free5gc/src/smf/pfcp/pfcp_udp"
+	"free5gc/src/smf/pfcp/udp"
 )
 
 const testPfcpClientPort = 12345
 
 func TestRun(t *testing.T) {
 	// Set SMF Node ID
-	pfcp_udp.ServerNodeId = pfcpType.NodeID{
+	udp.ServerNodeId = pfcpType.NodeID{
 		NodeIdType:  pfcpType.NodeIdTypeIpv4Address,
 		NodeIdValue: net.ParseIP("127.0.0.1").To4(),
 	}
 
 	go handler.Handle()
-	pfcp_udp.Run()
+	udp.Run()
 
 	testPfcpReq := pfcp.Message{
 		Header: pfcp.Header{

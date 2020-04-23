@@ -3,7 +3,7 @@ package pdusession
 import (
 	"free5gc/lib/http2_util"
 	"free5gc/lib/path_util"
-	"free5gc/src/smf/pfcp/pfcp_udp"
+	"free5gc/src/smf/pfcp/udp"
 	"github.com/gin-gonic/gin"
 	"log"
 )
@@ -13,7 +13,7 @@ func DummyServer() {
 
 	AddService(router)
 
-	go pfcp_udp.Run()
+	go udp.Run()
 
 	smfKeyLogPath := path_util.Gofree5gcPath("free5gc/smfsslkey.log")
 	smfPemPath := path_util.Gofree5gcPath("free5gc/support/TLS/smf.pem")

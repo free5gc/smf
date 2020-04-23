@@ -11,21 +11,21 @@ import (
 	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/smf/handler"
-	"free5gc/src/smf/pfcp/pfcp_udp"
+	"free5gc/src/smf/pfcp/udp"
 )
 
 const testPfcpClientPort = 12345
 
 func init() {
-	pfcp_udp.ServerNodeId = pfcpType.NodeID{
+	udp.ServerNodeId = pfcpType.NodeID{
 		NodeIdType:  pfcpType.NodeIdTypeIpv4Address,
 		NodeIdValue: net.ParseIP("127.0.0.1").To4(),
 	}
 
-	pfcp_udp.Run()
+	udp.Run()
 
 	// Reset start time of PFCP server
-	pfcp_udp.ServerStartTime = time.Date(1972, time.January, 1, 0, 0, 0, 0, time.UTC)
+	udp.ServerStartTime = time.Date(1972, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 	go handler.Handle()
 }
@@ -63,12 +63,12 @@ func TestHandlePfcpAssociationSetupRequest(t *testing.T) {
 			SequenceNumber: 1,
 		},
 		Body: pfcp.PFCPAssociationSetupResponse{
-			NodeID: &pfcp_udp.ServerNodeId,
+			NodeID: &udp.ServerNodeId,
 			Cause: &pfcpType.Cause{
 				CauseValue: pfcpType.CauseRequestAccepted,
 			},
 			RecoveryTimeStamp: &pfcpType.RecoveryTimeStamp{
-				RecoveryTimeStamp: pfcp_udp.ServerStartTime,
+				RecoveryTimeStamp: udp.ServerStartTime,
 			},
 			CPFunctionFeatures: &pfcpType.CPFunctionFeatures{
 				SupportedFeatures: 0,
@@ -122,7 +122,7 @@ func TestHandlePfcpAssociationReleaseRequest(t *testing.T) {
 			SequenceNumber: 1,
 		},
 		Body: pfcp.PFCPAssociationReleaseResponse{
-			NodeID: &pfcp_udp.ServerNodeId,
+			NodeID: &udp.ServerNodeId,
 			Cause: &pfcpType.Cause{
 				// Cause value would be No Established PFCP Association if TestHandlePfcpAssociationReleaseRequest is run alone
 				// CauseValue: pfcpType.CauseNoEstablishedPfcpAssociation,

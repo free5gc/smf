@@ -6,7 +6,7 @@ import (
 	"free5gc/lib/pfcp"
 	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/src/smf/context"
-	"free5gc/src/smf/pfcp/pfcp_udp"
+	"free5gc/src/smf/pfcp/udp"
 )
 
 func BuildPfcpAssociationSetupRequest() (pfcp.PFCPAssociationSetupRequest, error) {
@@ -15,7 +15,7 @@ func BuildPfcpAssociationSetupRequest() (pfcp.PFCPAssociationSetupRequest, error
 	msg.NodeID = &context.SMF_Self().CPNodeID
 
 	msg.RecoveryTimeStamp = &pfcpType.RecoveryTimeStamp{
-		RecoveryTimeStamp: pfcp_udp.ServerStartTime,
+		RecoveryTimeStamp: udp.ServerStartTime,
 	}
 
 	msg.CPFunctionFeatures = &pfcpType.CPFunctionFeatures{
@@ -33,7 +33,7 @@ func BuildPfcpAssociationSetupResponse(cause pfcpType.Cause) (pfcp.PFCPAssociati
 	msg.Cause = &cause
 
 	msg.RecoveryTimeStamp = &pfcpType.RecoveryTimeStamp{
-		RecoveryTimeStamp: pfcp_udp.ServerStartTime,
+		RecoveryTimeStamp: udp.ServerStartTime,
 	}
 
 	msg.CPFunctionFeatures = &pfcpType.CPFunctionFeatures{

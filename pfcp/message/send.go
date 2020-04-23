@@ -5,7 +5,7 @@ import (
 	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/src/smf/context"
 	"free5gc/src/smf/logger"
-	"free5gc/src/smf/pfcp/pfcp_udp"
+	"free5gc/src/smf/pfcp/udp"
 	"net"
 )
 
@@ -34,7 +34,7 @@ func SendPfcpAssociationSetupRequest(addr *net.UDPAddr) {
 		Body: pfcpMsg,
 	}
 
-	pfcp_udp.SendPfcp(message, addr)
+	udp.SendPfcp(message, addr)
 }
 
 func SendPfcpAssociationSetupResponse(addr *net.UDPAddr, cause pfcpType.Cause) {
@@ -55,7 +55,7 @@ func SendPfcpAssociationSetupResponse(addr *net.UDPAddr, cause pfcpType.Cause) {
 		Body: pfcpMsg,
 	}
 
-	pfcp_udp.SendPfcp(message, addr)
+	udp.SendPfcp(message, addr)
 }
 
 func SendPfcpAssociationReleaseRequest(addr *net.UDPAddr) {
@@ -76,7 +76,7 @@ func SendPfcpAssociationReleaseRequest(addr *net.UDPAddr) {
 		Body: pfcpMsg,
 	}
 
-	pfcp_udp.SendPfcp(message, addr)
+	udp.SendPfcp(message, addr)
 }
 
 // Deprecated: PFCP Association Release Procedure should be initiated by the CP function
@@ -98,7 +98,7 @@ func SendPfcpAssociationReleaseResponse(addr *net.UDPAddr, cause pfcpType.Cause)
 		Body: pfcpMsg,
 	}
 
-	pfcp_udp.SendPfcp(message, addr)
+	udp.SendPfcp(message, addr)
 }
 
 func SendPfcpSessionEstablishmentRequest(raddr *net.UDPAddr, ctx *context.SMContext) {
@@ -121,7 +121,7 @@ func SendPfcpSessionEstablishmentRequest(raddr *net.UDPAddr, ctx *context.SMCont
 		Body: pfcpMsg,
 	}
 
-	pfcp_udp.SendPfcp(message, raddr)
+	udp.SendPfcp(message, raddr)
 }
 
 func SendPfcpSessionEstablishmentRequestForULCL(raddr *net.UDPAddr, ctx *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) {
@@ -146,7 +146,7 @@ func SendPfcpSessionEstablishmentRequestForULCL(raddr *net.UDPAddr, ctx *context
 
 	logger.PduSessLog.Traceln("[SMF] Send SendPfcpSessionEstablishmentRequestForULCL")
 	logger.PduSessLog.Traceln("Send to addr ", raddr.String())
-	pfcp_udp.SendPfcp(message, raddr)
+	udp.SendPfcp(message, raddr)
 }
 
 // Deprecated: PFCP Session Establishment Procedure should be initiated by the CP function
@@ -170,7 +170,7 @@ func SendPfcpSessionEstablishmentResponse(addr *net.UDPAddr) {
 		Body: pfcpMsg,
 	}
 
-	pfcp_udp.SendPfcp(message, addr)
+	udp.SendPfcp(message, addr)
 }
 
 func SendPfcpSessionModificationRequest(raddr *net.UDPAddr, ctx *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (seqNum uint32) {
@@ -196,7 +196,7 @@ func SendPfcpSessionModificationRequest(raddr *net.UDPAddr, ctx *context.SMConte
 		Body: pfcpMsg,
 	}
 
-	pfcp_udp.SendPfcp(message, raddr)
+	udp.SendPfcp(message, raddr)
 	return seqNum
 }
 
@@ -221,7 +221,7 @@ func SendPfcpSessionModificationResponse(addr *net.UDPAddr) {
 		Body: pfcpMsg,
 	}
 
-	pfcp_udp.SendPfcp(message, addr)
+	udp.SendPfcp(message, addr)
 }
 
 func SendPfcpSessionDeletionRequest(addr *net.UDPAddr, ctx *context.SMContext) (seqNum uint32) {
@@ -244,7 +244,7 @@ func SendPfcpSessionDeletionRequest(addr *net.UDPAddr, ctx *context.SMContext) (
 		Body: pfcpMsg,
 	}
 
-	pfcp_udp.SendPfcp(message, addr)
+	udp.SendPfcp(message, addr)
 
 	return seqNum
 }
@@ -270,7 +270,7 @@ func SendPfcpSessionDeletionResponse(addr *net.UDPAddr) {
 		Body: pfcpMsg,
 	}
 
-	pfcp_udp.SendPfcp(message, addr)
+	udp.SendPfcp(message, addr)
 }
 
 func SendPfcpSessionReportResponse(addr *net.UDPAddr, cause pfcpType.Cause, seqFromUPF uint32, SEID uint64) {
@@ -292,5 +292,5 @@ func SendPfcpSessionReportResponse(addr *net.UDPAddr, cause pfcpType.Cause, seqF
 		Body: pfcpMsg,
 	}
 
-	pfcp_udp.SendPfcp(message, addr)
+	udp.SendPfcp(message, addr)
 }

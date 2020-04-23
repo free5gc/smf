@@ -1,4 +1,4 @@
-package pfcp_udp
+package udp
 
 import (
 	"net"
