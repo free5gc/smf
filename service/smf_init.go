@@ -18,7 +18,7 @@ import (
 	"free5gc/src/smf/pdusession"
 	"free5gc/src/smf/pfcp/message"
 	"free5gc/src/smf/pfcp/udp"
-	"free5gc/src/smf/smf_util"
+	smf_util "free5gc/src/smf/util"
 	"net"
 	"os"
 	"os/exec"

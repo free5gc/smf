@@ -1,6 +1,6 @@
 //+build !debug
 
-package smf_util
+package util
 
 import (
 	"free5gc/lib/path_util"
