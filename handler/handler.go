@@ -5,7 +5,7 @@ import (
 	"free5gc/lib/openapi/models"
 	"free5gc/src/smf/handler/message"
 	"free5gc/src/smf/pfcp"
-	"free5gc/src/smf/smf_producer"
+	"free5gc/src/smf/producer"
 	"net/http"
 	"time"
 )
@@ -20,10 +20,10 @@ func Handle() {
 				case message.PFCPMessage:
 					pfcp.Dispatch(msg.PFCPRequest)
 				case message.PDUSessionSMContextCreate:
-					smf_producer.HandlePDUSessionSMContextCreate(msg.ResponseChan, msg.HTTPRequest.Body.(models.PostSmContextsRequest))
+					producer.HandlePDUSessionSMContextCreate(msg.ResponseChan, msg.HTTPRequest.Body.(models.PostSmContextsRequest))
 				case message.PDUSessionSMContextUpdate:
 					smContextRef := msg.HTTPRequest.Params["smContextRef"]
-					seqNum, ResBody := smf_producer.HandlePDUSessionSMContextUpdate(
+					seqNum, ResBody := producer.HandlePDUSessionSMContextUpdate(
 						msg.ResponseChan, smContextRef, msg.HTTPRequest.Body.(models.UpdateSmContextRequest))
 					response := http_wrapper.Response{
 						Status: http.StatusOK,
@@ -32,7 +32,7 @@ func Handle() {
 					message.RspQueue.PutItem(seqNum, msg.ResponseChan, response)
 				case message.PDUSessionSMContextRelease:
 					smContextRef := msg.HTTPRequest.Params["smContextRef"]
-					seqNum := smf_producer.HandlePDUSessionSMContextRelease(
+					seqNum := producer.HandlePDUSessionSMContextRelease(
 						msg.ResponseChan, smContextRef, msg.HTTPRequest.Body.(models.ReleaseSmContextRequest))
 					response := http_wrapper.Response{
 						Status: http.StatusNoContent,
@@ -41,7 +41,7 @@ func Handle() {
 					message.RspQueue.PutItem(seqNum, msg.ResponseChan, response)
 				case message.OAMGetUEPDUSessionInfo:
 					smContextRef := msg.HTTPRequest.Params["smContextRef"]
-					smf_producer.HandleOAMGetUEPDUSessionInfo(msg.ResponseChan, smContextRef)
+					producer.HandleOAMGetUEPDUSessionInfo(msg.ResponseChan, smContextRef)
 				}
 			}
 		case <-time.After(time.Second * 1):

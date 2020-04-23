@@ -1,4 +1,4 @@
-package smf_producer
+package producer
 
 import (
 	"free5gc/lib/pfcp/pfcpType"

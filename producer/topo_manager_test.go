@@ -1,11 +1,11 @@
-package smf_producer_test
+package producer_test
 
 import (
 	"free5gc/lib/path_util"
 	"free5gc/src/smf/context"
 	"free5gc/src/smf/factory"
 	"free5gc/src/smf/pfcp/udp"
-	"free5gc/src/smf/smf_producer"
+	"free5gc/src/smf/producer"
 	"net"
 	"testing"
 )
@@ -39,7 +39,7 @@ func TestSetUpUplinkUserPlane(t *testing.T) {
 	smContext.PDUAddress = net.ParseIP("60.60.0.1")
 	smContext.Dnn = "internet"
 	SetUpAllUPF(upfRoot)
-	smf_producer.SetUpUplinkUserPlane(upfRoot, smContext)
+	producer.SetUpUplinkUserPlane(upfRoot, smContext)
 }
 
 func TestSetUpDownlinkUserPlane(t *testing.T) {
@@ -49,7 +49,7 @@ func TestSetUpDownlinkUserPlane(t *testing.T) {
 	smContext.PDUAddress = net.ParseIP("60.60.0.1")
 	smContext.Dnn = "internet"
 	SetUpAllUPF(upfRoot)
-	smf_producer.SetUpDownLinkUserPlane(upfRoot, smContext)
+	producer.SetUpDownLinkUserPlane(upfRoot, smContext)
 }
 
 func SetUpAllUPF(node *context.DataPathNode) {

@@ -12,7 +12,7 @@ import (
 	smf_message "gofree5gc/src/smf/handler/message"
 	"gofree5gc/src/smf/logger"
 	pfcp_message "gofree5gc/src/smf/pfcp/message"
-	"gofree5gc/src/smf/smf_producer"
+	"gofree5gc/src/smf/producer"
 	"net/http"
 )
 
@@ -198,7 +198,7 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 				logger.PfcpLog.Infoln("smContext.BPManager")
 				if smContext.BPManager.BPStatus == smf_context.UnInitialized {
 					logger.PfcpLog.Infoln("AddPDUSessionAnchorAndULCL")
-					smf_producer.AddPDUSessionAnchorAndULCL(smContext)
+					producer.AddPDUSessionAnchorAndULCL(smContext)
 					smContext.BPManager.BPStatus = smf_context.HasSendPFCPMsg
 				}
 			}
