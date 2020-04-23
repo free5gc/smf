@@ -1,4 +1,4 @@
-package smf_message
+package message
 
 type Event int
 

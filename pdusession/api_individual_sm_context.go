@@ -13,7 +13,7 @@ import (
 	"free5gc/lib/http_wrapper"
 	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/models"
-	"free5gc/src/smf/handler/smf_message"
+	"free5gc/src/smf/handler/message"
 	"free5gc/src/smf/logger"
 	"github.com/gin-gonic/gin"
 	"log"
@@ -43,10 +43,10 @@ func ReleaseSmContext(c *gin.Context) {
 	req := http_wrapper.NewRequest(c.Request, request)
 	req.Params["smContextRef"] = c.Params.ByName("smContextRef")
 
-	message := smf_message.NewHandlerMessage(smf_message.PDUSessionSMContextRelease, req)
-	smf_message.SendMessage(message)
+	msg := message.NewHandlerMessage(message.PDUSessionSMContextRelease, req)
+	message.SendMessage(msg)
 
-	_ = <-message.ResponseChan
+	_ = <-msg.ResponseChan
 
 	c.Status(http.StatusNoContent)
 
@@ -79,10 +79,10 @@ func UpdateSmContext(c *gin.Context) {
 	req := http_wrapper.NewRequest(c.Request, request)
 	req.Params["smContextRef"] = c.Params.ByName("smContextRef")
 
-	message := smf_message.NewHandlerMessage(smf_message.PDUSessionSMContextUpdate, req)
-	smf_message.SendMessage(message)
+	msg := message.NewHandlerMessage(message.PDUSessionSMContextUpdate, req)
+	message.SendMessage(msg)
 
-	rsp := <-message.ResponseChan
+	rsp := <-msg.ResponseChan
 
 	HTTPResponse := rsp.HTTPResponse
 	if HTTPResponse.Status < 300 {

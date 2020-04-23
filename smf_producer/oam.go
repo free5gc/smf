@@ -4,7 +4,7 @@ import (
 	"free5gc/lib/http_wrapper"
 	"free5gc/lib/openapi/models"
 	"free5gc/src/smf/context"
-	"free5gc/src/smf/handler/smf_message"
+	"free5gc/src/smf/handler/message"
 	"net/http"
 	"strconv"
 )
@@ -24,10 +24,10 @@ type PDUSessionInfo struct {
 	Tunnel       context.UPTunnel
 }
 
-func HandleOAMGetUEPDUSessionInfo(rspChan chan smf_message.HandlerResponseMessage, smContextRef string) {
+func HandleOAMGetUEPDUSessionInfo(rspChan chan message.HandlerResponseMessage, smContextRef string) {
 	smContext := context.GetSMContext(smContextRef)
 	if smContext == nil {
-		rspChan <- smf_message.HandlerResponseMessage{
+		rspChan <- message.HandlerResponseMessage{
 			HTTPResponse: &http_wrapper.Response{
 				Header: nil,
 				Status: http.StatusNotFound,
@@ -37,7 +37,7 @@ func HandleOAMGetUEPDUSessionInfo(rspChan chan smf_message.HandlerResponseMessag
 		return
 	}
 
-	rspChan <- smf_message.HandlerResponseMessage{
+	rspChan <- message.HandlerResponseMessage{
 		HTTPResponse: &http_wrapper.Response{
 			Header: nil,
 			Status: http.StatusOK,

@@ -7,7 +7,7 @@ import (
 	"free5gc/lib/pfcp"
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/smf/context"
-	"free5gc/src/smf/handler/smf_message"
+	"free5gc/src/smf/handler/message"
 	"free5gc/src/smf/logger"
 	"free5gc/src/smf/smf_pfcp/pfcp_util"
 )
@@ -52,8 +52,8 @@ func Run() {
 
 			pfcpUdpMessage := pfcpUdp.NewMessage(remoteAddr, &pfcpMessage)
 
-			message := smf_message.NewPfcpMessage(&pfcpUdpMessage)
-			smf_message.SendMessage(message)
+			msg := message.NewPfcpMessage(&pfcpUdpMessage)
+			message.SendMessage(msg)
 		}
 	}(&Server)
 

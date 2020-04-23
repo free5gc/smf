@@ -9,7 +9,7 @@ import (
 	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/pfcp/pfcpUdp"
 	smf_context "free5gc/src/smf/context"
-	"free5gc/src/smf/handler/smf_message"
+	"free5gc/src/smf/handler/message"
 	"free5gc/src/smf/logger"
 	"free5gc/src/smf/smf_pfcp/pfcp_message"
 	"free5gc/src/smf/smf_producer"
