@@ -216,7 +216,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 	logger.PduSessLog.Traceln("[SMF] UpdateSmContextRequest JsonData: ", string(UpdateSmContextRequestJson))
 
 	if body.BinaryDataN1SmMessage != nil {
-		logger.PduSessLog.Infoln("Binary Data N1 SmMessage isn't nil!")
+		logger.PduSessLog.Traceln("Binary Data N1 SmMessage isn't nil!")
 		m := nas.NewMessage()
 		err := m.GsmMessageDecode(&body.BinaryDataN1SmMessage)
 		logger.PduSessLog.Traceln("[SMF] UpdateSmContextRequest N1SmMessage: ", m)
@@ -265,7 +265,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		}
 
 	} else {
-		logger.PduSessLog.Infoln("[SMF] Binary Data N1 SmMessage is nil!")
+		logger.PduSessLog.Traceln("[SMF] Binary Data N1 SmMessage is nil!")
 	}
 
 	tunnel := smContext.Tunnel
