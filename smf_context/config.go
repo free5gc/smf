@@ -1,7 +1,7 @@
 package smf_context
 
 import (
-	"gofree5gc/src/smf/factory"
+	"free5gc/src/smf/factory"
 )
 
 func SetupSMFContext(config *factory.Config) error {

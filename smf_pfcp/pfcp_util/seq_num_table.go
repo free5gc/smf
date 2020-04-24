@@ -2,9 +2,9 @@ package pfcp_util
 
 import (
 
-	//"gofree5gc/src/smf/smf_pfcp/pfcp_udp"
-	"gofree5gc/lib/pfcp"
-	"gofree5gc/src/smf/logger"
+	//"free5gc/src/smf/smf_pfcp/pfcp_udp"
+	"free5gc/lib/pfcp"
+	"free5gc/src/smf/logger"
 )
 
 type SeqNumTableItem struct {

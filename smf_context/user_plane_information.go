@@ -2,10 +2,10 @@ package smf_context
 
 import (
 	"fmt"
-	"gofree5gc/lib/pfcp/pfcpType"
-	"gofree5gc/lib/util_3gpp"
-	"gofree5gc/src/smf/factory"
-	"gofree5gc/src/smf/logger"
+	"free5gc/lib/pfcp/pfcpType"
+	"free5gc/lib/util_3gpp"
+	"free5gc/src/smf/factory"
+	"free5gc/src/smf/logger"
 	"net"
 	"reflect"
 )

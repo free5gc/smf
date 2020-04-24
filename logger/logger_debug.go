@@ -5,8 +5,8 @@ package logger
 import (
 	"fmt"
 	"github.com/sirupsen/logrus"
-	"gofree5gc/lib/logger_util"
-	"gofree5gc/lib/path_util"
+	"free5gc/lib/logger_util"
+	"free5gc/lib/path_util"
 	"os"
 	"runtime"
 	"strings"
@@ -45,7 +45,7 @@ func init() {
 		},
 	}
 
-	fileHook, err := logger_util.NewFileHook(path_util.Gofree5gcPath("gofree5gc/free5gc.log"), os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	fileHook, err := logger_util.NewFileHook(path_util.Gofree5gcPath("free5gc/free5gc.log"), os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err == nil {
 		log.Hooks.Add(fileHook)
 	}

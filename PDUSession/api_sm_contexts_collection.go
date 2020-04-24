@@ -11,11 +11,11 @@ package PDUSession
 
 import (
 	"github.com/gin-gonic/gin"
-	"gofree5gc/lib/http_wrapper"
-	"gofree5gc/lib/openapi"
-	"gofree5gc/lib/openapi/models"
-	"gofree5gc/src/smf/logger"
-	"gofree5gc/src/smf/smf_handler/smf_message"
+	"free5gc/lib/http_wrapper"
+	"free5gc/lib/openapi"
+	"free5gc/lib/openapi/models"
+	"free5gc/src/smf/logger"
+	"free5gc/src/smf/smf_handler/smf_message"
 	"net/http"
 	"strings"
 )

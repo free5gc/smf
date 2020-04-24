@@ -2,8 +2,8 @@ package Nsmf_OAM
 
 import (
 	"github.com/gin-gonic/gin"
-	"gofree5gc/lib/http_wrapper"
-	"gofree5gc/src/smf/smf_handler/smf_message"
+	"free5gc/lib/http_wrapper"
+	"free5gc/src/smf/smf_handler/smf_message"
 )
 
 func GetUEPDUSessionInfo(c *gin.Context) {

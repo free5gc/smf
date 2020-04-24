@@ -1,10 +1,10 @@
 package smf_producer
 
 import (
-	"gofree5gc/lib/http_wrapper"
-	"gofree5gc/lib/openapi/models"
-	"gofree5gc/src/smf/smf_context"
-	"gofree5gc/src/smf/smf_handler/smf_message"
+	"free5gc/lib/http_wrapper"
+	"free5gc/lib/openapi/models"
+	"free5gc/src/smf/smf_context"
+	"free5gc/src/smf/smf_handler/smf_message"
 	"net/http"
 	"strconv"
 )

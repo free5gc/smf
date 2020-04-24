@@ -2,8 +2,8 @@ package smf_context
 
 import (
 	"fmt"
-	"gofree5gc/lib/openapi/models"
-	"gofree5gc/src/smf/factory"
+	"free5gc/lib/openapi/models"
+	"free5gc/src/smf/factory"
 	"time"
 )
 

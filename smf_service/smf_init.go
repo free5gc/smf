@@ -3,22 +3,22 @@ package smf_service
 import (
 	"bufio"
 	"fmt"
-	"gofree5gc/lib/http2_util"
-	"gofree5gc/lib/openapi/models"
-	"gofree5gc/lib/path_util"
-	"gofree5gc/lib/pfcp/pfcpUdp"
-	"gofree5gc/src/app"
-	"gofree5gc/src/smf/EventExposure"
-	Nsmf_OAM "gofree5gc/src/smf/OAM"
-	"gofree5gc/src/smf/PDUSession"
-	"gofree5gc/src/smf/factory"
-	"gofree5gc/src/smf/logger"
-	"gofree5gc/src/smf/smf_consumer"
-	"gofree5gc/src/smf/smf_context"
-	"gofree5gc/src/smf/smf_handler"
-	"gofree5gc/src/smf/smf_pfcp/pfcp_message"
-	"gofree5gc/src/smf/smf_pfcp/pfcp_udp"
-	"gofree5gc/src/smf/smf_util"
+	"free5gc/lib/http2_util"
+	"free5gc/lib/openapi/models"
+	"free5gc/lib/path_util"
+	"free5gc/lib/pfcp/pfcpUdp"
+	"free5gc/src/app"
+	"free5gc/src/smf/EventExposure"
+	Nsmf_OAM "free5gc/src/smf/OAM"
+	"free5gc/src/smf/PDUSession"
+	"free5gc/src/smf/factory"
+	"free5gc/src/smf/logger"
+	"free5gc/src/smf/smf_consumer"
+	"free5gc/src/smf/smf_context"
+	"free5gc/src/smf/smf_handler"
+	"free5gc/src/smf/smf_pfcp/pfcp_message"
+	"free5gc/src/smf/smf_pfcp/pfcp_udp"
+	"free5gc/src/smf/smf_util"
 	"net"
 	"os"
 	"os/exec"
@@ -79,14 +79,14 @@ func (*SMF) Initialize(c *cli.Context) {
 	if config.smfcfg != "" {
 		factory.InitConfigFactory(config.smfcfg)
 	} else {
-		DefaultSmfConfigPath := path_util.Gofree5gcPath("gofree5gc/config/smfcfg.conf")
+		DefaultSmfConfigPath := path_util.Gofree5gcPath("free5gc/config/smfcfg.conf")
 		factory.InitConfigFactory(DefaultSmfConfigPath)
 	}
 
 	if config.uerouting != "" {
 		factory.InitRoutingConfigFactory(config.uerouting)
 	} else {
-		DefaultUERoutingPath := path_util.Gofree5gcPath("gofree5gc/config/uerouting.yaml")
+		DefaultUERoutingPath := path_util.Gofree5gcPath("free5gc/config/uerouting.yaml")
 		factory.InitRoutingConfigFactory(DefaultUERoutingPath)
 	}
 

@@ -1,8 +1,8 @@
 package smf_context
 
 import (
-	"gofree5gc/lib/pfcp/pfcpType"
-	"gofree5gc/lib/util_3gpp"
+	"free5gc/lib/pfcp/pfcpType"
+	"free5gc/lib/util_3gpp"
 )
 
 const (

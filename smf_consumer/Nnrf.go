@@ -3,12 +3,12 @@ package smf_consumer
 import (
 	"context"
 	"fmt"
-	"gofree5gc/lib/Nnrf_NFDiscovery"
-	"gofree5gc/lib/Nudm_SubscriberDataManagement"
-	"gofree5gc/lib/openapi/common"
-	"gofree5gc/lib/openapi/models"
-	"gofree5gc/src/smf/logger"
-	"gofree5gc/src/smf/smf_context"
+	"free5gc/lib/Nnrf_NFDiscovery"
+	"free5gc/lib/Nudm_SubscriberDataManagement"
+	"free5gc/lib/openapi/common"
+	"free5gc/lib/openapi/models"
+	"free5gc/src/smf/logger"
+	"free5gc/src/smf/smf_context"
 	"net/http"
 
 	"strings"
