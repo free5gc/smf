@@ -1,8 +1,8 @@
 package util
 
 import (
-	"gofree5gc/lib/pfcp"
-	"gofree5gc/src/smf/logger"
+	"free5gc/lib/pfcp"
+	"free5gc/src/smf/logger"
 )
 
 type SeqNumTableItem struct {

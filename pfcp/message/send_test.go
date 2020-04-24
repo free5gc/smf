@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	// "free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/smf/pfcp/message"
 	"free5gc/src/smf/pfcp/udp"
