@@ -190,6 +190,7 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 		if pfcpRsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
 			resQueueItem := HttpResponseQueue.GetItem(seqNum)
 
+			logger.PduSessLog.Infoln("[SMF] Send Update SMContext Response")
 			resQueueItem.RspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &resQueueItem.Response}
 
 			smContext := smf_context.GetSMContextBySEID(SEID)

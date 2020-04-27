@@ -188,6 +188,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMessage, smContextRef string, body models.UpdateSmContextRequest) (seqNum uint32, resBody models.UpdateSmContextResponse) {
 	smContext := smf_context.GetSMContext(smContextRef)
 
+	logger.PduSessLog.Infoln("[SMF] PDUSession SMContext Update")
 	if smContext == nil {
 		rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
 			Header: nil,
@@ -215,6 +216,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 	logger.PduSessLog.Traceln("[SMF] UpdateSmContextRequest JsonData: ", string(UpdateSmContextRequestJson))
 
 	if body.BinaryDataN1SmMessage != nil {
+		logger.PduSessLog.Traceln("Binary Data N1 SmMessage isn't nil!")
 		m := nas.NewMessage()
 		err := m.GsmMessageDecode(&body.BinaryDataN1SmMessage)
 		logger.PduSessLog.Traceln("[SMF] UpdateSmContextRequest N1SmMessage: ", m)
@@ -262,6 +264,8 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			return
 		}
 
+	} else {
+		logger.PduSessLog.Traceln("[SMF] Binary Data N1 SmMessage is nil!")
 	}
 
 	tunnel := smContext.Tunnel
@@ -336,15 +340,32 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		farList = []*smf_context.FAR{DLPDR.FAR}
 
 	case models.N2SmInfoType_PDU_RES_REL_RSP:
+		logger.PduSessLog.Infoln("[SMF] N2 PDUSession Release Complete ")
+		if smContext.PDUSessionRelease_DUE_TO_DUP_PDU_ID {
+			logger.PduSessLog.Infoln("[SMF] Send Update SmContext Response")
+			response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
+			SMContextUpdateResponse := http_wrapper.Response{
+				Status: http.StatusOK,
+				Body:   response,
+			}
+			rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &SMContextUpdateResponse}
 
-		logger.PduSessLog.Infoln("[SMF] Send Update SmContext Response")
-		SMContextUpdateResponse := http_wrapper.Response{
-			Status: http.StatusOK,
-			Body:   response,
+			smf_context.RemoveSMContext(smContext.Ref)
+			consumer.SendSMContextStatusNotification(smContext.SmStatusNotifyUri)
+
+			smContext.PDUSessionRelease_DUE_TO_DUP_PDU_ID = false
+			return
+
+		} else { // normal case
+			logger.PduSessLog.Infoln("[SMF] Send Update SmContext Response")
+			SMContextUpdateResponse := http_wrapper.Response{
+				Status: http.StatusOK,
+				Body:   response,
+			}
+			rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &SMContextUpdateResponse}
+
+			return
 		}
-		rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &SMContextUpdateResponse}
-
-		return
 	case models.N2SmInfoType_PATH_SWITCH_REQ:
 		DLPDR := tunnel.UpfRoot.DownLinkTunnel.MatchedPDR
 		err = smf_context.HandlePathSwitchRequestTransfer(body.BinaryDataN2SmInformation, smContext)
@@ -401,6 +422,32 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 	case models.HoState_COMPLETED:
 		smContext.HoState = models.HoState_COMPLETED
 		response.JsonData.HoState = models.HoState_COMPLETED
+	}
+
+	switch smContextUpdateData.Cause {
+
+	case models.Cause_REL_DUE_TO_DUPLICATE_SESSION_ID:
+		//* release PDU Session Here
+
+		response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "PDUResourceReleaseCommand"}
+		response.JsonData.N2SmInfoType = models.N2SmInfoType_PDU_RES_REL_CMD
+		smContext.PDUSessionRelease_DUE_TO_DUP_PDU_ID = true
+
+		buf, err := smf_context.BuildPDUSessionResourceReleaseCommandTransfer(smContext)
+		response.BinaryDataN2SmInformation = buf
+		if err != nil {
+			logger.PduSessLog.Error(err)
+		}
+
+		curDataPathNode := smContext.Tunnel.UpfRoot
+
+		for curDataPathNode != nil {
+			seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.PFCPAddr(), smContext)
+			curDataPathNode = curDataPathNode.DownLinkTunnel.SrcEndPoint
+		}
+
+		fmt.Println("[SMF] Cause_REL_DUE_TO_DUPLICATE_SESSION_ID")
+		return seqNum, response
 	}
 
 	if err != nil {
