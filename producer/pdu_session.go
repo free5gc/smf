@@ -351,7 +351,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &SMContextUpdateResponse}
 
 			smf_context.RemoveSMContext(smContext.Ref)
-			smf_consumer.SendSMContextStatusNotification(smContext.SmStatusNotifyUri)
+			consumer.SendSMContextStatusNotification(smContext.SmStatusNotifyUri)
 
 			smContext.PDUSessionRelease_DUE_TO_DUP_PDU_ID = false
 			return
