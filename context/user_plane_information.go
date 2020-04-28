@@ -191,20 +191,43 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 		if idx == lowerBound {
 			root = curDataPathNode
 			root.DataPathToAN = NewDataPathDownLink()
-			root.SetUpLinkSrcNode(nil)
+			err := root.SetUpLinkSrcNode(nil)
+
+			if err != nil {
+				logger.CtxLog.Warnln(err)
+			}
 		}
 		if idx == upperBound {
-			curDataPathNode.SetDownLinkSrcNode(nil)
+			err := curDataPathNode.SetDownLinkSrcNode(nil)
+
+			if err != nil {
+				logger.CtxLog.Warnln(err)
+			}
 			// curDataPathNode.AddParent(prevDataPathNode)
 			curDataPathNode.DLDataPathLinkForPSA = NewDataPathUpLink()
 			// prevDataPathNode.AddChild(curDataPathNode)
 		}
 		if prevDataPathNode != nil {
-			prevDataPathNode.SetDownLinkSrcNode(curDataPathNode)
-			curDataPathNode.SetUpLinkSrcNode(prevDataPathNode)
+			err := prevDataPathNode.SetDownLinkSrcNode(curDataPathNode)
 
-			curDataPathNode.AddParent(prevDataPathNode)
-			prevDataPathNode.AddChild(curDataPathNode)
+			if err != nil {
+				logger.CtxLog.Warnln(err)
+			}
+			err = curDataPathNode.SetUpLinkSrcNode(prevDataPathNode)
+
+			if err != nil {
+				logger.CtxLog.Warnln(err)
+			}
+			err = curDataPathNode.AddParent(prevDataPathNode)
+
+			if err != nil {
+				logger.CtxLog.Warnln(err)
+			}
+			err = prevDataPathNode.AddChild(curDataPathNode)
+
+			if err != nil {
+				logger.CtxLog.Warnln(err)
+			}
 		}
 		prevDataPathNode = curDataPathNode
 	}
@@ -371,8 +394,7 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (pathExist bool
 	}
 
 	//Run DFS
-	var visited map[*UPNode]bool
-	visited = make(map[*UPNode]bool)
+	visited := make(map[*UPNode]bool)
 
 	for _, upNode := range upi.UPNodes {
 		visited[upNode] = false

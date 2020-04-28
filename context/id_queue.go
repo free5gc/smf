@@ -10,10 +10,10 @@ type IDQueue struct {
 type IDType int
 
 const (
-	PDRType  IDType = iota
-	FARType  
-	BARType  
-	TEIDType 
+	PDRType IDType = iota
+	FARType
+	BARType
+	TEIDType
 )
 
 func NewIDQueue(idType IDType) (idQueue *IDQueue) {
