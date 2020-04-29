@@ -34,7 +34,7 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 			OperationCode: OperationCodeCreateNewQoSRule,
 			QFI:           uint8(authDefQos.Var5qi),
 			PacketFilterList: []PacketFilter{
-				PacketFilter{
+				{
 					Identifier:    0x01,
 					Direction:     PacketFilterDirectionBidirectional,
 					ComponentType: PacketFilterComponentTypeMatchAll,

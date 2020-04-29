@@ -72,7 +72,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		logger.PduSessLog.Errorln("Get SessionManagementSubscriptionData error:", err)
 	}
 
-	if sessSubData != nil && len(sessSubData) > 0 {
+	if len(sessSubData) > 0 {
 		smContext.DnnConfiguration = sessSubData[0].DnnConfigurations[smContext.Dnn]
 	} else {
 		logger.PduSessLog.Errorln("SessionManagementSubscriptionData from UDM is nil")

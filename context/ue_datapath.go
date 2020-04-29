@@ -85,8 +85,16 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 					UEPGraph.Graph = append(UEPGraph.Graph, child_node)
 				}
 
-				ue_node.AddChild(child_node)
-				ue_node.AddDestinationOfChild(child_node, DataEndPoint)
+				err = ue_node.AddChild(child_node)
+
+				if err != nil {
+					logger.CtxLog.Warnln(err)
+				}
+				err = ue_node.AddDestinationOfChild(child_node, DataEndPoint)
+
+				if err != nil {
+					logger.CtxLog.Warnln(err)
+				}
 				UEPGraph.AddANUPF(ue_node)
 			case upperBound:
 				parent_name := path.UPF[idx-1]
@@ -101,7 +109,11 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 					UEPGraph.Graph = append(UEPGraph.Graph, parent_node)
 				}
 
-				ue_node.AddParent(parent_node)
+				err = ue_node.AddParent(parent_node)
+
+				if err != nil {
+					logger.CtxLog.Warnln(err)
+				}
 				UEPGraph.AddPSA(ue_node)
 			default:
 				child_name := path.UPF[idx+1]
@@ -128,9 +140,21 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 					UEPGraph.Graph = append(UEPGraph.Graph, parent_node)
 				}
 
-				ue_node.AddChild(child_node)
-				ue_node.AddDestinationOfChild(child_node, DataEndPoint)
-				ue_node.AddParent(parent_node)
+				err = ue_node.AddChild(child_node)
+
+				if err != nil {
+					logger.CtxLog.Warnln(err)
+				}
+				err = ue_node.AddDestinationOfChild(child_node, DataEndPoint)
+
+				if err != nil {
+					logger.CtxLog.Warnln(err)
+				}
+				err = ue_node.AddParent(parent_node)
+
+				if err != nil {
+					logger.CtxLog.Warnln(err)
+				}
 			}
 
 		}
