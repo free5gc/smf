@@ -20,9 +20,10 @@ import (
 	smf_message "free5gc/src/smf/handler/message"
 	"free5gc/src/smf/logger"
 	pfcp_message "free5gc/src/smf/pfcp/message"
-	"github.com/antihax/optional"
 	"net"
 	"net/http"
+
+	"github.com/antihax/optional"
 )
 
 func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMessage, request models.PostSmContextsRequest) {
@@ -470,7 +471,7 @@ func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMe
 	// smf_context.RemoveSMContext(smContext.Ref)
 
 	addr := net.UDPAddr{
-		IP:   smContext.Tunnel.Node.NodeID.NodeIdValue,
+		IP:   smContext.Tunnel.UpfRoot.UPF.UPIPInfo.Ipv4Address,
 		Port: pfcpUdp.PFCP_PORT,
 	}
 

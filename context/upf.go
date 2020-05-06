@@ -18,7 +18,6 @@ func init() {
 }
 
 type UPTunnel struct {
-	Node  *UPF
 	ULPDR *PDR
 	DLPDR *PDR
 
