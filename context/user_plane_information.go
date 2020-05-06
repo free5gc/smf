@@ -316,21 +316,16 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 
 			DLFAR := DLPDR.FAR
 
-			nextDLTunnel := curDLTunnel.DestEndPoint.DownLinkTunnel
-			fmt.Println("DestEndPoint TEID", nextDLTunnel.TEID)
-			fmt.Println("SrcEndPoint TEID", curDLTunnel.DestEndPoint.UpLinkTunnel.TEID)
-			//fmt.Println("SrcEndPoint IP", curDLTunnel.DestEndPoint.UpLinkTunnel.SrcEndPoint.GetNodeIP())
-
 			if nextDLDest := curULTunnel.SrcEndPoint; nextDLDest != nil {
-				fmt.Println("In GenerateDataPath")
-				fmt.Println(nextDLDest.GetNodeIP())
+				nextDLTunnel := curULTunnel.SrcEndPoint.DownLinkTunnel
+
 				DLFAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
 				DLFAR.ForwardingParameters = &ForwardingParameters{
 					DestinationInterface: pfcpType.DestinationInterface{InterfaceValue: pfcpType.DestinationInterfaceAccess},
 					OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
 						OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
 						Ipv4Address:                    nextDLDest.UPF.UPIPInfo.Ipv4Address,
-						Teid:                           curDLTunnel.DestEndPoint.UpLinkTunnel.TEID,
+						Teid:                           nextDLTunnel.TEID,
 					},
 				}
 			}
