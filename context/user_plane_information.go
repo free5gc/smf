@@ -329,7 +329,7 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 					DestinationInterface: pfcpType.DestinationInterface{InterfaceValue: pfcpType.DestinationInterfaceAccess},
 					OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
 						OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
-						Ipv4Address:                    nextDLDest.UPF.NodeID.ResolveNodeIdToIp(),
+						Ipv4Address:                    nextDLDest.UPF.UPIPInfo.Ipv4Address,
 						Teid:                           curDLTunnel.DestEndPoint.UpLinkTunnel.TEID,
 					},
 				}
