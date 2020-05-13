@@ -26,9 +26,8 @@ func init() {
 
 func Run() {
 	CPNodeID := context.SMF_Self().CPNodeID
-	if len(CPNodeID.NodeIdValue) != 0 {
-		Server.Addr = CPNodeID.ResolveNodeIdToIp().String()
-	}
+	Server = pfcpUdp.NewPfcpServer(CPNodeID.ResolveNodeIdToIp().String())
+
 	err := Server.Listen()
 	if err != nil {
 		logger.PfcpLog.Errorf("Failed to listen: %v", err)
