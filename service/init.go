@@ -18,7 +18,7 @@ import (
 	"free5gc/src/smf/pdusession"
 	"free5gc/src/smf/pfcp/message"
 	"free5gc/src/smf/pfcp/udp"
-	smf_util "free5gc/src/smf/util"
+	"free5gc/src/smf/util"
 	"net"
 	"os"
 	"os/exec"
@@ -167,11 +167,26 @@ func (smf *SMF) Start() {
 
 	go handler.Handle()
 	HTTPAddr := fmt.Sprintf("%s:%d", context.SMF_Self().HTTPAddress, context.SMF_Self().HTTPPort)
-	server, err := http2_util.NewServer(HTTPAddr, smf_util.SmfLogPath, router)
-	if err == nil && server != nil {
-		initLog.Infoln(server.ListenAndServeTLS(smf_util.SmfPemPath, smf_util.SmfKeyPath))
-	} else {
-		initLog.Fatalf("Initialize http2 server failed: %+v", err)
+	server, err := http2_util.NewServer(HTTPAddr, util.SmfLogPath, router)
+
+	if server == nil {
+		initLog.Errorln("Initialize HTTP server failed: %+v", err)
+		return
+	}
+
+	if err != nil {
+		initLog.Warnln("Initialize HTTP server: +%v", err)
+	}
+
+	serverScheme := factory.SmfConfig.Configuration.Sbi.Scheme
+	if serverScheme == "http" {
+		err = server.ListenAndServe()
+	} else if serverScheme == "https" {
+		err = server.ListenAndServeTLS(util.SmfPemPath, util.SmfKeyPath)
+	}
+
+	if err != nil {
+		initLog.Fatalln("HTTP server setup failed: %+v", err)
 	}
 
 }
