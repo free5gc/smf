@@ -39,15 +39,20 @@ func Run() {
 			var pfcpMessage pfcp.Message
 			remoteAddr, err := p.ReadFrom(&pfcpMessage)
 			if err != nil {
-				logger.PfcpLog.Errorf("Read PFCP error: %v", err)
+				if err.Error() == "Receive resend PFCP request" {
+					logger.PfcpLog.Infoln(err)
+				} else {
+					logger.PfcpLog.Warnf("Read PFCP error: %v", err)
+				}
+
 				continue
 			}
 
-			seq_num_check_pass := SeqNumTable.RecvCheckAndPutItem(&pfcpMessage)
-			if !seq_num_check_pass {
-				logger.PfcpLog.Errorf("\nSequence Number checking error.\n")
-				continue
-			}
+			// seq_num_check_pass := SeqNumTable.RecvCheckAndPutItem(&pfcpMessage)
+			// if !seq_num_check_pass {
+			// 	logger.PfcpLog.Warnf("\nSequence Number checking error.\n")
+			// 	continue
+			// }
 
 			pfcpUdpMessage := pfcpUdp.NewMessage(remoteAddr, &pfcpMessage)
 
@@ -60,11 +65,11 @@ func Run() {
 }
 
 func SendPfcp(msg pfcp.Message, addr *net.UDPAddr) {
-	seq_num_check_pass := SeqNumTable.SendCheckAndPutItem(&msg)
-	if !seq_num_check_pass {
-		logger.PfcpLog.Errorf("\nSequence Number checking error.\n")
-		return
-	}
+	// seq_num_check_pass := SeqNumTable.SendCheckAndPutItem(&msg)
+	// if !seq_num_check_pass {
+	// 	logger.PfcpLog.Errorf("\nSequence Number checking error.\n")
+	// 	return
+	// }
 
 	err := Server.WriteTo(msg, addr)
 	if err != nil {
