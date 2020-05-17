@@ -86,8 +86,9 @@ type SMContext struct {
 
 	SMState SMState
 
-	Tunnel                              *UPTunnel
-	BPManager                           *BPManager
+	Tunnel    *UPTunnel
+	BPManager *BPManager
+	//PFCPSessionContext map[]
 	PDUSessionRelease_DUE_TO_DUP_PDU_ID bool
 }
 

@@ -14,6 +14,7 @@ const (
 	FARType
 	BARType
 	TEIDType
+	LocalSEIDType
 )
 
 func NewIDQueue(idType IDType) (idQueue *IDQueue) {
