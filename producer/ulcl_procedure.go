@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"free5gc/lib/flowdesc"
 	"free5gc/lib/pfcp/pfcpType"
-	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/smf/context"
 	"free5gc/src/smf/logger"
 	"free5gc/src/smf/pfcp/message"
-	"net"
 )
 
 func AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
@@ -18,6 +16,7 @@ func AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
 	//select PSA2
 	bpManager.SelectPSA2()
 	err := upfRoot.EnableUserPlanePath(bpManager.PSA2Path)
+	smContext.AllocateLocalSEIDForUPPath(bpManager.PSA2Path)
 	if err != nil {
 		logger.PduSessLog.Errorln(err)
 		return
@@ -114,6 +113,7 @@ func EstablishULCL(smContext *context.SMContext) {
 		UpLinkForPSA2.DestinationPort = ulcl.DataPathToDN[psa2NodeAfterUlcl.UPF.GetUPFID()].DestinationPort
 
 		UpLinkForPSA2.UpLinkPDR, err = ulcl.UPF.AddPDR()
+		smContext.PutPDRtoPFCPSession(ulcl.UPF.NodeID, UpLinkForPSA2.UpLinkPDR)
 		if err != nil {
 			logger.PduSessLog.Error(err)
 		}
@@ -212,6 +212,7 @@ func EstablishULCL(smContext *context.SMContext) {
 		DownLinkForPSA2 = ulcl.DataPathToDN[psa2NodeAfterUlcl.UPF.GetUPFID()]
 
 		DownLinkForPSA2.DownLinkPDR, err = ulcl.UPF.AddPDR()
+		smContext.PutPDRtoPFCPSession(ulcl.UPF.NodeID, DownLinkForPSA2.DownLinkPDR)
 		if err != nil {
 			logger.PduSessLog.Error(err)
 		}
@@ -265,19 +266,11 @@ func EstablishULCL(smContext *context.SMContext) {
 		DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation.Teid = workAroundULCL.DownLinkTunnel.MatchedPDR.FAR.ForwardingParameters.OuterHeaderCreation.Teid
 		DownLinkFarForPSA2.ForwardingParameters.OuterHeaderCreation.Ipv4Address = workAroundULCL.DownLinkTunnel.MatchedPDR.FAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address //DownLinkForPSA1.DownLinkPDR.FAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address
 
-		// addr := net.UDPAddr{
-		// 	IP:   ulcl.Next[psa1NodeAfterUlcl.UPF.GetUPFID()].To.UPF.NodeID.NodeIdValue,
-		// 	Port: pfcpUdp.PFCP_PORT,
-		// }
-		addr := net.UDPAddr{
-			IP:   ulcl.UPF.NodeID.NodeIdValue,
-			Port: pfcpUdp.PFCP_PORT,
-		}
 		pdrList := []*context.PDR{UpLinkForPSA1.UpLinkPDR, UpLinkForPSA2.UpLinkPDR, DownLinkForPSA2.DownLinkPDR}
 		farList := []*context.FAR{UpLinkForPSA2.UpLinkPDR.FAR, DownLinkForPSA2.DownLinkPDR.FAR}
 		barList := []*context.BAR{}
 
-		message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
+		message.SendPfcpSessionModificationRequest(ulcl.UPF.NodeID, smContext, pdrList, farList, barList)
 		logger.PfcpLog.Info("[SMF] Establish ULCL msg has been send")
 	}
 }
@@ -324,14 +317,10 @@ func UpdatePSA2DownLink(smContext *context.SMContext) {
 			}
 		}
 
-		addr := net.UDPAddr{
-			IP:   psa2NodeAfterUlcl.UPF.NodeID.NodeIdValue,
-			Port: pfcpUdp.PFCP_PORT,
-		}
 		pdrList := []*context.PDR{}
 		barList := []*context.BAR{}
 
-		message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
+		message.SendPfcpSessionModificationRequest(psa2NodeAfterUlcl.UPF.NodeID, smContext, pdrList, farList, barList)
 		logger.PfcpLog.Info("[SMF] Update PSA2 downlink msg has been send")
 	}
 }

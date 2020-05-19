@@ -137,8 +137,9 @@ func HandlePfcpSessionEstablishmentResponse(msg *pfcpUdp.Message) {
 	smContext := smf_context.GetSMContextBySEID(SEID)
 
 	if rsp.UPFSEID != nil {
-		UPFSEID := rsp.UPFSEID
-		smContext.RemoteSEID = UPFSEID.Seid
+		NodeIDtoIP := rsp.NodeID.ResolveNodeIdToIp().String()
+		pfcpSessionCtx := smContext.PFCPContext[NodeIDtoIP]
+		pfcpSessionCtx.RemoteSEID = rsp.UPFSEID.Seid
 	}
 
 	if rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted && smContext.Tunnel.UpfRoot.UPF.NodeID.ResolveNodeIdToIp().Equal(rsp.NodeID.ResolveNodeIdToIp()) {

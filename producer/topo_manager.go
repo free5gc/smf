@@ -56,6 +56,7 @@ func AllocateUpLinkPDRandTEID(node *context.DataPathNode, smContext *context.SMC
 	}
 
 	upLink.UpLinkPDR, err = node.UPF.AddPDR()
+	smContext.PutPDRtoPFCPSession(node.UPF.NodeID, upLink.UpLinkPDR)
 	if err != nil {
 		logger.PduSessLog.Error(err)
 		return
@@ -127,7 +128,7 @@ func AllocateDownLinkPDR(node *context.DataPathNode, smContext *context.SMContex
 	for _, downLink := range node.DataPathToDN {
 
 		downLink.DownLinkPDR, err = node.UPF.AddPDR()
-
+		smContext.PutPDRtoPFCPSession(node.UPF.NodeID, downLink.DownLinkPDR)
 		if err != nil {
 			logger.PduSessLog.Error(err)
 		}
@@ -185,6 +186,7 @@ func AllocateDownLinkPDR(node *context.DataPathNode, smContext *context.SMContex
 
 		downLink := node.DLDataPathLinkForPSA
 		downLink.DownLinkPDR, err = node.UPF.AddPDR()
+		smContext.PutPDRtoPFCPSession(node.UPF.NodeID, downLink.DownLinkPDR)
 		if err != nil {
 			logger.PduSessLog.Error(err)
 		}
@@ -260,17 +262,12 @@ func SendUplinkPFCPRule(node *context.DataPathNode, smContext *context.SMContext
 		visited[node] = true
 	}
 
-	addr := net.UDPAddr{
-		IP:   node.UPF.NodeID.NodeIdValue,
-		Port: pfcpUdp.PFCP_PORT,
-	}
-
 	upLink := node.DataPathToAN
 	pdrList := []*context.PDR{upLink.UpLinkPDR}
 	farList := []*context.FAR{upLink.UpLinkPDR.FAR}
 	barList := []*context.BAR{}
 
-	message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdrList, farList, barList)
+	message.SendPfcpSessionEstablishmentRequestForULCL(node.UPF.NodeID, smContext, pdrList, farList, barList)
 
 	for _, upf_link := range node.DataPathToDN {
 
@@ -288,17 +285,12 @@ func SendDownLinkPFCPRule(node *context.DataPathNode, smContext *context.SMConte
 		visited[node] = true
 	}
 
-	addr := net.UDPAddr{
-		IP:   node.UPF.NodeID.NodeIdValue,
-		Port: pfcpUdp.PFCP_PORT,
-	}
-
 	for _, down_link := range node.DataPathToDN {
 
 		pdrList := []*context.PDR{down_link.DownLinkPDR}
 		farList := []*context.FAR{down_link.DownLinkPDR.FAR}
 		barList := []*context.BAR{}
-		message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
+		message.SendPfcpSessionModificationRequest(node.UPF.NodeID, smContext, pdrList, farList, barList)
 	}
 
 	if node.IsAnchorUPF() {
@@ -307,7 +299,7 @@ func SendDownLinkPFCPRule(node *context.DataPathNode, smContext *context.SMConte
 		pdrList := []*context.PDR{down_link.DownLinkPDR}
 		farList := []*context.FAR{down_link.DownLinkPDR.FAR}
 		barList := []*context.BAR{}
-		message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
+		message.SendPfcpSessionModificationRequest(node.UPF.NodeID, smContext, pdrList, farList, barList)
 	}
 
 	for _, upf_link := range node.DataPathToDN {
@@ -344,6 +336,7 @@ func SetUPPSA2Path(smContext *context.SMContext, psa2_path_after_ulcl []*context
 		}
 
 		upLink.UpLinkPDR, err = curDataPathNode.UPF.AddPDR()
+		smContext.PutPDRtoPFCPSession(curDataPathNode.UPF.NodeID, upLink.UpLinkPDR)
 		if err != nil {
 			logger.PduSessLog.Error(err)
 		}
@@ -388,7 +381,7 @@ func SetUPPSA2Path(smContext *context.SMContext, psa2_path_after_ulcl []*context
 		}
 
 		downLink.DownLinkPDR, err = curDataPathNode.UPF.AddPDR()
-
+		smContext.PutPDRtoPFCPSession(curDataPathNode.UPF.NodeID, downLink.DownLinkPDR)
 		if err != nil {
 			logger.PduSessLog.Error(err)
 		}
@@ -548,7 +541,7 @@ func SetUPPSA2Path(smContext *context.SMContext, psa2_path_after_ulcl []*context
 		farList := []*context.FAR{upLink.UpLinkPDR.FAR, downLink.DownLinkPDR.FAR}
 		barList := []*context.BAR{}
 
-		message.SendPfcpSessionEstablishmentRequestForULCL(&addr, smContext, pdrList, farList, barList)
+		message.SendPfcpSessionEstablishmentRequestForULCL(curDataPathNode.UPF.NodeID, smContext, pdrList, farList, barList)
 	}
 
 }

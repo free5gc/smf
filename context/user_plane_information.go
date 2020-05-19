@@ -191,14 +191,14 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 		if idx == lowerBound {
 			root = curDataPathNode
 			root.DataPathToAN = NewDataPathDownLink()
-			err := root.SetUpLinkSrcNode(nil)
+			err := root.SetUpLinkSrcNode(smContext, nil)
 
 			if err != nil {
 				logger.CtxLog.Warnln(err)
 			}
 		}
 		if idx == upperBound {
-			err := curDataPathNode.SetDownLinkSrcNode(nil)
+			err := curDataPathNode.SetDownLinkSrcNode(smContext, nil)
 
 			if err != nil {
 				logger.CtxLog.Warnln(err)
@@ -208,12 +208,12 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 			// prevDataPathNode.AddChild(curDataPathNode)
 		}
 		if prevDataPathNode != nil {
-			err := prevDataPathNode.SetDownLinkSrcNode(curDataPathNode)
+			err := prevDataPathNode.SetDownLinkSrcNode(smContext, curDataPathNode)
 
 			if err != nil {
 				logger.CtxLog.Warnln(err)
 			}
-			err = curDataPathNode.SetUpLinkSrcNode(prevDataPathNode)
+			err = curDataPathNode.SetUpLinkSrcNode(smContext, prevDataPathNode)
 
 			if err != nil {
 				logger.CtxLog.Warnln(err)

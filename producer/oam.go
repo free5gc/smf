@@ -12,8 +12,6 @@ import (
 type PDUSessionInfo struct {
 	Supi         string
 	PDUSessionID string
-	LocalSEID    string
-	RemoteSEID   string
 	Dnn          string
 	Sst          string
 	Sd           string
@@ -44,8 +42,6 @@ func HandleOAMGetUEPDUSessionInfo(rspChan chan message.HandlerResponseMessage, s
 			Body: PDUSessionInfo{
 				Supi:         smContext.Supi,
 				PDUSessionID: strconv.Itoa(int(smContext.PDUSessionID)),
-				LocalSEID:    strconv.FormatUint(smContext.LocalSEID, 10),
-				RemoteSEID:   strconv.FormatUint(smContext.RemoteSEID, 10),
 				Dnn:          smContext.Dnn,
 				Sst:          strconv.Itoa(int(smContext.Snssai.Sst)),
 				Sd:           smContext.Snssai.Sd,

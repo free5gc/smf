@@ -123,7 +123,7 @@ func (node *DataPathNode) AddParent(parent *DataPathNode) (err error) {
 	return
 }
 
-func (node *DataPathNode) SetUpLinkSrcNode(nextUpLinkNode *DataPathNode) (err error) {
+func (node *DataPathNode) SetUpLinkSrcNode(smContext *SMContext, nextUpLinkNode *DataPathNode) (err error) {
 
 	node.UpLinkTunnel = new(GTPTunnel)
 	node.UpLinkTunnel.SrcEndPoint = nextUpLinkNode
@@ -131,6 +131,8 @@ func (node *DataPathNode) SetUpLinkSrcNode(nextUpLinkNode *DataPathNode) (err er
 
 	destUPF := node.UPF
 	node.UpLinkTunnel.MatchedPDR, err = destUPF.AddPDR()
+	smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.UpLinkTunnel.MatchedPDR)
+
 	if err != nil {
 		logger.CtxLog.Errorln("allocate UpLinkTunnel.MatchedPDR", err)
 	}
@@ -140,7 +142,7 @@ func (node *DataPathNode) SetUpLinkSrcNode(nextUpLinkNode *DataPathNode) (err er
 	return
 }
 
-func (node *DataPathNode) SetDownLinkSrcNode(nextDownLinkNode *DataPathNode) (err error) {
+func (node *DataPathNode) SetDownLinkSrcNode(smContext *SMContext, nextDownLinkNode *DataPathNode) (err error) {
 
 	node.DownLinkTunnel = new(GTPTunnel)
 	node.DownLinkTunnel.SrcEndPoint = nextDownLinkNode
@@ -148,6 +150,8 @@ func (node *DataPathNode) SetDownLinkSrcNode(nextDownLinkNode *DataPathNode) (er
 
 	destUPF := node.UPF
 	node.DownLinkTunnel.MatchedPDR, err = destUPF.AddPDR()
+	smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.DownLinkTunnel.MatchedPDR)
+
 	if err != nil {
 		logger.CtxLog.Errorln("allocate DownLinkTunnel.MatchedPDR", err)
 	}

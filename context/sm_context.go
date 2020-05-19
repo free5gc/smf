@@ -11,15 +11,16 @@ import (
 	"free5gc/lib/nas/nasMessage"
 	"free5gc/lib/openapi/common"
 	"free5gc/lib/openapi/models"
+	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/src/smf/logger"
+	"github.com/google/uuid"
 	"net"
 	"net/http"
-
-	"github.com/google/uuid"
 )
 
 var smContextPool map[string]*SMContext
 var canonicalRef map[string]string
+var seidSMContextMap map[uint64]*SMContext
 
 var smContextCount uint64
 
@@ -32,6 +33,7 @@ const (
 
 func init() {
 	smContextPool = make(map[string]*SMContext)
+	seidSMContextMap = make(map[uint64]*SMContext)
 	canonicalRef = make(map[string]string)
 }
 
@@ -88,7 +90,8 @@ type SMContext struct {
 
 	Tunnel    *UPTunnel
 	BPManager *BPManager
-	//PFCPSessionContext map[]
+	//NodeID(string form) to PFCP Session Context
+	PFCPContext                         map[string]*PFCPSessionContext
 	PDUSessionRelease_DUE_TO_DUP_PDU_ID bool
 }
 
@@ -116,7 +119,7 @@ func NewSMContext(identifier string, pduSessID int32) (smContext *SMContext) {
 
 	smContext.Identifier = identifier
 	smContext.PDUSessionID = pduSessID
-	smContext.LocalSEID = GetSMContextCount()
+	smContext.PFCPContext = make(map[string]*PFCPSessionContext)
 	return smContext
 }
 
@@ -126,16 +129,20 @@ func GetSMContext(ref string) (smContext *SMContext) {
 }
 
 func RemoveSMContext(ref string) {
+
+	smContext := smContextPool[ref]
+
+	for _, pfcpSessionContext := range smContext.PFCPContext {
+
+		delete(seidSMContextMap, pfcpSessionContext.LocalSEID)
+	}
+
 	delete(smContextPool, ref)
 }
 
-func GetSMContextBySEID(SEID uint64) *SMContext {
-	for _, smCtx := range smContextPool {
-		if smCtx.LocalSEID == SEID {
-			return smCtx
-		}
-	}
-	return nil
+func GetSMContextBySEID(SEID uint64) (smContext *SMContext) {
+	smContext = seidSMContextMap[SEID]
+	return smContext
 }
 
 func (smContext *SMContext) SetCreateData(createData *models.SmContextCreateData) {
@@ -212,6 +219,32 @@ func (smContext *SMContext) PCFSelection() (err error) {
 	}
 
 	return
+}
+
+func (smContext *SMContext) AllocateLocalSEIDForUPPath(path UPPath) {
+
+	for _, upNode := range path {
+
+		NodeIDtoIP := upNode.NodeID.ResolveNodeIdToIp().String()
+		if _, exist := smContext.PFCPContext[NodeIDtoIP]; !exist {
+
+			allocatedSEID := AllocateLocalSEID()
+			smContext.PFCPContext[NodeIDtoIP] = &PFCPSessionContext{
+				PDRs:      make(map[uint16]*PDR),
+				NodeID:    upNode.NodeID,
+				LocalSEID: allocatedSEID,
+			}
+
+			seidSMContextMap[allocatedSEID] = smContext
+		}
+	}
+}
+
+func (smContext *SMContext) PutPDRtoPFCPSession(nodeID pfcpType.NodeID, pdr *PDR) {
+
+	NodeIDtoIP := nodeID.ResolveNodeIdToIp().String()
+	pfcpSessionCtx := smContext.PFCPContext[NodeIDtoIP]
+	pfcpSessionCtx.PDRs[pdr.PDRID] = pdr
 }
 
 func (smContext *SMContext) isAllowedPDUSessionType(nasPDUSessionType uint8) bool {
