@@ -3,12 +3,13 @@ package pdusession_test
 import (
 	"context"
 	"free5gc/lib/CommonConsumerTestData/SMF/TestPDUSession"
-	"free5gc/lib/Nsmf_PDUSession"
+	"free5gc/lib/openapi/Nsmf_PDUSession"
 	"free5gc/lib/openapi/models"
 	"free5gc/src/smf/handler"
 	"free5gc/src/smf/pdusession"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestUpdateSmContext(t *testing.T) {
