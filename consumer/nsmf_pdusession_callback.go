@@ -2,7 +2,7 @@ package consumer
 
 import (
 	"context"
-	"free5gc/lib/Nsmf_PDUSession"
+	"free5gc/lib/openapi/Nsmf_PDUSession"
 	"free5gc/lib/openapi/models"
 	"free5gc/src/smf/logger"
 	"net/http"

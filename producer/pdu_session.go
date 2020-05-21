@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"free5gc/lib/Namf_Communication"
-	"free5gc/lib/Nsmf_PDUSession"
-	"free5gc/lib/Nudm_SubscriberDataManagement"
 	"free5gc/lib/http_wrapper"
 	"free5gc/lib/nas"
 	"free5gc/lib/nas/nasConvert"
 	"free5gc/lib/openapi"
-	"free5gc/lib/openapi/common"
+	"free5gc/lib/openapi/Namf_Communication"
+	"free5gc/lib/openapi/Nsmf_PDUSession"
+	"free5gc/lib/openapi/Nudm_SubscriberDataManagement"
 	"free5gc/lib/openapi/models"
 	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/pfcp/pfcpUdp"
@@ -110,7 +109,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	smPolicyDecision, _, err := smContext.SMPolicyClient.DefaultApi.SmPoliciesPost(context.Background(), smPolicyData)
 
 	if err != nil {
-		openapiError := err.(common.GenericOpenAPIError)
+		openapiError := err.(openapi.GenericOpenAPIError)
 		problemDetails := openapiError.Model().(models.ProblemDetails)
 		logger.PduSessLog.Errorln("setup sm policy association failed:", err, problemDetails)
 	}

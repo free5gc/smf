@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net"
 
-	"free5gc/lib/Nnrf_NFDiscovery"
-	"free5gc/lib/Nnrf_NFManagement"
-	"free5gc/lib/Nudm_SubscriberDataManagement"
+	"free5gc/lib/openapi/Nnrf_NFDiscovery"
+	"free5gc/lib/openapi/Nnrf_NFManagement"
+	"free5gc/lib/openapi/Nudm_SubscriberDataManagement"
 	"free5gc/src/smf/factory"
 	"free5gc/src/smf/logger"
 

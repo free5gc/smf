@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"free5gc/lib/Namf_Communication"
-	"free5gc/lib/Nnrf_NFDiscovery"
-	"free5gc/lib/Npcf_SMPolicyControl"
 	"free5gc/lib/nas/nasConvert"
 	"free5gc/lib/nas/nasMessage"
-	"free5gc/lib/openapi/common"
+	"free5gc/lib/openapi"
+	"free5gc/lib/openapi/Namf_Communication"
+	"free5gc/lib/openapi/Nnrf_NFDiscovery"
+	"free5gc/lib/openapi/Npcf_SMPolicyControl"
 	"free5gc/lib/openapi/models"
 	"free5gc/src/smf/logger"
 	"net"
@@ -186,7 +186,7 @@ func (smContext *SMContext) PCFSelection() (err error) {
 
 	if res != nil {
 		if status := res.StatusCode; status != http.StatusOK {
-			apiError := err.(common.GenericOpenAPIError)
+			apiError := err.(openapi.GenericOpenAPIError)
 			problemDetails := apiError.Model().(models.ProblemDetails)
 
 			logger.CtxLog.Warningf("NFDiscovery PCF return status: %d\n", status)
