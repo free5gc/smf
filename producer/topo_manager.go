@@ -14,7 +14,7 @@ func SetUpUplinkUserPlane(root *context.DataPathNode, smContext *context.SMConte
 	visited := make(map[*context.DataPathNode]bool)
 	AllocateUpLinkPDRandTEID(root, smContext, visited)
 
-	for node, _ := range visited {
+	for node := range visited {
 		visited[node] = false
 	}
 
@@ -26,13 +26,13 @@ func SetUpDownLinkUserPlane(root *context.DataPathNode, smContext *context.SMCon
 	visited := make(map[*context.DataPathNode]bool)
 	AllocateDownLinkPDR(root, smContext, visited)
 
-	for node, _ := range visited {
+	for node := range visited {
 		visited[node] = false
 	}
 
 	AllocateDownLinkTEID(root, smContext, visited)
 
-	for node, _ := range visited {
+	for node := range visited {
 		visited[node] = false
 	}
 
@@ -333,7 +333,7 @@ func SetUPPSA2Path(smContext *context.SMContext, psa2_path_after_ulcl []*context
 
 		logger.PduSessLog.Traceln("Node ", i, ": ", node.UPF.GetUPFIP())
 	}
-	for idx, _ := range psa2_path_after_ulcl {
+	for idx := range psa2_path_after_ulcl {
 
 		upLink := curDataPathNode.GetUpLink()
 
@@ -442,7 +442,7 @@ func SetUPPSA2Path(smContext *context.SMContext, psa2_path_after_ulcl []*context
 	curDataPathNode = start_node
 
 	//Allocate upLink and downLink TEID
-	for idx, _ := range psa2_path_after_ulcl {
+	for idx := range psa2_path_after_ulcl {
 
 		switch idx {
 		case lowerBound:
@@ -524,7 +524,7 @@ func SetUPPSA2Path(smContext *context.SMContext, psa2_path_after_ulcl []*context
 
 	curDataPathNode = start_node
 	logger.PduSessLog.Traceln("Start Node is PSA: ", curDataPathNode.IsAnchorUPF())
-	for idx, _ := range psa2_path_after_ulcl {
+	for idx := range psa2_path_after_ulcl {
 
 		addr := net.UDPAddr{
 			IP:   curDataPathNode.UPF.NodeID.NodeIdValue,

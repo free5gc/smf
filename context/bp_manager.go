@@ -55,7 +55,7 @@ func NewBPManager(supi string) (bpManager *BPManager) {
 		ULCLState:  IsOnlyULCL,
 	}
 
-	for node, _ := range ueRoutingGraph.PSA {
+	for node := range ueRoutingGraph.PSA {
 		bpManager.PSAState[node] = NotAdded
 	}
 
@@ -72,7 +72,7 @@ func (bpMGR *BPManager) SetPSAStatus(psa_path []*UPNode) {
 	psa := psa_path[len(psa_path)-1]
 	psa_ip := psa.NodeID.ResolveNodeIdToIp().String()
 
-	for dataPathNode, _ := range bpMGR.PSAState {
+	for dataPathNode := range bpMGR.PSAState {
 
 		if psa_ip == dataPathNode.UPF.NodeID.ResolveNodeIdToIp().String() {
 			bpMGR.PSAState[dataPathNode] = AddPSASuccess
@@ -111,7 +111,6 @@ func (bpMGR *BPManager) SelectPSA2() {
 
 		logger.PduSessLog.Traceln("Node ", i, ": ", node.UPF.GetUPFIP())
 	}
-	return
 }
 
 func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
@@ -154,7 +153,7 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 	}
 
 	if bpMGR.ULCL == nil {
-		err = fmt.Errorf("Can't find ULCL for PSA: ", psa2_path[len_psa2_path-1].UPF.GetUPFIP())
+		err = fmt.Errorf("Can't find ULCL for PSA: %s", psa2_path[len_psa2_path-1].UPF.GetUPFIP())
 		return
 	}
 
@@ -163,7 +162,7 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 
 	curDataPathNode := upfRoot
 
-	for idx, _ := range psa2_path {
+	for idx := range psa2_path {
 
 		if idx == bpMGR.ULCLIdx {
 
@@ -179,7 +178,7 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 				curDataPathNode = nextDataPathLink.To
 			} else {
 
-				err = fmt.Errorf("PSA2 Path doesn't match UE Topo! error node: ", psa2_path[idx+1].UPF.GetUPFIP())
+				err = fmt.Errorf("PSA2 Path doesn't match UE Topo! error node: %s", psa2_path[idx+1].UPF.GetUPFIP())
 				return
 			}
 		}
@@ -187,7 +186,7 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 	}
 
 	if bpMGR.ULCLDataPathNode == nil {
-		err = fmt.Errorf("Can't find ULCLDataPathNode for PSA: ", psa2_path[len_psa2_path-1].UPF.GetUPFIP())
+		err = fmt.Errorf("Can't find ULCLDataPathNode for PSA: %s", psa2_path[len_psa2_path-1].UPF.GetUPFIP())
 		return
 	}
 

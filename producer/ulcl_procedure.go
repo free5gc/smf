@@ -68,7 +68,6 @@ func EstablishPSA2(smContext *context.SMContext) {
 
 	logger.PduSessLog.Traceln("End of EstablishPSA2")
 
-	return
 }
 
 func EstablishULCL(smContext *context.SMContext) {
@@ -218,6 +217,9 @@ func EstablishULCL(smContext *context.SMContext) {
 		}
 
 		teid, err := ulcl.UPF.GenerateTEID()
+		if err != nil {
+			logger.CtxLog.Error(err)
+		}
 		DownLinkForPSA2.DownLinkPDR.Precedence = 32
 		DownLinkForPSA2.DownLinkPDR.PDI = context.PDI{
 			SourceInterface: pfcpType.SourceInterface{

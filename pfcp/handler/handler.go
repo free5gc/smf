@@ -40,7 +40,7 @@ func HandlePfcpAssociationSetupRequest(msg *pfcpUdp.Message) {
 		logger.PfcpLog.Errorln("pfcp association needs NodeID")
 		return
 	}
-	logger.PfcpLog.Info("Handle PFCP Association Setup Request with NodeID[%s]", nodeID.ResolveNodeIdToIp().String())
+	logger.PfcpLog.Infof("Handle PFCP Association Setup Request with NodeID[%s]", nodeID.ResolveNodeIdToIp().String())
 
 	upf := smf_context.RetrieveUPFNodeByNodeID(*nodeID)
 	if upf == nil {
@@ -190,6 +190,7 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 		if pfcpRsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
 			resQueueItem := HttpResponseQueue.GetItem(seqNum)
 
+			logger.PduSessLog.Infoln("[SMF] Send Update SMContext Response")
 			resQueueItem.RspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &resQueueItem.Response}
 
 			smContext := smf_context.GetSMContextBySEID(SEID)
