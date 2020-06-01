@@ -188,16 +188,18 @@ func farToUpdateFAR(far *context.FAR) *pfcp.UpdateFAR {
 }
 
 // TODO: Replace dummy value in PFCP message
-func BuildPfcpSessionEstablishmentRequest(smContext *context.SMContext) (pfcp.PFCPSessionEstablishmentRequest, error) {
+func BuildPfcpSessionEstablishmentRequest(upNodeID pfcpType.NodeID, smContext *context.SMContext) (pfcp.PFCPSessionEstablishmentRequest, error) {
 	msg := pfcp.PFCPSessionEstablishmentRequest{}
 
 	msg.NodeID = &context.SMF_Self().CPNodeID
 
 	isv4 := context.SMF_Self().CPNodeID.NodeIdType == 0
+	nodeIDtoIP := upNodeID.ResolveNodeIdToIp().String()
+	localSEID := smContext.PFCPContext[nodeIDtoIP].LocalSEID
 	msg.CPFSEID = &pfcpType.FSEID{
 		V4:          isv4,
 		V6:          !isv4,
-		Seid:        smContext.LocalSEID,
+		Seid:        localSEID,
 		Ipv4Address: context.SMF_Self().CPNodeID.NodeIdValue,
 	}
 
@@ -214,16 +216,18 @@ func BuildPfcpSessionEstablishmentRequest(smContext *context.SMContext) (pfcp.PF
 	return msg, nil
 }
 
-func BuildPfcpSessionEstablishmentRequestForULCL(smContext *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (pfcp.PFCPSessionEstablishmentRequest, error) {
+func BuildPfcpSessionEstablishmentRequestForULCL(upNodeID pfcpType.NodeID, smContext *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (pfcp.PFCPSessionEstablishmentRequest, error) {
 	msg := pfcp.PFCPSessionEstablishmentRequest{}
 
 	msg.NodeID = &context.SMF_Self().CPNodeID
 
 	isv4 := context.SMF_Self().CPNodeID.NodeIdType == 0
+	nodeIDtoIP := upNodeID.ResolveNodeIdToIp().String()
+	localSEID := smContext.PFCPContext[nodeIDtoIP].LocalSEID
 	msg.CPFSEID = &pfcpType.FSEID{
 		V4:          isv4,
 		V6:          !isv4,
-		Seid:        smContext.LocalSEID,
+		Seid:        localSEID,
 		Ipv4Address: context.SMF_Self().CPNodeID.NodeIdValue,
 	}
 
@@ -297,16 +301,18 @@ func BuildPfcpSessionEstablishmentResponse() (pfcp.PFCPSessionEstablishmentRespo
 }
 
 // TODO: Replace dummy value in PFCP message
-func BuildPfcpSessionModificationRequest(smContext *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (pfcp.PFCPSessionModificationRequest, error) {
+func BuildPfcpSessionModificationRequest(upNodeID pfcpType.NodeID, smContext *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (pfcp.PFCPSessionModificationRequest, error) {
 	msg := pfcp.PFCPSessionModificationRequest{}
 
 	msg.UpdatePDR = make([]*pfcp.UpdatePDR, 0, 2)
 	msg.UpdateFAR = make([]*pfcp.UpdateFAR, 0, 2)
 
+	nodeIDtoIP := upNodeID.ResolveNodeIdToIp().String()
+	localSEID := smContext.PFCPContext[nodeIDtoIP].LocalSEID
 	msg.CPFSEID = &pfcpType.FSEID{
 		V4:          true,
 		V6:          false,
-		Seid:        smContext.LocalSEID,
+		Seid:        localSEID,
 		Ipv4Address: context.SMF_Self().CPNodeID.NodeIdValue,
 	}
 
@@ -334,10 +340,6 @@ func BuildPfcpSessionModificationRequest(smContext *context.SMContext, pdrList [
 			msg.CreateBAR = append(msg.CreateBAR, barToCreateBAR(bar))
 		}
 	}
-
-	// for _, far := range msg.CreateFAR {
-	// 	printCreateFAR(far)
-	// }
 
 	return msg, nil
 }

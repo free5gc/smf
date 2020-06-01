@@ -54,11 +54,17 @@ type SMFContext struct {
 	ULCLSupport     bool
 	UERoutingPaths  map[string][]factory.Path
 	UERoutingGraphs map[string]*UEDataPathGraph
+	LocalSEIDCount  uint64
 }
 
 func AllocUEIP() net.IP {
 	smfContext.UEAddressTemp[3]++
 	return smfContext.UEAddressTemp
+}
+
+func AllocateLocalSEID() uint64 {
+	smfContext.LocalSEIDCount++
+	return smfContext.LocalSEIDCount
 }
 
 func InitSmfContext(config *factory.Config) {

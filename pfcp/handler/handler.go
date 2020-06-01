@@ -137,8 +137,9 @@ func HandlePfcpSessionEstablishmentResponse(msg *pfcpUdp.Message) {
 	smContext := smf_context.GetSMContextBySEID(SEID)
 
 	if rsp.UPFSEID != nil {
-		UPFSEID := rsp.UPFSEID
-		smContext.RemoteSEID = UPFSEID.Seid
+		NodeIDtoIP := rsp.NodeID.ResolveNodeIdToIp().String()
+		pfcpSessionCtx := smContext.PFCPContext[NodeIDtoIP]
+		pfcpSessionCtx.RemoteSEID = rsp.UPFSEID.Seid
 	}
 
 	if rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted && smContext.Tunnel.UpfRoot.UPF.NodeID.ResolveNodeIdToIp().Equal(rsp.NodeID.ResolveNodeIdToIp()) {
@@ -185,6 +186,7 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 	SEID := msg.PfcpMessage.Header.SEID
 	seqNum := msg.PfcpMessage.Header.SequenceNumber
 
+	logger.CtxLog.Infoln("Handle PfcpSessionModificationResponse")
 	HttpResponseQueue := smf_message.RspQueue
 	if HttpResponseQueue.CheckItemExist(seqNum) {
 		if pfcpRsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
@@ -232,8 +234,13 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 		} else {
 			logger.PfcpLog.Infof("PFCP Session Modification Failed[%d]\n", SEID)
 		}
-	} else {
-		logger.PfcpLog.Infof("[PFCP Modification RSP] Can't find corresponding seq num[%d]\n", seqNum)
+	}
+
+	smContext := smf_context.GetSMContextBySEID(SEID)
+	logger.CtxLog.Traceln("PFCP Session Context")
+	for _, ctx := range smContext.PFCPContext {
+
+		logger.CtxLog.Traceln(ctx.ToString())
 	}
 
 }

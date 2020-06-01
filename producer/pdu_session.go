@@ -13,13 +13,11 @@ import (
 	"free5gc/lib/openapi/Nudm_SubscriberDataManagement"
 	"free5gc/lib/openapi/models"
 	"free5gc/lib/pfcp/pfcpType"
-	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/smf/consumer"
 	smf_context "free5gc/src/smf/context"
 	smf_message "free5gc/src/smf/handler/message"
 	"free5gc/src/smf/logger"
 	pfcp_message "free5gc/src/smf/pfcp/message"
-	"net"
 	"net/http"
 
 	"github.com/antihax/optional"
@@ -123,6 +121,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	var dataPathRoot *smf_context.DataPathNode
 	defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
+	smContext.AllocateLocalSEIDForUPPath(defaultUPPath)
 	dataPathRoot = smf_context.GenerateDataPath(defaultUPPath, smContext)
 	smContext.Tunnel.UpfRoot = dataPathRoot
 	if smf_context.SMF_Self().ULCLSupport && smf_context.CheckUEHasPreConfig(createData.Supi) {
@@ -243,7 +242,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			curDataPathNode := smContext.Tunnel.UpfRoot
 
 			for curDataPathNode != nil {
-				seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.PFCPAddr(), smContext)
+				seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
 				curDataPathNode = curDataPathNode.DownLinkTunnel.SrcEndPoint
 			}
 
@@ -442,7 +441,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		curDataPathNode := smContext.Tunnel.UpfRoot
 
 		for curDataPathNode != nil {
-			seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.PFCPAddr(), smContext)
+			seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
 			curDataPathNode = curDataPathNode.DownLinkTunnel.SrcEndPoint
 		}
 
@@ -454,12 +453,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		logger.PduSessLog.Error(err)
 	}
 
-	addr := net.UDPAddr{
-		IP:   smContext.Tunnel.UpfRoot.UPF.NodeID.NodeIdValue,
-		Port: pfcpUdp.PFCP_PORT,
-	}
-
-	seqNum = pfcp_message.SendPfcpSessionModificationRequest(&addr, smContext, pdrList, farList, barList)
+	seqNum = pfcp_message.SendPfcpSessionModificationRequest(smContext.Tunnel.UpfRoot.UPF.NodeID, smContext, pdrList, farList, barList)
 
 	return seqNum, response
 }
@@ -469,12 +463,7 @@ func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMe
 
 	// smf_context.RemoveSMContext(smContext.Ref)
 
-	addr := net.UDPAddr{
-		IP:   smContext.Tunnel.UpfRoot.UPF.UPIPInfo.Ipv4Address,
-		Port: pfcpUdp.PFCP_PORT,
-	}
-
-	seqNum = pfcp_message.SendPfcpSessionDeletionRequest(&addr, smContext)
+	seqNum = pfcp_message.SendPfcpSessionDeletionRequest(smContext.Tunnel.UpfRoot.UPF.NodeID, smContext)
 	return seqNum
 
 	// rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
@@ -499,7 +488,7 @@ func SendPFCPRule(smContext *smf_context.SMContext, root *smf_context.DataPathNo
 				farList = append(farList, curDataPathNode.DownLinkTunnel.MatchedPDR.FAR)
 			}
 
-			pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(curDataPathNode.UPF.PFCPAddr(), smContext, pdrList, farList, nil)
+			pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(curDataPathNode.UPF.NodeID, smContext, pdrList, farList, nil)
 			curDataPathNode.HaveSession = true
 		} else {
 			if curDataPathNode.UpLinkTunnel != nil && curDataPathNode.UpLinkTunnel.MatchedPDR != nil {
@@ -511,7 +500,7 @@ func SendPFCPRule(smContext *smf_context.SMContext, root *smf_context.DataPathNo
 				farList = append(farList, curDataPathNode.DownLinkTunnel.MatchedPDR.FAR)
 			}
 
-			pfcp_message.SendPfcpSessionModificationRequest(curDataPathNode.UPF.PFCPAddr(), smContext, pdrList, farList, nil)
+			pfcp_message.SendPfcpSessionModificationRequest(curDataPathNode.UPF.NodeID, smContext, pdrList, farList, nil)
 		}
 		if curDataPathNode.DownLinkTunnel == nil {
 			break

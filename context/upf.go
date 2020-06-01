@@ -252,6 +252,37 @@ func (upf *UPF) AddBAR() (bar *BAR, err error) {
 	return bar, nil
 }
 
+func (upf *UPF) RemovePDR(pdr *PDR) (err error) {
+
+	if upf.UPFStatus != AssociatedSetUpSuccess {
+		err = fmt.Errorf("this upf not associate with smf")
+		return err
+	}
+
+	upf.pdrIDReuseQueue.Push(int(pdr.PDRID))
+	delete(upf.pdrPool, pdr.PDRID)
+	return nil
+}
+
+func (upf *UPF) RemoveFAR(far *FAR) (err error) {
+
+	upf.farIDReuseQueue.Push(int(far.FARID))
+	delete(upf.farPool, far.FARID)
+	return nil
+}
+
+func (upf *UPF) RemoveBAR(bar *BAR) (err error) {
+
+	if upf.UPFStatus != AssociatedSetUpSuccess {
+		err = fmt.Errorf("this upf not associate with smf")
+		return err
+	}
+
+	upf.barIDReuseQueue.Push(int(bar.BARID))
+	delete(upf.barPool, bar.BARID)
+	return nil
+}
+
 func (upf *UPF) GetValidID(idType IDType) (id int) {
 
 	switch idType {

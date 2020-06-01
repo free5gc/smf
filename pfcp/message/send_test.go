@@ -6,12 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/smf/pfcp/message"
 	"free5gc/src/smf/pfcp/udp"
 )
 
 var testAddr *net.UDPAddr
+var upNodeID pfcpType.NodeID
 
 // Adjust waiting time in millisecond if PFCP packets are not captured
 var testWaitingTime int = 500
@@ -30,6 +32,12 @@ func init() {
 		IP:   net.ParseIP("127.0.0.1"),
 		Port: pfcpUdp.PFCP_PORT,
 	}
+
+	upNodeID = pfcpType.NodeID{
+		NodeIdType:  pfcpType.NodeIdTypeIpv4Address,
+		NodeIdValue: net.ParseIP("127.0.0.2").To4(),
+	}
+
 	dummyContext = context.NewSMContext("imsi-20893000000001", 3)
 
 }
@@ -45,7 +53,7 @@ func TestSendPfcpSessionEstablishmentResponse(t *testing.T) {
 }
 
 func TestSendPfcpSessionEstablishmentRequest(t *testing.T) {
-	message.SendPfcpSessionEstablishmentRequest(testAddr, dummyContext)
+	message.SendPfcpSessionEstablishmentRequest(upNodeID, dummyContext)
 	time.Sleep(time.Duration(testWaitingTime) * time.Millisecond)
 }
 
