@@ -42,6 +42,8 @@ func Handle() {
 				case message.OAMGetUEPDUSessionInfo:
 					smContextRef := msg.HTTPRequest.Params["smContextRef"]
 					producer.HandleOAMGetUEPDUSessionInfo(msg.ResponseChan, smContextRef)
+				case message.SMPolicyUpdateNotify:
+					producer.HandleSMPolicyUpdateNotify(msg.ResponseChan, msg.HTTPRequest.Body.(models.SmPolicyNotification))
 				}
 			}
 		case <-time.After(time.Second * 1):
