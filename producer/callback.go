@@ -10,7 +10,7 @@ import (
 func HandleSMPolicyUpdateNotify(rspChan chan smf_message.HandlerResponseMessage, request models.SmPolicyNotification) {
 
 	rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
-		Status: http.StatusCreated,
+		Status: http.StatusNoContent,
 		Body:   nil,
 	}}
 }
