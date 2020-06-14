@@ -21,6 +21,8 @@ type Info struct {
 type Configuration struct {
 	SmfName string `yaml:"smfName,omitempty"`
 
+	ServerIPv4 string `yaml:"serverIPv4,omitempty"`
+
 	Sbi *Sbi `yaml:"sbi,omitempty"`
 
 	PFCP *PFCP `yaml:"pfcp,omitempty"`
