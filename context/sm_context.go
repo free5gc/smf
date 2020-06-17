@@ -13,9 +13,10 @@ import (
 	"free5gc/lib/openapi/models"
 	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/src/smf/logger"
-	"github.com/google/uuid"
 	"net"
 	"net/http"
+
+	"github.com/google/uuid"
 )
 
 var smContextPool map[string]*SMContext
@@ -76,7 +77,6 @@ type SMContext struct {
 	SelectedPDUSessionType uint8
 
 	DnnConfiguration models.DnnConfiguration
-	SessionRule      models.SessionRule
 
 	// Client
 	SMPolicyClient      *Npcf_SMPolicyControl.APIClient
@@ -93,6 +93,11 @@ type SMContext struct {
 	//NodeID(string form) to PFCP Session Context
 	PFCPContext                         map[string]*PFCPSessionContext
 	PDUSessionRelease_DUE_TO_DUP_PDU_ID bool
+
+	// SM Policy related
+	PCCRules           map[string]*PCCRule
+	SessionRules       map[string]*SessionRule
+	TrafficControlPool map[string]*TrafficControlData
 }
 
 func canonicalName(identifier string, pduSessID int32) (canonical string) {
@@ -120,6 +125,12 @@ func NewSMContext(identifier string, pduSessID int32) (smContext *SMContext) {
 	smContext.Identifier = identifier
 	smContext.PDUSessionID = pduSessID
 	smContext.PFCPContext = make(map[string]*PFCPSessionContext)
+	smContext.LocalSEID = GetSMContextCount()
+
+	// initialize SM Policy Data
+	smContext.PCCRules = make(map[string]*PCCRule)
+	smContext.SessionRules = make(map[string]*SessionRule)
+	smContext.TrafficControlPool = make(map[string]*TrafficControlData)
 	return smContext
 }
 
@@ -260,4 +271,124 @@ func (smContext *SMContext) isAllowedPDUSessionType(nasPDUSessionType uint8) boo
 		}
 	}
 	return false
+}
+
+// SM Policy related operation
+
+// ApplySmPolicyFromDecision - update the SM Policy from the message
+func (smContext *SMContext) ApplySmPolicyFromDecision(decision *models.SmPolicyDecision) error {
+	for id, tcModel := range decision.TraffContDecs {
+		tcData := NewTrafficControlDataFromModel(&tcModel)
+		smContext.TrafficControlPool[id] = tcData
+	}
+
+	for id, sessRuleModel := range decision.SessRules {
+		smContext.handleSessionRule(id, &sessRuleModel)
+		// default activate first session rules
+		smContext.SessionRules[id].isActivate = true
+		break
+	}
+
+	for id, pccRuleModel := range decision.PccRules {
+		smContext.handlePCCRule(id, &pccRuleModel)
+	}
+
+	return nil
+}
+
+func (smContext *SMContext) handlePCCRule(id string, pccRuleModel *models.PccRule) {
+	if pccRuleModel == nil {
+		smContext.removePCCRule(id)
+	} else {
+		// PCC rule installation
+		if _, exist := smContext.PCCRules[id]; !exist {
+			smContext.installPCCRule(id, pccRuleModel)
+		} else { // PCC rule modification
+			smContext.modifyPCCRule(id, pccRuleModel)
+		}
+	}
+}
+
+func (smContext *SMContext) installPCCRule(pccRuleID string, pccRuleModel *models.PccRule) error {
+	logger.CtxLog.Debugf("Install PCCRule[%s]", pccRuleID)
+	pccRule := NewPCCRuleFromModel(pccRuleModel)
+
+	// set reference to traffic control data
+	if len(pccRuleModel.RefTcData) != 0 && pccRuleModel.RefTcData[0] != "" {
+		refTcID := pccRuleModel.RefTcData[0]
+		tcData := smContext.TrafficControlPool[refTcID]
+		if tcData != nil {
+			tcData.RefedPCCRule[pccRuleID] = pccRule
+		} else {
+			return fmt.Errorf("pcc rule [%s] ref to traffic control data [%s] fail", pccRuleID, refTcID)
+		}
+	}
+
+	smContext.PCCRules[pccRuleID] = pccRule
+	return nil
+}
+
+func (smContext *SMContext) modifyPCCRule(pccRuleID string, pccRuleModel *models.PccRule) error {
+	logger.CtxLog.Debugf("Modify PCCRule[%s]", pccRuleID)
+	pccRule := NewPCCRuleFromModel(pccRuleModel)
+
+	// set reference to traffic control data
+	if len(pccRuleModel.RefTcData) != 0 && pccRuleModel.RefTcData[0] != "" {
+		refTcID := pccRuleModel.RefTcData[0]
+		tcData := smContext.TrafficControlPool[refTcID]
+		if tcData != nil {
+			tcData.RefedPCCRule[pccRuleID] = pccRule
+		} else {
+			return fmt.Errorf("pcc rule [%s] ref to traffic control data [%s] fail", pccRuleID, refTcID)
+		}
+
+		pccRule.RefTrafficControlData = tcData
+
+	}
+
+	smContext.PCCRules[pccRuleID] = pccRule
+	return nil
+}
+
+func (smContext *SMContext) removePCCRule(id string) error {
+	logger.CtxLog.Debugf("Remove PCCRule[%s]", id)
+	pccRule, exist := smContext.PCCRules[id]
+	if !exist {
+		return fmt.Errorf("pcc rule [%s] not exist", id)
+	}
+
+	refTcData := pccRule.RefTrafficControlData
+	delete(refTcData.RefedPCCRule, pccRule.PCCRuleID)
+
+	delete(smContext.PCCRules, id)
+	return nil
+}
+
+func (smContext *SMContext) handleSessionRule(id string, sessionRuleModel *models.SessionRule) {
+	if sessionRuleModel == nil {
+		logger.CtxLog.Debugf("Delete SessionRule[%s]", id)
+		delete(smContext.SessionRules, id)
+	} else {
+		sessRule := NewSessionRuleFromModel(sessionRuleModel)
+		// Session rule installation
+		if oldSessRule, exist := smContext.SessionRules[id]; !exist {
+			logger.CtxLog.Debugf("Install SessionRule[%s]", id)
+
+			smContext.SessionRules[id] = sessRule
+		} else { // Session rule modification
+			logger.CtxLog.Debugf("Modify SessionRule[%s]", oldSessRule.SessionRuleID)
+			smContext.SessionRules[id] = sessRule
+		}
+	}
+}
+
+// SelectedSessionRule - return the SMF selected session rule for this SM Context
+func (smContext *SMContext) SelectedSessionRule() *SessionRule {
+	for _, sessionRule := range smContext.SessionRules {
+		if sessionRule.isActivate {
+			return sessionRule
+		}
+	}
+
+	return nil
 }

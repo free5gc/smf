@@ -16,7 +16,8 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	m.PDUSessionEstablishmentAccept = nasMessage.NewPDUSessionEstablishmentAccept(0x0)
 	pDUSessionEstablishmentAccept := m.PDUSessionEstablishmentAccept
 
-	authDefQos := smContext.SessionRule.AuthDefQos
+	sessRule := smContext.SelectedSessionRule()
+	authDefQos := sessRule.AuthDefQos
 
 	pDUSessionEstablishmentAccept.SetPDUSessionID(uint8(smContext.PDUSessionID))
 	pDUSessionEstablishmentAccept.SetMessageType(nas.MsgTypePDUSessionEstablishmentAccept)
@@ -24,7 +25,7 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	pDUSessionEstablishmentAccept.SetPTI(0x00)
 	pDUSessionEstablishmentAccept.SetPDUSessionType(smContext.SelectedPDUSessionType)
 	pDUSessionEstablishmentAccept.SetSSCMode(1)
-	pDUSessionEstablishmentAccept.SessionAMBR = nasConvert.ModelsToSessionAMBR(smContext.SessionRule.AuthSessAmbr)
+	pDUSessionEstablishmentAccept.SessionAMBR = nasConvert.ModelsToSessionAMBR(sessRule.AuthSessAmbr)
 	pDUSessionEstablishmentAccept.SessionAMBR.SetLen(uint8(len(pDUSessionEstablishmentAccept.SessionAMBR.Octet)))
 
 	qoSRules := QoSRules{

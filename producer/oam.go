@@ -47,8 +47,8 @@ func HandleOAMGetUEPDUSessionInfo(rspChan chan message.HandlerResponseMessage, s
 				Sd:           smContext.Snssai.Sd,
 				AnType:       smContext.AnType,
 				PDUAddress:   smContext.PDUAddress.String(),
-				SessionRule:  smContext.SessionRule,
 				UpCnxState:   smContext.UpCnxState,
+				// SessionRule:  smContext.SelectedSessionRule(),
 				Tunnel: context.UPTunnel{
 					//UpfRoot:  smContext.Tunnel.UpfRoot,
 					ULCLRoot: smContext.Tunnel.ULCLRoot,

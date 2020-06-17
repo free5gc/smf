@@ -11,9 +11,11 @@ import (
 
 func HandleSMPolicyUpdateNotify(rspChan chan smf_message.HandlerResponseMessage, smContextRef string, request models.SmPolicyNotification) {
 
-	// policyDecision := request.SmPolicyDecision
+	policyDecision := request.SmPolicyDecision
 
 	smContext := context.GetSMContext(smContextRef)
+
+	smContext.ApplySmPolicyFromDecision(policyDecision)
 
 	if smContext == nil {
 		logger.PduSessLog.Errorf("SMContext[%s] not found", smContextRef)

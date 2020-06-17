@@ -113,9 +113,10 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		logger.PduSessLog.Errorln("setup sm policy association failed:", err, problemDetails)
 	}
 
-	for _, sessRule := range smPolicyDecision.SessRules {
-		smContext.SessionRule = sessRule
-		break
+	err = smContext.ApplySmPolicyFromDecision(&smPolicyDecision)
+
+	if err != nil {
+		logger.PduSessLog.Errorf("apply sm policy decision error: %v", err)
 	}
 
 	smContext.Tunnel = new(smf_context.UPTunnel)
