@@ -32,6 +32,8 @@ func SmPolicyUpdateNotification(c *gin.Context) {
 	}
 
 	reqWrapper := http_wrapper.NewRequest(c.Request, request)
+	reqWrapper.Params["smContextRef"] = c.Params.ByName("smContextRef")
+
 	msg := message.NewHandlerMessage(message.SMPolicyUpdateNotify, reqWrapper)
 
 	message.SendMessage(msg)

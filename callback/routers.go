@@ -58,13 +58,13 @@ var routes = Routes{
 	{
 		"SmPolicyUpdateNotification",
 		"POST",
-		"/sm-policies/:smPolicyID/update",
+		"/sm-policies/:smContextRef/update",
 		SmPolicyUpdateNotification,
 	},
 	{
 		"SmPolicyControlTerminationRequestNotification	",
 		"POST",
-		"/sm-policies/:smPolicyID/terminate",
+		"/sm-policies/:smContextRef/terminate",
 		SmPolicyControlTerminationRequestNotification,
 	},
 }
