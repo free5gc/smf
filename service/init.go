@@ -8,6 +8,7 @@ import (
 	"free5gc/lib/path_util"
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/app"
+	"free5gc/src/smf/callback"
 	"free5gc/src/smf/consumer"
 	"free5gc/src/smf/context"
 	"free5gc/src/smf/eventexposure"
@@ -143,6 +144,7 @@ func (smf *SMF) Start() {
 	}()
 
 	oam.AddService(router)
+	callback.AddService(router)
 	for _, serviceName := range factory.SmfConfig.Configuration.ServiceNameList {
 		switch models.ServiceName(serviceName) {
 		case models.ServiceName_NSMF_PDUSESSION:

@@ -7,5 +7,6 @@ const (
 	PDUSessionSMContextCreate
 	PDUSessionSMContextUpdate
 	PDUSessionSMContextRelease
+	SMPolicyUpdateNotify
 	OAMGetUEPDUSessionInfo
 )
