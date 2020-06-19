@@ -175,19 +175,20 @@ func (upi *UserPlaneInformation) ExistDefaultPath(dnn string) bool {
 	return exist
 }
 
-func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) {
+func GenerateDataPath(upPath UPPath, smContext *SMContext) (dataPath *DataPath) {
 	if len(upPath) < 1 {
 		logger.CtxLog.Errorf("invalid path")
 	}
 	var lowerBound = 0
 	var upperBound = len(upPath) - 1
+	var root *DataPathNode
 	var curDataPathNode *DataPathNode
 	var prevDataPathNode *DataPathNode
 
 	for idx, upNode := range upPath {
-		curDataPathNode := NewDataPathNode()
+		curDataPathNode = NewDataPathNode()
 		curDataPathNode.UPF = upNode.UPF
-		curDataPathNode.InUse = true
+
 		if idx == lowerBound {
 			root = curDataPathNode
 			root.DataPathToAN = NewDataPathDownLink()
@@ -203,9 +204,7 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 			if err != nil {
 				logger.CtxLog.Warnln(err)
 			}
-			// curDataPathNode.AddParent(prevDataPathNode)
-			curDataPathNode.DLDataPathLinkForPSA = NewDataPathUpLink()
-			// prevDataPathNode.AddChild(curDataPathNode)
+
 		}
 		if prevDataPathNode != nil {
 			err := prevDataPathNode.SetDownLinkSrcNode(smContext, curDataPathNode)
@@ -218,12 +217,12 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 			if err != nil {
 				logger.CtxLog.Warnln(err)
 			}
-			err = curDataPathNode.AddParent(prevDataPathNode)
+			err = curDataPathNode.AddPrev(prevDataPathNode)
 
 			if err != nil {
 				logger.CtxLog.Warnln(err)
 			}
-			err = prevDataPathNode.AddChild(curDataPathNode)
+			err = prevDataPathNode.AddNext(curDataPathNode)
 
 			if err != nil {
 				logger.CtxLog.Warnln(err)
@@ -234,7 +233,7 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 
 	curDataPathNode = root
 	for curDataPathNode != nil {
-		fmt.Println("calculate ", curDataPathNode.UPF.PFCPAddr().String())
+		logger.CtxLog.Infoln("Calculate ", curDataPathNode.UPF.PFCPAddr().String())
 		curULTunnel := curDataPathNode.UpLinkTunnel
 		curDLTunnel := curDataPathNode.DownLinkTunnel
 
@@ -351,6 +350,14 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) 
 		curDataPathNode = curDataPathNode.DownLinkTunnel.SrcEndPoint
 	}
 
+	dataPath = &DataPath{
+		Destination: Destination{
+			DestinationIP:   "",
+			DestinationPort: "",
+			Url:             "",
+		},
+		FirstDPNode: root,
+	}
 	return
 }
 

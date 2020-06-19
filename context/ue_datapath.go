@@ -2,14 +2,14 @@ package context
 
 import (
 	"fmt"
+	"free5gc/lib/idgenerator"
+	"free5gc/src/smf/factory"
 	"free5gc/src/smf/logger"
 )
 
-type UEDataPathGraph struct {
-	SUPI  string
-	Graph []*DataPathNode
-	ANUPF map[*DataPathNode]bool
-	PSA   map[*DataPathNode]bool
+type UEPreConfigPaths struct {
+	DataPathPool    DataPathPool
+	PathIDGenerator *idgenerator.IDGenerator
 }
 
 func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
@@ -22,38 +22,33 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 	}
 
 	node = &DataPathNode{
-		UPF:                  upNodes[name].UPF,
-		DataPathToDN:         make(map[string]*DataPathUpLink),
-		DataPathToAN:         NewDataPathDownLink(),
-		IsBranchingPoint:     false,
-		DLDataPathLinkForPSA: NewDataPathUpLink(),
-		BPUpLinkPDRs:         make(map[string]*DataPathDownLink),
+		UPF:            upNodes[name].UPF,
+		UpLinkTunnel:   &GTPTunnel{},
+		DownLinkTunnel: &GTPTunnel{},
 	}
 	return
 }
 
-func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
+func NewUEPreConfigPaths(SUPI string, paths []factory.Path) (uePreConfigPaths *UEPreConfigPaths, err error) {
 
-	UEPGraph = new(UEDataPathGraph)
-	UEPGraph.Graph = make([]*DataPathNode, 0)
-	UEPGraph.SUPI = SUPI
-	UEPGraph.ANUPF = make(map[*DataPathNode]bool)
-	UEPGraph.PSA = make(map[*DataPathNode]bool)
-
-	paths := smfContext.UERoutingPaths[SUPI]
+	ueDataPathPool = NewDataPathPool()
 	lowerBound := 0
-
 	NodeCreated := make(map[string]*DataPathNode)
-
-	//RANRoot := NewDataPathNode()
+	pathIDGenerator = idgenerator.NewGenerator(1, 2147483647)
 
 	for _, path := range paths {
 		upperBound := len(path.UPF) - 1
-
-		DataEndPoint := &DataPathUpLink{
-			DestinationIP:   path.DestinationIP,
-			DestinationPort: path.DestinationPort,
+		dataPath := NewDataPath()
+		pathID, err := pathIDGenerator.Allocate()
+		if err != nil {
+			logger.CtxLog.Warnf("Allocate pathID error: %+v", err)
+			return nil, nil, err
 		}
+
+		dataPath.Destination.DestinationIP = path.DestinationIP
+		dataPath.Destination.DestinationPort = path.DestinationPort
+		ueDataPathPool[pathID] = dataPath
+
 		for idx, node_name := range path.UPF {
 
 			var ue_node, child_node, parent_node *DataPathNode
@@ -65,10 +60,9 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 				ue_node, err = NewUEDataPathNode(node_name)
 
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				NodeCreated[node_name] = ue_node
-				UEPGraph.Graph = append(UEPGraph.Graph, ue_node)
 			}
 
 			switch idx {
@@ -79,23 +73,13 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 					child_node, err = NewUEDataPathNode(child_name)
 
 					if err != nil {
-						return nil, err
+						return nil, nil, err
 					}
 					NodeCreated[child_name] = child_node
-					UEPGraph.Graph = append(UEPGraph.Graph, child_node)
 				}
 
-				err = ue_node.AddChild(child_node)
+				ue_node.AddNext(child_node)
 
-				if err != nil {
-					logger.CtxLog.Warnln(err)
-				}
-				err = ue_node.AddDestinationOfChild(child_node, DataEndPoint)
-
-				if err != nil {
-					logger.CtxLog.Warnln(err)
-				}
-				UEPGraph.AddANUPF(ue_node)
 			case upperBound:
 				parent_name := path.UPF[idx-1]
 
@@ -103,18 +87,16 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 					parent_node, err = NewUEDataPathNode(parent_name)
 
 					if err != nil {
-						return nil, err
+						return nil, nil, err
 					}
 					NodeCreated[parent_name] = parent_node
-					UEPGraph.Graph = append(UEPGraph.Graph, parent_node)
 				}
 
-				err = ue_node.AddParent(parent_node)
+				ue_node.AddPrev(parent_node)
 
 				if err != nil {
 					logger.CtxLog.Warnln(err)
 				}
-				UEPGraph.AddPSA(ue_node)
 			default:
 				child_name := path.UPF[idx+1]
 
@@ -122,10 +104,9 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 					child_node, err = NewUEDataPathNode(child_name)
 
 					if err != nil {
-						return nil, err
+						return nil, nil, err
 					}
 					NodeCreated[child_name] = child_node
-					UEPGraph.Graph = append(UEPGraph.Graph, child_node)
 				}
 
 				parent_name := path.UPF[idx-1]
@@ -134,32 +115,22 @@ func NewUEDataPathGraph(SUPI string) (UEPGraph *UEDataPathGraph, err error) {
 					parent_node, err = NewUEDataPathNode(parent_name)
 
 					if err != nil {
-						return nil, err
+						return nil, nil, err
 					}
 					NodeCreated[parent_name] = parent_node
-					UEPGraph.Graph = append(UEPGraph.Graph, parent_node)
 				}
 
-				err = ue_node.AddChild(child_node)
-
-				if err != nil {
-					logger.CtxLog.Warnln(err)
-				}
-				err = ue_node.AddDestinationOfChild(child_node, DataEndPoint)
-
-				if err != nil {
-					logger.CtxLog.Warnln(err)
-				}
-				err = ue_node.AddParent(parent_node)
-
-				if err != nil {
-					logger.CtxLog.Warnln(err)
-				}
+				ue_node.AddNext(child_node)
+				ue_node.AddPrev(parent_node)
 			}
 
 		}
 	}
 
+	uePreConfigPaths = &UEPreConfigPaths{
+		DataPathPool:    ueDataPathPool,
+		PathIDGenerator: pathIDGenerator,
+	}
 	return
 }
 
@@ -306,12 +277,12 @@ func (root *DataPathNode) EnableUserPlanePath(path []*UPNode) (err error) {
 }
 
 func CheckUEHasPreConfig(SUPI string) (exist bool) {
-	_, exist = smfContext.UERoutingGraphs[SUPI]
+	_, exist = smfContext.UEDataPathPools[SUPI]
 	fmt.Println("CheckUEHasPreConfig")
-	fmt.Println(smfContext.UERoutingGraphs)
+	fmt.Println(smfContext.UEDataPathPools)
 	return
 }
 
 func GetUERoutingGraph(SUPI string) *UEDataPathGraph {
-	return smfContext.UERoutingGraphs[SUPI]
+	return smfContext.UEDataPathPools[SUPI]
 }

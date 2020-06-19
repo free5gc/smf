@@ -12,7 +12,7 @@ import (
 func AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
 
 	bpManager := smContext.BPManager
-	upfRoot := smContext.Tunnel.ULCLRoot
+	upfRoot := smContext.Tunnel.UpfRoot
 	//select PSA2
 	bpManager.SelectPSA2()
 	err := upfRoot.EnableUserPlanePath(bpManager.PSA2Path)

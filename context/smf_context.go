@@ -51,10 +51,10 @@ type SMFContext struct {
 
 	UserPlaneInformation UserPlaneInformation
 	//*** For ULCL ** //
-	ULCLSupport     bool
-	UERoutingPaths  map[string][]factory.Path
-	UERoutingGraphs map[string]*UEDataPathGraph
-	LocalSEIDCount  uint64
+	ULCLSupport         bool
+	UERoutingPaths      map[string][]factory.Path
+	UEPreConfigPathPool map[string]*UEPreConfigPaths
+	LocalSEIDCount      uint64
 }
 
 func AllocUEIP() net.IP {
@@ -149,26 +149,23 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 		routingConfig.Info.Version, routingConfig.Info.Description)
 
 	UERoutingInfo := routingConfig.UERoutingInfo
-	smfContext.UERoutingPaths = make(map[string][]factory.Path)
-	smfContext.UERoutingGraphs = make(map[string]*UEDataPathGraph)
+	ueRoutingPaths := make(map[string][]factory.Path)
+	smfContext.UEPreConfigPathPool = make(map[string]*UEPreConfigPaths)
 
 	for _, routingInfo := range UERoutingInfo {
-
 		supi := routingInfo.SUPI
 
-		smfContext.UERoutingPaths[supi] = routingInfo.PathList
+		ueRoutingPaths[supi] = routingInfo.PathList
 	}
 
-	for supi := range smfContext.UERoutingPaths {
-
-		graph, err := NewUEDataPathGraph(supi)
-
+	for supi, paths := range ueRoutingPaths {
+		uePreConfigPaths, err := NewUEPreConfigPaths(supi, paths)
 		if err != nil {
 			logger.CtxLog.Warnln(err)
 			continue
 		}
 
-		smfContext.UERoutingGraphs[supi] = graph
+		smfContext.UEPreConfigPathPool[supi] = uePreConfigPaths
 	}
 
 }

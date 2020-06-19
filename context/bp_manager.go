@@ -46,7 +46,7 @@ const (
 )
 
 func NewBPManager(supi string) (bpManager *BPManager) {
-	ueRoutingGraph := SMF_Self().UERoutingGraphs[supi]
+	ueRoutingGraph := SMF_Self().UEDataPathPools[supi]
 
 	bpManager = &BPManager{
 		ANUPFState: ueRoutingGraph.ANUPF,
@@ -157,7 +157,7 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 		return
 	}
 
-	upfRoot := smContext.Tunnel.ULCLRoot
+	upfRoot := smContext.Tunnel.UpfRoot
 	upperBound := len(psa2_path) - 1
 
 	curDataPathNode := upfRoot

@@ -142,7 +142,7 @@ func HandlePfcpSessionEstablishmentResponse(msg *pfcpUdp.Message) {
 		pfcpSessionCtx.RemoteSEID = rsp.UPFSEID.Seid
 	}
 
-	if rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted && smContext.Tunnel.UpfRoot.UPF.NodeID.ResolveNodeIdToIp().Equal(rsp.NodeID.ResolveNodeIdToIp()) {
+	if rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted && smContext.Tunnel.ANUPF.UPF.NodeID.ResolveNodeIdToIp().Equal(rsp.NodeID.ResolveNodeIdToIp()) {
 		smNasBuf, _ := smf_context.BuildGSMPDUSessionEstablishmentAccept(smContext)
 		n2Pdu, _ := smf_context.BuildPDUSessionResourceSetupRequestTransfer(smContext)
 		n1n2Request := models.N1N2MessageTransferRequest{}
@@ -326,7 +326,7 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 			logger.PfcpLog.Warnf("PFCP Session Report Request DownlinkDataServiceInformation handling is not implemented")
 		}
 
-		DLPDR := smContext.Tunnel.UpfRoot.DownLinkTunnel.MatchedPDR
+		DLPDR := smContext.Tunnel.ANUPF.DownLinkTunnel.PDR
 		if DLPDR.PDRID == pdrID {
 			// TS 23.502 4.2.3.3 2b. Send Data Notification Ack, SMF->UPF
 			cause.CauseValue = pfcpType.CauseRequestAccepted

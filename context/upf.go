@@ -2,13 +2,13 @@ package context
 
 import (
 	"fmt"
+	"free5gc/lib/idgenerator"
 	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/smf/logger"
+	"github.com/google/uuid"
 	"net"
 	"reflect"
-
-	"github.com/google/uuid"
 )
 
 var upfPool map[string]*UPF
@@ -26,6 +26,10 @@ type UPTunnel struct {
 
 	UpfRoot  *DataPathNode
 	ULCLRoot *DataPathNode
+
+	PathIDGenerator *idgenerator.IDGenerator
+	DataPathPool    map[int]*DataPath
+	ANUPF           *DataPathNode
 }
 
 type UPFStatus int
@@ -63,6 +67,24 @@ type UPF struct {
 // Maybe allocate by UPF in future
 func (upf *UPF) UUID() string {
 	return upf.uuid.String()
+}
+
+func NewUPTunnel() (tunnel *UPTunnel) {
+	tunnel = &UPTunnel{
+		PathIDGenerator: idgenerator.NewGenerator(1, 2147483647),
+	}
+
+	return
+}
+
+func (upTunnel *UPTunnel) AddDataPath(dataPath *DataPath) {
+	pathID, err := upTunnel.PathIDGenerator.Allocate()
+	if err != nil {
+		logger.CtxLog.Warnf("Allocate pathID error: %+v", err)
+		return
+	}
+
+	upTunnel.DataPathPool[pathID] = dataPath
 }
 
 // NewUPF returns a new UPF context in SMF

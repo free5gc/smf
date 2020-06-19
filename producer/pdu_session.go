@@ -119,21 +119,22 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		logger.PduSessLog.Errorf("apply sm policy decision error: %v", err)
 	}
 
-	smContext.Tunnel = new(smf_context.UPTunnel)
-
-	var dataPathRoot *smf_context.DataPathNode
+	smContext.Tunnel = NewUPTunnel()
+	var dataPath *smf_context.DataPathNode
 	defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
 	smContext.AllocateLocalSEIDForUPPath(defaultUPPath)
-	dataPathRoot = smf_context.GenerateDataPath(defaultUPPath, smContext)
-	smContext.Tunnel.UpfRoot = dataPathRoot
+	defaultPath = smf_context.GenerateDataPath(defaultUPPath, smContext)
+	smContext.Tunnel.AddDataPath(defaultPath)
+	smContext.Tunnel.ANUPF = defaultPath.FirstDPNode
 	if smf_context.SMF_Self().ULCLSupport && smf_context.CheckUEHasPreConfig(createData.Supi) {
+		//TODO: change UPFRoot => ULCL UserPlane Refactor
 		logger.PduSessLog.Infof("SUPI[%s] has pre-config route", createData.Supi)
 		ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
-		dataPathRoot = ueRoutingGraph.GetGraphRoot()
-		smContext.Tunnel.ULCLRoot = dataPathRoot
+		dataPath = ueRoutingGraph.GetGraphRoot()
+		smContext.Tunnel.UpfRoot = dataPath
 		psaPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
 
-		err := dataPathRoot.EnableUserPlanePath(psaPath)
+		err := dataPath.EnableUserPlanePath(psaPath)
 		if err != nil {
 			logger.PduSessLog.Error(err)
 			return
@@ -142,10 +143,10 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		smContext.BPManager = smf_context.NewBPManager(createData.Supi)
 		smContext.BPManager.SetPSAStatus(psaPath)
 		smContext.BPManager.PSA1Path = psaPath
-		SetUpUplinkUserPlane(smContext.Tunnel.ULCLRoot, smContext)
+		//SetUpUplinkUserPlane(smContext.Tunnel.ULCLRoot, smContext)
 	}
 
-	if dataPathRoot == nil {
+	if defaultPath == nil {
 		logger.PduSessLog.Errorf("Path for serve DNN[%s] not found\n", createData.Dnn)
 		rspChan <- smf_message.HandlerResponseMessage{
 			HTTPResponse: &http_wrapper.Response{
@@ -173,7 +174,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	// TODO: UECM registration
 
-	SendPFCPRule(smContext, smContext.Tunnel.UpfRoot)
+	SendPFCPRule(smContext, defaultPath)
 
 	consumer.SendNFDiscoveryServingAMF(smContext)
 
@@ -241,6 +242,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 				logger.PduSessLog.Error(err)
 			}
 
+			// TODO: Change to free the path, not node
 			curDataPathNode := smContext.Tunnel.UpfRoot
 
 			for curDataPathNode != nil {
@@ -292,7 +294,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		smContext.UeLocation = body.JsonData.UeLocation
 		// TODO: Deactivate N2 downlink tunnel
 		//Set FAR and An, N3 Release Info
-		DLPDR := tunnel.UpfRoot.DownLinkTunnel.MatchedPDR
+		DLPDR := tunnel.ANUPF.DownLinkTunnel.PDR
 		if DLPDR == nil {
 			logger.PduSessLog.Errorf("Release Error")
 		} else {
@@ -309,8 +311,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 
 	switch smContextUpdateData.N2SmInfoType {
 	case models.N2SmInfoType_PDU_RES_SETUP_RSP:
-		DLPDR := tunnel.UpfRoot.DownLinkTunnel.MatchedPDR
-
+		DLPDR := tunnel.ANUPF.DownLinkTunnel.PDR
 		// TODO: Setup Uplink Routing
 
 		DLPDR.Precedence = 32
@@ -368,7 +369,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			return
 		}
 	case models.N2SmInfoType_PATH_SWITCH_REQ:
-		DLPDR := tunnel.UpfRoot.DownLinkTunnel.MatchedPDR
+		DLPDR := tunnel.ANUPF.DownLinkTunnel.PDR
 		err = smf_context.HandlePathSwitchRequestTransfer(body.BinaryDataN2SmInformation, smContext)
 		n2Buf, err := smf_context.BuildPathSwitchRequestAcknowledgeTransfer(smContext)
 		if err != nil {
@@ -440,7 +441,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			logger.PduSessLog.Error(err)
 		}
 
-		curDataPathNode := smContext.Tunnel.UpfRoot
+		curDataPathNode := smContext.Tunnel.ANUPF
 
 		for curDataPathNode != nil {
 			seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
@@ -455,7 +456,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		logger.PduSessLog.Error(err)
 	}
 
-	seqNum = pfcp_message.SendPfcpSessionModificationRequest(smContext.Tunnel.UpfRoot.UPF.NodeID, smContext, pdrList, farList, barList)
+	seqNum = pfcp_message.SendPfcpSessionModificationRequest(smContext.Tunnel.ANUPF.UPF.NodeID, smContext, pdrList, farList, barList)
 
 	return seqNum, response
 }
@@ -465,7 +466,7 @@ func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMe
 
 	// smf_context.RemoveSMContext(smContext.Ref)
 
-	seqNum = pfcp_message.SendPfcpSessionDeletionRequest(smContext.Tunnel.UpfRoot.UPF.NodeID, smContext)
+	seqNum = pfcp_message.SendPfcpSessionDeletionRequest(smContext.Tunnel.ANUPF.UPF.NodeID, smContext)
 	return seqNum
 
 	// rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
@@ -481,25 +482,25 @@ func SendPFCPRule(smContext *smf_context.SMContext, root *smf_context.DataPathNo
 		pdrList := make([]*smf_context.PDR, 0, 2)
 		farList := make([]*smf_context.FAR, 0, 2)
 		if !curDataPathNode.HaveSession {
-			if curDataPathNode.UpLinkTunnel != nil && curDataPathNode.UpLinkTunnel.MatchedPDR != nil {
-				pdrList = append(pdrList, curDataPathNode.UpLinkTunnel.MatchedPDR)
-				farList = append(farList, curDataPathNode.UpLinkTunnel.MatchedPDR.FAR)
+			if curDataPathNode.UpLinkTunnel != nil && curDataPathNode.UpLinkTunnel.PDR != nil {
+				pdrList = append(pdrList, curDataPathNode.UpLinkTunnel.PDR)
+				farList = append(farList, curDataPathNode.UpLinkTunnel.PDR.FAR)
 			}
-			if curDataPathNode.DownLinkTunnel != nil && curDataPathNode.DownLinkTunnel.MatchedPDR != nil {
-				pdrList = append(pdrList, curDataPathNode.DownLinkTunnel.MatchedPDR)
-				farList = append(farList, curDataPathNode.DownLinkTunnel.MatchedPDR.FAR)
+			if curDataPathNode.DownLinkTunnel != nil && curDataPathNode.DownLinkTunnel.PDR != nil {
+				pdrList = append(pdrList, curDataPathNode.DownLinkTunnel.PDR)
+				farList = append(farList, curDataPathNode.DownLinkTunnel.PDR.FAR)
 			}
 
 			pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(curDataPathNode.UPF.NodeID, smContext, pdrList, farList, nil)
 			curDataPathNode.HaveSession = true
 		} else {
-			if curDataPathNode.UpLinkTunnel != nil && curDataPathNode.UpLinkTunnel.MatchedPDR != nil {
-				pdrList = append(pdrList, curDataPathNode.UpLinkTunnel.MatchedPDR)
-				farList = append(farList, curDataPathNode.UpLinkTunnel.MatchedPDR.FAR)
+			if curDataPathNode.UpLinkTunnel != nil && curDataPathNode.UpLinkTunnel.PDR != nil {
+				pdrList = append(pdrList, curDataPathNode.UpLinkTunnel.PDR)
+				farList = append(farList, curDataPathNode.UpLinkTunnel.PDR.FAR)
 			}
-			if curDataPathNode.DownLinkTunnel != nil && curDataPathNode.DownLinkTunnel.MatchedPDR != nil {
-				pdrList = append(pdrList, curDataPathNode.DownLinkTunnel.MatchedPDR)
-				farList = append(farList, curDataPathNode.DownLinkTunnel.MatchedPDR.FAR)
+			if curDataPathNode.DownLinkTunnel != nil && curDataPathNode.DownLinkTunnel.PDR != nil {
+				pdrList = append(pdrList, curDataPathNode.DownLinkTunnel.PDR)
+				farList = append(farList, curDataPathNode.DownLinkTunnel.PDR.FAR)
 			}
 
 			pfcp_message.SendPfcpSessionModificationRequest(curDataPathNode.UPF.NodeID, smContext, pdrList, farList, nil)
@@ -507,6 +508,6 @@ func SendPFCPRule(smContext *smf_context.SMContext, root *smf_context.DataPathNo
 		if curDataPathNode.DownLinkTunnel == nil {
 			break
 		}
-		curDataPathNode = curDataPathNode.DownLinkTunnel.SrcEndPoint
+		curDataPathNode = curDataPathNode.Next
 	}
 }

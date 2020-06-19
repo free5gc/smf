@@ -10,14 +10,14 @@ type GTPTunnel struct {
 	SrcEndPoint  *DataPathNode
 	DestEndPoint *DataPathNode
 
-	TEID       uint32
-	MatchedPDR *PDR
+	TEID uint32
+	PDR  *PDR
 }
 
 type DataPathNode struct {
-	UPF          *UPF
-	DataPathToAN *DataPathDownLink
-	DataPathToDN map[string]*DataPathUpLink //uuid to DataPathLink
+	UPF *UPF
+	//DataPathToAN *DataPathDownLink
+	//DataPathToDN map[string]*DataPathUpLink //uuid to DataPathLink
 
 	UpLinkTunnel   *GTPTunnel
 	DownLinkTunnel *GTPTunnel
@@ -25,101 +25,71 @@ type DataPathNode struct {
 	//for special case:
 	//branching & leafnode
 
-	InUse                bool
-	IsBranchingPoint     bool
-	DLDataPathLinkForPSA *DataPathUpLink
-	BPUpLinkPDRs         map[string]*DataPathDownLink // uuid to UpLink
+	//InUse                bool
+	IsBranchingPoint bool
+	//DLDataPathLinkForPSA *DataPathUpLink
+	//BPUpLinkPDRs         map[string]*DataPathDownLink // uuid to UpLink
 
 	HaveSession bool
 }
 
-type DataPathDownLink struct {
-	To *DataPathNode
-
-	// Filter Rules
-	DestinationIP   string
-	DestinationPort string
-
-	// related context
-	UpLinkPDR *PDR
+type DataPath struct {
+	//meta data
+	Activated         bool
+	Destination       Destination
+	HasBranchingPoint bool
+	//Data Path Double Link List
+	FirstDPNode *DataPathNode
 }
 
-type DataPathUpLink struct {
-	To *DataPathNode
+type DataPathPool map[int64]*DataPath
 
-	// Filter Rules
+type Destination struct {
 	DestinationIP   string
 	DestinationPort string
-
-	// related context
-	DownLinkPDR *PDR
+	Url             string
 }
 
 func NewDataPathNode() (node *DataPathNode) {
-
-	node = &DataPathNode{
-		UPF:                  nil,
-		DataPathToDN:         make(map[string]*DataPathUpLink),
-		DataPathToAN:         NewDataPathDownLink(),
-		IsBranchingPoint:     false,
-		DLDataPathLinkForPSA: nil,
-		BPUpLinkPDRs:         make(map[string]*DataPathDownLink),
-	}
+	node = &DataPathNode{}
 	return
 }
 
-func NewDataPathDownLink() (link *DataPathDownLink) {
-
-	link = &DataPathDownLink{
-		To:              nil,
-		DestinationIP:   "",
-		DestinationPort: "",
-		UpLinkPDR:       nil,
-	}
-	return
-}
-
-func NewDataPathUpLink() (link *DataPathUpLink) {
-
-	link = &DataPathUpLink{
-		To:              nil,
-		DestinationIP:   "",
-		DestinationPort: "",
-		DownLinkPDR:     nil,
-	}
-	return
-}
-
-func (node *DataPathNode) AddChild(child *DataPathNode) (err error) {
-	child_id, err := child.GetUPFID()
-	if err != nil {
-		return err
-	}
-	if _, exist := node.DataPathToDN[child_id]; !exist {
-		child_link := &DataPathUpLink{
-			To:              child,
+func NewDataPath() (dataPath *DataPath) {
+	dataPath = &DataPath{
+		Destination: Destination{
 			DestinationIP:   "",
 			DestinationPort: "",
-			DownLinkPDR:     nil,
-		}
-		node.DataPathToDN[child_id] = child_link
+			Url:             "",
+		},
 	}
+
 	return
 }
-func (node *DataPathNode) AddParent(parent *DataPathNode) (err error) {
-	parent_ip := parent.GetNodeIP()
-	var exist bool
-	if _, exist = smfContext.UserPlaneInformation.UPFsIPtoID[parent_ip]; !exist {
-		err = fmt.Errorf("UPNode IP %s doesn't exist in smfcfg.conf, please sync the config files!", parent_ip)
-		return err
-	}
-	parent_link := &DataPathDownLink{
-		To:              parent,
-		DestinationIP:   "",
-		DestinationPort: "",
-		UpLinkPDR:       nil,
-	}
-	node.DataPathToAN = parent_link
+
+func NewDataPathPool() (pool DataPathPool) {
+	pool = make(map[int64]*DataPath)
+	return
+}
+
+func (node *DataPathNode) AddNext(next *DataPathNode) {
+	node.DownLinkTunnel.SrcEndPoint = next
+
+	return
+}
+func (node *DataPathNode) AddPrev(prev *DataPathNode) {
+	node.UpLinkTunnel.SrcEndPoint = prev
+
+	return
+}
+
+func (node *DataPathNode) Next() (next *DataPathNode) {
+	next = node.DownLinkTunnel.SrcEndPoint
+	return
+}
+
+func (node *DataPathNode) Prev() (prev *DataPathNode) {
+	prev = node.DownLinkTunnel.SrcEndPoint
 	return
 }
 
@@ -130,8 +100,8 @@ func (node *DataPathNode) SetUpLinkSrcNode(smContext *SMContext, nextUpLinkNode 
 	node.UpLinkTunnel.DestEndPoint = node
 
 	destUPF := node.UPF
-	node.UpLinkTunnel.MatchedPDR, err = destUPF.AddPDR()
-	smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.UpLinkTunnel.MatchedPDR)
+	node.UpLinkTunnel.PDR, err = destUPF.AddPDR()
+	smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.UpLinkTunnel.PDR)
 
 	if err != nil {
 		logger.CtxLog.Errorln("allocate UpLinkTunnel.MatchedPDR", err)
@@ -149,8 +119,8 @@ func (node *DataPathNode) SetDownLinkSrcNode(smContext *SMContext, nextDownLinkN
 	node.DownLinkTunnel.DestEndPoint = node
 
 	destUPF := node.UPF
-	node.DownLinkTunnel.MatchedPDR, err = destUPF.AddPDR()
-	smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.DownLinkTunnel.MatchedPDR)
+	node.DownLinkTunnel.PDR, err = destUPF.AddPDR()
+	smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.DownLinkTunnel.PDR)
 
 	if err != nil {
 		logger.CtxLog.Errorln("allocate DownLinkTunnel.MatchedPDR", err)
@@ -158,23 +128,6 @@ func (node *DataPathNode) SetDownLinkSrcNode(smContext *SMContext, nextDownLinkN
 
 	teid, _ := destUPF.GenerateTEID()
 	node.DownLinkTunnel.TEID = teid
-
-	return
-}
-
-func (node *DataPathNode) AddDestinationOfChild(child *DataPathNode, Dest *DataPathUpLink) (err error) {
-
-	child_id, err := child.GetUPFID()
-
-	if err != nil {
-		return err
-	}
-	if child_link, exist := node.DataPathToDN[child_id]; exist {
-
-		child_link.DestinationIP = Dest.DestinationIP
-		child_link.DestinationPort = Dest.DestinationPort
-
-	}
 
 	return
 }
@@ -200,7 +153,7 @@ func (node *DataPathNode) GetNodeIP() (ip string) {
 
 func (node *DataPathNode) IsANUPF() bool {
 
-	if node.DataPathToAN.To == nil {
+	if node.Prev() == nil {
 		return true
 	} else {
 		return false
@@ -209,7 +162,7 @@ func (node *DataPathNode) IsANUPF() bool {
 
 func (node *DataPathNode) IsAnchorUPF() bool {
 
-	if len(node.DataPathToDN) == 0 {
+	if node.Next() == nil {
 		return true
 	} else {
 		return false
@@ -217,26 +170,17 @@ func (node *DataPathNode) IsAnchorUPF() bool {
 
 }
 
-func (node *DataPathNode) GetUpLink() (link *DataPathDownLink) {
-
-	return node.DataPathToAN
-}
-
 func (node *DataPathNode) GetUpLinkPDR() (pdr *PDR) {
-	return node.DataPathToAN.UpLinkPDR
+	return node.UpLinkTunnel.PDR
 }
 
 func (node *DataPathNode) GetUpLinkFAR() (far *FAR) {
-	return node.DataPathToAN.UpLinkPDR.FAR
-}
-
-func (node *DataPathNode) GetParent() (parent *DataPathNode) {
-	return node.DataPathToAN.To
+	return node.UpLinkTunnel.PDR.FAR
 }
 
 func (node *DataPathNode) PathToString() string {
 	if node == nil {
 		return ""
 	}
-	return node.UPF.NodeID.ResolveNodeIdToIp().String() + " -> " + node.DownLinkTunnel.SrcEndPoint.PathToString()
+	return node.UPF.NodeID.ResolveNodeIdToIp().String() + " -> " + node.Next().PathToString()
 }
