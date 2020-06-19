@@ -91,13 +91,18 @@ func (*SMF) Initialize(c *cli.Context) {
 		factory.InitRoutingConfigFactory(DefaultUERoutingPath)
 	}
 
-	initLog.Traceln("SMF debug level(string):", app.ContextSelf().Logger.SMF.DebugLevel)
 	if app.ContextSelf().Logger.SMF.DebugLevel != "" {
-		initLog.Infoln("SMF debug level(string):", app.ContextSelf().Logger.SMF.DebugLevel)
 		level, err := logrus.ParseLevel(app.ContextSelf().Logger.SMF.DebugLevel)
 		if err != nil {
+			initLog.Warnf("Log level [%s] is not valid, set to [info] level", app.ContextSelf().Logger.SMF.DebugLevel)
+			logger.SetLogLevel(logrus.InfoLevel)
+		} else {
 			logger.SetLogLevel(level)
+			initLog.Infof("Log level is set to [%s] level", level)
 		}
+	} else {
+		initLog.Infoln("Log level is default set to [info] level")
+		logger.SetLogLevel(logrus.InfoLevel)
 	}
 
 	logger.SetReportCaller(app.ContextSelf().Logger.SMF.ReportCaller)
