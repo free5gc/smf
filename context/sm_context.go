@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"free5gc/lib/idgenerator"
 	"free5gc/lib/nas/nasConvert"
 	"free5gc/lib/nas/nasMessage"
 	"free5gc/lib/openapi"
@@ -252,11 +251,37 @@ func (smContext *SMContext) AllocateLocalSEIDForUPPath(path UPPath) {
 	}
 }
 
+func (smContext *SMContext) AllocateLocalSEIDForDataPath(dataPath *DataPath) {
+
+	for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
+
+		NodeIDtoIP := curDataPathNode.UPF.NodeID.ResolveNodeIdToIp().String()
+		if _, exist := smContext.PFCPContext[NodeIDtoIP]; !exist {
+
+			allocatedSEID := AllocateLocalSEID()
+			smContext.PFCPContext[NodeIDtoIP] = &PFCPSessionContext{
+				PDRs:      make(map[uint16]*PDR),
+				NodeID:    curDataPathNode.UPF.NodeID,
+				LocalSEID: allocatedSEID,
+			}
+
+			seidSMContextMap[allocatedSEID] = smContext
+		}
+	}
+}
+
 func (smContext *SMContext) PutPDRtoPFCPSession(nodeID pfcpType.NodeID, pdr *PDR) {
 
 	NodeIDtoIP := nodeID.ResolveNodeIdToIp().String()
 	pfcpSessionCtx := smContext.PFCPContext[NodeIDtoIP]
 	pfcpSessionCtx.PDRs[pdr.PDRID] = pdr
+}
+
+func (smContext *SMContext) RemovePDRfromPFCPSession(nodeID pfcpType.NodeID, pdr *PDR) {
+
+	NodeIDtoIP := nodeID.ResolveNodeIdToIp().String()
+	pfcpSessionCtx := smContext.PFCPContext[NodeIDtoIP]
+	delete(pfcpSessionCtx.PDRs, pdr.PDRID)
 }
 
 func (smContext *SMContext) isAllowedPDUSessionType(nasPDUSessionType uint8) bool {

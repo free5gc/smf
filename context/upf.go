@@ -28,7 +28,7 @@ type UPTunnel struct {
 	ULCLRoot *DataPathNode
 
 	PathIDGenerator *idgenerator.IDGenerator
-	DataPathPool    map[int]*DataPath
+	DataPathPool    DataPathPool
 	ANUPF           *DataPathNode
 }
 

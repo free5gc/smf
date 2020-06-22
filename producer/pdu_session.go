@@ -120,30 +120,27 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	}
 
 	smContext.Tunnel = NewUPTunnel()
-	var dataPath *smf_context.DataPathNode
+	var defaultPath *smf_context.DataPath
 	defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
 	smContext.AllocateLocalSEIDForUPPath(defaultUPPath)
 	defaultPath = smf_context.GenerateDataPath(defaultUPPath, smContext)
 	smContext.Tunnel.AddDataPath(defaultPath)
+	defaultPath.ActivateTunnelAndPDR(smContext)
 	smContext.Tunnel.ANUPF = defaultPath.FirstDPNode
 	if smf_context.SMF_Self().ULCLSupport && smf_context.CheckUEHasPreConfig(createData.Supi) {
 		//TODO: change UPFRoot => ULCL UserPlane Refactor
 		logger.PduSessLog.Infof("SUPI[%s] has pre-config route", createData.Supi)
-		ueRoutingGraph := smf_context.GetUERoutingGraph(createData.Supi)
-		dataPath = ueRoutingGraph.GetGraphRoot()
-		smContext.Tunnel.UpfRoot = dataPath
-		psaPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
+		uePreConfigPaths := smf_context.GetUEPreConfigPaths(createData.Supi)
+		smContext.Tunnel.DataPathPool = uePreConfigPaths.DataPathPool
+		smContext.Tunnel.PathIDGenerator = uePreConfigPaths.PathIDGenerator
+		defaultPath = smContext.Tunnel.DataPathPool.GetDefaultPath()
+		defaultPath.ActivateTunnelAndPDR(smContext)
+		smContext.AllocateLocalSEIDForDataPath(defaultPath)
 
-		err := dataPath.EnableUserPlanePath(psaPath)
-		if err != nil {
-			logger.PduSessLog.Error(err)
-			return
-		}
-
-		smContext.BPManager = smf_context.NewBPManager(createData.Supi)
-		smContext.BPManager.SetPSAStatus(psaPath)
-		smContext.BPManager.PSA1Path = psaPath
-		//SetUpUplinkUserPlane(smContext.Tunnel.ULCLRoot, smContext)
+		// TODO: Maybe we don't need this
+		// smContext.BPManager = smf_context.NewBPManager(createData.Supi)
+		// smContext.BPManager.SetPSAStatus(psaPath)
+		// smContext.BPManager.PSA1Path = psaPath
 	}
 
 	if defaultPath == nil {
@@ -192,20 +189,22 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 
 	logger.PduSessLog.Infoln("[SMF] PDUSession SMContext Update")
 	if smContext == nil {
-		rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
-			Header: nil,
-			Status: http.StatusNotFound,
-			Body: models.UpdateSmContextErrorResponse{
-				JsonData: &models.SmContextUpdateError{
-					UpCnxState: models.UpCnxState_DEACTIVATED,
-					Error: &models.ProblemDetails{
-						Type:   "Resource Not Found",
-						Title:  "SMContext Ref is not found",
-						Status: http.StatusNotFound,
+		rspChan <- smf_message.HandlerResponseMessage{
+			HTTPResponse: &http_wrapper.Response{
+				Header: nil,
+				Status: http.StatusNotFound,
+				Body: models.UpdateSmContextErrorResponse{
+					JsonData: &models.SmContextUpdateError{
+						UpCnxState: models.UpCnxState_DEACTIVATED,
+						Error: &models.ProblemDetails{
+							Type:   "Resource Not Found",
+							Title:  "SMContext Ref is not found",
+							Status: http.StatusNotFound,
+						},
 					},
 				},
-			},
-		}}
+			}
+		}
 		return
 	}
 
@@ -242,12 +241,17 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 				logger.PduSessLog.Error(err)
 			}
 
-			// TODO: Change to free the path, not node
-			curDataPathNode := smContext.Tunnel.UpfRoot
+			deletedPFCPNode := make(map[string]bool)
 
-			for curDataPathNode != nil {
-				seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
-				curDataPathNode = curDataPathNode.DownLinkTunnel.SrcEndPoint
+			for _, dataPath := range smContext.Tunnel.DataPathPool{
+				
+				dataPath.DeactivateTunnelAndPDR(smContext)
+				for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode.Next() {
+					if _, exist = deletedPFCPNode[curDataPathNode.GetUPFID()]; !exist{
+						seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
+						deletedPFCPNode[curDataPathNode.GetUPFID()] = true 
+					}
+				}	
 			}
 
 			return seqNum, response
@@ -476,9 +480,9 @@ func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMe
 	// }}
 }
 
-func SendPFCPRule(smContext *smf_context.SMContext, root *smf_context.DataPathNode) {
-	curDataPathNode := root
-	for curDataPathNode != nil {
+func SendPFCPRule(smContext *smf_context.SMContext, dataPath *smf_context.DataPath) {
+
+	for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
 		pdrList := make([]*smf_context.PDR, 0, 2)
 		farList := make([]*smf_context.FAR, 0, 2)
 		if !curDataPathNode.HaveSession {
@@ -505,9 +509,6 @@ func SendPFCPRule(smContext *smf_context.SMContext, root *smf_context.DataPathNo
 
 			pfcp_message.SendPfcpSessionModificationRequest(curDataPathNode.UPF.NodeID, smContext, pdrList, farList, nil)
 		}
-		if curDataPathNode.DownLinkTunnel == nil {
-			break
-		}
-		curDataPathNode = curDataPathNode.Next
+
 	}
 }

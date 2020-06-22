@@ -46,7 +46,7 @@ const (
 )
 
 func NewBPManager(supi string) (bpManager *BPManager) {
-	ueRoutingGraph := SMF_Self().UEDataPathPools[supi]
+	ueRoutingGraph := SMF_Self().UEPreConfigPathPool[supi]
 
 	bpManager = &BPManager{
 		ANUPFState: ueRoutingGraph.ANUPF,
@@ -63,7 +63,7 @@ func NewBPManager(supi string) (bpManager *BPManager) {
 
 }
 
-func (bpMGR *BPManager) SetPSAStatus(psa_path []*UPNode) {
+func (bpMGR *BPManager) SetPSAStatus(dataPath *DataPath) {
 
 	if len(psa_path) == 0 {
 		return
