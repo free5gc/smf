@@ -466,17 +466,29 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		logger.PduSessLog.Error(err)
 	}
 
-	seqNum = pfcp_message.SendPfcpSessionModificationRequest(smContext.Tunnel.ANUPF.UPF.NodeID, smContext, pdrList, farList, barList)
+	defaultPath := smContext.Tunnel.DataPathPool.GetDefaultPath()
+	ANUPF := defaultPath.FirstDPNode
+
+	seqNum = pfcp_message.SendPfcpSessionModificationRequest(ANUPF.UPF.NodeID, smContext, pdrList, farList, barList)
 
 	return seqNum, response
 }
 
 func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMessage, smContextRef string, body models.ReleaseSmContextRequest) (seqNum uint32) {
 	smContext := smf_context.GetSMContext(smContextRef)
-
 	// smf_context.RemoveSMContext(smContext.Ref)
 
-	seqNum = pfcp_message.SendPfcpSessionDeletionRequest(smContext.Tunnel.ANUPF.UPF.NodeID, smContext)
+	for _, dataPath := range smContext.Tunnel.DataPathPool{
+				
+		dataPath.DeactivateTunnelAndPDR(smContext)
+		for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode.Next() {
+			if _, exist = deletedPFCPNode[curDataPathNode.GetUPFID()]; !exist{
+				seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
+				deletedPFCPNode[curDataPathNode.GetUPFID()] = true 
+			}
+		}	
+	}
+
 	return seqNum
 
 	// rspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &http_wrapper.Response{
