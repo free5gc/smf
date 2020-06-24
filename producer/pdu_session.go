@@ -298,52 +298,51 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		smContext.UeLocation = body.JsonData.UeLocation
 		// TODO: Deactivate N2 downlink tunnel
 		//Set FAR and An, N3 Release Info
-		DLPDR := tunnel.ANUPF.DownLinkTunnel.PDR
-		if DLPDR == nil {
-			logger.PduSessLog.Errorf("Release Error")
-		} else {
-			DLPDR.FAR.State = smf_context.RULE_UPDATE
-			DLPDR.FAR.ApplyAction.Forw = false
-			DLPDR.FAR.ApplyAction.Buff = true
-			DLPDR.FAR.ApplyAction.Nocp = true
+		farList = []*smf_context.FAR{}
+
+		for _, dataPath := range smContext.Tunnel.DataPathPool{
+				
+			ANUPF := dataPath.FirstDPNode
+			DLPDR := ANUPF.DownLinkTunnel.PDR
+			if DLPDR == nil {
+				logger.PduSessLog.Errorf("AN Release Error")
+			} else {
+				DLPDR.FAR.State = smf_context.RULE_UPDATE
+				DLPDR.FAR.ApplyAction.Forw = false
+				DLPDR.FAR.ApplyAction.Buff = true
+				DLPDR.FAR.ApplyAction.Nocp = true
+			}
+
+			farList = append(farList, DLPDR)
 		}
 
-		farList = []*smf_context.FAR{DLPDR.FAR}
 	}
 
 	var err error
 
 	switch smContextUpdateData.N2SmInfoType {
 	case models.N2SmInfoType_PDU_RES_SETUP_RSP:
-		DLPDR := tunnel.ANUPF.DownLinkTunnel.PDR
-		// TODO: Setup Uplink Routing
+		pdrList = []*smf_context.PDR{}
+		farList = []*smf_context.FAR{}
 
-		DLPDR.Precedence = 32
-		DLPDR.PDI = smf_context.PDI{
-			SourceInterface: pfcpType.SourceInterface{
-				InterfaceValue: pfcpType.SourceInterfaceSgiLanN6Lan,
-			},
-			NetworkInstance: []byte(smContext.Dnn),
-			// TODO: Should Uncomment this after FR5GC-1029 is solved
-			// UEIPAddress: &pfcpType.UEIPAddress{
-			// 	V4:          true,
-			// 	Ipv4Address: smContext.PDUAddress.To4(),
-			// },
+		for _, dataPath := range tunnel.DataPathPool{
+				
+			ANUPF := dataPath.FirstDPNode
+			DLPDR := ANUPF.DownLinkTunnel.PDR
+			
+			DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
+			DLPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
+				DestinationInterface: pfcpType.DestinationInterface{
+					InterfaceValue: pfcpType.DestinationInterfaceAccess,
+				},
+				NetworkInstance: []byte(smContext.Dnn),
+			}
+			
+			DLPDR.State = smf_context.RULE_UPDATE
+			DLPDR.FAR.State = smf_context.RULE_UPDATE	
 		}
 
-		DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
-		DLPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
-			DestinationInterface: pfcpType.DestinationInterface{
-				InterfaceValue: pfcpType.DestinationInterfaceAccess,
-			},
-			NetworkInstance: []byte(smContext.Dnn),
-		}
 		err = smf_context.HandlePDUSessionResourceSetupResponseTransfer(body.BinaryDataN2SmInformation, smContext)
-
-		DLPDR.State = smf_context.RULE_UPDATE
-		DLPDR.FAR.State = smf_context.RULE_UPDATE
-		pdrList = []*smf_context.PDR{DLPDR}
-		farList = []*smf_context.FAR{DLPDR.FAR}
 
 	case models.N2SmInfoType_PDU_RES_REL_RSP:
 		logger.PduSessLog.Infoln("[SMF] N2 PDUSession Release Complete ")
@@ -373,7 +372,8 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			return
 		}
 	case models.N2SmInfoType_PATH_SWITCH_REQ:
-		DLPDR := tunnel.ANUPF.DownLinkTunnel.PDR
+		//TODO: Ask if we could comment DLPDR here
+		//DLPDR := tunnel.ANUPF.DownLinkTunnel.PDR
 		err = smf_context.HandlePathSwitchRequestTransfer(body.BinaryDataN2SmInformation, smContext)
 		n2Buf, err := smf_context.BuildPathSwitchRequestAcknowledgeTransfer(smContext)
 		if err != nil {
@@ -386,8 +386,9 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			ContentId: "PATH_SWITCH_REQ_ACK",
 		}
 
-		pdrList = []*smf_context.PDR{DLPDR}
-		farList = []*smf_context.FAR{DLPDR.FAR}
+		// pdrList = []*smf_context.PDR{DLPDR}
+		// farList = []*smf_context.FAR{DLPDR.FAR}
+		return
 
 	case models.N2SmInfoType_PATH_SWITCH_SETUP_FAIL:
 		err = smf_context.HandlePathSwitchRequestSetupFailedTransfer(body.BinaryDataN2SmInformation, smContext)
@@ -445,11 +446,16 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			logger.PduSessLog.Error(err)
 		}
 
-		curDataPathNode := smContext.Tunnel.ANUPF
-
-		for curDataPathNode != nil {
-			seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
-			curDataPathNode = curDataPathNode.DownLinkTunnel.SrcEndPoint
+		deletedPFCPNode := make(map[string]bool)
+		for _, dataPath := range smContext.Tunnel.DataPathPool{
+				
+			dataPath.DeactivateTunnelAndPDR(smContext)
+			for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode.Next() {
+				if _, exist = deletedPFCPNode[curDataPathNode.GetUPFID()]; !exist{
+					seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
+					deletedPFCPNode[curDataPathNode.GetUPFID()] = true 
+				}
+			}	
 		}
 
 		fmt.Println("[SMF] Cause_REL_DUE_TO_DUPLICATE_SESSION_ID")
