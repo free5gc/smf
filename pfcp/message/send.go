@@ -102,8 +102,8 @@ func SendPfcpAssociationReleaseResponse(addr *net.UDPAddr, cause pfcpType.Cause)
 	udp.SendPfcp(message, addr)
 }
 
-func SendPfcpSessionEstablishmentRequest(upNodeID pfcpType.NodeID, ctx *context.SMContext) {
-	pfcpMsg, err := BuildPfcpSessionEstablishmentRequest(upNodeID, ctx)
+func SendPfcpSessionEstablishmentRequest(upNodeID pfcpType.NodeID, ctx *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) {
+	pfcpMsg, err := BuildPfcpSessionEstablishmentRequest(upNodeID, ctx, pdrList, farList, barList)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Establishment Request failed: %v", err)
 		return
@@ -126,35 +126,7 @@ func SendPfcpSessionEstablishmentRequest(upNodeID pfcpType.NodeID, ctx *context.
 		IP:   upNodeID.ResolveNodeIdToIp(),
 		Port: pfcpUdp.PFCP_PORT,
 	}
-
-	udp.SendPfcp(message, upaddr)
-}
-
-func SendPfcpSessionEstablishmentRequestForULCL(upNodeID pfcpType.NodeID, ctx *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) {
-	pfcpMsg, err := BuildPfcpSessionEstablishmentRequestForULCL(upNodeID, ctx, pdrList, farList, barList)
-	if err != nil {
-		logger.PfcpLog.Errorf("Build PFCP Session Establishment Request failed: %v", err)
-		return
-	}
-
-	message := pfcp.Message{
-		Header: pfcp.Header{
-			Version:         pfcp.PfcpVersion,
-			MP:              1,
-			S:               pfcp.SEID_PRESENT,
-			MessageType:     pfcp.PFCP_SESSION_ESTABLISHMENT_REQUEST,
-			SEID:            0,
-			SequenceNumber:  getSeqNumber(),
-			MessagePriority: 0,
-		},
-		Body: pfcpMsg,
-	}
-
-	upaddr := &net.UDPAddr{
-		IP:   upNodeID.ResolveNodeIdToIp(),
-		Port: pfcpUdp.PFCP_PORT,
-	}
-	logger.PduSessLog.Traceln("[SMF] Send SendPfcpSessionEstablishmentRequestForULCL")
+	logger.PduSessLog.Traceln("[SMF] Send SendPfcpSessionEstablishmentRequest")
 	logger.PduSessLog.Traceln("Send to addr ", upaddr.String())
 
 	udp.SendPfcp(message, upaddr)

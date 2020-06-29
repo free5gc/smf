@@ -528,7 +528,7 @@ func SendPFCPRule(smContext *smf_context.SMContext, dataPath *smf_context.DataPa
 				farList = append(farList, curDataPathNode.DownLinkTunnel.PDR.FAR)
 			}
 
-			pfcp_message.SendPfcpSessionEstablishmentRequestForULCL(curDataPathNode.UPF.NodeID, smContext, pdrList, farList, nil)
+			pfcp_message.SendPfcpSessionEstablishmentRequest(curDataPathNode.UPF.NodeID, smContext, pdrList, farList, nil)
 			curDataPathNode.HaveSession = true
 		} else {
 			if curDataPathNode.UpLinkTunnel != nil && curDataPathNode.UpLinkTunnel.PDR != nil {

@@ -238,7 +238,7 @@ package producer
 // 		farList := []*context.FAR{upLink.UpLinkPDR.FAR, downLink.DownLinkPDR.FAR}
 // 		barList := []*context.BAR{}
 
-// 		message.SendPfcpSessionEstablishmentRequestForULCL(curDataPathNode.UPF.NodeID, smContext, pdrList, farList, barList)
+// 		message.SendPfcpSessionEstablishmentRequest(curDataPathNode.UPF.NodeID, smContext, pdrList, farList, barList)
 // 	}
 
 // }

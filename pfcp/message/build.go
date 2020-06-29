@@ -187,36 +187,7 @@ func farToUpdateFAR(far *context.FAR) *pfcp.UpdateFAR {
 	return updateFAR
 }
 
-// TODO: Replace dummy value in PFCP message
-func BuildPfcpSessionEstablishmentRequest(upNodeID pfcpType.NodeID, smContext *context.SMContext) (pfcp.PFCPSessionEstablishmentRequest, error) {
-	msg := pfcp.PFCPSessionEstablishmentRequest{}
-
-	msg.NodeID = &context.SMF_Self().CPNodeID
-
-	isv4 := context.SMF_Self().CPNodeID.NodeIdType == 0
-	nodeIDtoIP := upNodeID.ResolveNodeIdToIp().String()
-	localSEID := smContext.PFCPContext[nodeIDtoIP].LocalSEID
-	msg.CPFSEID = &pfcpType.FSEID{
-		V4:          isv4,
-		V6:          !isv4,
-		Seid:        localSEID,
-		Ipv4Address: context.SMF_Self().CPNodeID.NodeIdValue,
-	}
-
-	msg.CreatePDR = make([]*pfcp.CreatePDR, 0, 2)
-	msg.CreateFAR = make([]*pfcp.CreateFAR, 0, 2)
-
-	msg.CreatePDR = append(msg.CreatePDR, pdrToCreatePDR(smContext.Tunnel.ULPDR))
-	msg.CreateFAR = append(msg.CreateFAR, farToCreateFAR(smContext.Tunnel.ULPDR.FAR))
-
-	msg.PDNType = &pfcpType.PDNType{
-		PdnType: pfcpType.PDNTypeIpv4,
-	}
-
-	return msg, nil
-}
-
-func BuildPfcpSessionEstablishmentRequestForULCL(upNodeID pfcpType.NodeID, smContext *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (pfcp.PFCPSessionEstablishmentRequest, error) {
+func BuildPfcpSessionEstablishmentRequest(upNodeID pfcpType.NodeID, smContext *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (pfcp.PFCPSessionEstablishmentRequest, error) {
 	msg := pfcp.PFCPSessionEstablishmentRequest{}
 
 	msg.NodeID = &context.SMF_Self().CPNodeID

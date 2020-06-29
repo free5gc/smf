@@ -18,15 +18,6 @@ func init() {
 }
 
 type UPTunnel struct {
-	ULPDR *PDR
-	DLPDR *PDR
-
-	ULTEID uint32
-	DLTEID uint32
-
-	UpfRoot  *DataPathNode
-	ULCLRoot *DataPathNode
-
 	PathIDGenerator *idgenerator.IDGenerator
 	DataPathPool    DataPathPool
 	ANUPF           *DataPathNode
