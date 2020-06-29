@@ -141,6 +141,10 @@ func InitSmfContext(config *factory.Config) {
 
 func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 
+	if !smfContext.ULCLSupport {
+		return
+	}
+
 	if routingConfig == nil {
 		logger.CtxLog.Infof("Routing Config is nil")
 	}
