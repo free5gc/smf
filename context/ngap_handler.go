@@ -64,17 +64,21 @@ func HandlePathSwitchRequestTransfer(b []byte, ctx *SMContext) (err error) {
 	}
 
 	for _, dataPath := range ctx.Tunnel.DataPathPool {
-		ANUPF := dataPath.FirstDPNode
-		DLPDR := ANUPF.DownLinkTunnel.PDR
 
-		DLPDR.FAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
-		DLPDR.FAR.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-		DLPDR.FAR.ForwardingParameters.OuterHeaderCreation.Teid = uint32(teid)
-		DLPDR.FAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address = gtpTunnel.TransportLayerAddress.Value.Bytes
-		DLPDR.FAR.State = RULE_UPDATE
+		if dataPath.Activated {
+			ANUPF := dataPath.FirstDPNode
+			DLPDR := ANUPF.DownLinkTunnel.PDR
+
+			DLPDR.FAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
+			DLPDR.FAR.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+			DLPDR.FAR.ForwardingParameters.OuterHeaderCreation.Teid = uint32(teid)
+			DLPDR.FAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address = gtpTunnel.TransportLayerAddress.Value.Bytes
+			DLPDR.FAR.State = RULE_UPDATE
+		}
+
 	}
 
-	return nil
+	return
 }
 
 func HandlePathSwitchRequestSetupFailedTransfer(b []byte, ctx *SMContext) (err error) {

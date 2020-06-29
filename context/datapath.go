@@ -267,7 +267,7 @@ func (dataPathPool DataPathPool) GetDefaultPath() (dataPath *DataPath) {
 
 	for _, path := range dataPathPool {
 
-		if dataPath.IsDefaultPath {
+		if path.IsDefaultPath {
 			dataPath = path
 			return
 		}
