@@ -38,6 +38,7 @@ type DataPathNode struct {
 type DataPath struct {
 	//meta data
 	Activated         bool
+	IsDefaultPath     bool
 	Destination       Destination
 	HasBranchingPoint bool
 	//Data Path Double Link List
@@ -108,10 +109,6 @@ func (node *DataPathNode) Prev() (prev *DataPathNode) {
 
 func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) (err error) {
 
-	if node.Prev() == nil {
-		return
-	}
-
 	node.UpLinkTunnel.SrcEndPoint = node.Prev()
 	node.UpLinkTunnel.DestEndPoint = node
 
@@ -125,14 +122,11 @@ func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) (err error)
 
 	teid, _ := destUPF.GenerateTEID()
 	node.UpLinkTunnel.TEID = teid
+
 	return
 }
 
 func (node *DataPathNode) ActivateDownLinkTunnel(smContext *SMContext) (err error) {
-
-	if node.Next() == nil {
-		return
-	}
 
 	node.DownLinkTunnel.SrcEndPoint = node.Next()
 	node.DownLinkTunnel.DestEndPoint = node
@@ -270,7 +264,16 @@ func (node *DataPathNode) PathToString() string {
 }
 
 func (dataPathPool DataPathPool) GetDefaultPath() (dataPath *DataPath) {
-	return dataPathPool[1]
+
+	for _, path := range dataPathPool {
+
+		if dataPath.IsDefaultPath {
+			dataPath = path
+			return
+		}
+
+	}
+	return
 }
 
 func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
@@ -319,18 +322,22 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
 
 			ULFAR := ULPDR.FAR
 
-			if curDLTunnel != nil {
-				if nextULDest := curDLTunnel.SrcEndPoint; nextULDest != nil {
-					nextULTunnel := nextULDest.UpLinkTunnel
-					ULFAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
-					ULFAR.ForwardingParameters = &ForwardingParameters{
-						DestinationInterface: pfcpType.DestinationInterface{InterfaceValue: pfcpType.DestinationInterfaceCore},
-						OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
-							OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
-							Ipv4Address:                    nextULTunnel.DestEndPoint.UPF.UPIPInfo.Ipv4Address,
-							Teid:                           nextULTunnel.TEID,
-						},
-					}
+			if nextULDest := curDataPathNode.Next(); nextULDest != nil {
+				nextULTunnel := nextULDest.UpLinkTunnel
+				ULFAR.ApplyAction = pfcpType.ApplyAction{
+					Buff: false,
+					Drop: false,
+					Dupl: false,
+					Forw: true,
+					Nocp: false,
+				}
+				ULFAR.ForwardingParameters = &ForwardingParameters{
+					DestinationInterface: pfcpType.DestinationInterface{InterfaceValue: pfcpType.DestinationInterfaceCore},
+					OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
+						OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
+						Ipv4Address:                    nextULTunnel.DestEndPoint.UPF.UPIPInfo.Ipv4Address,
+						Teid:                           nextULTunnel.TEID,
+					},
 				}
 			}
 
@@ -370,15 +377,23 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
 			fmt.Println("Is anchor point: ", curDataPathNode.IsAnchorUPF())
 
 			if !curDataPathNode.IsAnchorUPF() {
-				DLPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4}
+				DLPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{
+					OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4,
+				}
 			}
 
 			DLFAR := DLPDR.FAR
 
-			if nextDLDest := curULTunnel.SrcEndPoint; nextDLDest != nil {
+			if nextDLDest := curDataPathNode.Prev(); nextDLDest != nil {
 				nextDLTunnel := curULTunnel.SrcEndPoint.DownLinkTunnel
 
-				DLFAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
+				DLFAR.ApplyAction = pfcpType.ApplyAction{
+					Buff: false,
+					Drop: false,
+					Dupl: false,
+					Forw: true,
+					Nocp: false,
+				}
 				DLFAR.ForwardingParameters = &ForwardingParameters{
 					DestinationInterface: pfcpType.DestinationInterface{InterfaceValue: pfcpType.DestinationInterfaceAccess},
 					OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
@@ -400,7 +415,6 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
 						Ipv4Address: smContext.PDUAddress.To4(),
 					},
 				}
-				break
 			}
 		}
 	}

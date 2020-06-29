@@ -12,7 +12,7 @@ import (
 	smf_message "free5gc/src/smf/handler/message"
 	"free5gc/src/smf/logger"
 	pfcp_message "free5gc/src/smf/pfcp/message"
-	"free5gc/src/smf/producer"
+	//"free5gc/src/smf/producer"
 	"net/http"
 )
 
@@ -142,7 +142,8 @@ func HandlePfcpSessionEstablishmentResponse(msg *pfcpUdp.Message) {
 		pfcpSessionCtx.RemoteSEID = rsp.UPFSEID.Seid
 	}
 
-	if rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted && smContext.Tunnel.ANUPF.UPF.NodeID.ResolveNodeIdToIp().Equal(rsp.NodeID.ResolveNodeIdToIp()) {
+	ANUPF := smContext.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
+	if rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted && ANUPF.UPF.NodeID.ResolveNodeIdToIp().Equal(rsp.NodeID.ResolveNodeIdToIp()) {
 		smNasBuf, _ := smf_context.BuildGSMPDUSessionEstablishmentAccept(smContext)
 		n2Pdu, _ := smf_context.BuildPDUSessionResourceSetupRequestTransfer(smContext)
 		n1n2Request := models.N1N2MessageTransferRequest{}
@@ -195,16 +196,16 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 			logger.PduSessLog.Infoln("[SMF] Send Update SMContext Response")
 			resQueueItem.RspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &resQueueItem.Response}
 
-			smContext := smf_context.GetSMContextBySEID(SEID)
+			//smContext := smf_context.GetSMContextBySEID(SEID)
 
-			if smf_context.SMF_Self().ULCLSupport && smContext.BPManager != nil {
-				logger.PfcpLog.Infoln("smContext.BPManager")
-				if smContext.BPManager.BPStatus == smf_context.UnInitialized {
-					logger.PfcpLog.Infoln("AddPDUSessionAnchorAndULCL")
-					producer.AddPDUSessionAnchorAndULCL(smContext)
-					smContext.BPManager.BPStatus = smf_context.HasSendPFCPMsg
-				}
-			}
+			// if smf_context.SMF_Self().ULCLSupport && smContext.BPManager != nil {
+			// 	logger.PfcpLog.Infoln("smContext.BPManager")
+			// 	if smContext.BPManager.BPStatus == smf_context.UnInitialized {
+			// 		logger.PfcpLog.Infoln("AddPDUSessionAnchorAndULCL")
+			// 		producer.AddPDUSessionAnchorAndULCL(smContext)
+			// 		smContext.BPManager.BPStatus = smf_context.HasSendPFCPMsg
+			// 	}
+			// }
 
 			HttpResponseQueue.DeleteItem(seqNum)
 
@@ -326,7 +327,8 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 			logger.PfcpLog.Warnf("PFCP Session Report Request DownlinkDataServiceInformation handling is not implemented")
 		}
 
-		DLPDR := smContext.Tunnel.ANUPF.DownLinkTunnel.PDR
+		ANUPF := smContext.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
+		DLPDR := ANUPF.DownLinkTunnel.PDR
 		if DLPDR.PDRID == pdrID {
 			// TS 23.502 4.2.3.3 2b. Send Data Notification Ack, SMF->UPF
 			cause.CauseValue = pfcpType.CauseRequestAccepted

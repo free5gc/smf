@@ -71,6 +71,7 @@ func (upf *UPF) UUID() string {
 
 func NewUPTunnel() (tunnel *UPTunnel) {
 	tunnel = &UPTunnel{
+		DataPathPool:    make(DataPathPool),
 		PathIDGenerator: idgenerator.NewGenerator(1, 2147483647),
 	}
 

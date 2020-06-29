@@ -51,7 +51,6 @@ func NewUEPreConfigPaths(SUPI string, paths []factory.Path) (uePreConfigPaths *U
 		for idx, node_name := range path.UPF {
 
 			var ue_node, child_node, parent_node *DataPathNode
-			var exist bool
 			var err error
 
 			ue_node, err = NewUEDataPathNode(node_name)

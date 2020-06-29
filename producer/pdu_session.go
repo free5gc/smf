@@ -119,14 +119,14 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		logger.PduSessLog.Errorf("apply sm policy decision error: %v", err)
 	}
 
-	smContext.Tunnel = NewUPTunnel()
+	smContext.Tunnel = smf_context.NewUPTunnel()
 	var defaultPath *smf_context.DataPath
 	defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
 	smContext.AllocateLocalSEIDForUPPath(defaultUPPath)
 	defaultPath = smf_context.GenerateDataPath(defaultUPPath, smContext)
+	defaultPath.IsDefaultPath = true
 	smContext.Tunnel.AddDataPath(defaultPath)
 	defaultPath.ActivateTunnelAndPDR(smContext)
-	smContext.Tunnel.ANUPF = defaultPath.FirstDPNode
 	if smf_context.SMF_Self().ULCLSupport && smf_context.CheckUEHasPreConfig(createData.Supi) {
 		//TODO: change UPFRoot => ULCL UserPlane Refactor
 		logger.PduSessLog.Infof("SUPI[%s] has pre-config route", createData.Supi)
@@ -138,7 +138,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		smContext.AllocateLocalSEIDForDataPath(defaultPath)
 
 		// TODO: Maybe we don't need this
-		// smContext.BPManager = smf_context.NewBPManager(createData.Supi)
+		//smContext.BPManager = smf_context.NewBPManager(createData.Supi)
 		// smContext.BPManager.SetPSAStatus(psaPath)
 		// smContext.BPManager.PSA1Path = psaPath
 	}
@@ -203,7 +203,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 						},
 					},
 				},
-			}
+			},
 		}
 		return
 	}
@@ -243,15 +243,16 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 
 			deletedPFCPNode := make(map[string]bool)
 
-			for _, dataPath := range smContext.Tunnel.DataPathPool{
-				
+			for _, dataPath := range smContext.Tunnel.DataPathPool {
+
 				dataPath.DeactivateTunnelAndPDR(smContext)
 				for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode.Next() {
-					if _, exist = deletedPFCPNode[curDataPathNode.GetUPFID()]; !exist{
+					curUPFID, _ := curDataPathNode.GetUPFID()
+					if _, exist := deletedPFCPNode[curUPFID]; !exist {
 						seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
-						deletedPFCPNode[curDataPathNode.GetUPFID()] = true 
+						deletedPFCPNode[curUPFID] = true
 					}
-				}	
+				}
 			}
 
 			return seqNum, response
@@ -300,8 +301,8 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		//Set FAR and An, N3 Release Info
 		farList = []*smf_context.FAR{}
 
-		for _, dataPath := range smContext.Tunnel.DataPathPool{
-				
+		for _, dataPath := range smContext.Tunnel.DataPathPool {
+
 			ANUPF := dataPath.FirstDPNode
 			DLPDR := ANUPF.DownLinkTunnel.PDR
 			if DLPDR == nil {
@@ -313,7 +314,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 				DLPDR.FAR.ApplyAction.Nocp = true
 			}
 
-			farList = append(farList, DLPDR)
+			farList = append(farList, DLPDR.FAR)
 		}
 
 	}
@@ -325,21 +326,27 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		pdrList = []*smf_context.PDR{}
 		farList = []*smf_context.FAR{}
 
-		for _, dataPath := range tunnel.DataPathPool{
-				
-			ANUPF := dataPath.FirstDPNode
-			DLPDR := ANUPF.DownLinkTunnel.PDR
-			
-			DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
-			DLPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
-				DestinationInterface: pfcpType.DestinationInterface{
-					InterfaceValue: pfcpType.DestinationInterfaceAccess,
-				},
-				NetworkInstance: []byte(smContext.Dnn),
+		for _, dataPath := range tunnel.DataPathPool {
+
+			if dataPath.Activated {
+				ANUPF := dataPath.FirstDPNode
+				DLPDR := ANUPF.DownLinkTunnel.PDR
+
+				DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
+				DLPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
+					DestinationInterface: pfcpType.DestinationInterface{
+						InterfaceValue: pfcpType.DestinationInterfaceAccess,
+					},
+					NetworkInstance: []byte(smContext.Dnn),
+				}
+
+				DLPDR.State = smf_context.RULE_UPDATE
+				DLPDR.FAR.State = smf_context.RULE_UPDATE
+
+				pdrList = append(pdrList, DLPDR)
+				farList = append(farList, DLPDR.FAR)
 			}
-			
-			DLPDR.State = smf_context.RULE_UPDATE
-			DLPDR.FAR.State = smf_context.RULE_UPDATE	
+
 		}
 
 		err = smf_context.HandlePDUSessionResourceSetupResponseTransfer(body.BinaryDataN2SmInformation, smContext)
@@ -447,15 +454,16 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 		}
 
 		deletedPFCPNode := make(map[string]bool)
-		for _, dataPath := range smContext.Tunnel.DataPathPool{
-				
+		for _, dataPath := range smContext.Tunnel.DataPathPool {
+
 			dataPath.DeactivateTunnelAndPDR(smContext)
 			for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode.Next() {
-				if _, exist = deletedPFCPNode[curDataPathNode.GetUPFID()]; !exist{
+				curUPFID, _ := curDataPathNode.GetUPFID()
+				if _, exist := deletedPFCPNode[curUPFID]; !exist {
 					seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
-					deletedPFCPNode[curDataPathNode.GetUPFID()] = true 
+					deletedPFCPNode[curUPFID] = true
 				}
-			}	
+			}
 		}
 
 		fmt.Println("[SMF] Cause_REL_DUE_TO_DUPLICATE_SESSION_ID")
@@ -477,16 +485,17 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMessage, smContextRef string, body models.ReleaseSmContextRequest) (seqNum uint32) {
 	smContext := smf_context.GetSMContext(smContextRef)
 	// smf_context.RemoveSMContext(smContext.Ref)
+	deletedPFCPNode := make(map[string]bool)
+	for _, dataPath := range smContext.Tunnel.DataPathPool {
 
-	for _, dataPath := range smContext.Tunnel.DataPathPool{
-				
 		dataPath.DeactivateTunnelAndPDR(smContext)
 		for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode.Next() {
-			if _, exist = deletedPFCPNode[curDataPathNode.GetUPFID()]; !exist{
+			curUPFID, _ := curDataPathNode.GetUPFID()
+			if _, exist := deletedPFCPNode[curUPFID]; !exist {
 				seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
-				deletedPFCPNode[curDataPathNode.GetUPFID()] = true 
+				deletedPFCPNode[curUPFID] = true
 			}
-		}	
+		}
 	}
 
 	return seqNum

@@ -31,34 +31,3 @@ func init() {
 	userPlaneInfo.GenerateDefaultPath("internet")
 	udp.Run()
 }
-
-func TestSetUpUplinkUserPlane(t *testing.T) {
-
-	upfRoot := context.GetUserPlaneInformation().GetDefaultUPFTopoByDNN("internet")
-	smContext := context.NewSMContext("imsi-2089300007487", 20)
-	smContext.PDUAddress = net.ParseIP("60.60.0.1")
-	smContext.Dnn = "internet"
-	SetUpAllUPF(upfRoot)
-	producer.SetUpUplinkUserPlane(upfRoot, smContext)
-}
-
-func TestSetUpDownlinkUserPlane(t *testing.T) {
-
-	upfRoot := context.GetUserPlaneInformation().GetDefaultUPFTopoByDNN("internet")
-	smContext := context.NewSMContext("imsi-2089300007487", 20)
-	smContext.PDUAddress = net.ParseIP("60.60.0.1")
-	smContext.Dnn = "internet"
-	SetUpAllUPF(upfRoot)
-	producer.SetUpDownLinkUserPlane(upfRoot, smContext)
-}
-
-func SetUpAllUPF(node *context.DataPathNode) {
-
-	node.UPF.UPFStatus = context.AssociatedSetUpSuccess
-	node.UPF.UPIPInfo.Ipv4Address = net.ParseIP("10.200.200.50").To4()
-
-	for _, child_link := range node.DataPathToDN {
-
-		SetUpAllUPF(child_link.To)
-	}
-}
