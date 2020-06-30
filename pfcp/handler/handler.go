@@ -12,6 +12,7 @@ import (
 	smf_message "free5gc/src/smf/handler/message"
 	"free5gc/src/smf/logger"
 	pfcp_message "free5gc/src/smf/pfcp/message"
+	"free5gc/src/smf/producer"
 	//"free5gc/src/smf/producer"
 	"net/http"
 )
@@ -196,7 +197,7 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 			logger.PduSessLog.Infoln("[SMF] Send Update SMContext Response")
 			resQueueItem.RspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &resQueueItem.Response}
 
-			//smContext := smf_context.GetSMContextBySEID(SEID)
+			smContext := smf_context.GetSMContextBySEID(SEID)
 
 			if smf_context.SMF_Self().ULCLSupport && smContext.BPManager != nil {
 				logger.PfcpLog.Infoln("smContext.BPManager")

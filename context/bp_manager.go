@@ -1,8 +1,6 @@
 package context
 
 import (
-	"fmt"
-	"free5gc/src/smf/logger"
 	"reflect"
 )
 
@@ -44,7 +42,6 @@ const (
 )
 
 func NewBPManager(supi string) (bpManager *BPManager) {
-	ueRoutingGraph := SMF_Self().UEPreConfigPathPool[supi]
 
 	bpManager = &BPManager{
 		BPStatus:              UnInitialized,
