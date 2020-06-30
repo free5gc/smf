@@ -146,10 +146,6 @@ func (node *DataPathNode) ActivateDownLinkTunnel(smContext *SMContext) (err erro
 
 func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 
-	if node.Prev() == nil {
-		return
-	}
-
 	pdr := node.UpLinkTunnel.PDR
 	far := node.UpLinkTunnel.PDR.FAR
 	bar := node.UpLinkTunnel.PDR.FAR.BAR
@@ -178,10 +174,6 @@ func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 }
 
 func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
-
-	if node.Next() == nil {
-		return
-	}
 
 	pdr := node.DownLinkTunnel.PDR
 	far := node.DownLinkTunnel.PDR.FAR

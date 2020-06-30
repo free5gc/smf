@@ -138,9 +138,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		smContext.AllocateLocalSEIDForDataPath(defaultPath)
 
 		// TODO: Maybe we don't need this
-		//smContext.BPManager = smf_context.NewBPManager(createData.Supi)
-		// smContext.BPManager.SetPSAStatus(psaPath)
-		// smContext.BPManager.PSA1Path = psaPath
+		smContext.BPManager = smf_context.NewBPManager(createData.Supi)
 	}
 
 	if defaultPath == nil {

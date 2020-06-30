@@ -190,58 +190,6 @@ func CheckUEHasPreConfig(SUPI string) (exist bool) {
 
 // }
 
-// func (uepg *UEDataPathGraph) GetGraphRoot() *DataPathNode {
-// 	return uepg.Graph[0]
-// }
-
-// func (root *DataPathNode) EnableUserPlanePath(path []*UPNode) (err error) {
-
-// 	curDataPathNode := root
-// 	upperBound := len(path) - 1
-
-// 	logger.PduSessLog.Traceln("In EnableUserPlanePath")
-
-// 	for idx, node := range path {
-
-// 		if node.Type == UPNODE_AN {
-// 			continue
-// 		}
-
-// 		curDataPathNodeIP := curDataPathNode.UPF.GetUPFIP()
-// 		UPPathNodeIP := node.UPF.GetUPFIP()
-
-// 		if curDataPathNodeIP != UPPathNodeIP {
-// 			err = fmt.Errorf("UE default topo have no %s", UPPathNodeIP)
-// 			return
-// 		} else {
-// 			curDataPathNode.InUse = true
-// 			if idx < upperBound {
-
-// 				nextUPPathNodeIP := path[idx+1].UPF.GetUPFIP()
-// 				findNextChild := false
-// 				for _, child_link := range curDataPathNode.DataPathToDN {
-
-// 					childIP := child_link.To.UPF.GetUPFIP()
-// 					if nextUPPathNodeIP == childIP {
-// 						curDataPathNode = child_link.To
-// 						findNextChild = true
-// 						break
-// 					}
-// 				}
-
-// 				//didn't find next child from the path pattern
-// 				//path and UE Topo doesn't match
-// 				if !findNextChild {
-// 					err = fmt.Errorf("UE default topo have no %s", nextUPPathNodeIP)
-// 					return
-// 				}
-// 			}
-
-// 		}
-// 	}
-
-// 	return
-// }
 // func GetUERoutingGraph(SUPI string) *UEDataPathGraph {
 // 	return smfContext.UEDataPathPools[SUPI]
 // }

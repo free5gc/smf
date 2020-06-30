@@ -20,7 +20,6 @@ func init() {
 type UPTunnel struct {
 	PathIDGenerator *idgenerator.IDGenerator
 	DataPathPool    DataPathPool
-	ANUPF           *DataPathNode
 }
 
 type UPFStatus int

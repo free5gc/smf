@@ -198,14 +198,14 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 
 			//smContext := smf_context.GetSMContextBySEID(SEID)
 
-			// if smf_context.SMF_Self().ULCLSupport && smContext.BPManager != nil {
-			// 	logger.PfcpLog.Infoln("smContext.BPManager")
-			// 	if smContext.BPManager.BPStatus == smf_context.UnInitialized {
-			// 		logger.PfcpLog.Infoln("AddPDUSessionAnchorAndULCL")
-			// 		producer.AddPDUSessionAnchorAndULCL(smContext)
-			// 		smContext.BPManager.BPStatus = smf_context.HasSendPFCPMsg
-			// 	}
-			// }
+			if smf_context.SMF_Self().ULCLSupport && smContext.BPManager != nil {
+				logger.PfcpLog.Infoln("smContext.BPManager")
+				if smContext.BPManager.BPStatus == smf_context.UnInitialized {
+					logger.PfcpLog.Infoln("AddPDUSessionAnchorAndULCL")
+					producer.AddPDUSessionAnchorAndULCL(smContext)
+					smContext.BPManager.BPStatus = smf_context.HasSendPFCPMsg
+				}
+			}
 
 			HttpResponseQueue.DeleteItem(seqNum)
 
