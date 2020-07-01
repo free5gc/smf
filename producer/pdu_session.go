@@ -134,9 +134,11 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		smContext.Tunnel.DataPathPool = uePreConfigPaths.DataPathPool
 		smContext.Tunnel.PathIDGenerator = uePreConfigPaths.PathIDGenerator
 		defaultPath = smContext.Tunnel.DataPathPool.GetDefaultPath()
+		logger.PduSessLog.Infof("After GetDefaultPath")
 		defaultPath.ActivateTunnelAndPDR(smContext)
+		logger.PduSessLog.Infof("After ActivateTunnelAndPDR")
 		smContext.AllocateLocalSEIDForDataPath(defaultPath)
-
+		logger.PduSessLog.Infof("After AllocateLocalSEIDForDataPath")
 		// TODO: Maybe we don't need this
 		smContext.BPManager = smf_context.NewBPManager(createData.Supi)
 	}
@@ -170,6 +172,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 	// TODO: UECM registration
 
 	SendPFCPRule(smContext, defaultPath)
+	logger.PduSessLog.Infof("SendPFCPRule Finshed")
 
 	consumer.SendNFDiscoveryServingAMF(smContext)
 
@@ -180,6 +183,9 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 			smContext.CommunicationClient = Namf_Communication.NewAPIClient(communicationConf)
 		}
 	}
+
+	logger.PduSessLog.Infof("HandlePDUSessionSMContextUpdate Finshed")
+
 }
 
 func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMessage, smContextRef string, body models.UpdateSmContextRequest) (seqNum uint32, resBody models.UpdateSmContextResponse) {
@@ -513,6 +519,8 @@ func HandlePDUSessionSMContextRelease(rspChan chan smf_message.HandlerResponseMe
 
 func SendPFCPRule(smContext *smf_context.SMContext, dataPath *smf_context.DataPath) {
 
+	logger.PduSessLog.Infof("Send PFCP Rule")
+	logger.PduSessLog.Infof("DataPath: ", dataPath)
 	for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
 		pdrList := make([]*smf_context.PDR, 0, 2)
 		farList := make([]*smf_context.FAR, 0, 2)

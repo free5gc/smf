@@ -48,7 +48,7 @@ func EstablishPSA2(smContext *context.SMContext) {
 	bpMGR := smContext.BPManager
 	activatingPath := bpMGR.ActivatingPath
 	ulcl := bpMGR.ULCL
-
+	logger.PduSessLog.Infoln("In EstablishPSA2")
 	nodeAfterULCL := false
 	for curDataPathNode := activatingPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
 
@@ -68,7 +68,7 @@ func EstablishPSA2(smContext *context.SMContext) {
 
 			lastNode := curDataPathNode.Prev()
 
-			if !reflect.DeepEqual(lastNode.UPF.NodeID, ulcl.NodeID) {
+			if lastNode != nil && !reflect.DeepEqual(lastNode.UPF.NodeID, ulcl.NodeID) {
 				downLinkPDR := curDataPathNode.DownLinkTunnel.PDR
 				pdrList = append(pdrList, downLinkPDR)
 				farList = append(farList, downLinkPDR.FAR)

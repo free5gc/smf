@@ -35,9 +35,13 @@ func NewUEPreConfigPaths(SUPI string, paths []factory.Path) (uePreConfigPaths *U
 	lowerBound := 0
 	pathIDGenerator := idgenerator.NewGenerator(1, 2147483647)
 
-	for _, path := range paths {
+	for idx, path := range paths {
 		upperBound := len(path.UPF) - 1
 		dataPath := NewDataPath()
+
+		if idx == 0 {
+			dataPath.IsDefaultPath = true
+		}
 		pathID, err := pathIDGenerator.Allocate()
 		if err != nil {
 			logger.CtxLog.Warnf("Allocate pathID error: %+v", err)
@@ -65,6 +69,7 @@ func NewUEPreConfigPaths(SUPI string, paths []factory.Path) (uePreConfigPaths *U
 				}
 
 				ue_node.AddNext(child_node)
+				dataPath.FirstDPNode = ue_node
 
 			case upperBound:
 				parent_name := path.UPF[idx-1]

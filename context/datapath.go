@@ -271,9 +271,10 @@ func (dataPathPool DataPathPool) GetDefaultPath() (dataPath *DataPath) {
 func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
 
 	firstDPNode := dataPath.FirstDPNode
-
+	logger.PduSessLog.Infoln("In ActivateTunnelAndPDR")
 	//Activate Tunnels
 	for curDataPathNode := firstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
+		logger.PduSessLog.Infoln("")
 		err := curDataPathNode.ActivateUpLinkTunnel(smContext)
 
 		if err != nil {
