@@ -35,6 +35,8 @@ func NewUEPreConfigPaths(SUPI string, paths []factory.Path) (uePreConfigPaths *U
 	lowerBound := 0
 	pathIDGenerator := idgenerator.NewGenerator(1, 2147483647)
 
+	logger.PduSessLog.Infoln("In NewUEPreConfigPaths")
+
 	for idx, path := range paths {
 		upperBound := len(path.UPF) - 1
 		dataPath := NewDataPath()
@@ -51,10 +53,9 @@ func NewUEPreConfigPaths(SUPI string, paths []factory.Path) (uePreConfigPaths *U
 		dataPath.Destination.DestinationIP = path.DestinationIP
 		dataPath.Destination.DestinationPort = path.DestinationPort
 		ueDataPathPool[pathID] = dataPath
-
+		var ue_node, child_node, parent_node *DataPathNode
 		for idx, node_name := range path.UPF {
 
-			var ue_node, child_node, parent_node *DataPathNode
 			var err error
 
 			ue_node, err = NewUEDataPathNode(node_name)
@@ -72,34 +73,26 @@ func NewUEPreConfigPaths(SUPI string, paths []factory.Path) (uePreConfigPaths *U
 				dataPath.FirstDPNode = ue_node
 
 			case upperBound:
-				parent_name := path.UPF[idx-1]
-				parent_node, err = NewUEDataPathNode(parent_name)
-
-				if err != nil {
-					logger.CtxLog.Warnln(err)
-				}
-
-				ue_node.AddPrev(parent_node)
-
+				child_node.AddPrev(parent_node)
 			default:
+				child_node.AddPrev(parent_node)
+				ue_node = child_node
 				child_name := path.UPF[idx+1]
 				child_node, err = NewUEDataPathNode(child_name)
-				if err != nil {
-					logger.CtxLog.Warnln(err)
-				}
-
-				parent_name := path.UPF[idx-1]
-				parent_node, err = NewUEDataPathNode(parent_name)
 
 				if err != nil {
 					logger.CtxLog.Warnln(err)
 				}
 
 				ue_node.AddNext(child_node)
-				ue_node.AddPrev(parent_node)
 			}
 
+			parent_node = ue_node
+
 		}
+
+		logger.CtxLog.Traceln("New data path added")
+		logger.CtxLog.Traceln("\n" + dataPath.ToString() + "\n")
 	}
 
 	uePreConfigPaths = &UEPreConfigPaths{

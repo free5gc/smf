@@ -121,12 +121,7 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 
 	smContext.Tunnel = smf_context.NewUPTunnel()
 	var defaultPath *smf_context.DataPath
-	defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
-	smContext.AllocateLocalSEIDForUPPath(defaultUPPath)
-	defaultPath = smf_context.GenerateDataPath(defaultUPPath, smContext)
-	defaultPath.IsDefaultPath = true
-	smContext.Tunnel.AddDataPath(defaultPath)
-	defaultPath.ActivateTunnelAndPDR(smContext)
+
 	if smf_context.SMF_Self().ULCLSupport && smf_context.CheckUEHasPreConfig(createData.Supi) {
 		//TODO: change UPFRoot => ULCL UserPlane Refactor
 		logger.PduSessLog.Infof("SUPI[%s] has pre-config route", createData.Supi)
@@ -134,13 +129,18 @@ func HandlePDUSessionSMContextCreate(rspChan chan smf_message.HandlerResponseMes
 		smContext.Tunnel.DataPathPool = uePreConfigPaths.DataPathPool
 		smContext.Tunnel.PathIDGenerator = uePreConfigPaths.PathIDGenerator
 		defaultPath = smContext.Tunnel.DataPathPool.GetDefaultPath()
-		logger.PduSessLog.Infof("After GetDefaultPath")
-		defaultPath.ActivateTunnelAndPDR(smContext)
-		logger.PduSessLog.Infof("After ActivateTunnelAndPDR")
 		smContext.AllocateLocalSEIDForDataPath(defaultPath)
-		logger.PduSessLog.Infof("After AllocateLocalSEIDForDataPath")
+		defaultPath.ActivateTunnelAndPDR(smContext)
 		// TODO: Maybe we don't need this
 		smContext.BPManager = smf_context.NewBPManager(createData.Supi)
+	} else {
+		logger.PduSessLog.Infof("SUPI[%s] has no pre-config route", createData.Supi)
+		defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(createData.Dnn)
+		smContext.AllocateLocalSEIDForUPPath(defaultUPPath)
+		defaultPath = smf_context.GenerateDataPath(defaultUPPath, smContext)
+		defaultPath.IsDefaultPath = true
+		smContext.Tunnel.AddDataPath(defaultPath)
+		defaultPath.ActivateTunnelAndPDR(smContext)
 	}
 
 	if defaultPath == nil {

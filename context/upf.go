@@ -226,7 +226,7 @@ func (upf *UPF) barID() (barID uint8, err error) {
 func (upf *UPF) AddPDR() (pdr *PDR, err error) {
 
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("this upf not associate with smf")
+		err = fmt.Errorf("this upf do not associate with smf")
 		return nil, err
 	}
 
@@ -241,7 +241,7 @@ func (upf *UPF) AddPDR() (pdr *PDR, err error) {
 func (upf *UPF) AddFAR() (far *FAR, err error) {
 
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("this upf not associate with smf")
+		err = fmt.Errorf("this upf do not associate with smf")
 		return nil, err
 	}
 
@@ -254,7 +254,7 @@ func (upf *UPF) AddFAR() (far *FAR, err error) {
 func (upf *UPF) AddBAR() (bar *BAR, err error) {
 
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("this upf not associate with smf")
+		err = fmt.Errorf("this upf do not associate with smf")
 		return nil, err
 	}
 

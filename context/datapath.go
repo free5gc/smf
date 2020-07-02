@@ -5,6 +5,7 @@ import (
 	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/util_3gpp"
 	"free5gc/src/smf/logger"
+	"strconv"
 )
 
 // GTPTunnel represents the GTP tunnel information
@@ -109,16 +110,19 @@ func (node *DataPathNode) Prev() (prev *DataPathNode) {
 
 func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) (err error) {
 
+	logger.CtxLog.Infoln("In ActivateUpLinkTunnel")
 	node.UpLinkTunnel.SrcEndPoint = node.Prev()
 	node.UpLinkTunnel.DestEndPoint = node
 
 	destUPF := node.UPF
 	node.UpLinkTunnel.PDR, err = destUPF.AddPDR()
-	smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.UpLinkTunnel.PDR)
 
 	if err != nil {
-		logger.CtxLog.Errorln("allocate UpLinkTunnel.MatchedPDR", err)
+		logger.CtxLog.Warnln("In ActivateUpLinkTunnel UPF IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
+		logger.CtxLog.Warnln("Allocata PDR Error: ", err)
 	}
+
+	smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.UpLinkTunnel.PDR)
 
 	teid, _ := destUPF.GenerateTEID()
 	node.UpLinkTunnel.TEID = teid
@@ -133,11 +137,13 @@ func (node *DataPathNode) ActivateDownLinkTunnel(smContext *SMContext) (err erro
 
 	destUPF := node.UPF
 	node.DownLinkTunnel.PDR, err = destUPF.AddPDR()
-	smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.DownLinkTunnel.PDR)
 
 	if err != nil {
-		logger.CtxLog.Errorln("allocate DownLinkTunnel.MatchedPDR", err)
+		logger.CtxLog.Warnln("In ActivateDownLinkTunnel UPF IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
+		logger.CtxLog.Warnln("Allocata PDR Error: ", err)
 	}
+
+	smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.DownLinkTunnel.PDR)
 
 	teid, _ := destUPF.GenerateTEID()
 	node.DownLinkTunnel.TEID = teid
@@ -248,13 +254,6 @@ func (node *DataPathNode) GetUpLinkFAR() (far *FAR) {
 	return node.UpLinkTunnel.PDR.FAR
 }
 
-func (node *DataPathNode) PathToString() string {
-	if node == nil {
-		return ""
-	}
-	return node.UPF.NodeID.ResolveNodeIdToIp().String() + " -> " + node.Next().PathToString()
-}
-
 func (dataPathPool DataPathPool) GetDefaultPath() (dataPath *DataPath) {
 
 	for _, path := range dataPathPool {
@@ -268,13 +267,49 @@ func (dataPathPool DataPathPool) GetDefaultPath() (dataPath *DataPath) {
 	return
 }
 
+func (dataPath *DataPath) ToString() (str string) {
+
+	firstDPNode := dataPath.FirstDPNode
+
+	str += "DataPath Meta Information\n"
+	str += "Activated: " + strconv.FormatBool(dataPath.Activated) + "\n"
+	str += "IsDefault Path: " + strconv.FormatBool(dataPath.IsDefaultPath) + "\n"
+	str += "Has Braching Point: " + strconv.FormatBool(dataPath.HasBranchingPoint) + "\n"
+	str += "Destination IP: " + dataPath.Destination.DestinationIP + "\n"
+	str += "Destination Port: " + dataPath.Destination.DestinationPort + "\n"
+
+	str += "DataPath Routing Information\n"
+	index := 1
+	for curDPNode := firstDPNode; curDPNode != nil; curDPNode = curDPNode.Next() {
+
+		str += strconv.Itoa(index) + "th Node in the Path\n"
+		str += "Current UPF IP: " + curDPNode.GetNodeIP() + "\n"
+		if curDPNode.Prev() != nil {
+			str += "Previous UPF IP: " + curDPNode.Prev().GetNodeIP() + "\n"
+		} else {
+			str += "Previous UPF IP: None\n"
+		}
+
+		if curDPNode.Next() != nil {
+			str += "Next UPF IP: " + curDPNode.Next().GetNodeIP() + "\n"
+		} else {
+			str += "Next UPF IP: None\n"
+		}
+
+		index++
+	}
+
+	return
+}
+
 func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
 
 	firstDPNode := dataPath.FirstDPNode
 	logger.PduSessLog.Infoln("In ActivateTunnelAndPDR")
+	logger.PduSessLog.Traceln(dataPath.ToString())
 	//Activate Tunnels
 	for curDataPathNode := firstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
-		logger.PduSessLog.Infoln("")
+		logger.PduSessLog.Traceln("Current DP Node IP: ", curDataPathNode.UPF.NodeID.ResolveNodeIdToIp().String())
 		err := curDataPathNode.ActivateUpLinkTunnel(smContext)
 
 		if err != nil {
@@ -377,8 +412,11 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
 
 			DLFAR := DLPDR.FAR
 
+			logger.PduSessLog.Traceln("Current DP Node IP: ", curDataPathNode.UPF.NodeID.ResolveNodeIdToIp().String())
+			logger.PduSessLog.Traceln("Before DLPDR OuterHeaderCreation")
 			if nextDLDest := curDataPathNode.Prev(); nextDLDest != nil {
-				nextDLTunnel := curULTunnel.SrcEndPoint.DownLinkTunnel
+				logger.PduSessLog.Traceln("In DLPDR OuterHeaderCreation")
+				nextDLTunnel := nextDLDest.DownLinkTunnel
 
 				DLFAR.ApplyAction = pfcpType.ApplyAction{
 					Buff: false,
