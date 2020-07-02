@@ -9,7 +9,6 @@ import (
 	"free5gc/src/smf/pfcp/message"
 	"net"
 	"reflect"
-	"time"
 )
 
 func AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
@@ -31,21 +30,15 @@ func AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
 
 	//Establish PSA2
 	EstablishPSA2(smContext)
-	//workaround for waitng PFCP response
-	time.Sleep(time.Second * 1)
 
 	EstablishRANTunnelInfo(smContext)
 	//Establish ULCL
 	EstablishULCL(smContext)
-	//workaround for waitng PFCP response
-	time.Sleep(time.Second * 1)
 
 	//updatePSA1 downlink
 	//UpdatePSA1DownLink(smContext)
 	//updatePSA2 downlink
 	UpdatePSA2DownLink(smContext)
-	//workaround for waitng PFCP response
-	time.Sleep(time.Second * 1)
 	//update AN for new CN Info
 	UpdateRANAndIUPFUpLink(smContext)
 
