@@ -232,6 +232,17 @@ func (smContext *SMContext) PCFSelection() (err error) {
 	return
 }
 
+func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) (nodeID pfcpType.NodeID) {
+
+	for _, pfcpCtx := range smContext.PFCPContext {
+		if pfcpCtx.LocalSEID == seid {
+			nodeID = pfcpCtx.NodeID
+		}
+	}
+
+	return
+}
+
 func (smContext *SMContext) AllocateLocalSEIDForUPPath(path UPPath) {
 
 	for _, upNode := range path {
