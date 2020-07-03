@@ -100,6 +100,7 @@ func AddPDUSessionAnchorAndULCL(smContext *context.SMContext, nodeID pfcpType.No
 		if pendingUPF.IsEmpty() {
 			bpMGR.AddingPSAState = context.Finished
 			bpMGR.BPStatus = context.AddPSASuccess
+			logger.CtxLog.Infoln("[SMF] Add PSA success")
 		}
 	}
 
@@ -153,7 +154,7 @@ func EstablishPSA2(smContext *context.SMContext) {
 
 func EstablishULCL(smContext *context.SMContext) {
 
-	logger.PduSessLog.Traceln("In EstablishULCL")
+	logger.PduSessLog.Infoln("In EstablishULCL")
 
 	bpMGR := smContext.BPManager
 	bpMGR.PendingUPF = make(context.PendingUPF)
@@ -375,6 +376,7 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 
 		bpMGR.AddingPSAState = context.Finished
 		bpMGR.BPStatus = context.AddPSASuccess
+		logger.CtxLog.Infoln("[SMF] Add PSA success")
 	} else {
 		bpMGR.AddingPSAState = context.UpdatingRANAndIUPFUpLink
 	}

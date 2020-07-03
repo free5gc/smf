@@ -185,7 +185,7 @@ func HandlePfcpSessionEstablishmentResponse(msg *pfcpUdp.Message) {
 	if smf_context.SMF_Self().ULCLSupport && smContext.BPManager != nil {
 		if smContext.BPManager.BPStatus == smf_context.AddingPSA {
 			logger.PfcpLog.Infoln("Keep Adding PSAndULCL")
-			producer.AddPDUSessionAnchorAndULCL(smContext, rsp.NodeID)
+			producer.AddPDUSessionAnchorAndULCL(smContext, *rsp.NodeID)
 			smContext.BPManager.BPStatus = smf_context.AddingPSA
 		}
 	}
@@ -220,7 +220,8 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 			if smf_context.SMF_Self().ULCLSupport && smContext.BPManager != nil {
 				if smContext.BPManager.BPStatus == smf_context.UnInitialized {
 					logger.PfcpLog.Infoln("Add PSAAndULCL")
-					producer.AddPDUSessionAnchorAndULCL(smContext)
+					upfNodeID := smContext.GetNodeIDByLocalSEID(SEID)
+					producer.AddPDUSessionAnchorAndULCL(smContext, upfNodeID)
 					smContext.BPManager.BPStatus = smf_context.AddingPSA
 				}
 			}
@@ -255,7 +256,6 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 		}
 	}
 
-	smContext := smf_context.GetSMContextBySEID(SEID)
 	logger.CtxLog.Traceln("PFCP Session Context")
 	for _, ctx := range smContext.PFCPContext {
 
