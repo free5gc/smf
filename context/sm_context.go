@@ -310,12 +310,54 @@ func (smContext *SMContext) isAllowedPDUSessionType(nasPDUSessionType uint8) boo
 		return false
 	}
 
+	allowIPv4 := false
+	allowIPv6 := false
+	allowEthernet := false
+
 	for _, allowedPDUSessionType := range smContext.DnnConfiguration.PduSessionTypes.AllowedSessionTypes {
-		if allowedPDUSessionType == nasConvert.PDUSessionTypeToModels(nasPDUSessionType) {
-			return true
+		switch allowedPDUSessionType {
+		case models.PduSessionType_IPV4:
+			allowIPv4 = true
+		case models.PduSessionType_IPV6:
+			allowIPv6 = true
+		case models.PduSessionType_IPV4_V6:
+			allowIPv4 = true
+			allowIPv6 = true
+		case models.PduSessionType_ETHERNET:
+			allowEthernet = true
 		}
 	}
-	return false
+
+	switch nasConvert.PDUSessionTypeToModels(nasPDUSessionType) {
+	case models.PduSessionType_IPV4:
+		if allowIPv4 {
+			return true
+		} else {
+			return false
+		}
+
+	case models.PduSessionType_IPV6:
+		if allowIPv6 {
+			return true
+		} else {
+			return false
+		}
+	case models.PduSessionType_IPV4_V6:
+		if allowIPv4 || allowIPv6 {
+			return true
+		} else {
+			return false
+		}
+	case models.PduSessionType_ETHERNET:
+		if allowEthernet {
+			return true
+		} else {
+			return false
+		}
+	default:
+		return false
+	}
+
 }
 
 // SM Policy related operation
