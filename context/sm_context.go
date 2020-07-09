@@ -251,11 +251,38 @@ func (smContext *SMContext) AllocateLocalSEIDForUPPath(path UPPath) {
 	}
 }
 
+func (smContext *SMContext) AllocateLocalSEIDForDataPath(dataPath *DataPath) {
+	logger.PduSessLog.Infoln("In AllocateLocalSEIDForDataPath")
+	for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
+
+		NodeIDtoIP := curDataPathNode.UPF.NodeID.ResolveNodeIdToIp().String()
+		logger.PduSessLog.Infoln("NodeIDtoIP: ", NodeIDtoIP)
+		if _, exist := smContext.PFCPContext[NodeIDtoIP]; !exist {
+
+			allocatedSEID := AllocateLocalSEID()
+			smContext.PFCPContext[NodeIDtoIP] = &PFCPSessionContext{
+				PDRs:      make(map[uint16]*PDR),
+				NodeID:    curDataPathNode.UPF.NodeID,
+				LocalSEID: allocatedSEID,
+			}
+
+			seidSMContextMap[allocatedSEID] = smContext
+		}
+	}
+}
+
 func (smContext *SMContext) PutPDRtoPFCPSession(nodeID pfcpType.NodeID, pdr *PDR) {
 
 	NodeIDtoIP := nodeID.ResolveNodeIdToIp().String()
 	pfcpSessionCtx := smContext.PFCPContext[NodeIDtoIP]
 	pfcpSessionCtx.PDRs[pdr.PDRID] = pdr
+}
+
+func (smContext *SMContext) RemovePDRfromPFCPSession(nodeID pfcpType.NodeID, pdr *PDR) {
+
+	NodeIDtoIP := nodeID.ResolveNodeIdToIp().String()
+	pfcpSessionCtx := smContext.PFCPContext[NodeIDtoIP]
+	delete(pfcpSessionCtx.PDRs, pdr.PDRID)
 }
 
 func (smContext *SMContext) isAllowedPDUSessionType(nasPDUSessionType uint8) bool {

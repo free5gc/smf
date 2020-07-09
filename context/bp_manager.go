@@ -1,23 +1,19 @@
 package context
 
 import (
-	"fmt"
-	"free5gc/src/smf/logger"
+	"reflect"
 )
 
 type BPManager struct {
-	BPStatus   BPStatus
-	ANUPFState map[*DataPathNode]bool
-	PSAState   map[*DataPathNode]PDUSessionAnchorState
+	BPStatus BPStatus
 
 	//Need these variable conducting Add addtional PSA (TS23.502 4.3.5.4)
 	//There value will change from time to time
-	PSA1Path         []*UPNode
-	PSA2Path         []*UPNode
-	ULCL             *UPNode
-	ULCLIdx          int
-	ULCLDataPathNode *DataPathNode
-	ULCLState        ULCLState
+
+	ActivatedPaths        []*DataPath
+	ActivatingPath        *DataPath
+	UpdatedBranchingPoint map[*UPF]int
+	ULCL                  *UPF
 }
 
 type BPStatus int
@@ -46,164 +42,63 @@ const (
 )
 
 func NewBPManager(supi string) (bpManager *BPManager) {
-	ueRoutingGraph := SMF_Self().UERoutingGraphs[supi]
 
 	bpManager = &BPManager{
-		ANUPFState: ueRoutingGraph.ANUPF,
-		PSAState:   make(map[*DataPathNode]PDUSessionAnchorState),
-		PSA1Path:   make([]*UPNode, 0),
-		ULCLState:  IsOnlyULCL,
-	}
-
-	for node := range ueRoutingGraph.PSA {
-		bpManager.PSAState[node] = NotAdded
+		BPStatus:              UnInitialized,
+		ActivatedPaths:        make([]*DataPath, 0),
+		UpdatedBranchingPoint: make(map[*UPF]int),
 	}
 
 	return
-
 }
 
-func (bpMGR *BPManager) SetPSAStatus(psa_path []*UPNode) {
+func (bpMGR *BPManager) SelectPSA2(smContext *SMContext) {
 
-	if len(psa_path) == 0 {
-		return
-	}
+	hasSelectPSA2 := false
+	bpMGR.ActivatedPaths = []*DataPath{}
+	for _, dataPath := range smContext.Tunnel.DataPathPool {
 
-	psa := psa_path[len(psa_path)-1]
-	psa_ip := psa.NodeID.ResolveNodeIdToIp().String()
-
-	for dataPathNode := range bpMGR.PSAState {
-
-		if psa_ip == dataPathNode.UPF.NodeID.ResolveNodeIdToIp().String() {
-			bpMGR.PSAState[dataPathNode] = AddPSASuccess
-			logger.PduSessLog.Traceln("Add PSA ", dataPathNode.UPF.GetUPFIP(), "Success")
-			break
+		if dataPath.Activated {
+			bpMGR.ActivatedPaths = append(bpMGR.ActivatedPaths, dataPath)
+		} else {
+			if !hasSelectPSA2 {
+				bpMGR.ActivatingPath = dataPath
+				hasSelectPSA2 = true
+			}
 		}
-	}
-
-}
-
-func (bpMGR *BPManager) SelectPSA2() {
-
-	var psa2, curNode *DataPathNode
-	psa2_path := make([]*UPNode, 0)
-	upInfo := GetUserPlaneInformation()
-
-	for dataPathNode, status := range bpMGR.PSAState {
-
-		if status == NotAdded {
-			psa2 = dataPathNode
-			break
-		}
-	}
-
-	for curNode = psa2; curNode != nil; curNode = curNode.DataPathToAN.To {
-
-		curNodeIP := curNode.UPF.GetUPFIP()
-		curUPNode := upInfo.GetUPFNodeByIP(curNodeIP)
-		psa2_path = append([]*UPNode{curUPNode}, psa2_path...)
-	}
-
-	bpMGR.PSA2Path = psa2_path
-
-	logger.PduSessLog.Traceln("SelectPSA2")
-	for i, node := range psa2_path {
-
-		logger.PduSessLog.Traceln("Node ", i, ": ", node.UPF.GetUPFIP())
 	}
 }
 
 func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 
-	psa1_path := bpMGR.PSA1Path
-	psa2_path := bpMGR.PSA2Path
-	len_psa1_path := len(psa1_path)
-	len_psa2_path := len(psa2_path)
-	bpMGR.ULCL = nil
-	bpMGR.ULCLDataPathNode = nil
+	bpMGR.UpdatedBranchingPoint = make(map[*UPF]int)
+	activatingPath := bpMGR.ActivatingPath
+	for _, psa1Path := range bpMGR.ActivatedPaths {
+		depth := 0
+		psa1CurDPNode := psa1Path.FirstDPNode
+		for psa2CurDPNode := activatingPath.FirstDPNode; psa2CurDPNode != nil; psa2CurDPNode = psa2CurDPNode.Next() {
+			if reflect.DeepEqual(psa2CurDPNode.UPF.NodeID, psa1CurDPNode.UPF.NodeID) {
 
-	if len_psa1_path > len_psa2_path {
+				psa1CurDPNode = psa1CurDPNode.Next()
+				depth += 1
 
-		for idx, node := range psa2_path {
-
-			node1_id := psa1_path[idx].UPF.GetUPFID()
-			node2_id := psa2_path[idx].UPF.GetUPFID()
-
-			if node1_id == node2_id {
-				bpMGR.ULCL = node
-				bpMGR.ULCLIdx = idx
+				if _, exist := bpMGR.UpdatedBranchingPoint[psa2CurDPNode.UPF]; !exist {
+					bpMGR.UpdatedBranchingPoint[psa2CurDPNode.UPF] = depth
+				}
 			} else {
 				break
 			}
-		}
-	} else {
 
-		for idx, node := range psa1_path {
-
-			node1_id := psa1_path[idx].UPF.GetUPFID()
-			node2_id := psa2_path[idx].UPF.GetUPFID()
-
-			if node1_id == node2_id {
-				bpMGR.ULCL = node
-				bpMGR.ULCLIdx = idx
-			} else {
-				break
-			}
 		}
 	}
 
-	if bpMGR.ULCL == nil {
-		err = fmt.Errorf("Can't find ULCL for PSA: %s", psa2_path[len_psa2_path-1].UPF.GetUPFIP())
-		return
-	}
+	maxDepth := 0
+	for upf, depth := range bpMGR.UpdatedBranchingPoint {
 
-	upfRoot := smContext.Tunnel.ULCLRoot
-	upperBound := len(psa2_path) - 1
-
-	curDataPathNode := upfRoot
-
-	for idx := range psa2_path {
-
-		if idx == bpMGR.ULCLIdx {
-
-			bpMGR.ULCLDataPathNode = curDataPathNode
-			break
+		if depth > maxDepth {
+			bpMGR.ULCL = upf
+			maxDepth = depth
 		}
-
-		if idx < upperBound {
-			nextUPFID := psa2_path[idx+1].UPF.GetUPFID()
-
-			if nextDataPathLink, exist := curDataPathNode.DataPathToDN[nextUPFID]; exist {
-
-				curDataPathNode = nextDataPathLink.To
-			} else {
-
-				err = fmt.Errorf("PSA2 Path doesn't match UE Topo! error node: %s", psa2_path[idx+1].UPF.GetUPFIP())
-				return
-			}
-		}
-
 	}
-
-	if bpMGR.ULCLDataPathNode == nil {
-		err = fmt.Errorf("Can't find ULCLDataPathNode for PSA: %s", psa2_path[len_psa2_path-1].UPF.GetUPFIP())
-		return
-	}
-
-	logger.PduSessLog.Traceln("ULCL is : ", bpMGR.ULCLDataPathNode.UPF.GetUPFIP())
-	fmt.Println("ULCL is : ", bpMGR.ULCLDataPathNode.UPF.GetUPFIP())
-	bpMGR.ULCLDataPathNode.IsBranchingPoint = true
-
-	ulclIdx := bpMGR.ULCLIdx
-	if ulclIdx+1 >= len(psa1_path) {
-
-		bpMGR.ULCLState = IsULCLAndPSA1
-	} else if ulclIdx+1 >= len(psa2_path) {
-
-		bpMGR.ULCLState = IsULCLAndPSA2
-	} else {
-		bpMGR.ULCLState = IsOnlyULCL
-	}
-
 	return
 }

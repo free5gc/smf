@@ -13,6 +13,7 @@ import (
 	"free5gc/src/smf/logger"
 	pfcp_message "free5gc/src/smf/pfcp/message"
 	"free5gc/src/smf/producer"
+	//"free5gc/src/smf/producer"
 	"net/http"
 )
 
@@ -142,7 +143,8 @@ func HandlePfcpSessionEstablishmentResponse(msg *pfcpUdp.Message) {
 		pfcpSessionCtx.RemoteSEID = rsp.UPFSEID.Seid
 	}
 
-	if rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted && smContext.Tunnel.UpfRoot.UPF.NodeID.ResolveNodeIdToIp().Equal(rsp.NodeID.ResolveNodeIdToIp()) {
+	ANUPF := smContext.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
+	if rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted && ANUPF.UPF.NodeID.ResolveNodeIdToIp().Equal(rsp.NodeID.ResolveNodeIdToIp()) {
 		smNasBuf, _ := smf_context.BuildGSMPDUSessionEstablishmentAccept(smContext)
 		n2Pdu, _ := smf_context.BuildPDUSessionResourceSetupRequestTransfer(smContext)
 		n1n2Request := models.N1N2MessageTransferRequest{}
@@ -326,7 +328,8 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 			logger.PfcpLog.Warnf("PFCP Session Report Request DownlinkDataServiceInformation handling is not implemented")
 		}
 
-		DLPDR := smContext.Tunnel.UpfRoot.DownLinkTunnel.MatchedPDR
+		ANUPF := smContext.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
+		DLPDR := ANUPF.DownLinkTunnel.PDR
 		if DLPDR.PDRID == pdrID {
 			// TS 23.502 4.2.3.3 2b. Send Data Notification Ack, SMF->UPF
 			cause.CauseValue = pfcpType.CauseRequestAccepted

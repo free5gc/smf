@@ -2,13 +2,13 @@ package context
 
 import (
 	"fmt"
+	"free5gc/lib/idgenerator"
 	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/smf/logger"
+	"github.com/google/uuid"
 	"net"
 	"reflect"
-
-	"github.com/google/uuid"
 )
 
 var upfPool map[string]*UPF
@@ -18,14 +18,8 @@ func init() {
 }
 
 type UPTunnel struct {
-	ULPDR *PDR
-	DLPDR *PDR
-
-	ULTEID uint32
-	DLTEID uint32
-
-	UpfRoot  *DataPathNode
-	ULCLRoot *DataPathNode
+	PathIDGenerator *idgenerator.IDGenerator
+	DataPathPool    DataPathPool
 }
 
 type UPFStatus int
@@ -63,6 +57,25 @@ type UPF struct {
 // Maybe allocate by UPF in future
 func (upf *UPF) UUID() string {
 	return upf.uuid.String()
+}
+
+func NewUPTunnel() (tunnel *UPTunnel) {
+	tunnel = &UPTunnel{
+		DataPathPool:    make(DataPathPool),
+		PathIDGenerator: idgenerator.NewGenerator(1, 2147483647),
+	}
+
+	return
+}
+
+func (upTunnel *UPTunnel) AddDataPath(dataPath *DataPath) {
+	pathID, err := upTunnel.PathIDGenerator.Allocate()
+	if err != nil {
+		logger.CtxLog.Warnf("Allocate pathID error: %+v", err)
+		return
+	}
+
+	upTunnel.DataPathPool[pathID] = dataPath
 }
 
 // NewUPF returns a new UPF context in SMF
@@ -213,7 +226,7 @@ func (upf *UPF) barID() (barID uint8, err error) {
 func (upf *UPF) AddPDR() (pdr *PDR, err error) {
 
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("this upf not associate with smf")
+		err = fmt.Errorf("this upf do not associate with smf")
 		return nil, err
 	}
 
@@ -228,7 +241,7 @@ func (upf *UPF) AddPDR() (pdr *PDR, err error) {
 func (upf *UPF) AddFAR() (far *FAR, err error) {
 
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("this upf not associate with smf")
+		err = fmt.Errorf("this upf do not associate with smf")
 		return nil, err
 	}
 
@@ -241,7 +254,7 @@ func (upf *UPF) AddFAR() (far *FAR, err error) {
 func (upf *UPF) AddBAR() (bar *BAR, err error) {
 
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("this upf not associate with smf")
+		err = fmt.Errorf("this upf do not associate with smf")
 		return nil, err
 	}
 
