@@ -33,7 +33,7 @@ func AddPDUSessionAnchorAndULCL(smContext *context.SMContext, nodeID pfcpType.No
 
 		//Establish PSA2
 		EstablishPSA2(smContext)
-	case context.EstablishingPSA2:
+	case context.EstablishingNewPSA:
 
 		trggierUPFIP := nodeID.ResolveNodeIdToIp().String()
 		_, exist := pendingUPF[trggierUPFIP]
@@ -41,7 +41,7 @@ func AddPDUSessionAnchorAndULCL(smContext *context.SMContext, nodeID pfcpType.No
 		if exist {
 			delete(pendingUPF, trggierUPFIP)
 		} else {
-			logger.CtxLog.Warnln("In AddPDUSessionAnchorAndULCL case EstablishingPSA2")
+			logger.CtxLog.Warnln("In AddPDUSessionAnchorAndULCL case EstablishingNewPSA")
 			logger.CtxLog.Warnln("UPF IP ", trggierUPFIP, " doesn't exist in pending UPF!")
 			return
 		}
@@ -148,7 +148,7 @@ func EstablishPSA2(smContext *context.SMContext) {
 
 	}
 
-	bpMGR.AddingPSAState = context.EstablishingPSA2
+	bpMGR.AddingPSAState = context.EstablishingNewPSA
 	logger.PduSessLog.Traceln("End of EstablishPSA2")
 }
 

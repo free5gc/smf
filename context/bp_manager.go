@@ -30,7 +30,7 @@ type AddingPSAState int
 
 const (
 	ActivatingDataPath AddingPSAState = iota
-	EstablishingPSA2
+	EstablishingNewPSA
 	EstablishingULCL
 	UpdatingPSA2DownLink
 	UpdatingRANAndIUPFUpLink
