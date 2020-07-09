@@ -48,13 +48,13 @@ type SMFContext struct {
 	NFManagementClient             *Nnrf_NFManagement.APIClient
 	NFDiscoveryClient              *Nnrf_NFDiscovery.APIClient
 	SubscriberDataManagementClient *Nudm_SubscriberDataManagement.APIClient
+	DNNInfo                        map[string]factory.DNNInfo
 
 	UserPlaneInformation UserPlaneInformation
-	//*** For ULCL ** //
-	ULCLSupport         bool
-	UERoutingPaths      map[string][]factory.Path
-	UEPreConfigPathPool map[string]*UEPreConfigPaths
-	LocalSEIDCount      uint64
+	ULCLSupport          bool
+	UERoutingPaths       map[string][]factory.Path
+	UEPreConfigPathPool  map[string]*UEPreConfigPaths
+	LocalSEIDCount       uint64
 }
 
 func AllocUEIP() net.IP {
@@ -118,6 +118,8 @@ func InitSmfContext(config *factory.Config) {
 	if err != nil {
 		logger.InitLog.Errorln(err)
 	}
+
+	smfContext.DNNInfo = configuration.DNN
 	smfContext.UESubNet = ipNet
 	smfContext.UEAddressTemp = ipNet.IP
 

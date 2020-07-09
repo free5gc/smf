@@ -77,6 +77,8 @@ type SMContext struct {
 	SelectedPDUSessionType uint8
 
 	DnnConfiguration models.DnnConfiguration
+	DNSIPv4Request   bool
+	DNSIPv6Request   bool
 
 	// Client
 	SMPolicyClient      *Npcf_SMPolicyControl.APIClient
