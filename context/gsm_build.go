@@ -76,12 +76,18 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 
 			if smContext.ProtocolConfigurationOptions.DNSIPv4Request {
 				DNSIPv4Addr := net.ParseIP(dnnInfo.DNS.IPv4Addr)
-				protocolConfigurationOptions.AddDNSServerIPv4Address(DNSIPv4Addr)
+				err := protocolConfigurationOptions.AddDNSServerIPv4Address(DNSIPv4Addr)
+				if err != nil {
+					logger.GsmLog.Warnln("Error while adding DNS IPv4 Addr: ", err)
+				}
 			}
 
 			if smContext.ProtocolConfigurationOptions.DNSIPv6Request {
-				DNSIPv6Addr := net.ParseIP(dnnInfo.DNS.IPv4Addr)
-				protocolConfigurationOptions.AddDNSServerIPv6Address(DNSIPv6Addr)
+				DNSIPv6Addr := net.ParseIP(dnnInfo.DNS.IPv6Addr)
+				err := protocolConfigurationOptions.AddDNSServerIPv6Address(DNSIPv6Addr)
+				if err != nil {
+					logger.GsmLog.Warnln("Error while adding DNS IPv6 Addr: ", err)
+				}
 			}
 
 			pcoContents := protocolConfigurationOptions.Marshal()
