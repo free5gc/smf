@@ -5,48 +5,48 @@ import (
 )
 
 type BPManager struct {
-	BPStatus BPStatus
-
+	BPStatus       BPStatus
+	AddingPSAState AddingPSAState
 	//Need these variable conducting Add addtional PSA (TS23.502 4.3.5.4)
 	//There value will change from time to time
 
+	PendingUPF            PendingUPF
 	ActivatedPaths        []*DataPath
 	ActivatingPath        *DataPath
 	UpdatedBranchingPoint map[*UPF]int
 	ULCL                  *UPF
 }
-
 type BPStatus int
 
 const (
 	UnInitialized BPStatus = iota
-	HasSendPFCPMsg
+	AddingPSA
+	AddPSASuccess
 	InitializedSuccess
 	InitializedFail
 )
 
-type PDUSessionAnchorState int
+type AddingPSAState int
 
 const (
-	NotAdded PDUSessionAnchorState = iota
-	AddPSASuccess
-	AddPSAFail
+	ActivatingDataPath AddingPSAState = iota
+	EstablishingNewPSA
+	EstablishingULCL
+	UpdatingPSA2DownLink
+	UpdatingRANAndIUPFUpLink
+	Finished
 )
 
-type ULCLState int
-
-const (
-	IsOnlyULCL ULCLState = iota
-	IsULCLAndPSA1
-	IsULCLAndPSA2
-)
+type PendingUPF map[string]bool
 
 func NewBPManager(supi string) (bpManager *BPManager) {
 
 	bpManager = &BPManager{
 		BPStatus:              UnInitialized,
+		AddingPSAState:        ActivatingDataPath,
 		ActivatedPaths:        make([]*DataPath, 0),
 		UpdatedBranchingPoint: make(map[*UPF]int),
+		PendingUPF:            make(PendingUPF),
 	}
 
 	return
@@ -101,4 +101,14 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 		}
 	}
 	return
+}
+
+func (pendingUPF PendingUPF) IsEmpty() bool {
+
+	if len(pendingUPF) == 0 {
+		return true
+	} else {
+		return false
+	}
+
 }

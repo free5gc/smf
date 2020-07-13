@@ -232,6 +232,17 @@ func (smContext *SMContext) PCFSelection() (err error) {
 	return
 }
 
+func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) (nodeID pfcpType.NodeID) {
+
+	for _, pfcpCtx := range smContext.PFCPContext {
+		if pfcpCtx.LocalSEID == seid {
+			nodeID = pfcpCtx.NodeID
+		}
+	}
+
+	return
+}
+
 func (smContext *SMContext) AllocateLocalSEIDForUPPath(path UPPath) {
 
 	for _, upNode := range path {
@@ -252,11 +263,11 @@ func (smContext *SMContext) AllocateLocalSEIDForUPPath(path UPPath) {
 }
 
 func (smContext *SMContext) AllocateLocalSEIDForDataPath(dataPath *DataPath) {
-	logger.PduSessLog.Infoln("In AllocateLocalSEIDForDataPath")
+	logger.PduSessLog.Traceln("In AllocateLocalSEIDForDataPath")
 	for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
 
 		NodeIDtoIP := curDataPathNode.UPF.NodeID.ResolveNodeIdToIp().String()
-		logger.PduSessLog.Infoln("NodeIDtoIP: ", NodeIDtoIP)
+		logger.PduSessLog.Traceln("NodeIDtoIP: ", NodeIDtoIP)
 		if _, exist := smContext.PFCPContext[NodeIDtoIP]; !exist {
 
 			allocatedSEID := AllocateLocalSEID()

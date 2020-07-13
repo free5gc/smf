@@ -133,6 +133,7 @@ func HandlePfcpSessionSetDeletionResponse(msg *pfcpUdp.Message) {
 
 func HandlePfcpSessionEstablishmentResponse(msg *pfcpUdp.Message) {
 	rsp := msg.PfcpMessage.Body.(pfcp.PFCPSessionEstablishmentResponse)
+	logger.PfcpLog.Infoln("In HandlePfcpSessionEstablishmentResponse")
 
 	SEID := msg.PfcpMessage.Header.SEID
 	smContext := smf_context.GetSMContextBySEID(SEID)
@@ -180,6 +181,14 @@ func HandlePfcpSessionEstablishmentResponse(msg *pfcpUdp.Message) {
 		}
 
 	}
+
+	if smf_context.SMF_Self().ULCLSupport && smContext.BPManager != nil {
+		if smContext.BPManager.BPStatus == smf_context.AddingPSA {
+			logger.PfcpLog.Infoln("Keep Adding PSAndULCL")
+			producer.AddPDUSessionAnchorAndULCL(smContext, *rsp.NodeID)
+			smContext.BPManager.BPStatus = smf_context.AddingPSA
+		}
+	}
 }
 
 func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
@@ -187,9 +196,20 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 
 	SEID := msg.PfcpMessage.Header.SEID
 	seqNum := msg.PfcpMessage.Header.SequenceNumber
+	smContext := smf_context.GetSMContextBySEID(SEID)
 
-	logger.CtxLog.Infoln("Handle PfcpSessionModificationResponse")
+	logger.PfcpLog.Infoln("In HandlePfcpSessionModificationResponse")
 	HttpResponseQueue := smf_message.RspQueue
+
+	if smf_context.SMF_Self().ULCLSupport && smContext.BPManager != nil {
+		if smContext.BPManager.BPStatus == smf_context.AddingPSA {
+			logger.PfcpLog.Infoln("Keep Adding PSAAndULCL")
+
+			upfNodeID := smContext.GetNodeIDByLocalSEID(SEID)
+			producer.AddPDUSessionAnchorAndULCL(smContext, upfNodeID)
+		}
+	}
+
 	if HttpResponseQueue.CheckItemExist(seqNum) {
 		if pfcpRsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
 			resQueueItem := HttpResponseQueue.GetItem(seqNum)
@@ -197,14 +217,12 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 			logger.PduSessLog.Infoln("[SMF] Send Update SMContext Response")
 			resQueueItem.RspChan <- smf_message.HandlerResponseMessage{HTTPResponse: &resQueueItem.Response}
 
-			smContext := smf_context.GetSMContextBySEID(SEID)
-
 			if smf_context.SMF_Self().ULCLSupport && smContext.BPManager != nil {
-				logger.PfcpLog.Infoln("smContext.BPManager")
 				if smContext.BPManager.BPStatus == smf_context.UnInitialized {
-					logger.PfcpLog.Infoln("AddPDUSessionAnchorAndULCL")
-					producer.AddPDUSessionAnchorAndULCL(smContext)
-					smContext.BPManager.BPStatus = smf_context.HasSendPFCPMsg
+					logger.PfcpLog.Infoln("Add PSAAndULCL")
+					upfNodeID := smContext.GetNodeIDByLocalSEID(SEID)
+					producer.AddPDUSessionAnchorAndULCL(smContext, upfNodeID)
+					smContext.BPManager.BPStatus = smf_context.AddingPSA
 				}
 			}
 
@@ -238,7 +256,6 @@ func HandlePfcpSessionModificationResponse(msg *pfcpUdp.Message) {
 		}
 	}
 
-	smContext := smf_context.GetSMContextBySEID(SEID)
 	logger.CtxLog.Traceln("PFCP Session Context")
 	for _, ctx := range smContext.PFCPContext {
 

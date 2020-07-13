@@ -110,7 +110,7 @@ func (node *DataPathNode) Prev() (prev *DataPathNode) {
 
 func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) (err error) {
 
-	logger.CtxLog.Infoln("In ActivateUpLinkTunnel")
+	logger.CtxLog.Traceln("In ActivateUpLinkTunnel")
 	node.UpLinkTunnel.SrcEndPoint = node.Prev()
 	node.UpLinkTunnel.DestEndPoint = node
 
@@ -305,7 +305,7 @@ func (dataPath *DataPath) ToString() (str string) {
 func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
 
 	firstDPNode := dataPath.FirstDPNode
-	logger.PduSessLog.Infoln("In ActivateTunnelAndPDR")
+	logger.PduSessLog.Traceln("In ActivateTunnelAndPDR")
 	logger.PduSessLog.Traceln(dataPath.ToString())
 	//Activate Tunnels
 	for curDataPathNode := firstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
@@ -324,7 +324,7 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
 
 	//Activate PDR
 	for curDataPathNode := firstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
-		logger.CtxLog.Infoln("Calculate ", curDataPathNode.UPF.PFCPAddr().String())
+		logger.CtxLog.Traceln("Calculate ", curDataPathNode.UPF.PFCPAddr().String())
 		curULTunnel := curDataPathNode.UpLinkTunnel
 		curDLTunnel := curDataPathNode.DownLinkTunnel
 
@@ -399,10 +399,6 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
 					Ipv4Address: smContext.PDUAddress.To4(),
 				}
 			}
-
-			fmt.Println("In GenerateDataPath")
-			fmt.Println("curDataPathNode IP: ", curDataPathNode.GetNodeIP())
-			fmt.Println("Is anchor point: ", curDataPathNode.IsAnchorUPF())
 
 			if !curDataPathNode.IsAnchorUPF() {
 				DLPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{
