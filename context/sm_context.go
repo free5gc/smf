@@ -98,6 +98,9 @@ type SMContext struct {
 	PCCRules           map[string]*PCCRule
 	SessionRules       map[string]*SessionRule
 	TrafficControlPool map[string]*TrafficControlData
+
+	//PCO Related
+	ProtocolConfigurationOptions *ProtocolConfigurationOptions
 }
 
 func canonicalName(identifier string, pduSessID int32) (canonical string) {
@@ -131,6 +134,10 @@ func NewSMContext(identifier string, pduSessID int32) (smContext *SMContext) {
 	smContext.PCCRules = make(map[string]*PCCRule)
 	smContext.SessionRules = make(map[string]*SessionRule)
 	smContext.TrafficControlPool = make(map[string]*TrafficControlData)
+	smContext.ProtocolConfigurationOptions = &ProtocolConfigurationOptions{
+		DNSIPv4Request: false,
+		DNSIPv6Request: false,
+	}
 	return smContext
 }
 
