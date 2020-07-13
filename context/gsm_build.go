@@ -26,7 +26,6 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	pDUSessionEstablishmentAccept.SetMessageType(nas.MsgTypePDUSessionEstablishmentAccept)
 	pDUSessionEstablishmentAccept.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
 	pDUSessionEstablishmentAccept.SetPTI(0x00)
-	pDUSessionEstablishmentAccept.SetPDUSessionType(smContext.SelectedPDUSessionType)
 
 	selectedPDUSessionType := nasConvert.PDUSessionTypeToModels(smContext.SelectedPDUSessionType)
 	if selectedPDUSessionType == models.PduSessionType_IPV4_V6 {
@@ -35,15 +34,18 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 		onlySupportIPv6 := SMF_Self().OnlySupportIPv6
 
 		if onlySupportIPv4 {
+			smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4
 			pDUSessionEstablishmentAccept.Cause5GSM = nasType.NewCause5GSM(nasMessage.PDUSessionEstablishmentAcceptCause5GSMType)
 			pDUSessionEstablishmentAccept.SetCauseValue(nasMessage.Cause5GSMPDUSessionTypeIPv4OnlyAllowed)
 		}
 		if onlySupportIPv6 {
+			smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv6
 			pDUSessionEstablishmentAccept.Cause5GSM = nasType.NewCause5GSM(nasMessage.PDUSessionEstablishmentAcceptCause5GSMType)
 			pDUSessionEstablishmentAccept.SetCauseValue(nasMessage.Cause5GSMPDUSessionTypeIPv6OnlyAllowed)
 		}
 
 	}
+	pDUSessionEstablishmentAccept.SetPDUSessionType(smContext.SelectedPDUSessionType)
 
 	pDUSessionEstablishmentAccept.SetSSCMode(1)
 	pDUSessionEstablishmentAccept.SessionAMBR = nasConvert.ModelsToSessionAMBR(sessRule.AuthSessAmbr)
