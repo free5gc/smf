@@ -51,10 +51,13 @@ type SMFContext struct {
 	DNNInfo                        map[string]factory.DNNInfo
 
 	UserPlaneInformation UserPlaneInformation
-	ULCLSupport          bool
-	UERoutingPaths       map[string][]factory.Path
-	UEPreConfigPathPool  map[string]*UEPreConfigPaths
-	LocalSEIDCount       uint64
+	OnlySupportIPv4      bool
+	OnlySupportIPv6      bool
+	//*** For ULCL ** //
+	ULCLSupport     bool
+	UERoutingPaths  map[string][]factory.Path
+	UERoutingGraphs map[string]*UEDataPathGraph
+	LocalSEIDCount  uint64
 }
 
 func AllocUEIP() net.IP {
@@ -135,6 +138,8 @@ func InitSmfContext(config *factory.Config) {
 	smfContext.ULCLSupport = configuration.ULCL
 
 	smfContext.SnssaiInfos = configuration.SNssaiInfo
+
+	smfContext.OnlySupportIPv4 = true
 
 	processUPTopology(&configuration.UserPlaneInformation)
 
