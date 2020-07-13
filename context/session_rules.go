@@ -34,3 +34,8 @@ func NewSessionRuleFromModel(model *models.SessionRule) *SessionRule {
 
 	return sessionRule
 }
+
+// SetSessionRuleActivateState
+func SetSessionRuleActivateState(rule *SessionRule, state bool) {
+	rule.isActivate = state
+}
