@@ -54,10 +54,10 @@ type SMFContext struct {
 	OnlySupportIPv4      bool
 	OnlySupportIPv6      bool
 	//*** For ULCL ** //
-	ULCLSupport     bool
-	UERoutingPaths  map[string][]factory.Path
-	UERoutingGraphs map[string]*UEDataPathGraph
-	LocalSEIDCount  uint64
+	ULCLSupport         bool
+	UERoutingPaths      map[string][]factory.Path
+	UEPreConfigPathPool map[string]*UEPreConfigPaths
+	LocalSEIDCount      uint64
 }
 
 func AllocUEIP() net.IP {
