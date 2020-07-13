@@ -5,6 +5,8 @@ import (
 	"free5gc/lib/nas/nasConvert"
 	"free5gc/lib/nas/nasMessage"
 	"free5gc/lib/nas/nasType"
+	"free5gc/src/smf/logger"
+	"net"
 	// "free5gc/lib/nas/nasType"
 )
 
@@ -63,6 +65,33 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	// pDUSessionEstablishmentAccept.AuthorizedQosFlowDescriptions = nasType.NewAuthorizedQosFlowDescriptions(nasMessage.PDUSessionEstablishmentAcceptAuthorizedQosFlowDescriptionsType)
 	// pDUSessionEstablishmentAccept.AuthorizedQosFlowDescriptions.SetLen(6)
 	// pDUSessionEstablishmentAccept.SetQoSFlowDescriptions([]uint8{0x09, 0x20, 0x41, 0x01, 0x01, 0x09})
+
+	if smContext.ProtocolConfigurationOptions.DNSIPv4Request || smContext.ProtocolConfigurationOptions.DNSIPv6Request {
+		dnnInfo, exist := SMF_Self().DNNInfo[smContext.Dnn]
+		if !exist {
+			logger.GsmLog.Warnf("No default DNS IP for DNN [%s]\n", smContext.Dnn)
+		} else {
+			pDUSessionEstablishmentAccept.ExtendedProtocolConfigurationOptions = nasType.NewExtendedProtocolConfigurationOptions(nasMessage.PDUSessionEstablishmentAcceptExtendedProtocolConfigurationOptionsType)
+			protocolConfigurationOptions := nasConvert.NewProtocolConfigurationOptions()
+
+			if smContext.ProtocolConfigurationOptions.DNSIPv4Request {
+				DNSIPv4Addr := net.ParseIP(dnnInfo.DNS.IPv4Addr)
+				protocolConfigurationOptions.AddDNSServerIPv4Address(DNSIPv4Addr)
+			}
+
+			if smContext.ProtocolConfigurationOptions.DNSIPv6Request {
+				DNSIPv6Addr := net.ParseIP(dnnInfo.DNS.IPv4Addr)
+				protocolConfigurationOptions.AddDNSServerIPv6Address(DNSIPv6Addr)
+			}
+
+			pcoContents := protocolConfigurationOptions.Marshal()
+			pcoContentsLength := len(pcoContents)
+			pDUSessionEstablishmentAccept.ExtendedProtocolConfigurationOptions.SetLen(uint16(pcoContentsLength))
+			pDUSessionEstablishmentAccept.ExtendedProtocolConfigurationOptions.SetExtendedProtocolConfigurationOptionsContents(pcoContents)
+
+		}
+
+	}
 	return m.PlainNasEncode()
 }
 

@@ -40,7 +40,7 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 			case nasMessage.IMCNSubsystemSignalingFlagUL:
 				logger.GsmLog.Infoln("Didn't Implement container type IMCNSubsystemSignalingFlagUL")
 			case nasMessage.DNSServerIPv6AddressRequestUL:
-				smContext.DNSIPv6Request = true
+				smContext.ProtocolConfigurationOptions.DNSIPv6Request = true
 			case nasMessage.NotSupportedUL:
 				logger.GsmLog.Infoln("Didn't Implement container type NotSupportedUL")
 			case nasMessage.MSSupportOfNetworkRequestedBearerControlIndicatorUL:
@@ -58,7 +58,7 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 			case nasMessage.PCSCFIPv4AddressRequestUL:
 				logger.GsmLog.Infoln("Didn't Implement container type PCSCFIPv4AddressRequestUL")
 			case nasMessage.DNSServerIPv4AddressRequestUL:
-				smContext.DNSIPv4Request = true
+				smContext.ProtocolConfigurationOptions.DNSIPv4Request = true
 			case nasMessage.MSISDNRequestUL:
 				logger.GsmLog.Infoln("Didn't Implement container type MSISDNRequestUL")
 			case nasMessage.IFOMSupportRequestUL:
