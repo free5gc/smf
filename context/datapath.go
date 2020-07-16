@@ -349,37 +349,29 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
 			ULPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4}
 
 			ULFAR := ULPDR.FAR
+			ULFAR.ApplyAction = pfcpType.ApplyAction{
+				Buff: false,
+				Drop: false,
+				Dupl: false,
+				Forw: true,
+				Nocp: false,
+			}
+			ULPDR.FAR.ForwardingParameters = &ForwardingParameters{
+				DestinationInterface: pfcpType.DestinationInterface{
+					InterfaceValue: pfcpType.DestinationInterfaceAccess,
+				},
+				NetworkInstance: []byte(smContext.Dnn),
+			}
 
 			if nextULDest := curDataPathNode.Next(); nextULDest != nil {
 				nextULTunnel := nextULDest.UpLinkTunnel
-				ULFAR.ApplyAction = pfcpType.ApplyAction{
-					Buff: false,
-					Drop: false,
-					Dupl: false,
-					Forw: true,
-					Nocp: false,
-				}
-				ULFAR.ForwardingParameters = &ForwardingParameters{
-					DestinationInterface: pfcpType.DestinationInterface{InterfaceValue: pfcpType.DestinationInterfaceCore},
-					OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
-						OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
-						Ipv4Address:                    nextULTunnel.DestEndPoint.UPF.UPIPInfo.Ipv4Address,
-						Teid:                           nextULTunnel.TEID,
-					},
+				ULPDR.FAR.ForwardingParameters.OuterHeaderCreation = &pfcpType.OuterHeaderCreation{
+					OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
+					Ipv4Address:                    nextULTunnel.DestEndPoint.UPF.UPIPInfo.Ipv4Address,
+					Teid:                           nextULTunnel.TEID,
 				}
 			}
 
-		}
-
-		ANUPF := dataPath.FirstDPNode
-		ULPDR := ANUPF.UpLinkTunnel.PDR
-
-		ULPDR.FAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
-		ULPDR.FAR.ForwardingParameters = &ForwardingParameters{
-			DestinationInterface: pfcpType.DestinationInterface{
-				InterfaceValue: pfcpType.DestinationInterfaceAccess,
-			},
-			NetworkInstance: []byte(smContext.Dnn),
 		}
 
 		// Setup DownLink
