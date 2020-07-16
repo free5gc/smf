@@ -371,6 +371,17 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
 
 		}
 
+		ANUPF := dataPath.FirstDPNode
+		ULPDR := ANUPF.UpLinkTunnel.PDR
+
+		ULPDR.FAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
+		ULPDR.FAR.ForwardingParameters = &ForwardingParameters{
+			DestinationInterface: pfcpType.DestinationInterface{
+				InterfaceValue: pfcpType.DestinationInterfaceAccess,
+			},
+			NetworkInstance: []byte(smContext.Dnn),
+		}
+
 		// Setup DownLink
 		if curDLTunnel != nil {
 			DLPDR := curDLTunnel.PDR
