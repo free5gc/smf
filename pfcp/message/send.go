@@ -3,6 +3,7 @@ package message
 import (
 	"free5gc/lib/pfcp"
 	"free5gc/lib/pfcp/pfcpType"
+	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/smf/context"
 	"free5gc/src/smf/logger"
 	"free5gc/src/smf/pfcp/udp"
@@ -101,8 +102,8 @@ func SendPfcpAssociationReleaseResponse(addr *net.UDPAddr, cause pfcpType.Cause)
 	udp.SendPfcp(message, addr)
 }
 
-func SendPfcpSessionEstablishmentRequest(raddr *net.UDPAddr, ctx *context.SMContext) {
-	pfcpMsg, err := BuildPfcpSessionEstablishmentRequest(ctx)
+func SendPfcpSessionEstablishmentRequest(upNodeID pfcpType.NodeID, ctx *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) {
+	pfcpMsg, err := BuildPfcpSessionEstablishmentRequest(upNodeID, ctx, pdrList, farList, barList)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Establishment Request failed: %v", err)
 		return
@@ -121,32 +122,14 @@ func SendPfcpSessionEstablishmentRequest(raddr *net.UDPAddr, ctx *context.SMCont
 		Body: pfcpMsg,
 	}
 
-	udp.SendPfcp(message, raddr)
-}
-
-func SendPfcpSessionEstablishmentRequestForULCL(raddr *net.UDPAddr, ctx *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) {
-	pfcpMsg, err := BuildPfcpSessionEstablishmentRequestForULCL(ctx, pdrList, farList, barList)
-	if err != nil {
-		logger.PfcpLog.Errorf("Build PFCP Session Establishment Request failed: %v", err)
-		return
+	upaddr := &net.UDPAddr{
+		IP:   upNodeID.ResolveNodeIdToIp(),
+		Port: pfcpUdp.PFCP_PORT,
 	}
+	logger.PduSessLog.Traceln("[SMF] Send SendPfcpSessionEstablishmentRequest")
+	logger.PduSessLog.Traceln("Send to addr ", upaddr.String())
 
-	message := pfcp.Message{
-		Header: pfcp.Header{
-			Version:         pfcp.PfcpVersion,
-			MP:              1,
-			S:               pfcp.SEID_PRESENT,
-			MessageType:     pfcp.PFCP_SESSION_ESTABLISHMENT_REQUEST,
-			SEID:            0,
-			SequenceNumber:  getSeqNumber(),
-			MessagePriority: 0,
-		},
-		Body: pfcpMsg,
-	}
-
-	logger.PduSessLog.Traceln("[SMF] Send SendPfcpSessionEstablishmentRequestForULCL")
-	logger.PduSessLog.Traceln("Send to addr ", raddr.String())
-	udp.SendPfcp(message, raddr)
+	udp.SendPfcp(message, upaddr)
 }
 
 // Deprecated: PFCP Session Establishment Procedure should be initiated by the CP function
@@ -173,9 +156,9 @@ func SendPfcpSessionEstablishmentResponse(addr *net.UDPAddr) {
 	udp.SendPfcp(message, addr)
 }
 
-func SendPfcpSessionModificationRequest(raddr *net.UDPAddr, ctx *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (seqNum uint32) {
+func SendPfcpSessionModificationRequest(upNodeID pfcpType.NodeID, ctx *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (seqNum uint32) {
 
-	pfcpMsg, err := BuildPfcpSessionModificationRequest(ctx, pdrList, farList, barList)
+	pfcpMsg, err := BuildPfcpSessionModificationRequest(upNodeID, ctx, pdrList, farList, barList)
 
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Modification Request failed: %v", err)
@@ -183,20 +166,27 @@ func SendPfcpSessionModificationRequest(raddr *net.UDPAddr, ctx *context.SMConte
 	}
 
 	seqNum = getSeqNumber()
+	nodeIDtoIP := upNodeID.ResolveNodeIdToIp().String()
+	remoteSEID := ctx.PFCPContext[nodeIDtoIP].RemoteSEID
 	message := pfcp.Message{
 		Header: pfcp.Header{
 			Version:         pfcp.PfcpVersion,
 			MP:              1,
 			S:               pfcp.SEID_PRESENT,
 			MessageType:     pfcp.PFCP_SESSION_MODIFICATION_REQUEST,
-			SEID:            ctx.RemoteSEID,
+			SEID:            remoteSEID,
 			SequenceNumber:  seqNum,
 			MessagePriority: 12,
 		},
 		Body: pfcpMsg,
 	}
 
-	udp.SendPfcp(message, raddr)
+	upaddr := &net.UDPAddr{
+		IP:   upNodeID.ResolveNodeIdToIp(),
+		Port: pfcpUdp.PFCP_PORT,
+	}
+
+	udp.SendPfcp(message, upaddr)
 	return seqNum
 }
 
@@ -224,27 +214,34 @@ func SendPfcpSessionModificationResponse(addr *net.UDPAddr) {
 	udp.SendPfcp(message, addr)
 }
 
-func SendPfcpSessionDeletionRequest(addr *net.UDPAddr, ctx *context.SMContext) (seqNum uint32) {
+func SendPfcpSessionDeletionRequest(upNodeID pfcpType.NodeID, ctx *context.SMContext) (seqNum uint32) {
 	pfcpMsg, err := BuildPfcpSessionDeletionRequest()
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Deletion Request failed: %v", err)
 		return
 	}
 	seqNum = getSeqNumber()
+	nodeIDtoIP := upNodeID.ResolveNodeIdToIp().String()
+	remoteSEID := ctx.PFCPContext[nodeIDtoIP].RemoteSEID
 	message := pfcp.Message{
 		Header: pfcp.Header{
 			Version:         pfcp.PfcpVersion,
 			MP:              1,
 			S:               pfcp.SEID_PRESENT,
 			MessageType:     pfcp.PFCP_SESSION_DELETION_REQUEST,
-			SEID:            ctx.RemoteSEID,
+			SEID:            remoteSEID,
 			SequenceNumber:  seqNum,
 			MessagePriority: 12,
 		},
 		Body: pfcpMsg,
 	}
 
-	udp.SendPfcp(message, addr)
+	upaddr := &net.UDPAddr{
+		IP:   upNodeID.ResolveNodeIdToIp(),
+		Port: pfcpUdp.PFCP_PORT,
+	}
+
+	udp.SendPfcp(message, upaddr)
 
 	return seqNum
 }

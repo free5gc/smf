@@ -8,6 +8,7 @@ import (
 	"free5gc/lib/path_util"
 	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/app"
+	"free5gc/src/smf/callback"
 	"free5gc/src/smf/consumer"
 	"free5gc/src/smf/context"
 	"free5gc/src/smf/eventexposure"
@@ -90,13 +91,18 @@ func (*SMF) Initialize(c *cli.Context) {
 		factory.InitRoutingConfigFactory(DefaultUERoutingPath)
 	}
 
-	initLog.Traceln("SMF debug level(string):", app.ContextSelf().Logger.SMF.DebugLevel)
 	if app.ContextSelf().Logger.SMF.DebugLevel != "" {
-		initLog.Infoln("SMF debug level(string):", app.ContextSelf().Logger.SMF.DebugLevel)
 		level, err := logrus.ParseLevel(app.ContextSelf().Logger.SMF.DebugLevel)
 		if err != nil {
+			initLog.Warnf("Log level [%s] is not valid, set to [info] level", app.ContextSelf().Logger.SMF.DebugLevel)
+			logger.SetLogLevel(logrus.InfoLevel)
+		} else {
 			logger.SetLogLevel(level)
+			initLog.Infof("Log level is set to [%s] level", level)
 		}
+	} else {
+		initLog.Infoln("Log level is default set to [info] level")
+		logger.SetLogLevel(logrus.InfoLevel)
 	}
 
 	logger.SetReportCaller(app.ContextSelf().Logger.SMF.ReportCaller)
@@ -143,6 +149,7 @@ func (smf *SMF) Start() {
 	}()
 
 	oam.AddService(router)
+	callback.AddService(router)
 	for _, serviceName := range factory.SmfConfig.Configuration.ServiceNameList {
 		switch models.ServiceName(serviceName) {
 		case models.ServiceName_NSMF_PDUSESSION:
