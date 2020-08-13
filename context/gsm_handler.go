@@ -33,7 +33,7 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 
 		for _, container := range protocolConfigurationOptions.ProtocolOrContainerList {
 			logger.GsmLog.Traceln("Container ID: ", container.ProtocolOrContainerID)
-			logger.GsmLog.Traceln("Container Length: ", container.LengthofContents)
+			logger.GsmLog.Traceln("Container Length: ", container.LengthOfContents)
 			switch container.ProtocolOrContainerID {
 			case nasMessage.PCSCFIPv6AddressRequestUL:
 				logger.GsmLog.Infoln("Didn't Implement container type PCSCFIPv6AddressRequestUL")
@@ -64,7 +64,7 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 			case nasMessage.IFOMSupportRequestUL:
 				logger.GsmLog.Infoln("Didn't Implement container type IFOMSupportRequestUL")
 			case nasMessage.IPv4LinkMTURequestUL:
-				logger.GsmLog.Infoln("Didn't Implenment container type IPv4LinkMTURequestUL")
+				smContext.ProtocolConfigurationOptions.IPv4LinkMTURequest = true
 			case nasMessage.MSSupportOfLocalAddressInTFTIndicatorUL:
 				logger.GsmLog.Infoln("Didn't Implement container type MSSupportOfLocalAddressInTFTIndicatorUL")
 			case nasMessage.PCSCFReSelectionSupportUL:
@@ -85,8 +85,26 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 				logger.GsmLog.Infoln("Didn't Implement container type AdditionalAPNRateControlForExceptionDataSupportIndicatorUL")
 			case nasMessage.PDUSessionIDUL:
 				logger.GsmLog.Infoln("Didn't Implement container type PDUSessionIDUL")
+			case nasMessage.EthernetFramePayloadMTURequestUL:
+				logger.GsmLog.Infoln("Didn't Implement container type EthernetFramePayloadMTURequestUL")
+			case nasMessage.UnstructuredLinkMTURequestUL:
+				logger.GsmLog.Infoln("Didn't Implement container type UnstructuredLinkMTURequestUL")
+			case nasMessage.I5GSMCauseValueUL:
+				logger.GsmLog.Infoln("Didn't Implement container type 5GSMCauseValueUL")
+			case nasMessage.QoSRulesWithTheLengthOfTwoOctetsSupportIndicatorUL:
+				logger.GsmLog.Infoln("Didn't Implement container type QoSRulesWithTheLengthOfTwoOctetsSupportIndicatorUL")
+			case nasMessage.QoSFlowDescriptionsWithTheLengthOfTwoOctetsSupportIndicatorUL:
+				logger.GsmLog.Infoln("Didn't Implement container type QoSFlowDescriptionsWithTheLengthOfTwoOctetsSupportIndicatorUL")
+			case nasMessage.LinkControlProtocolUL:
+				logger.GsmLog.Infoln("Didn't Implement container type LinkControlProtocolUL")
+			case nasMessage.PushAccessControlProtocolUL:
+				logger.GsmLog.Infoln("Didn't Implement container type PushAccessControlProtocolUL")
+			case nasMessage.ChallengeHandshakeAuthenticationProtocolUL:
+				logger.GsmLog.Infoln("Didn't Implement container type ChallengeHandshakeAuthenticationProtocolUL")
+			case nasMessage.InternetProtocolControlProtocolUL:
+				logger.GsmLog.Infoln("Didn't Implement container type InternetProtocolControlProtocolUL")
 			default:
-				logger.GsmLog.Infoln("Unknown Container ID [%d]", container.ProtocolOrContainerID)
+				logger.GsmLog.Infof("Unknown Container ID [%d]\n", container.ProtocolOrContainerID)
 			}
 		}
 	}
