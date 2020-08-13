@@ -10,6 +10,10 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 	// Retrieve PDUSessionID
 	smContext.PDUSessionID = int32(req.PDUSessionID.GetPDUSessionID())
 	logger.GsmLog.Infoln("In HandlePDUSessionEstablishmentRequest")
+
+	// Retrieve PTI (Procedure transaction identity)
+	smContext.Pti = req.GetPTI()
+
 	// Handle PDUSessionType
 	if req.PDUSessionType != nil {
 		requestedPDUSessionType := req.PDUSessionType.GetPDUSessionTypeValue()
@@ -114,4 +118,7 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 
 func (smContext *SMContext) HandlePDUSessionReleaseRequest(req *nasMessage.PDUSessionReleaseRequest) {
 	logger.GsmLog.Infof("Handle Pdu Session Release Request")
+
+	// Retrieve PTI (Procedure transaction identity)
+	smContext.Pti = req.GetPTI()
 }

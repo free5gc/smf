@@ -53,6 +53,7 @@ type SMContext struct {
 	// SUPI or PEI
 	Supi           string
 	Pei            string
+	Pti            uint8
 	Identifier     string
 	Gpsi           string
 	PDUSessionID   int32

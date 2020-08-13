@@ -26,7 +26,7 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	pDUSessionEstablishmentAccept.SetPDUSessionID(uint8(smContext.PDUSessionID))
 	pDUSessionEstablishmentAccept.SetMessageType(nas.MsgTypePDUSessionEstablishmentAccept)
 	pDUSessionEstablishmentAccept.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
-	pDUSessionEstablishmentAccept.SetPTI(0x00)
+	pDUSessionEstablishmentAccept.SetPTI(smContext.Pti)
 
 	selectedPDUSessionType := nasConvert.PDUSessionTypeToModels(smContext.SelectedPDUSessionType)
 	if selectedPDUSessionType == models.PduSessionType_IPV4_V6 {
@@ -57,6 +57,7 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 			Identifier:    0x01,
 			DQR:           0x01,
 			OperationCode: OperationCodeCreateNewQoSRule,
+			Precedence:    0xff,
 			QFI:           uint8(authDefQos.Var5qi),
 			PacketFilterList: []PacketFilter{
 				{
@@ -145,7 +146,6 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 			pcoContentsLength := len(pcoContents)
 			pDUSessionEstablishmentAccept.ExtendedProtocolConfigurationOptions.SetLen(uint16(pcoContentsLength))
 			pDUSessionEstablishmentAccept.ExtendedProtocolConfigurationOptions.SetExtendedProtocolConfigurationOptionsContents(pcoContents)
-
 		}
 
 	}
@@ -153,7 +153,6 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 }
 
 func BuildGSMPDUSessionReleaseCommand(smContext *SMContext) ([]byte, error) {
-
 	m := nas.NewMessage()
 	m.GsmMessage = nas.NewGsmMessage()
 	m.GsmHeader.SetMessageType(nas.MsgTypePDUSessionReleaseCommand)
@@ -164,7 +163,7 @@ func BuildGSMPDUSessionReleaseCommand(smContext *SMContext) ([]byte, error) {
 	pDUSessionReleaseCommand.SetMessageType(nas.MsgTypePDUSessionReleaseCommand)
 	pDUSessionReleaseCommand.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
 	pDUSessionReleaseCommand.SetPDUSessionID(uint8(smContext.PDUSessionID))
-	pDUSessionReleaseCommand.SetPTI(0x00)
+	pDUSessionReleaseCommand.SetPTI(smContext.Pti)
 	pDUSessionReleaseCommand.SetCauseValue(0x0)
 
 	return m.PlainNasEncode()
