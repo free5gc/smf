@@ -1,9 +1,7 @@
 package context
 
 import (
-	"fmt"
 	"free5gc/lib/pfcp/pfcpType"
-	"free5gc/lib/util_3gpp"
 	"free5gc/src/smf/factory"
 	"free5gc/src/smf/logger"
 	"net"
@@ -175,182 +173,42 @@ func (upi *UserPlaneInformation) ExistDefaultPath(dnn string) bool {
 	return exist
 }
 
-func GenerateDataPath(upPath UPPath, smContext *SMContext) (root *DataPathNode) {
+func GenerateDataPath(upPath UPPath, smContext *SMContext) (dataPath *DataPath) {
 	if len(upPath) < 1 {
 		logger.CtxLog.Errorf("invalid path")
 	}
 	var lowerBound = 0
 	var upperBound = len(upPath) - 1
+	var root *DataPathNode
 	var curDataPathNode *DataPathNode
 	var prevDataPathNode *DataPathNode
 
 	for idx, upNode := range upPath {
-		curDataPathNode := NewDataPathNode()
+		curDataPathNode = NewDataPathNode()
 		curDataPathNode.UPF = upNode.UPF
-		curDataPathNode.InUse = true
+
 		if idx == lowerBound {
 			root = curDataPathNode
-			root.DataPathToAN = NewDataPathDownLink()
-			err := root.SetUpLinkSrcNode(nil)
-
-			if err != nil {
-				logger.CtxLog.Warnln(err)
-			}
+			root.AddPrev(nil)
 		}
 		if idx == upperBound {
-			err := curDataPathNode.SetDownLinkSrcNode(nil)
-
-			if err != nil {
-				logger.CtxLog.Warnln(err)
-			}
-			// curDataPathNode.AddParent(prevDataPathNode)
-			curDataPathNode.DLDataPathLinkForPSA = NewDataPathUpLink()
-			// prevDataPathNode.AddChild(curDataPathNode)
+			curDataPathNode.AddNext(nil)
 		}
 		if prevDataPathNode != nil {
-			err := prevDataPathNode.SetDownLinkSrcNode(curDataPathNode)
-
-			if err != nil {
-				logger.CtxLog.Warnln(err)
-			}
-			err = curDataPathNode.SetUpLinkSrcNode(prevDataPathNode)
-
-			if err != nil {
-				logger.CtxLog.Warnln(err)
-			}
-			err = curDataPathNode.AddParent(prevDataPathNode)
-
-			if err != nil {
-				logger.CtxLog.Warnln(err)
-			}
-			err = prevDataPathNode.AddChild(curDataPathNode)
-
-			if err != nil {
-				logger.CtxLog.Warnln(err)
-			}
+			prevDataPathNode.AddNext(curDataPathNode)
+			curDataPathNode.AddPrev(prevDataPathNode)
 		}
 		prevDataPathNode = curDataPathNode
 	}
 
-	curDataPathNode = root
-	for curDataPathNode != nil {
-		fmt.Println("calculate ", curDataPathNode.UPF.PFCPAddr().String())
-		curULTunnel := curDataPathNode.UpLinkTunnel
-		curDLTunnel := curDataPathNode.DownLinkTunnel
-
-		// Setup UpLink PDR
-		if curULTunnel != nil {
-			ULPDR := curULTunnel.MatchedPDR
-			ULDestUPF := curULTunnel.DestEndPoint.UPF
-
-			ULPDR.Precedence = 32
-			ULPDR.PDI = PDI{
-				SourceInterface: pfcpType.SourceInterface{InterfaceValue: pfcpType.SourceInterfaceAccess},
-				LocalFTeid: &pfcpType.FTEID{
-					V4:          true,
-					Ipv4Address: ULDestUPF.UPIPInfo.Ipv4Address,
-					Teid:        curULTunnel.TEID,
-				},
-				UEIPAddress: &pfcpType.UEIPAddress{
-					V4:          true,
-					Ipv4Address: smContext.PDUAddress.To4(),
-				},
-			}
-			ULPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4}
-
-			ULFAR := ULPDR.FAR
-
-			if curDLTunnel != nil {
-				if nextULDest := curDLTunnel.SrcEndPoint; nextULDest != nil {
-					nextULTunnel := nextULDest.UpLinkTunnel
-					ULFAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
-					ULFAR.ForwardingParameters = &ForwardingParameters{
-						DestinationInterface: pfcpType.DestinationInterface{InterfaceValue: pfcpType.DestinationInterfaceCore},
-						OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
-							OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
-							Ipv4Address:                    nextULTunnel.DestEndPoint.UPF.UPIPInfo.Ipv4Address,
-							Teid:                           nextULTunnel.TEID,
-						},
-					}
-				}
-			}
-
-		}
-
-		// Setup DownLink
-		if curDLTunnel != nil {
-			DLPDR := curDLTunnel.MatchedPDR
-			DLDestUPF := curDLTunnel.DestEndPoint.UPF
-
-			DLPDR.Precedence = 32
-			DLPDR.PDI = PDI{
-				SourceInterface: pfcpType.SourceInterface{InterfaceValue: pfcpType.SourceInterfaceCore},
-				LocalFTeid: &pfcpType.FTEID{
-					V4:          true,
-					Ipv4Address: DLDestUPF.UPIPInfo.Ipv4Address,
-					Teid:        curDLTunnel.TEID,
-				},
-
-				// TODO: Should Uncomment this after FR5GC-1029 is solved
-				// UEIPAddress: &pfcpType.UEIPAddress{
-				// 	V4:          true,
-				// 	Ipv4Address: smContext.PDUAddress.To4(),
-				// },
-			}
-
-			// TODO: Should delete this after FR5GC-1029 is solved
-			if curDataPathNode.IsAnchorUPF() {
-				DLPDR.PDI.UEIPAddress = &pfcpType.UEIPAddress{
-					V4:          true,
-					Ipv4Address: smContext.PDUAddress.To4(),
-				}
-			}
-
-			fmt.Println("In GenerateDataPath")
-			fmt.Println("curDataPathNode IP: ", curDataPathNode.GetNodeIP())
-			fmt.Println("Is anchor point: ", curDataPathNode.IsAnchorUPF())
-
-			if !curDataPathNode.IsAnchorUPF() {
-				DLPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4}
-			}
-
-			DLFAR := DLPDR.FAR
-
-			if nextDLDest := curULTunnel.SrcEndPoint; nextDLDest != nil {
-				nextDLTunnel := curULTunnel.SrcEndPoint.DownLinkTunnel
-
-				DLFAR.ApplyAction = pfcpType.ApplyAction{Buff: false, Drop: false, Dupl: false, Forw: true, Nocp: false}
-				DLFAR.ForwardingParameters = &ForwardingParameters{
-					DestinationInterface: pfcpType.DestinationInterface{InterfaceValue: pfcpType.DestinationInterfaceAccess},
-					OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
-						OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
-						Ipv4Address:                    nextDLDest.UPF.UPIPInfo.Ipv4Address,
-						Teid:                           nextDLTunnel.TEID,
-					},
-				}
-			}
-		}
-		if curDataPathNode.DownLinkTunnel != nil {
-			if curDataPathNode.DownLinkTunnel.SrcEndPoint == nil {
-				DNDLPDR := curDataPathNode.DownLinkTunnel.MatchedPDR
-				DNDLPDR.PDI = PDI{
-					SourceInterface: pfcpType.SourceInterface{InterfaceValue: pfcpType.SourceInterfaceCore},
-					NetworkInstance: util_3gpp.Dnn(smContext.Dnn),
-					UEIPAddress: &pfcpType.UEIPAddress{
-						V4:          true,
-						Ipv4Address: smContext.PDUAddress.To4(),
-					},
-				}
-				break
-			}
-		}
-
-		if curDataPathNode.DownLinkTunnel == nil {
-			break
-		}
-		curDataPathNode = curDataPathNode.DownLinkTunnel.SrcEndPoint
+	dataPath = &DataPath{
+		Destination: Destination{
+			DestinationIP:   "",
+			DestinationPort: "",
+			Url:             "",
+		},
+		FirstDPNode: root,
 	}
-
 	return
 }
 

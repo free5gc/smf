@@ -3,6 +3,7 @@ package message
 import (
 	"free5gc/lib/http_wrapper"
 	"free5gc/lib/pfcp/pfcpUdp"
+	"net/http"
 )
 
 type HandlerMessage struct {
@@ -38,4 +39,11 @@ func NewHandlerMessage(event Event, httpRequest *http_wrapper.Request) (msg Hand
 		msg.HTTPRequest = httpRequest
 	}
 	return
+}
+
+/* Send HTTP Response to HTTP handler thread through HTTP channel, args[0] is response payload and args[1:] is Additional Value*/
+func SendHttpResponseMessage(channel chan HandlerResponseMessage, header http.Header, status int, body interface{}) {
+	responseMsg := HandlerResponseMessage{}
+	responseMsg.HTTPResponse = http_wrapper.NewResponse(status, header, body)
+	channel <- responseMsg
 }

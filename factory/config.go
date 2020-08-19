@@ -27,6 +27,8 @@ type Configuration struct {
 
 	PFCP *PFCP `yaml:"pfcp,omitempty"`
 
+	DNN map[string]DNNInfo `yaml:"dnn,omitempty"`
+
 	NrfUri string `yaml:"nrfUri,omitempty"`
 
 	UserPlaneInformation UserPlaneInformation `yaml:"userplane_information"`
@@ -56,6 +58,15 @@ type TLS struct {
 type PFCP struct {
 	Addr string `yaml:"addr,omitempty"`
 	Port uint16 `yaml:"port,omitempty"`
+}
+
+type DNNInfo struct {
+	DNS DNS `yaml:"dns,omitempty"`
+}
+
+type DNS struct {
+	IPv4Addr string `yaml:"ipv4,omitempty"`
+	IPv6Addr string `yaml:"ipv6,omitempty"`
 }
 
 type Path struct {

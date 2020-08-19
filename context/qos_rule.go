@@ -2,6 +2,7 @@ package context
 
 import (
 	"bytes"
+	"encoding/binary"
 )
 
 const (
@@ -138,7 +139,7 @@ func (r *QoSRule) MarshalBinary() (data []byte, err error) {
 	}
 
 	// write QoS rule length
-	err = ruleBuffer.WriteByte(uint8(ruleContentBuffer.Len()))
+	err = binary.Write(ruleBuffer, binary.BigEndian, uint16(ruleContentBuffer.Len()))
 	if err != nil {
 		return nil, err
 	}

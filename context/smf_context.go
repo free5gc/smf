@@ -51,17 +51,26 @@ type SMFContext struct {
 	NFManagementClient             *Nnrf_NFManagement.APIClient
 	NFDiscoveryClient              *Nnrf_NFDiscovery.APIClient
 	SubscriberDataManagementClient *Nudm_SubscriberDataManagement.APIClient
+	DNNInfo                        map[string]factory.DNNInfo
 
 	UserPlaneInformation UserPlaneInformation
+	OnlySupportIPv4      bool
+	OnlySupportIPv6      bool
 	//*** For ULCL ** //
-	ULCLSupport     bool
-	UERoutingPaths  map[string][]factory.Path
-	UERoutingGraphs map[string]*UEDataPathGraph
+	ULCLSupport         bool
+	UERoutingPaths      map[string][]factory.Path
+	UEPreConfigPathPool map[string]*UEPreConfigPaths
+	LocalSEIDCount      uint64
 }
 
 func AllocUEIP() net.IP {
 	smfContext.UEAddressTemp[3]++
 	return smfContext.UEAddressTemp
+}
+
+func AllocateLocalSEID() uint64 {
+	smfContext.LocalSEIDCount++
+	return smfContext.LocalSEIDCount
 }
 
 func InitSmfContext(config *factory.Config) {
@@ -131,6 +140,8 @@ func InitSmfContext(config *factory.Config) {
 	if err != nil {
 		logger.InitLog.Errorln(err)
 	}
+
+	smfContext.DNNInfo = configuration.DNN
 	smfContext.UESubNet = ipNet
 	smfContext.UEAddressTemp = ipNet.IP
 
@@ -147,12 +158,18 @@ func InitSmfContext(config *factory.Config) {
 
 	smfContext.SnssaiInfos = configuration.SNssaiInfo
 
+	smfContext.OnlySupportIPv4 = true
+
 	processUPTopology(&configuration.UserPlaneInformation)
 
 	SetupNFProfile(config)
 }
 
 func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
+
+	if !smfContext.ULCLSupport {
+		return
+	}
 
 	if routingConfig == nil {
 		logger.CtxLog.Infof("Routing Config is nil")
@@ -162,26 +179,23 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 		routingConfig.Info.Version, routingConfig.Info.Description)
 
 	UERoutingInfo := routingConfig.UERoutingInfo
-	smfContext.UERoutingPaths = make(map[string][]factory.Path)
-	smfContext.UERoutingGraphs = make(map[string]*UEDataPathGraph)
+	ueRoutingPaths := make(map[string][]factory.Path)
+	smfContext.UEPreConfigPathPool = make(map[string]*UEPreConfigPaths)
 
 	for _, routingInfo := range UERoutingInfo {
-
 		supi := routingInfo.SUPI
 
-		smfContext.UERoutingPaths[supi] = routingInfo.PathList
+		ueRoutingPaths[supi] = routingInfo.PathList
 	}
 
-	for supi := range smfContext.UERoutingPaths {
-
-		graph, err := NewUEDataPathGraph(supi)
-
+	for supi, paths := range ueRoutingPaths {
+		uePreConfigPaths, err := NewUEPreConfigPaths(supi, paths)
 		if err != nil {
 			logger.CtxLog.Warnln(err)
 			continue
 		}
 
-		smfContext.UERoutingGraphs[supi] = graph
+		smfContext.UEPreConfigPathPool[supi] = uePreConfigPaths
 	}
 
 }
