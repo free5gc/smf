@@ -2,14 +2,13 @@ package context
 
 import (
 	"fmt"
-	"net"
-	"os"
-
 	"free5gc/lib/openapi/Nnrf_NFDiscovery"
 	"free5gc/lib/openapi/Nnrf_NFManagement"
 	"free5gc/lib/openapi/Nudm_SubscriberDataManagement"
 	"free5gc/src/smf/factory"
 	"free5gc/src/smf/logger"
+	"net"
+	"os"
 
 	"free5gc/lib/openapi/models"
 	"free5gc/lib/pfcp/pfcpType"
@@ -26,11 +25,10 @@ var smfContext SMFContext
 
 type SMFContext struct {
 	Name         string
-	ServerIPv4	string
-
 	NfInstanceID string
 
 	URIScheme   models.UriScheme
+	BindingIPv4 string
 	HTTPAddress string
 	HTTPPort    int
 	CPNodeID    pfcpType.NodeID
@@ -84,23 +82,13 @@ func InitSmfContext(config *factory.Config) {
 		smfContext.Name = configuration.SmfName
 	}
 
-	smfContext.ServerIPv4 = os.Getenv(configuration.ServerIPv4)
-	if smfContext.ServerIPv4 == "" {
-		logger.CtxLog.Warn("Problem parsing ServerIPv4 address from ENV Variable. Trying to parse it as string.")
-		smfContext.ServerIPv4 = configuration.ServerIPv4
-		if smfContext.ServerIPv4 == "" {
-			logger.CtxLog.Warn("Error parsing ServerIPv4 address as string. Using the localhost address as default.")
-			smfContext.ServerIPv4 = "127.0.0.1"
-		}
-	}
-
 	sbi := configuration.Sbi
 	smfContext.URIScheme = models.UriScheme(sbi.Scheme)
 	smfContext.HTTPAddress = "127.0.0.1" // default localhost
 	smfContext.HTTPPort = 29502          // default port
 	if sbi != nil {
-		if sbi.IPv4Addr != "" {
-			smfContext.HTTPAddress = sbi.IPv4Addr
+		if sbi.RegisterIPv4 != "" {
+			smfContext.HTTPAddress = sbi.RegisterIPv4
 		}
 		if sbi.Port != 0 {
 			smfContext.HTTPPort = sbi.Port
@@ -110,22 +98,25 @@ func InitSmfContext(config *factory.Config) {
 			smfContext.Key = tls.Key
 			smfContext.PEM = tls.PEM
 		}
+		smfContext.BindingIPv4 = os.Getenv(sbi.BindingIPv4)
+		if smfContext.BindingIPv4 == "" {
+			logger.CtxLog.Warn("Problem parsing ServerIPv4 address from ENV Variable. Trying to parse it as string.")
+			smfContext.BindingIPv4 = sbi.BindingIPv4
+			if smfContext.BindingIPv4 == "" {
+				logger.CtxLog.Warn("Error parsing ServerIPv4 address as string. Using the localhost address as default.")
+				smfContext.BindingIPv4 = "0.0.0.0"
+			}
+		}
 	}
 	if configuration.NrfUri != "" {
 		smfContext.NrfUri = configuration.NrfUri
 	} else {
 		logger.CtxLog.Error("NRF Uri is empty! Using localhost as NRF IPv4 address.")
-		smfContext.NrfUri = fmt.Sprintf("%s://%s:%d", smfContext.URIScheme, "127.0.0.1", 29510)
-	}
+		smfContext.NrfUri = fmt.Sprintf("%s://%s:%d", smfContext.URIScheme, "127.0.0.1", 29510)	}
 
 	if pfcp := configuration.PFCP; pfcp != nil {
 		if pfcp.Port == 0 {
 			pfcp.Port = pfcpUdp.PFCP_PORT
-		}
-		pfcp.Addr = os.Getenv(pfcp.Addr)
-		if pfcp.Addr == "" {
-			logger.CtxLog.Warn("Problem parsing PFCP IPv4 address from ENV Variable. Using the localhost address as default.")
-			pfcp.Addr = "127.0.0.1"
 		}
 		addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", pfcp.Addr, pfcp.Port))
 		if err != nil {
