@@ -100,10 +100,10 @@ func InitSmfContext(config *factory.Config) {
 		}
 		smfContext.BindingIPv4 = os.Getenv(sbi.BindingIPv4)
 		if smfContext.BindingIPv4 == "" {
-			logger.CtxLog.Warn("Problem parsing ServerIPv4 address from ENV Variable. Trying to parse it as string.")
+			logger.CtxLog.Info("Problem parsing ServerIPv4 address from ENV Variable. Trying to parse it as string.")
 			smfContext.BindingIPv4 = sbi.BindingIPv4
 			if smfContext.BindingIPv4 == "" {
-				logger.CtxLog.Warn("Error parsing ServerIPv4 address as string. Using the localhost address as default.")
+				logger.CtxLog.Info("Error parsing ServerIPv4 address as string. Using the 0.0.0.0 address as default.")
 				smfContext.BindingIPv4 = "0.0.0.0"
 			}
 		}
@@ -111,12 +111,17 @@ func InitSmfContext(config *factory.Config) {
 	if configuration.NrfUri != "" {
 		smfContext.NrfUri = configuration.NrfUri
 	} else {
-		logger.CtxLog.Error("NRF Uri is empty! Using localhost as NRF IPv4 address.")
+		logger.CtxLog.Info("NRF Uri is empty! Using localhost as NRF IPv4 address.")
 		smfContext.NrfUri = fmt.Sprintf("%s://%s:%d", smfContext.URIScheme, "127.0.0.1", 29510)	}
 
 	if pfcp := configuration.PFCP; pfcp != nil {
 		if pfcp.Port == 0 {
 			pfcp.Port = pfcpUdp.PFCP_PORT
+		}
+		pfcp.Addr = os.Getenv(pfcp.Addr)
+		if pfcp.Addr == "" {
+			logger.CtxLog.Info("Problem parsing PFCP IPv4 address from ENV variable. Using the 0.0.0.0 address as default.")
+			pfcp.Addr = "0.0.0.0"
 		}
 		addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", pfcp.Addr, pfcp.Port))
 		if err != nil {
