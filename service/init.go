@@ -173,7 +173,7 @@ func (smf *SMF) Start() {
 	time.Sleep(1000 * time.Millisecond)
 
 	go handler.Handle()
-	HTTPAddr := fmt.Sprintf("%s:%d", context.SMF_Self().HTTPAddress, context.SMF_Self().HTTPPort)
+	HTTPAddr := fmt.Sprintf("%s:%d", context.SMF_Self().BindingIPv4, context.SMF_Self().HTTPPort)
 	server, err := http2_util.NewServer(HTTPAddr, util.SmfLogPath, router)
 
 	if server == nil {

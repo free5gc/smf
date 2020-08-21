@@ -2,13 +2,13 @@ package context
 
 import (
 	"fmt"
-	"net"
-
 	"free5gc/lib/openapi/Nnrf_NFDiscovery"
 	"free5gc/lib/openapi/Nnrf_NFManagement"
 	"free5gc/lib/openapi/Nudm_SubscriberDataManagement"
 	"free5gc/src/smf/factory"
 	"free5gc/src/smf/logger"
+	"net"
+	"os"
 
 	"free5gc/lib/openapi/models"
 	"free5gc/lib/pfcp/pfcpType"
@@ -28,7 +28,8 @@ type SMFContext struct {
 	NfInstanceID string
 
 	URIScheme   models.UriScheme
-	HTTPAddress string
+	BindingIPv4 string
+	HTTPAddress string // IP register to NRF
 	HTTPPort    int
 	CPNodeID    pfcpType.NodeID
 
@@ -86,8 +87,8 @@ func InitSmfContext(config *factory.Config) {
 	smfContext.HTTPAddress = "127.0.0.1" // default localhost
 	smfContext.HTTPPort = 29502          // default port
 	if sbi != nil {
-		if sbi.IPv4Addr != "" {
-			smfContext.HTTPAddress = sbi.IPv4Addr
+		if sbi.RegisterIPv4 != "" {
+			smfContext.HTTPAddress = sbi.RegisterIPv4
 		}
 		if sbi.Port != 0 {
 			smfContext.HTTPPort = sbi.Port
@@ -97,16 +98,36 @@ func InitSmfContext(config *factory.Config) {
 			smfContext.Key = tls.Key
 			smfContext.PEM = tls.PEM
 		}
+		smfContext.BindingIPv4 = os.Getenv(sbi.BindingIPv4)
+		if smfContext.BindingIPv4 != "" {
+			logger.CtxLog.Info("Parsing ServerIPv4 address from ENV Variable.")
+		} else {
+			smfContext.BindingIPv4 = sbi.BindingIPv4
+			if smfContext.BindingIPv4 == "" {
+				logger.CtxLog.Warn("Error parsing ServerIPv4 address as string. Using the 0.0.0.0 address as default.")
+				smfContext.BindingIPv4 = "0.0.0.0"
+			}
+		}
 	}
 	if configuration.NrfUri != "" {
 		smfContext.NrfUri = configuration.NrfUri
 	} else {
-		smfContext.NrfUri = fmt.Sprintf("%s://%s:%d", smfContext.URIScheme, smfContext.HTTPAddress, 29510)
+		logger.CtxLog.Info("NRF Uri is empty! Using localhost as NRF IPv4 address.")
+		smfContext.NrfUri = fmt.Sprintf("%s://%s:%d", smfContext.URIScheme, "127.0.0.1", 29510)
 	}
 
 	if pfcp := configuration.PFCP; pfcp != nil {
 		if pfcp.Port == 0 {
 			pfcp.Port = pfcpUdp.PFCP_PORT
+		}
+		pfcpAddrEnv := os.Getenv(pfcp.Addr)
+		if pfcpAddrEnv != "" {
+			logger.CtxLog.Info("Parsing PFCP IPv4 address from ENV variable found.")
+			pfcp.Addr = pfcpAddrEnv
+		}
+		if pfcp.Addr == "" {
+			logger.CtxLog.Warn("Error parsing PFCP IPv4 address as string. Using the 0.0.0.0 address as default.")
+			pfcp.Addr = "0.0.0.0"
 		}
 		addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", pfcp.Addr, pfcp.Port))
 		if err != nil {
