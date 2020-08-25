@@ -179,7 +179,7 @@ func BuildGSMPDUSessionModificationCommand(smContext *SMContext) ([]byte, error)
 
 	pDUSessionModificationCommand.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
 	pDUSessionModificationCommand.SetPDUSessionID(uint8(smContext.PDUSessionID))
-	pDUSessionModificationCommand.SetPTI(0x00)
+	pDUSessionModificationCommand.SetPTI(smContext.Pti)
 	pDUSessionModificationCommand.SetMessageType(nas.MsgTypePDUSessionModificationCommand)
 	// pDUSessionModificationCommand.SetQosRule()
 	// pDUSessionModificationCommand.AuthorizedQosRules.SetLen()
@@ -204,7 +204,7 @@ func BuildGSMPDUSessionReleaseReject(smContext *SMContext) ([]byte, error) {
 	pDUSessionReleaseReject.SetMessageType(nas.MsgTypePDUSessionReleaseReject)
 	pDUSessionReleaseReject.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
 	pDUSessionReleaseReject.SetPDUSessionID(uint8(smContext.PDUSessionID))
-	pDUSessionReleaseReject.SetPTI(0x00)
+	pDUSessionReleaseReject.SetPTI(smContext.Pti)
 	// TODO: fix to real value
 	pDUSessionReleaseReject.SetCauseValue(nasMessage.Cause5GSMRequestRejectedUnspecified)
 
