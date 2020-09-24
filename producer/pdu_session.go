@@ -250,7 +250,7 @@ func HandlePDUSessionSMContextUpdate(rspChan chan smf_message.HandlerResponseMes
 			for _, dataPath := range smContext.Tunnel.DataPathPool {
 
 				dataPath.DeactivateTunnelAndPDR(smContext)
-				for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode.Next() {
+				for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
 					curUPFID, _ := curDataPathNode.GetUPFID()
 					if _, exist := deletedPFCPNode[curUPFID]; !exist {
 						seqNum = pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
