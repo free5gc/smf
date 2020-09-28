@@ -4,7 +4,6 @@ import (
 	"free5gc/lib/http_wrapper"
 	"free5gc/lib/openapi/models"
 	"free5gc/src/smf/context"
-	"free5gc/src/smf/handler/message"
 	"net/http"
 	"strconv"
 )
@@ -22,37 +21,37 @@ type PDUSessionInfo struct {
 	Tunnel       context.UPTunnel
 }
 
-func HandleOAMGetUEPDUSessionInfo(rspChan chan message.HandlerResponseMessage, smContextRef string) {
+func HandleOAMGetUEPDUSessionInfo(smContextRef string) *http_wrapper.Response {
 	smContext := context.GetSMContext(smContextRef)
 	if smContext == nil {
-		rspChan <- message.HandlerResponseMessage{
-			HTTPResponse: &http_wrapper.Response{
-				Header: nil,
-				Status: http.StatusNotFound,
-				Body:   nil,
-			},
+
+		httpResponse := &http_wrapper.Response{
+			Header: nil,
+			Status: http.StatusNotFound,
+			Body:   nil,
 		}
-		return
+
+		return httpResponse
 	}
 
-	rspChan <- message.HandlerResponseMessage{
-		HTTPResponse: &http_wrapper.Response{
-			Header: nil,
-			Status: http.StatusOK,
-			Body: PDUSessionInfo{
-				Supi:         smContext.Supi,
-				PDUSessionID: strconv.Itoa(int(smContext.PDUSessionID)),
-				Dnn:          smContext.Dnn,
-				Sst:          strconv.Itoa(int(smContext.Snssai.Sst)),
-				Sd:           smContext.Snssai.Sd,
-				AnType:       smContext.AnType,
-				PDUAddress:   smContext.PDUAddress.String(),
-				UpCnxState:   smContext.UpCnxState,
-				// Tunnel: context.UPTunnel{
-				// 	//UpfRoot:  smContext.Tunnel.UpfRoot,
-				// 	ULCLRoot: smContext.Tunnel.UpfRoot,
-				// },
-			},
+	httpResponse := &http_wrapper.Response{
+		Header: nil,
+		Status: http.StatusOK,
+		Body: PDUSessionInfo{
+			Supi:         smContext.Supi,
+			PDUSessionID: strconv.Itoa(int(smContext.PDUSessionID)),
+			Dnn:          smContext.Dnn,
+			Sst:          strconv.Itoa(int(smContext.Snssai.Sst)),
+			Sd:           smContext.Snssai.Sd,
+			AnType:       smContext.AnType,
+			PDUAddress:   smContext.PDUAddress.String(),
+			UpCnxState:   smContext.UpCnxState,
+			// Tunnel: context.UPTunnel{
+			// 	//UpfRoot:  smContext.Tunnel.UpfRoot,
+			// 	ULCLRoot: smContext.Tunnel.UpfRoot,
+			// },
 		},
 	}
+	return httpResponse
+
 }

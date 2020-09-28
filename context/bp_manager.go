@@ -69,7 +69,7 @@ func (bpMGR *BPManager) SelectPSA2(smContext *SMContext) {
 	}
 }
 
-func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
+func (bpMGR *BPManager) FindULCL(smContext *SMContext) error {
 
 	bpMGR.UpdatedBranchingPoint = make(map[*UPF]int)
 	activatingPath := bpMGR.ActivatingPath
@@ -80,7 +80,7 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 			if reflect.DeepEqual(psa2CurDPNode.UPF.NodeID, psa1CurDPNode.UPF.NodeID) {
 
 				psa1CurDPNode = psa1CurDPNode.Next()
-				depth += 1
+				depth++
 
 				if _, exist := bpMGR.UpdatedBranchingPoint[psa2CurDPNode.UPF]; !exist {
 					bpMGR.UpdatedBranchingPoint[psa2CurDPNode.UPF] = depth
@@ -100,7 +100,7 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) (err error) {
 			maxDepth = depth
 		}
 	}
-	return
+	return nil
 }
 
 func (pendingUPF PendingUPF) IsEmpty() bool {

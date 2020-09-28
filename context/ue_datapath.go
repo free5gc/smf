@@ -5,6 +5,7 @@ import (
 	"free5gc/lib/idgenerator"
 	"free5gc/src/smf/factory"
 	"free5gc/src/smf/logger"
+	"math"
 )
 
 type UEPreConfigPaths struct {
@@ -29,11 +30,11 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 	return
 }
 
-func NewUEPreConfigPaths(SUPI string, paths []factory.Path) (uePreConfigPaths *UEPreConfigPaths, err error) {
-
+func NewUEPreConfigPaths(SUPI string, paths []factory.Path) (*UEPreConfigPaths, error) {
+	var uePreConfigPaths *UEPreConfigPaths
 	ueDataPathPool := NewDataPathPool()
 	lowerBound := 0
-	pathIDGenerator := idgenerator.NewGenerator(1, 2147483647)
+	pathIDGenerator := idgenerator.NewGenerator(1, math.MaxInt32)
 
 	logger.PduSessLog.Infoln("In NewUEPreConfigPaths")
 
@@ -44,50 +45,53 @@ func NewUEPreConfigPaths(SUPI string, paths []factory.Path) (uePreConfigPaths *U
 		if idx == 0 {
 			dataPath.IsDefaultPath = true
 		}
-		pathID, err := pathIDGenerator.Allocate()
-		if err != nil {
+
+		var pathID int64
+		if allocPathID, err := pathIDGenerator.Allocate(); err != nil {
 			logger.CtxLog.Warnf("Allocate pathID error: %+v", err)
 			return nil, err
+		} else {
+			pathID = allocPathID
 		}
 
 		dataPath.Destination.DestinationIP = path.DestinationIP
 		dataPath.Destination.DestinationPort = path.DestinationPort
 		ueDataPathPool[pathID] = dataPath
-		var ue_node, child_node, parent_node *DataPathNode
-		for idx, node_name := range path.UPF {
+		var ueNode, childNode, parentNode *DataPathNode
+		for idx, nodeName := range path.UPF {
 
-			var err error
-
-			ue_node, err = NewUEDataPathNode(node_name)
+			if newUeNode, err := NewUEDataPathNode(nodeName); err != nil {
+				return nil, err
+			} else {
+				ueNode = newUeNode
+			}
 
 			switch idx {
 			case lowerBound:
-				child_name := path.UPF[idx+1]
-				child_node, err = NewUEDataPathNode(child_name)
-
-				if err != nil {
+				childName := path.UPF[idx+1]
+				if newChildNode, err := NewUEDataPathNode(childName); err != nil {
 					logger.CtxLog.Warnln(err)
+				} else {
+					childNode = newChildNode
+					ueNode.AddNext(childNode)
+					dataPath.FirstDPNode = ueNode
 				}
-
-				ue_node.AddNext(child_node)
-				dataPath.FirstDPNode = ue_node
 
 			case upperBound:
-				child_node.AddPrev(parent_node)
+				childNode.AddPrev(parentNode)
 			default:
-				child_node.AddPrev(parent_node)
-				ue_node = child_node
-				child_name := path.UPF[idx+1]
-				child_node, err = NewUEDataPathNode(child_name)
-
-				if err != nil {
+				childNode.AddPrev(parentNode)
+				ueNode = childNode
+				childName := path.UPF[idx+1]
+				if childNode, err := NewUEDataPathNode(childName); err != nil {
 					logger.CtxLog.Warnln(err)
+				} else {
+					ueNode.AddNext(childNode)
 				}
 
-				ue_node.AddNext(child_node)
 			}
 
-			parent_node = ue_node
+			parentNode = ueNode
 
 		}
 
@@ -99,7 +103,7 @@ func NewUEPreConfigPaths(SUPI string, paths []factory.Path) (uePreConfigPaths *U
 		DataPathPool:    ueDataPathPool,
 		PathIDGenerator: pathIDGenerator,
 	}
-	return
+	return uePreConfigPaths, nil
 }
 
 func GetUEPreConfigPaths(SUPI string) *UEPreConfigPaths {

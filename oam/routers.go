@@ -1,6 +1,8 @@
 package oam
 
 import (
+	"free5gc/lib/logger_util"
+	"free5gc/src/smf/logger"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -23,7 +25,7 @@ type Routes []Route
 
 // NewRouter returns a new router.
 func NewRouter() *gin.Engine {
-	router := gin.Default()
+	router := logger_util.NewGinWithLogrus(logger.GinLog)
 	AddService(router)
 	return router
 }
@@ -56,6 +58,6 @@ var routes = Routes{
 		"Get UE PDU Session Info",
 		"GET",
 		"/ue-pdu-session-info/:smContextRef",
-		GetUEPDUSessionInfo,
+		HTTPGetUEPDUSessionInfo,
 	},
 }

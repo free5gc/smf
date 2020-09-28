@@ -36,6 +36,7 @@ type PDI struct {
 	NetworkInstance util_3gpp.Dnn
 	UEIPAddress     *pfcpType.UEIPAddress
 	SDFFilter       *pfcpType.SDFFilter
+	ApplicationID   string
 }
 
 // Forwarding Action Rule. 7.5.2.3-1
@@ -54,6 +55,7 @@ type ForwardingParameters struct {
 	DestinationInterface pfcpType.DestinationInterface
 	NetworkInstance      util_3gpp.Dnn
 	OuterHeaderCreation  *pfcpType.OuterHeaderCreation
+	ForwardingPolicyID   string
 }
 
 // Buffering Action Rule 7.5.2.6-1

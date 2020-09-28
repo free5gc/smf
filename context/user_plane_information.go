@@ -28,13 +28,12 @@ const (
 
 // UPNode represent the user plane node topology
 type UPNode struct {
-	Type         UPNodeType
-	NodeID       pfcpType.NodeID
-	UPResourceIP net.IP
-	ANIP         net.IP
-	Dnn          string
-	Links        []*UPNode
-	UPF          *UPF
+	Type   UPNodeType
+	NodeID pfcpType.NodeID
+	ANIP   net.IP
+	Dnn    string
+	Links  []*UPNode
+	UPF    *UPF
 }
 
 // UPPath represent User Plane Sequence of this path
@@ -53,7 +52,8 @@ func AllocateUPFID() {
 	}
 }
 
-func processUPTopology(upTopology *factory.UserPlaneInformation) {
+// NewUserPlaneInformation process the configuration then returns a new instance of UserPlaneInformation
+func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlaneInformation {
 	nodePool := make(map[string]*UPNode)
 	upfPool := make(map[string]*UPNode)
 	anPool := make(map[string]*UPNode)
@@ -72,10 +72,8 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 			//This is just a work around
 			var ip net.IP
 			if net.ParseIP(node.NodeID).To4() == nil {
-
 				ip = net.ParseIP(node.NodeID)
 			} else {
-
 				ip = net.ParseIP(node.NodeID).To4()
 			}
 
@@ -124,13 +122,17 @@ func processUPTopology(upTopology *factory.UserPlaneInformation) {
 		upfNode.UPF = NewUPF(&upfNode.NodeID)
 	}
 
-	smfContext.UserPlaneInformation.UPNodes = nodePool
-	smfContext.UserPlaneInformation.UPFs = upfPool
-	smfContext.UserPlaneInformation.AccessNetwork = anPool
-	smfContext.UserPlaneInformation.UPFIPToName = upfIPMap
-	smfContext.UserPlaneInformation.UPFsID = make(map[string]string)
-	smfContext.UserPlaneInformation.UPFsIPtoID = make(map[string]string)
-	smfContext.UserPlaneInformation.DefaultUserPlanePath = make(map[string][]*UPNode)
+	userplaneInformation := &UserPlaneInformation{
+		UPNodes:              nodePool,
+		UPFs:                 upfPool,
+		AccessNetwork:        anPool,
+		UPFIPToName:          upfIPMap,
+		UPFsID:               make(map[string]string),
+		UPFsIPtoID:           make(map[string]string),
+		DefaultUserPlanePath: make(map[string][]*UPNode),
+	}
+
+	return userplaneInformation
 }
 
 func (upi *UserPlaneInformation) GetUPFNameByIp(ip string) string {
@@ -173,9 +175,10 @@ func (upi *UserPlaneInformation) ExistDefaultPath(dnn string) bool {
 	return exist
 }
 
-func GenerateDataPath(upPath UPPath, smContext *SMContext) (dataPath *DataPath) {
+func GenerateDataPath(upPath UPPath, smContext *SMContext) *DataPath {
 	if len(upPath) < 1 {
-		logger.CtxLog.Errorf("invalid path")
+		logger.CtxLog.Errorf("Invalid data path")
+		return nil
 	}
 	var lowerBound = 0
 	var upperBound = len(upPath) - 1
@@ -201,7 +204,7 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (dataPath *DataPath) 
 		prevDataPathNode = curDataPathNode
 	}
 
-	dataPath = &DataPath{
+	dataPath := &DataPath{
 		Destination: Destination{
 			DestinationIP:   "",
 			DestinationPort: "",
@@ -209,10 +212,10 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) (dataPath *DataPath) 
 		},
 		FirstDPNode: root,
 	}
-	return
+	return dataPath
 }
 
-func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (pathExist bool) {
+func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) bool {
 
 	var source *UPNode
 	var destination *UPNode
@@ -253,14 +256,13 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(dnn string) (pathExist bool
 		visited[upNode] = false
 	}
 
-	var path []*UPNode
-	path, pathExist = getPathBetween(source, destination, visited)
+	path, pathExist := getPathBetween(source, destination, visited)
 
 	if path[0].Type == UPNODE_AN {
 		path = path[1:]
 	}
 	upi.DefaultUserPlanePath[dnn] = path
-	return
+	return pathExist
 }
 
 func getPathBetween(cur *UPNode, dest *UPNode, visited map[*UPNode]bool) (path []*UPNode, pathExist bool) {
