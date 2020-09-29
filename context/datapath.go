@@ -32,8 +32,6 @@ type DataPathNode struct {
 	IsBranchingPoint bool
 	//DLDataPathLinkForPSA *DataPathUpLink
 	//BPUpLinkPDRs         map[string]*DataPathDownLink // uuid to UpLink
-
-	HaveSession bool
 }
 
 type DataPath struct {
@@ -54,16 +52,16 @@ type Destination struct {
 	Url             string
 }
 
-func NewDataPathNode() (node *DataPathNode) {
-	node = &DataPathNode{
+func NewDataPathNode() *DataPathNode {
+	node := &DataPathNode{
 		UpLinkTunnel:   &GTPTunnel{},
 		DownLinkTunnel: &GTPTunnel{},
 	}
-	return
+	return node
 }
 
-func NewDataPath() (dataPath *DataPath) {
-	dataPath = &DataPath{
+func NewDataPath() *DataPath {
+	dataPath := &DataPath{
 		Destination: Destination{
 			DestinationIP:   "",
 			DestinationPort: "",
@@ -71,45 +69,41 @@ func NewDataPath() (dataPath *DataPath) {
 		},
 	}
 
-	return
+	return dataPath
 }
 
-func NewDataPathPool() (pool DataPathPool) {
-	pool = make(map[int64]*DataPath)
-	return
+func NewDataPathPool() DataPathPool {
+	pool := make(map[int64]*DataPath)
+	return pool
 }
 
 func (node *DataPathNode) AddNext(next *DataPathNode) {
 	node.DownLinkTunnel.SrcEndPoint = next
-
-	return
 }
 func (node *DataPathNode) AddPrev(prev *DataPathNode) {
 	node.UpLinkTunnel.SrcEndPoint = prev
-
-	return
 }
 
-func (node *DataPathNode) Next() (next *DataPathNode) {
+func (node *DataPathNode) Next() *DataPathNode {
 
 	if node.DownLinkTunnel == nil {
 		return nil
 	}
-	next = node.DownLinkTunnel.SrcEndPoint
-	return
+	next := node.DownLinkTunnel.SrcEndPoint
+	return next
 }
 
-func (node *DataPathNode) Prev() (prev *DataPathNode) {
+func (node *DataPathNode) Prev() *DataPathNode {
 
 	if node.UpLinkTunnel == nil {
 		return nil
 	}
-	prev = node.UpLinkTunnel.SrcEndPoint
-	return
+	prev := node.UpLinkTunnel.SrcEndPoint
+	return prev
 }
 
-func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) (err error) {
-
+func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) error {
+	var err error
 	logger.CtxLog.Traceln("In ActivateUpLinkTunnel")
 	node.UpLinkTunnel.SrcEndPoint = node.Prev()
 	node.UpLinkTunnel.DestEndPoint = node
@@ -124,30 +118,40 @@ func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) (err error)
 
 	smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.UpLinkTunnel.PDR)
 
-	teid, _ := destUPF.GenerateTEID()
-	node.UpLinkTunnel.TEID = teid
+	if teid, err := destUPF.GenerateTEID(); err != nil {
+		logger.CtxLog.Errorf("Generate uplink TEID fail: %s", err)
+		return err
+	} else {
+		node.UpLinkTunnel.TEID = teid
+	}
 
-	return
+	return nil
 }
 
-func (node *DataPathNode) ActivateDownLinkTunnel(smContext *SMContext) (err error) {
+func (node *DataPathNode) ActivateDownLinkTunnel(smContext *SMContext) error {
 
 	node.DownLinkTunnel.SrcEndPoint = node.Next()
 	node.DownLinkTunnel.DestEndPoint = node
 
 	destUPF := node.UPF
-	node.DownLinkTunnel.PDR, err = destUPF.AddPDR()
-
-	if err != nil {
+	if newPDR, err := destUPF.AddPDR(); err != nil {
 		logger.CtxLog.Warnln("In ActivateDownLinkTunnel UPF IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
 		logger.CtxLog.Warnln("Allocata PDR Error: ", err)
+		return fmt.Errorf("AddPDR failed: %s", err)
+	} else {
+		node.DownLinkTunnel.PDR = newPDR
 	}
 
 	smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.DownLinkTunnel.PDR)
 
-	teid, _ := destUPF.GenerateTEID()
-	node.DownLinkTunnel.TEID = teid
-	return
+	if teid, err := destUPF.GenerateTEID(); err != nil {
+		logger.CtxLog.Errorf("Generate downlink TEID fail: %s", err)
+		return err
+	} else {
+		node.DownLinkTunnel.TEID = teid
+	}
+
+	return nil
 }
 
 func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
@@ -176,7 +180,6 @@ func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 	}
 
 	node.UpLinkTunnel = &GTPTunnel{}
-	return
 }
 
 func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
@@ -205,7 +208,6 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 	}
 
 	node.DownLinkTunnel = &GTPTunnel{}
-	return
 }
 
 func (node *DataPathNode) GetUPFID() (id string, err error) {
@@ -267,9 +269,11 @@ func (dataPathPool DataPathPool) GetDefaultPath() (dataPath *DataPath) {
 	return
 }
 
-func (dataPath *DataPath) ToString() (str string) {
+func (dataPath *DataPath) ToString() string {
 
 	firstDPNode := dataPath.FirstDPNode
+
+	var str string
 
 	str += "DataPath Meta Information\n"
 	str += "Activated: " + strconv.FormatBool(dataPath.Activated) + "\n"
@@ -299,7 +303,7 @@ func (dataPath *DataPath) ToString() (str string) {
 		index++
 	}
 
-	return
+	return str
 }
 
 func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
@@ -346,7 +350,9 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
 					Ipv4Address: smContext.PDUAddress.To4(),
 				},
 			}
-			ULPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4}
+			ULPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{
+				OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4,
+			}
 
 			ULFAR := ULPDR.FAR
 			ULFAR.ApplyAction = pfcpType.ApplyAction{
@@ -356,16 +362,21 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
 				Forw: true,
 				Nocp: false,
 			}
-			ULPDR.FAR.ForwardingParameters = &ForwardingParameters{
+			ULFAR.ForwardingParameters = &ForwardingParameters{
 				DestinationInterface: pfcpType.DestinationInterface{
-					InterfaceValue: pfcpType.DestinationInterfaceAccess,
+					InterfaceValue: pfcpType.DestinationInterfaceCore,
 				},
 				NetworkInstance: []byte(smContext.Dnn),
 			}
 
+			if curDataPathNode.IsAnchorUPF() {
+				ULFAR.ForwardingParameters.
+					DestinationInterface.InterfaceValue = pfcpType.DestinationInterfaceSgiLanN6Lan
+			}
+
 			if nextULDest := curDataPathNode.Next(); nextULDest != nil {
 				nextULTunnel := nextULDest.UpLinkTunnel
-				ULPDR.FAR.ForwardingParameters.OuterHeaderCreation = &pfcpType.OuterHeaderCreation{
+				ULFAR.ForwardingParameters.OuterHeaderCreation = &pfcpType.OuterHeaderCreation{
 					OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
 					Ipv4Address:                    nextULTunnel.DestEndPoint.UPF.UPIPInfo.Ipv4Address,
 					Teid:                           nextULTunnel.TEID,
@@ -431,6 +442,21 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext) {
 						Ipv4Address:                    nextDLDest.UPF.UPIPInfo.Ipv4Address,
 						Teid:                           nextDLTunnel.TEID,
 					},
+				}
+			} else {
+				if anIP := smContext.Tunnel.ANInformation.IPAddress; anIP != nil {
+					ANUPF := dataPath.FirstDPNode
+					DLPDR := ANUPF.DownLinkTunnel.PDR
+					DLFAR := DLPDR.FAR
+					DLFAR.ForwardingParameters = new(ForwardingParameters)
+					DLFAR.ForwardingParameters.DestinationInterface.InterfaceValue = pfcpType.DestinationInterfaceAccess
+					DLFAR.ForwardingParameters.NetworkInstance = []byte(smContext.Dnn)
+					DLFAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
+
+					dlOuterHeaderCreation := DLFAR.ForwardingParameters.OuterHeaderCreation
+					dlOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+					dlOuterHeaderCreation.Teid = uint32(smContext.Tunnel.ANInformation.TEID)
+					dlOuterHeaderCreation.Ipv4Address = smContext.Tunnel.ANInformation.IPAddress.To4()
 				}
 			}
 		}

@@ -13,16 +13,16 @@ import (
 	"free5gc/lib/http_wrapper"
 	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/models"
-	"free5gc/src/smf/handler/message"
 	"free5gc/src/smf/logger"
+	"free5gc/src/smf/producer"
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
 	"strings"
 )
 
-// ReleaseSmContext - Release SM Context
-func ReleaseSmContext(c *gin.Context) {
+// HTTPReleaseSmContext - Release SM Context
+func HTTPReleaseSmContext(c *gin.Context) {
 	logger.PduSessLog.Info("Recieve Release SM Context Request")
 	var request models.ReleaseSmContextRequest
 	request.JsonData = new(models.SmContextReleaseData)
@@ -43,10 +43,9 @@ func ReleaseSmContext(c *gin.Context) {
 	req := http_wrapper.NewRequest(c.Request, request)
 	req.Params["smContextRef"] = c.Params.ByName("smContextRef")
 
-	msg := message.NewHandlerMessage(message.PDUSessionSMContextRelease, req)
-	message.SendMessage(msg)
-
-	_ = <-msg.ResponseChan
+	smContextRef := req.Params["smContextRef"]
+	producer.HandlePDUSessionSMContextRelease(
+		smContextRef, req.Body.(models.ReleaseSmContextRequest))
 
 	c.Status(http.StatusNoContent)
 
@@ -57,8 +56,8 @@ func RetrieveSmContext(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{})
 }
 
-// UpdateSmContext - Update SM Context
-func UpdateSmContext(c *gin.Context) {
+// HTTPUpdateSmContext - Update SM Context
+func HTTPUpdateSmContext(c *gin.Context) {
 	logger.PduSessLog.Info("Recieve Update SM Context Request")
 	var request models.UpdateSmContextRequest
 	request.JsonData = new(models.SmContextUpdateData)
@@ -79,12 +78,10 @@ func UpdateSmContext(c *gin.Context) {
 	req := http_wrapper.NewRequest(c.Request, request)
 	req.Params["smContextRef"] = c.Params.ByName("smContextRef")
 
-	msg := message.NewHandlerMessage(message.PDUSessionSMContextUpdate, req)
-	message.SendMessage(msg)
+	smContextRef := req.Params["smContextRef"]
+	HTTPResponse := producer.HandlePDUSessionSMContextUpdate(
+		smContextRef, req.Body.(models.UpdateSmContextRequest))
 
-	rsp := <-msg.ResponseChan
-
-	HTTPResponse := rsp.HTTPResponse
 	if HTTPResponse.Status < 300 {
 		c.Render(HTTPResponse.Status, openapi.MultipartRelatedRender{Data: HTTPResponse.Body})
 	} else {

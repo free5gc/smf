@@ -16,7 +16,7 @@ type TrafficControlData struct {
 	UpPathChgEvent *models.UpPathChgEvent
 
 	// referenced dataType
-	RefedPCCRule map[string]*PCCRule
+	refedPCCRule map[string]*PCCRule
 }
 
 // NewTrafficControlDataFromModel - create the traffic control data from OpenAPI model
@@ -27,7 +27,13 @@ func NewTrafficControlDataFromModel(model *models.TrafficControlData) *TrafficCo
 	trafficControlData.FlowStatus = model.FlowStatus
 	trafficControlData.RouteToLocs = model.RouteToLocs
 	trafficControlData.UpPathChgEvent = model.UpPathChgEvent
-	trafficControlData.RefedPCCRule = make(map[string]*PCCRule)
+
+	trafficControlData.refedPCCRule = make(map[string]*PCCRule)
 
 	return trafficControlData
+}
+
+// GetRefedPCCRules - returns the PCCRules that reference this tcData
+func (tc *TrafficControlData) GetRefedPCCRules() map[string]*PCCRule {
+	return tc.refedPCCRule
 }

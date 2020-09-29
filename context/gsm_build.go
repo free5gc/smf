@@ -8,6 +8,7 @@ import (
 	"free5gc/lib/nas/nasType"
 	"free5gc/src/smf/logger"
 	"net"
+
 	// "free5gc/lib/nas/nasType"
 	"free5gc/lib/openapi/models"
 )
@@ -79,22 +80,29 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 
 	if smContext.PDUAddress != nil {
 		addr, addrLen := smContext.PDUAddressToNAS()
-		pDUSessionEstablishmentAccept.PDUAddress = nasType.NewPDUAddress(nasMessage.PDUSessionEstablishmentAcceptPDUAddressType)
+		pDUSessionEstablishmentAccept.PDUAddress =
+			nasType.NewPDUAddress(nasMessage.PDUSessionEstablishmentAcceptPDUAddressType)
 		pDUSessionEstablishmentAccept.PDUAddress.SetLen(addrLen)
 		pDUSessionEstablishmentAccept.PDUAddress.SetPDUSessionTypeValue(smContext.SelectedPDUSessionType)
 		pDUSessionEstablishmentAccept.PDUAddress.SetPDUAddressInformation(addr)
 	}
 
-	pDUSessionEstablishmentAccept.AuthorizedQosFlowDescriptions = nasType.NewAuthorizedQosFlowDescriptions(nasMessage.PDUSessionEstablishmentAcceptAuthorizedQosFlowDescriptionsType)
+	pDUSessionEstablishmentAccept.AuthorizedQosFlowDescriptions =
+		nasType.NewAuthorizedQosFlowDescriptions(nasMessage.PDUSessionEstablishmentAcceptAuthorizedQosFlowDescriptionsType)
 	pDUSessionEstablishmentAccept.AuthorizedQosFlowDescriptions.SetLen(6)
 	pDUSessionEstablishmentAccept.SetQoSFlowDescriptions([]uint8{uint8(authDefQos.Var5qi), 0x20, 0x41, 0x01, 0x01, 0x09})
 
 	pDUSessionEstablishmentAccept.Cause5GSM = nasType.NewCause5GSM(nasMessage.PDUSessionEstablishmentAcceptCause5GSMType)
 	pDUSessionEstablishmentAccept.Cause5GSM.SetCauseValue(nasMessage.Cause5GSMPDUSessionTypeIPv4OnlyAllowed)
 
-	byteArray, _ := hex.DecodeString(smContext.Snssai.Sd)
 	var sd [3]uint8
-	copy(sd[:], byteArray)
+
+	if byteArray, err := hex.DecodeString(smContext.Snssai.Sd); err != nil {
+		return nil, err
+	} else {
+		copy(sd[:], byteArray)
+	}
+
 	pDUSessionEstablishmentAccept.SNSSAI = nasType.NewSNSSAI(nasMessage.ULNASTransportSNSSAIType)
 	pDUSessionEstablishmentAccept.SNSSAI.SetLen(4)
 	pDUSessionEstablishmentAccept.SNSSAI.SetSST(uint8(smContext.Snssai.Sst))
@@ -112,7 +120,10 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 		}
 
 		if exist || smContext.ProtocolConfigurationOptions.IPv4LinkMTURequest {
-			pDUSessionEstablishmentAccept.ExtendedProtocolConfigurationOptions = nasType.NewExtendedProtocolConfigurationOptions(nasMessage.PDUSessionEstablishmentAcceptExtendedProtocolConfigurationOptionsType)
+			pDUSessionEstablishmentAccept.ExtendedProtocolConfigurationOptions =
+				nasType.NewExtendedProtocolConfigurationOptions(
+					nasMessage.PDUSessionEstablishmentAcceptExtendedProtocolConfigurationOptionsType,
+				)
 			protocolConfigurationOptions := nasConvert.NewProtocolConfigurationOptions()
 
 			// DNS IP
@@ -144,15 +155,37 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 
 			pcoContents := protocolConfigurationOptions.Marshal()
 			pcoContentsLength := len(pcoContents)
-			pDUSessionEstablishmentAccept.ExtendedProtocolConfigurationOptions.SetLen(uint16(pcoContentsLength))
-			pDUSessionEstablishmentAccept.ExtendedProtocolConfigurationOptions.SetExtendedProtocolConfigurationOptionsContents(pcoContents)
+			pDUSessionEstablishmentAccept.
+				ExtendedProtocolConfigurationOptions.
+				SetLen(uint16(pcoContentsLength))
+			pDUSessionEstablishmentAccept.
+				ExtendedProtocolConfigurationOptions.
+				SetExtendedProtocolConfigurationOptionsContents(pcoContents)
+
 		}
 
 	}
 	return m.PlainNasEncode()
 }
 
+func BuildGSMPDUSessionEstablishmentReject(smContext *SMContext, cause uint8) ([]byte, error) {
+	m := nas.NewMessage()
+	m.GsmMessage = nas.NewGsmMessage()
+	m.GsmHeader.SetMessageType(nas.MsgTypePDUSessionEstablishmentReject)
+	m.GsmHeader.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
+	m.PDUSessionEstablishmentReject = nasMessage.NewPDUSessionEstablishmentReject(0x0)
+	pDUSessionEstablishmentReject := m.PDUSessionEstablishmentReject
+
+	pDUSessionEstablishmentReject.SetMessageType(nas.MsgTypePDUSessionEstablishmentReject)
+	pDUSessionEstablishmentReject.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
+	pDUSessionEstablishmentReject.SetPDUSessionID(uint8(smContext.PDUSessionID))
+	pDUSessionEstablishmentReject.SetCauseValue(cause)
+
+	return m.PlainNasEncode()
+}
+
 func BuildGSMPDUSessionReleaseCommand(smContext *SMContext) ([]byte, error) {
+
 	m := nas.NewMessage()
 	m.GsmMessage = nas.NewGsmMessage()
 	m.GsmHeader.SetMessageType(nas.MsgTypePDUSessionReleaseCommand)
@@ -203,7 +236,9 @@ func BuildGSMPDUSessionReleaseReject(smContext *SMContext) ([]byte, error) {
 
 	pDUSessionReleaseReject.SetMessageType(nas.MsgTypePDUSessionReleaseReject)
 	pDUSessionReleaseReject.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
+
 	pDUSessionReleaseReject.SetPDUSessionID(uint8(smContext.PDUSessionID))
+
 	pDUSessionReleaseReject.SetPTI(smContext.Pti)
 	// TODO: fix to real value
 	pDUSessionReleaseReject.SetCauseValue(nasMessage.Cause5GSMRequestRejectedUnspecified)

@@ -13,15 +13,15 @@ import (
 	"free5gc/lib/http_wrapper"
 	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/models"
-	"free5gc/src/smf/handler/message"
 	"free5gc/src/smf/logger"
+	"free5gc/src/smf/producer"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
 // SubscriptionsPost -
-func SmPolicyUpdateNotification(c *gin.Context) {
+func HTTPSmPolicyUpdateNotification(c *gin.Context) {
 	var request models.SmPolicyNotification
 
 	reqBody, _ := c.GetRawData()
@@ -34,13 +34,9 @@ func SmPolicyUpdateNotification(c *gin.Context) {
 	reqWrapper := http_wrapper.NewRequest(c.Request, request)
 	reqWrapper.Params["smContextRef"] = c.Params.ByName("smContextRef")
 
-	msg := message.NewHandlerMessage(message.SMPolicyUpdateNotify, reqWrapper)
+	smContextRef := reqWrapper.Params["smContextRef"]
+	HTTPResponse := producer.HandleSMPolicyUpdateNotify(smContextRef, reqWrapper.Body.(models.SmPolicyNotification))
 
-	message.SendMessage(msg)
-
-	rsp := <-msg.ResponseChan
-
-	HTTPResponse := rsp.HTTPResponse
 	for key, val := range HTTPResponse.Header {
 		c.Header(key, val[0])
 	}

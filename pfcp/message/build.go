@@ -77,6 +77,12 @@ func pdrToCreatePDR(pdr *context.PDR) *pfcp.CreatePDR {
 		UEIPAddress:     pdr.PDI.UEIPAddress,
 	}
 
+	if pdr.PDI.ApplicationID != "" {
+		createPDR.PDI.ApplicationID = &pfcpType.ApplicationID{
+			ApplicationIdentifier: []byte(pdr.PDI.ApplicationID),
+		}
+	}
+
 	if pdr.PDI.SDFFilter != nil {
 		createPDR.PDI.SDFFilter = pdr.PDI.SDFFilter
 	}
@@ -109,6 +115,13 @@ func farToCreateFAR(far *context.FAR) *pfcp.CreateFAR {
 		createFAR.ForwardingParameters.DestinationInterface = &far.ForwardingParameters.DestinationInterface
 		createFAR.ForwardingParameters.NetworkInstance = &far.ForwardingParameters.NetworkInstance
 		createFAR.ForwardingParameters.OuterHeaderCreation = far.ForwardingParameters.OuterHeaderCreation
+		if far.ForwardingParameters.ForwardingPolicyID != "" {
+			createFAR.ForwardingParameters.ForwardingPolicy = new(pfcpType.ForwardingPolicy)
+			createFAR.ForwardingParameters.ForwardingPolicy.ForwardingPolicyIdentifierLength =
+				uint8(len(far.ForwardingParameters.ForwardingPolicyID))
+			createFAR.ForwardingParameters.ForwardingPolicy.ForwardingPolicyIdentifier =
+				[]byte(far.ForwardingParameters.ForwardingPolicyID)
+		}
 	}
 
 	return createFAR
@@ -142,6 +155,12 @@ func pdrToUpdatePDR(pdr *context.PDR) *pfcp.UpdatePDR {
 		LocalFTEID:      pdr.PDI.LocalFTeid,
 		NetworkInstance: &pdr.PDI.NetworkInstance,
 		UEIPAddress:     pdr.PDI.UEIPAddress,
+	}
+
+	if pdr.PDI.ApplicationID != "" {
+		updatePDR.PDI.ApplicationID = &pfcpType.ApplicationID{
+			ApplicationIdentifier: []byte(pdr.PDI.ApplicationID),
+		}
 	}
 
 	if pdr.PDI.SDFFilter != nil {
@@ -187,14 +206,19 @@ func farToUpdateFAR(far *context.FAR) *pfcp.UpdateFAR {
 	return updateFAR
 }
 
-func BuildPfcpSessionEstablishmentRequest(upNodeID pfcpType.NodeID, smContext *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (pfcp.PFCPSessionEstablishmentRequest, error) {
+func BuildPfcpSessionEstablishmentRequest(
+	upNodeID pfcpType.NodeID,
+	smContext *context.SMContext,
+	pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (pfcp.PFCPSessionEstablishmentRequest, error) {
 	msg := pfcp.PFCPSessionEstablishmentRequest{}
 
 	msg.NodeID = &context.SMF_Self().CPNodeID
 
 	isv4 := context.SMF_Self().CPNodeID.NodeIdType == 0
 	nodeIDtoIP := upNodeID.ResolveNodeIdToIp().String()
+
 	localSEID := smContext.PFCPContext[nodeIDtoIP].LocalSEID
+
 	msg.CPFSEID = &pfcpType.FSEID{
 		V4:          isv4,
 		V6:          !isv4,
@@ -272,14 +296,19 @@ func BuildPfcpSessionEstablishmentResponse() (pfcp.PFCPSessionEstablishmentRespo
 }
 
 // TODO: Replace dummy value in PFCP message
-func BuildPfcpSessionModificationRequest(upNodeID pfcpType.NodeID, smContext *context.SMContext, pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (pfcp.PFCPSessionModificationRequest, error) {
+func BuildPfcpSessionModificationRequest(
+	upNodeID pfcpType.NodeID,
+	smContext *context.SMContext,
+	pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (pfcp.PFCPSessionModificationRequest, error) {
 	msg := pfcp.PFCPSessionModificationRequest{}
 
 	msg.UpdatePDR = make([]*pfcp.UpdatePDR, 0, 2)
 	msg.UpdateFAR = make([]*pfcp.UpdateFAR, 0, 2)
 
 	nodeIDtoIP := upNodeID.ResolveNodeIdToIp().String()
+
 	localSEID := smContext.PFCPContext[nodeIDtoIP].LocalSEID
+
 	msg.CPFSEID = &pfcpType.FSEID{
 		V4:          true,
 		V6:          false,

@@ -20,7 +20,8 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 		if smContext.isAllowedPDUSessionType(requestedPDUSessionType) {
 			smContext.SelectedPDUSessionType = requestedPDUSessionType
 		} else {
-			logger.CtxLog.Errorf("requested pdu session type [%s] is not in allowed type\n", nasConvert.PDUSessionTypeToModels(requestedPDUSessionType))
+			logger.CtxLog.Errorf("requested pdu session type [%s] is not in allowed type\n",
+				nasConvert.PDUSessionTypeToModels(requestedPDUSessionType))
 		}
 	} else {
 		// Default to IPv4
@@ -31,7 +32,10 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 	if req.ExtendedProtocolConfigurationOptions != nil {
 		EPCOContents := req.ExtendedProtocolConfigurationOptions.GetExtendedProtocolConfigurationOptionsContents()
 		protocolConfigurationOptions := nasConvert.NewProtocolConfigurationOptions()
-		protocolConfigurationOptions.UnMarshal(EPCOContents)
+		unmarshalErr := protocolConfigurationOptions.UnMarshal(EPCOContents)
+		if unmarshalErr != nil {
+			logger.GsmLog.Errorf("Parsing PCO failed: %s", unmarshalErr)
+		}
 		logger.GsmLog.Infoln("Protocol Configuration Options")
 		logger.GsmLog.Infoln(protocolConfigurationOptions)
 
@@ -86,7 +90,9 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 			case nasMessage.ReliableDataServiceRequestIndicatorUL:
 				logger.GsmLog.Infoln("Didn't Implement container type ReliableDataServiceRequestIndicatorUL")
 			case nasMessage.AdditionalAPNRateControlForExceptionDataSupportIndicatorUL:
-				logger.GsmLog.Infoln("Didn't Implement container type AdditionalAPNRateControlForExceptionDataSupportIndicatorUL")
+				logger.GsmLog.Infoln(
+					"Didn't Implement container type AdditionalAPNRateControlForExceptionDataSupportIndicatorUL",
+				)
 			case nasMessage.PDUSessionIDUL:
 				logger.GsmLog.Infoln("Didn't Implement container type PDUSessionIDUL")
 			case nasMessage.EthernetFramePayloadMTURequestUL:
@@ -98,7 +104,9 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 			case nasMessage.QoSRulesWithTheLengthOfTwoOctetsSupportIndicatorUL:
 				logger.GsmLog.Infoln("Didn't Implement container type QoSRulesWithTheLengthOfTwoOctetsSupportIndicatorUL")
 			case nasMessage.QoSFlowDescriptionsWithTheLengthOfTwoOctetsSupportIndicatorUL:
-				logger.GsmLog.Infoln("Didn't Implement container type QoSFlowDescriptionsWithTheLengthOfTwoOctetsSupportIndicatorUL")
+				logger.GsmLog.Infoln(
+					"Didn't Implement container type QoSFlowDescriptionsWithTheLengthOfTwoOctetsSupportIndicatorUL",
+				)
 			case nasMessage.LinkControlProtocolUL:
 				logger.GsmLog.Infoln("Didn't Implement container type LinkControlProtocolUL")
 			case nasMessage.PushAccessControlProtocolUL:
@@ -108,7 +116,7 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 			case nasMessage.InternetProtocolControlProtocolUL:
 				logger.GsmLog.Infoln("Didn't Implement container type InternetProtocolControlProtocolUL")
 			default:
-				logger.GsmLog.Infof("Unknown Container ID [%d]\n", container.ProtocolOrContainerID)
+				logger.GsmLog.Infof("Unknown Container ID [%d]", container.ProtocolOrContainerID)
 			}
 		}
 	}
