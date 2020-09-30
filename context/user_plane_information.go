@@ -71,6 +71,14 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 			//so we can't use the length of return ip to seperate IPv4 and IPv6
 			//This is just a work around
 			var ip net.IP
+
+			//If nodeID is an FQDN, ParseIp() will not work. We need to try DNS
+			//resolution before attempting to parse the IP.
+			resolvedIP, err := net.ResolveIPAddr("ip", node.NodeID)
+			if err == nil {
+				node.NodeID = resolvedIP.String()
+			}
+
 			if net.ParseIP(node.NodeID).To4() == nil {
 				ip = net.ParseIP(node.NodeID)
 			} else {
