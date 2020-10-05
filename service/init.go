@@ -14,6 +14,7 @@ import (
 	"free5gc/lib/logger_util"
 	"free5gc/lib/openapi/models"
 	"free5gc/lib/path_util"
+	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/src/app"
 	"free5gc/src/smf/callback"
 	"free5gc/src/smf/consumer"
@@ -156,10 +157,14 @@ func (smf *SMF) Start() {
 	udp.Run(pfcp.Dispatch)
 
 	for _, upf := range context.SMF_Self().UserPlaneInformation.UPFs {
-		logger.AppLog.Infof("Send PFCP Association Request to UPF[%s]\n", upf.NodeID.NodeIdValue)
+		if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
+			logger.AppLog.Infof("Send PFCP Association Request to UPF[%s]\n", upf.NodeID.NodeIdValue)
+		} else {
+			logger.AppLog.Infof("Send PFCP Association Request to UPF[%s]\n", upf.NodeID.ResolveNodeIdToIp().String())
+		}
 		message.SendPfcpAssociationSetupRequest(upf.NodeID)
 	}
-
+	
 	time.Sleep(1000 * time.Millisecond)
 
 	HTTPAddr := fmt.Sprintf("%s:%d", context.SMF_Self().BindingIPv4, context.SMF_Self().SBIPort)
