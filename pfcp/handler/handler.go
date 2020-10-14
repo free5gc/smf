@@ -66,6 +66,10 @@ func HandlePfcpAssociationSetupResponse(msg *pfcpUdp.Message) {
 		}
 
 		upf := smf_context.RetrieveUPFNodeByNodeID(*req.NodeID)
+		if upf == nil {
+			logger.PfcpLog.Errorf("can't find UPF[%s]", nodeID.ResolveNodeIdToIp().String())
+			return
+		}
 
 		upf.UPFStatus = smf_context.AssociatedSetUpSuccess
 

@@ -124,9 +124,10 @@ func (upf *UPF) PFCPAddr() *net.UDPAddr {
 }
 
 func RetrieveUPFNodeByNodeID(nodeID pfcpType.NodeID) (upf *UPF) {
+	upf = nil
 	upfPool.Range(func(key, value interface{}) bool {
-		upf = value.(*UPF)
-		if reflect.DeepEqual(upf.NodeID, nodeID) {
+		if reflect.DeepEqual(value.(*UPF).NodeID, nodeID) {
+			upf = value.(*UPF)
 			return false
 		} else {
 			return true
