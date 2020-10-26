@@ -14,7 +14,8 @@ import (
 )
 
 func HandlePfcpHeartbeatRequest(msg *pfcpUdp.Message) {
-	logger.PfcpLog.Warnf("PFCP Heartbeat Request handling is not implemented")
+	h := msg.PfcpMessage.Header
+	pfcp_message.SendHeartbeatResponse(msg.RemoteAddr, h.SequenceNumber)
 }
 
 func HandlePfcpHeartbeatResponse(msg *pfcpUdp.Message) {
