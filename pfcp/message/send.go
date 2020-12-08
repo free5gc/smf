@@ -315,3 +315,23 @@ func SendPfcpSessionReportResponse(addr *net.UDPAddr, cause pfcpType.Cause, seqF
 
 	udp.SendPfcp(message, addr)
 }
+
+func SendHeartbeatResponse(addr *net.UDPAddr, seq uint32) {
+	pfcpMsg := pfcp.HeartbeatResponse{
+		RecoveryTimeStamp:  &pfcpType.RecoveryTimeStamp{udp.ServerStartTime},
+	}
+
+	message := pfcp.Message{
+		Header: pfcp.Header{
+			Version:        pfcp.PfcpVersion,
+			MP:             0,
+			S:              pfcp.SEID_NOT_PRESENT,
+			MessageType:    pfcp.PFCP_HEARTBEAT_RESPONSE,
+			SequenceNumber: seq,
+		},
+		Body: pfcpMsg,
+	}
+
+	udp.SendPfcp(message, addr)
+}
+
