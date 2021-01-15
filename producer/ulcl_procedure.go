@@ -170,15 +170,15 @@ func EstablishULCL(smContext *context.SMContext) {
 			UPLinkPDR.State = context.RULE_INITIAL
 
 			FlowDespcription := flowdesc.NewIPFilterRule()
-			err := FlowDespcription.SetAction(true) //permit
+			err := FlowDespcription.SetAction(flowdesc.Permit) //permit
 			if err != nil {
 				logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
 			}
-			err = FlowDespcription.SetDirection(true) //uplink
+			err = FlowDespcription.SetDirection(flowdesc.Out) //uplink
 			if err != nil {
 				logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
 			}
-			err = FlowDespcription.SetDestinationIp(dest.DestinationIP)
+			err = FlowDespcription.SetDestinationIP(dest.DestinationIP)
 			if err != nil {
 				logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
 			}
@@ -186,12 +186,12 @@ func EstablishULCL(smContext *context.SMContext) {
 			if err != nil {
 				logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
 			}
-			err = FlowDespcription.SetSourceIp(smContext.PDUAddress.To4().String())
+			err = FlowDespcription.SetSourceIP(smContext.PDUAddress.To4().String())
 			if err != nil {
 				logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
 			}
 
-			FlowDespcriptionStr, err := FlowDespcription.Encode()
+			FlowDespcriptionStr, err := flowdesc.Encode(FlowDespcription)
 
 			if err != nil {
 				logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
@@ -297,9 +297,10 @@ func EstablishRANTunnelInfo(smContext *context.SMContext) {
 
 	activatingANUPFDLFAR.State = context.RULE_INITIAL
 	activatingANUPFDLFAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
-	activatingANUPFDLFAR.ForwardingParameters.OuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-	activatingANUPFDLFAR.ForwardingParameters.OuterHeaderCreation.Teid = defaultANUPFDLFAR.ForwardingParameters.OuterHeaderCreation.Teid
-	activatingANUPFDLFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address = defaultANUPFDLFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address
+	anOuterHeaderCreation := activatingANUPFDLFAR.ForwardingParameters.OuterHeaderCreation
+	anOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+	anOuterHeaderCreation.Teid = defaultANUPFDLFAR.ForwardingParameters.OuterHeaderCreation.Teid
+	anOuterHeaderCreation.Ipv4Address = defaultANUPFDLFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address
 
 }
 
@@ -324,15 +325,15 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 			if _, exist := bpMGR.UpdatedBranchingPoint[curDPNode.UPF]; exist {
 				//add SDF Filter
 				FlowDespcription := flowdesc.NewIPFilterRule()
-				err := FlowDespcription.SetAction(true) //permit
+				err := FlowDespcription.SetAction(flowdesc.Permit) //permit
 				if err != nil {
 					logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
 				}
-				err = FlowDespcription.SetDirection(true) //uplink
+				err = FlowDespcription.SetDirection(flowdesc.Out) //uplink
 				if err != nil {
 					logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
 				}
-				err = FlowDespcription.SetDestinationIp(dest.DestinationIP)
+				err = FlowDespcription.SetDestinationIP(dest.DestinationIP)
 				if err != nil {
 					logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
 				}
@@ -340,12 +341,12 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 				if err != nil {
 					logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
 				}
-				err = FlowDespcription.SetSourceIp(smContext.PDUAddress.To4().String())
+				err = FlowDespcription.SetSourceIP(smContext.PDUAddress.To4().String())
 				if err != nil {
 					logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
 				}
 
-				FlowDespcriptionStr, err := FlowDespcription.Encode()
+				FlowDespcriptionStr, err := flowdesc.Encode(FlowDespcription)
 
 				if err != nil {
 					logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)

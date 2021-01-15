@@ -1,58 +1,76 @@
 package context_test
 
 import (
-	"free5gc/lib/path_util"
 	"free5gc/src/smf/context"
 	"free5gc/src/smf/factory"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func init() {
+var configuration = &factory.UserPlaneInformation{
+	UPNodes: map[string]factory.UPNode{
+		"GNodeB": {
+			Type:   "AN",
+			NodeID: "192.168.179.100",
+		},
+		"UPF1": {
+			Type:   "UPF",
+			NodeID: "192.168.179.1",
+		},
+		"UPF2": {
+			Type:   "UPF",
+			NodeID: "192.168.179.2",
+		},
+		"UPF3": {
+			Type:   "UPF",
+			NodeID: "192.168.179.3",
+		},
+		"UPF4": {
+			Type:   "UPF",
+			NodeID: "192.168.179.4",
+		},
+	},
+	Links: []factory.UPLink{
+		{
+			A: "GNodeB",
+			B: "UPF1",
+		},
+		{
+			A: "UPF1",
+			B: "UPF2",
+		},
+		{
+			A: "UPF2",
+			B: "UPF3",
+		},
+		{
+			A: "UPF3",
+			B: "UPF4",
+		},
+	},
+}
 
-	//config path
-	DefaultSmfConfigPath := path_util.Gofree5gcPath("free5gc/config/smf.FR5GC858.cfg")
-	factory.InitConfigFactory(DefaultSmfConfigPath)
+func TestNewUserPlaneInformation(t *testing.T) {
+	userplaneInformation := context.NewUserPlaneInformation(configuration)
 
-	//read config to data structure
-	context.InitSmfContext(&factory.SmfConfig)
-	context.AllocateUPFID()
+	require.NotNil(t, userplaneInformation.AccessNetwork["GNodeB"])
+
+	require.NotNil(t, userplaneInformation.UPFs["UPF1"])
+	require.NotNil(t, userplaneInformation.UPFs["UPF2"])
+	require.NotNil(t, userplaneInformation.UPFs["UPF3"])
+	require.NotNil(t, userplaneInformation.UPFs["UPF4"])
+
+	// check links
+	require.Contains(t, userplaneInformation.AccessNetwork["GNodeB"].Links, userplaneInformation.UPFs["UPF1"])
+	require.Contains(t, userplaneInformation.UPFs["UPF1"].Links, userplaneInformation.UPFs["UPF2"])
+	require.Contains(t, userplaneInformation.UPFs["UPF2"].Links, userplaneInformation.UPFs["UPF3"])
+	require.Contains(t, userplaneInformation.UPFs["UPF3"].Links, userplaneInformation.UPFs["UPF4"])
+
 }
 
 func TestGenerateDefaultPath(t *testing.T) {
-
-	userPlaneInfo := context.GetUserPlaneInformation()
-
-	for node_name, node := range userPlaneInfo.UPNodes {
-
-		if node_name == "AnchorUPF3" {
-			node.UPF.UPIPInfo.NetworkInstance = []byte("internet")
-			break
-		}
-	}
-
-	//userPlaneInfo.PrintUserPlaneTopology()
-	pathExist := userPlaneInfo.GenerateDefaultPath("internet")
-	assertEqual(pathExist, true)
 }
 
 func TestGetDefaultUPFTopoByDNN(t *testing.T) {
-
-	userPlaneInfo := context.GetUserPlaneInformation()
-
-	for node_name, node := range userPlaneInfo.UPNodes {
-
-		if node_name == "AnchorUPF3" {
-			node.UPF.UPIPInfo.NetworkInstance = []byte("internet")
-			break
-		}
-	}
-
-	//userPlaneInfo.PrintUserPlaneTopology()
-	userPlaneInfo.GenerateDefaultPath("internet")
-	//userPlaneInfo.PrintDefaultDnnPath("internet")
-	root := userPlaneInfo.GetDefaultUPFTopoByDNN("internet")
-
-	if root == nil {
-		panic("There is no default upf topo")
-	}
 }

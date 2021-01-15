@@ -1,0 +1,38 @@
+# This is a sample build configuration for Go.
+# Check our guides at https://confluence.atlassian.com/x/5Q4SMw for more examples.
+# Only use spaces to indent your .yml configuration.
+# -----
+# You can specify a custom docker image from Docker Hub as your build environment.
+image: golang:1.14.4
+
+pipelines:
+  pull-requests:
+    "**":
+      - parallel:
+          - step:
+              caches:
+                - gopackage
+              name: Check coding style
+              size: 2x
+              script:
+                - curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.28.0
+                - git clone --recursive -b develop -j 30 git@bitbucket.org:free5gc-team/free5gc
+                - cd free5gc/src/smf
+                - git checkout $BITBUCKET_COMMIT
+                - golangci-lint run ./...
+          - step:
+              caches:
+                - gopackage
+              name: Unit test
+              size: 2x
+              script:
+                - go get -u gotest.tools/gotestsum
+                - git clone --recursive -b develop -j 30 git@bitbucket.org:free5gc-team/free5gc
+                - cd free5gc/src/smf
+                - git checkout $BITBUCKET_COMMIT
+                - gotestsum ./... -v -cover -race
+
+definitions:
+  caches:
+    gopackage: /go
+    aptpackage: /var/cache/apt

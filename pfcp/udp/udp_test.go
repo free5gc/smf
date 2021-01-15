@@ -5,26 +5,27 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"free5gc/lib/pfcp"
 	"free5gc/lib/pfcp/pfcpType"
 	"free5gc/lib/pfcp/pfcpUdp"
-	"free5gc/src/smf/handler"
+	"free5gc/src/smf/context"
+	smf_pfcp "free5gc/src/smf/pfcp"
 	"free5gc/src/smf/pfcp/udp"
+
+	"github.com/stretchr/testify/require"
 )
 
 const testPfcpClientPort = 12345
 
 func TestRun(t *testing.T) {
 	// Set SMF Node ID
-	udp.ServerNodeId = pfcpType.NodeID{
+
+	context.SMF_Self().CPNodeID = pfcpType.NodeID{
 		NodeIdType:  pfcpType.NodeIdTypeIpv4Address,
 		NodeIdValue: net.ParseIP("127.0.0.1").To4(),
 	}
 
-	go handler.Handle()
-	udp.Run()
+	udp.Run(smf_pfcp.Dispatch)
 
 	testPfcpReq := pfcp.Message{
 		Header: pfcp.Header{
@@ -51,11 +52,11 @@ func TestRun(t *testing.T) {
 	}
 	dstAddr := &net.UDPAddr{
 		IP:   net.ParseIP("127.0.0.1"),
-		Port: pfcpUdp.PfcpUdpDestinationPort,
+		Port: pfcpUdp.PFCP_PORT,
 	}
 
 	err := pfcpUdp.SendPfcpMessage(testPfcpReq, srcAddr, dstAddr)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	time.Sleep(300 * time.Millisecond)
 }

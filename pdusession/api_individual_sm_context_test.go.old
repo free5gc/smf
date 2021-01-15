@@ -5,7 +5,6 @@ import (
 	"free5gc/lib/CommonConsumerTestData/SMF/TestPDUSession"
 	"free5gc/lib/openapi/Nsmf_PDUSession"
 	"free5gc/lib/openapi/models"
-	"free5gc/src/smf/handler"
 	"free5gc/src/smf/pdusession"
 	"testing"
 
@@ -13,7 +12,6 @@ import (
 )
 
 func TestUpdateSmContext(t *testing.T) {
-	go handler.Handle()
 	go pdusession.DummyServer()
 	configuration := Nsmf_PDUSession.NewConfiguration()
 	configuration.SetBasePath("https://127.0.0.10:29502")

@@ -1,36 +1,32 @@
 package service
 
 import (
-	"bufio"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli"
+
 	"free5gc/lib/http2_util"
+	"free5gc/lib/logger_util"
 	"free5gc/lib/openapi/models"
 	"free5gc/lib/path_util"
-	"free5gc/lib/pfcp/pfcpUdp"
 	"free5gc/src/app"
 	"free5gc/src/smf/callback"
 	"free5gc/src/smf/consumer"
 	"free5gc/src/smf/context"
 	"free5gc/src/smf/eventexposure"
 	"free5gc/src/smf/factory"
-	"free5gc/src/smf/handler"
 	"free5gc/src/smf/logger"
 	"free5gc/src/smf/oam"
 	"free5gc/src/smf/pdusession"
+	"free5gc/src/smf/pfcp"
 	"free5gc/src/smf/pfcp/message"
 	"free5gc/src/smf/pfcp/udp"
 	"free5gc/src/smf/util"
-	"net"
-	"os"
-	"os/exec"
-	"os/signal"
-	"sync"
-	"syscall"
-	"time"
-
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli"
 )
 
 type SMF struct{}
@@ -104,7 +100,6 @@ func (*SMF) Initialize(c *cli.Context) {
 		initLog.Infoln("Log level is default set to [info] level")
 		logger.SetLogLevel(logrus.InfoLevel)
 	}
-
 	logger.SetReportCaller(app.ContextSelf().Logger.SMF.ReportCaller)
 }
 
@@ -128,7 +123,7 @@ func (smf *SMF) Start() {
 	context.InitSMFUERouting(&factory.UERoutingConfig)
 
 	initLog.Infoln("Server started")
-	router := gin.Default()
+	router := logger_util.NewGinWithLogrus(logger.GinLog)
 
 	err := consumer.SendNFRegistration()
 
@@ -158,31 +153,25 @@ func (smf *SMF) Start() {
 			eventexposure.AddService(router)
 		}
 	}
-	udp.Run()
+	udp.Run(pfcp.Dispatch)
 
 	for _, upf := range context.SMF_Self().UserPlaneInformation.UPFs {
-		addr := new(net.UDPAddr)
-		addr.IP = net.IP(upf.NodeID.NodeIdValue)
-
-		addr.Port = pfcpUdp.PFCP_PORT
-
-		logger.AppLog.Infof("Send PFCP Association Request to UPF[%s]\n", addr.String())
-		message.SendPfcpAssociationSetupRequest(addr)
+		logger.AppLog.Infof("Send PFCP Association Request to UPF[%s]\n", upf.NodeID.NodeIdValue)
+		message.SendPfcpAssociationSetupRequest(upf.NodeID)
 	}
 
 	time.Sleep(1000 * time.Millisecond)
 
-	go handler.Handle()
-	HTTPAddr := fmt.Sprintf("%s:%d", context.SMF_Self().HTTPAddress, context.SMF_Self().HTTPPort)
+	HTTPAddr := fmt.Sprintf("%s:%d", context.SMF_Self().BindingIPv4, context.SMF_Self().SBIPort)
 	server, err := http2_util.NewServer(HTTPAddr, util.SmfLogPath, router)
 
 	if server == nil {
-		initLog.Errorln("Initialize HTTP server failed: %+v", err)
+		initLog.Error("Initialize HTTP server failed:", err)
 		return
 	}
 
 	if err != nil {
-		initLog.Warnln("Initialize HTTP server: +%v", err)
+		initLog.Warnln("Initialize HTTP server:", err)
 	}
 
 	serverScheme := factory.SmfConfig.Configuration.Sbi.Scheme
@@ -193,7 +182,7 @@ func (smf *SMF) Start() {
 	}
 
 	if err != nil {
-		initLog.Fatalln("HTTP server setup failed: %+v", err)
+		initLog.Fatalln("HTTP server setup failed:", err)
 	}
 
 }
@@ -212,45 +201,5 @@ func (smf *SMF) Terminate() {
 }
 
 func (smf *SMF) Exec(c *cli.Context) error {
-	initLog.Traceln("args:", c.String("smfcfg"))
-	args := smf.FilterCli(c)
-	initLog.Traceln("filter: ", args)
-	command := exec.Command("./smf", args...)
-
-	stdout, err := command.StdoutPipe()
-	if err != nil {
-		initLog.Fatalln(err)
-	}
-	wg := sync.WaitGroup{}
-	wg.Add(3)
-	go func() {
-		in := bufio.NewScanner(stdout)
-		for in.Scan() {
-			fmt.Println(in.Text())
-		}
-		wg.Done()
-	}()
-
-	stderr, err := command.StderrPipe()
-	if err != nil {
-		initLog.Fatalln(err)
-	}
-	go func() {
-		in := bufio.NewScanner(stderr)
-		for in.Scan() {
-			fmt.Println(in.Text())
-		}
-		wg.Done()
-	}()
-
-	go func() {
-		if err := command.Start(); err != nil {
-			initLog.Errorf("SMF Start error: %v", err)
-		}
-		wg.Done()
-	}()
-
-	wg.Wait()
-
-	return err
+	return nil
 }
