@@ -3,10 +3,10 @@ package message
 import (
 	"net"
 
-	"free5gc/lib/pfcp"
-	"free5gc/lib/pfcp/pfcpType"
-	"free5gc/src/smf/context"
-	"free5gc/src/smf/pfcp/udp"
+	"github.com/free5gc/pfcp"
+	"github.com/free5gc/pfcp/pfcpType"
+	"github.com/free5gc/smf/context"
+	"github.com/free5gc/smf/pfcp/udp"
 )
 
 func BuildPfcpAssociationSetupRequest() (pfcp.PFCPAssociationSetupRequest, error) {
@@ -93,6 +93,14 @@ func pdrToCreatePDR(pdr *context.PDR) *pfcp.CreatePDR {
 		FarIdValue: pdr.FAR.FARID,
 	}
 
+	for _, qer := range pdr.QER {
+		if qer != nil {
+			createPDR.QERID = append(createPDR.QERID, &pfcpType.QERID{
+				QERID: qer.QERID,
+			})
+		}
+	}
+
 	return createPDR
 }
 
@@ -128,7 +136,6 @@ func farToCreateFAR(far *context.FAR) *pfcp.CreateFAR {
 }
 
 func barToCreateBAR(bar *context.BAR) *pfcp.CreateBAR {
-
 	createBAR := new(pfcp.CreateBAR)
 
 	createBAR.BARID = new(pfcpType.BARID)
@@ -136,9 +143,23 @@ func barToCreateBAR(bar *context.BAR) *pfcp.CreateBAR {
 
 	createBAR.DownlinkDataNotificationDelay = new(pfcpType.DownlinkDataNotificationDelay)
 
-	//createBAR.SuggestedBufferingPacketsCount = new(pfcpType.SuggestedBufferingPacketsCount)
+	// createBAR.SuggestedBufferingPacketsCount = new(pfcpType.SuggestedBufferingPacketsCount)
 
 	return createBAR
+}
+
+func qerToCreateQER(qer *context.QER) *pfcp.CreateQER {
+	createQER := new(pfcp.CreateQER)
+
+	createQER.QERID = new(pfcpType.QERID)
+	createQER.QERID.QERID = qer.QERID
+	createQER.GateStatus = qer.GateStatus
+
+	createQER.QoSFlowIdentifier = &qer.QFI
+	createQER.MaximumBitrate = qer.MBR
+	createQER.GuaranteedBitrate = qer.GBR
+
+	return createQER
 }
 
 func pdrToUpdatePDR(pdr *context.PDR) *pfcp.UpdatePDR {
@@ -198,10 +219,19 @@ func farToUpdateFAR(far *context.FAR) *pfcp.UpdateFAR {
 	updateFAR.ApplyAction.Dupl = far.ApplyAction.Dupl
 	updateFAR.ApplyAction.Drop = far.ApplyAction.Drop
 
-	updateFAR.UpdateForwardingParameters = new(pfcp.UpdateForwardingParametersIEInFAR)
-	updateFAR.UpdateForwardingParameters.DestinationInterface = &far.ForwardingParameters.DestinationInterface
-	updateFAR.UpdateForwardingParameters.NetworkInstance = &far.ForwardingParameters.NetworkInstance
-	updateFAR.UpdateForwardingParameters.OuterHeaderCreation = far.ForwardingParameters.OuterHeaderCreation
+	if far.ForwardingParameters != nil {
+		updateFAR.UpdateForwardingParameters = new(pfcp.UpdateForwardingParametersIEInFAR)
+		updateFAR.UpdateForwardingParameters.DestinationInterface = &far.ForwardingParameters.DestinationInterface
+		updateFAR.UpdateForwardingParameters.NetworkInstance = &far.ForwardingParameters.NetworkInstance
+		updateFAR.UpdateForwardingParameters.OuterHeaderCreation = far.ForwardingParameters.OuterHeaderCreation
+		if far.ForwardingParameters.ForwardingPolicyID != "" {
+			updateFAR.UpdateForwardingParameters.ForwardingPolicy = new(pfcpType.ForwardingPolicy)
+			updateFAR.UpdateForwardingParameters.ForwardingPolicy.ForwardingPolicyIdentifierLength =
+				uint8(len(far.ForwardingParameters.ForwardingPolicyID))
+			updateFAR.UpdateForwardingParameters.ForwardingPolicy.ForwardingPolicyIdentifier =
+				[]byte(far.ForwardingParameters.ForwardingPolicyID)
+		}
+	}
 
 	return updateFAR
 }
@@ -209,7 +239,10 @@ func farToUpdateFAR(far *context.FAR) *pfcp.UpdateFAR {
 func BuildPfcpSessionEstablishmentRequest(
 	upNodeID pfcpType.NodeID,
 	smContext *context.SMContext,
-	pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (pfcp.PFCPSessionEstablishmentRequest, error) {
+	pdrList []*context.PDR,
+	farList []*context.FAR,
+	barList []*context.BAR,
+	qerList []*context.QER) (pfcp.PFCPSessionEstablishmentRequest, error) {
 	msg := pfcp.PFCPSessionEstablishmentRequest{}
 
 	msg.NodeID = &context.SMF_Self().CPNodeID
@@ -233,18 +266,34 @@ func BuildPfcpSessionEstablishmentRequest(
 		if pdr.State == context.RULE_INITIAL {
 			msg.CreatePDR = append(msg.CreatePDR, pdrToCreatePDR(pdr))
 		}
+		pdr.State = context.RULE_CREATE
 	}
 
 	for _, far := range farList {
 		if far.State == context.RULE_INITIAL {
 			msg.CreateFAR = append(msg.CreateFAR, farToCreateFAR(far))
 		}
+		far.State = context.RULE_CREATE
 	}
 
 	for _, bar := range barList {
 		if bar.State == context.RULE_INITIAL {
 			msg.CreateBAR = append(msg.CreateBAR, barToCreateBAR(bar))
 		}
+		bar.State = context.RULE_CREATE
+	}
+
+	// QER maybe redundant, so we needs properly needs
+
+	qerMap := make(map[uint32]*context.QER)
+	for _, qer := range qerList {
+		qerMap[qer.QERID] = qer
+	}
+	for _, filteredQER := range qerMap {
+		if filteredQER.State == context.RULE_INITIAL {
+			msg.CreateQER = append(msg.CreateQER, qerToCreateQER(filteredQER))
+		}
+		filteredQER.State = context.RULE_CREATE
 	}
 
 	msg.PDNType = &pfcpType.PDNType{
@@ -299,7 +348,10 @@ func BuildPfcpSessionEstablishmentResponse() (pfcp.PFCPSessionEstablishmentRespo
 func BuildPfcpSessionModificationRequest(
 	upNodeID pfcpType.NodeID,
 	smContext *context.SMContext,
-	pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (pfcp.PFCPSessionModificationRequest, error) {
+	pdrList []*context.PDR,
+	farList []*context.FAR,
+	barList []*context.BAR,
+	qerList []*context.QER) (pfcp.PFCPSessionModificationRequest, error) {
 	msg := pfcp.PFCPSessionModificationRequest{}
 
 	msg.UpdatePDR = make([]*pfcp.UpdatePDR, 0, 2)
@@ -322,7 +374,14 @@ func BuildPfcpSessionModificationRequest(
 			msg.CreatePDR = append(msg.CreatePDR, pdrToCreatePDR(pdr))
 		case context.RULE_UPDATE:
 			msg.UpdatePDR = append(msg.UpdatePDR, pdrToUpdatePDR(pdr))
+		case context.RULE_REMOVE:
+			msg.RemovePDR = append(msg.RemovePDR, &pfcp.RemovePDR{
+				PDRID: &pfcpType.PacketDetectionRuleID{
+					RuleId: pdr.PDRID,
+				},
+			})
 		}
+		pdr.State = context.RULE_CREATE
 	}
 
 	for _, far := range farList {
@@ -331,7 +390,14 @@ func BuildPfcpSessionModificationRequest(
 			msg.CreateFAR = append(msg.CreateFAR, farToCreateFAR(far))
 		case context.RULE_UPDATE:
 			msg.UpdateFAR = append(msg.UpdateFAR, farToUpdateFAR(far))
+		case context.RULE_REMOVE:
+			msg.RemoveFAR = append(msg.RemoveFAR, &pfcp.RemoveFAR{
+				FARID: &pfcpType.FARID{
+					FarIdValue: far.FARID,
+				},
+			})
 		}
+		far.State = context.RULE_CREATE
 	}
 
 	for _, bar := range barList {
@@ -339,6 +405,14 @@ func BuildPfcpSessionModificationRequest(
 		case context.RULE_INITIAL:
 			msg.CreateBAR = append(msg.CreateBAR, barToCreateBAR(bar))
 		}
+	}
+
+	for _, qer := range qerList {
+		switch qer.State {
+		case context.RULE_INITIAL:
+			msg.CreateQER = append(msg.CreateQER, qerToCreateQER(qer))
+		}
+		qer.State = context.RULE_CREATE
 	}
 
 	return msg, nil

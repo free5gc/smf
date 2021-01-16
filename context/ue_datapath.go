@@ -2,10 +2,11 @@ package context
 
 import (
 	"fmt"
-	"free5gc/lib/idgenerator"
-	"free5gc/src/smf/factory"
-	"free5gc/src/smf/logger"
 	"math"
+
+	"github.com/free5gc/idgenerator"
+	"github.com/free5gc/smf/factory"
+	"github.com/free5gc/smf/logger"
 )
 
 type UEPreConfigPaths struct {
@@ -14,11 +15,10 @@ type UEPreConfigPaths struct {
 }
 
 func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
-
 	upNodes := smfContext.UserPlaneInformation.UPNodes
 
 	if _, exist := upNodes[name]; !exist {
-		err = fmt.Errorf("UPNode %s isn't exist in smfcfg.conf, but in UERouting.yaml!", name)
+		err = fmt.Errorf("UPNode %s isn't exist in smfcfg.yaml, but in UERouting.yaml!", name)
 		return nil, err
 	}
 
@@ -39,7 +39,6 @@ func NewUEPreConfigPaths(SUPI string, paths []factory.Path) (*UEPreConfigPaths, 
 	logger.PduSessLog.Infoln("In NewUEPreConfigPaths")
 
 	for idx, path := range paths {
-		upperBound := len(path.UPF) - 1
 		dataPath := NewDataPath()
 
 		if idx == 0 {
@@ -57,46 +56,25 @@ func NewUEPreConfigPaths(SUPI string, paths []factory.Path) (*UEPreConfigPaths, 
 		dataPath.Destination.DestinationIP = path.DestinationIP
 		dataPath.Destination.DestinationPort = path.DestinationPort
 		ueDataPathPool[pathID] = dataPath
-		var ueNode, childNode, parentNode *DataPathNode
+		var parentNode *DataPathNode = nil
 		for idx, nodeName := range path.UPF {
-
-			if newUeNode, err := NewUEDataPathNode(nodeName); err != nil {
+			newUeNode, err := NewUEDataPathNode(nodeName)
+			if err != nil {
 				return nil, err
-			} else {
-				ueNode = newUeNode
 			}
 
-			switch idx {
-			case lowerBound:
-				childName := path.UPF[idx+1]
-				if newChildNode, err := NewUEDataPathNode(childName); err != nil {
-					logger.CtxLog.Warnln(err)
-				} else {
-					childNode = newChildNode
-					ueNode.AddNext(childNode)
-					dataPath.FirstDPNode = ueNode
-				}
-
-			case upperBound:
-				childNode.AddPrev(parentNode)
-			default:
-				childNode.AddPrev(parentNode)
-				ueNode = childNode
-				childName := path.UPF[idx+1]
-				if childNode, err := NewUEDataPathNode(childName); err != nil {
-					logger.CtxLog.Warnln(err)
-				} else {
-					ueNode.AddNext(childNode)
-				}
-
+			if idx == lowerBound {
+				dataPath.FirstDPNode = newUeNode
 			}
-
-			parentNode = ueNode
-
+			if parentNode != nil {
+				newUeNode.AddPrev(parentNode)
+				parentNode.AddNext(newUeNode)
+			}
+			parentNode = newUeNode
 		}
 
 		logger.CtxLog.Traceln("New data path added")
-		logger.CtxLog.Traceln("\n" + dataPath.ToString() + "\n")
+		logger.CtxLog.Traceln("\n" + dataPath.String() + "\n")
 	}
 
 	uePreConfigPaths = &UEPreConfigPaths{

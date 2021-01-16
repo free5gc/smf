@@ -7,8 +7,8 @@ import (
 type BPManager struct {
 	BPStatus       BPStatus
 	AddingPSAState AddingPSAState
-	//Need these variable conducting Add addtional PSA (TS23.502 4.3.5.4)
-	//There value will change from time to time
+	// Need these variable conducting Add additional PSA (TS23.502 4.3.5.4)
+	// There value will change from time to time
 
 	PendingUPF            PendingUPF
 	ActivatedPaths        []*DataPath
@@ -40,7 +40,6 @@ const (
 type PendingUPF map[string]bool
 
 func NewBPManager(supi string) (bpManager *BPManager) {
-
 	bpManager = &BPManager{
 		BPStatus:              UnInitialized,
 		AddingPSAState:        ActivatingDataPath,
@@ -53,11 +52,9 @@ func NewBPManager(supi string) (bpManager *BPManager) {
 }
 
 func (bpMGR *BPManager) SelectPSA2(smContext *SMContext) {
-
 	hasSelectPSA2 := false
 	bpMGR.ActivatedPaths = []*DataPath{}
 	for _, dataPath := range smContext.Tunnel.DataPathPool {
-
 		if dataPath.Activated {
 			bpMGR.ActivatedPaths = append(bpMGR.ActivatedPaths, dataPath)
 		} else {
@@ -70,7 +67,6 @@ func (bpMGR *BPManager) SelectPSA2(smContext *SMContext) {
 }
 
 func (bpMGR *BPManager) FindULCL(smContext *SMContext) error {
-
 	bpMGR.UpdatedBranchingPoint = make(map[*UPF]int)
 	activatingPath := bpMGR.ActivatingPath
 	for _, psa1Path := range bpMGR.ActivatedPaths {
@@ -78,7 +74,6 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) error {
 		psa1CurDPNode := psa1Path.FirstDPNode
 		for psa2CurDPNode := activatingPath.FirstDPNode; psa2CurDPNode != nil; psa2CurDPNode = psa2CurDPNode.Next() {
 			if reflect.DeepEqual(psa2CurDPNode.UPF.NodeID, psa1CurDPNode.UPF.NodeID) {
-
 				psa1CurDPNode = psa1CurDPNode.Next()
 				depth++
 
@@ -88,13 +83,11 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) error {
 			} else {
 				break
 			}
-
 		}
 	}
 
 	maxDepth := 0
 	for upf, depth := range bpMGR.UpdatedBranchingPoint {
-
 		if depth > maxDepth {
 			bpMGR.ULCL = upf
 			maxDepth = depth
@@ -104,11 +97,9 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) error {
 }
 
 func (pendingUPF PendingUPF) IsEmpty() bool {
-
 	if len(pendingUPF) == 0 {
 		return true
 	} else {
 		return false
 	}
-
 }

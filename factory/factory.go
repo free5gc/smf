@@ -10,41 +10,61 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"free5gc/src/smf/logger"
+	"github.com/free5gc/smf/logger"
 )
 
-var SmfConfig Config
-var UERoutingConfig RoutingConfig
-
-func checkErr(err error) {
-	if err != nil {
-		err = fmt.Errorf("[Configuration] %s", err.Error())
-		logger.AppLog.Fatal(err)
-	}
-}
+var (
+	SmfConfig       Config
+	UERoutingConfig RoutingConfig
+)
 
 // TODO: Support configuration update from REST api
-func InitConfigFactory(f string) {
-	content, err := ioutil.ReadFile(f)
-	checkErr(err)
+func InitConfigFactory(f string) error {
+	if content, err := ioutil.ReadFile(f); err != nil {
+		return err
+	} else {
+		SmfConfig = Config{}
 
-	SmfConfig = Config{}
+		if yamlErr := yaml.Unmarshal(content, &SmfConfig); yamlErr != nil {
+			return yamlErr
+		}
+	}
 
-	err = yaml.Unmarshal([]byte(content), &SmfConfig)
-	checkErr(err)
-
-	logger.InitLog.Infof("Successfully initialize configuration %s", f)
+	return nil
 }
 
-func InitRoutingConfigFactory(f string) {
-	content, err := ioutil.ReadFile(f)
-	checkErr(err)
+func InitRoutingConfigFactory(f string) error {
+	if content, err := ioutil.ReadFile(f); err != nil {
+		return err
+	} else {
+		UERoutingConfig = RoutingConfig{}
 
-	UERoutingConfig = RoutingConfig{}
+		if yamlErr := yaml.Unmarshal(content, &UERoutingConfig); yamlErr != nil {
+			return yamlErr
+		}
+	}
 
-	err = yaml.Unmarshal([]byte(content), &UERoutingConfig)
-	checkErr(err)
+	return nil
+}
 
-	logger.InitLog.Infof("Successfully initialize configuration %s", f)
+func CheckConfigVersion() error {
+	currentVersion := SmfConfig.GetVersion()
 
+	if currentVersion != SMF_EXPECTED_CONFIG_VERSION {
+		return fmt.Errorf("SMF config version is [%s], but expected is [%s].",
+			currentVersion, SMF_EXPECTED_CONFIG_VERSION)
+	}
+
+	logger.CfgLog.Infof("SMF config version [%s]", currentVersion)
+
+	currentVersion = UERoutingConfig.GetVersion()
+
+	if currentVersion != UE_ROUTING_EXPECTED_CONFIG_VERSION {
+		return fmt.Errorf("UE-Routing config version is [%s], but expected is [%s].",
+			currentVersion, UE_ROUTING_EXPECTED_CONFIG_VERSION)
+	}
+
+	logger.CfgLog.Infof("UE-Routing config version [%s]", currentVersion)
+
+	return nil
 }

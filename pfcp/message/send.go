@@ -1,13 +1,14 @@
 package message
 
 import (
-	"free5gc/lib/pfcp"
-	"free5gc/lib/pfcp/pfcpType"
-	"free5gc/lib/pfcp/pfcpUdp"
-	"free5gc/src/smf/context"
-	"free5gc/src/smf/logger"
-	"free5gc/src/smf/pfcp/udp"
 	"net"
+
+	"github.com/free5gc/pfcp"
+	"github.com/free5gc/pfcp/pfcpType"
+	"github.com/free5gc/pfcp/pfcpUdp"
+	"github.com/free5gc/smf/context"
+	"github.com/free5gc/smf/logger"
+	"github.com/free5gc/smf/pfcp/udp"
 )
 
 var seq uint32
@@ -124,8 +125,8 @@ func SendPfcpAssociationReleaseResponse(upNodeID pfcpType.NodeID, cause pfcpType
 func SendPfcpSessionEstablishmentRequest(
 	upNodeID pfcpType.NodeID,
 	ctx *context.SMContext,
-	pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) {
-	pfcpMsg, err := BuildPfcpSessionEstablishmentRequest(upNodeID, ctx, pdrList, farList, barList)
+	pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR, qerList []*context.QER) {
+	pfcpMsg, err := BuildPfcpSessionEstablishmentRequest(upNodeID, ctx, pdrList, farList, barList, qerList)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Establishment Request failed: %v", err)
 		return
@@ -180,10 +181,8 @@ func SendPfcpSessionEstablishmentResponse(addr *net.UDPAddr) {
 
 func SendPfcpSessionModificationRequest(upNodeID pfcpType.NodeID,
 	ctx *context.SMContext,
-	pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR) (seqNum uint32) {
-
-	pfcpMsg, err := BuildPfcpSessionModificationRequest(upNodeID, ctx, pdrList, farList, barList)
-
+	pdrList []*context.PDR, farList []*context.FAR, barList []*context.BAR, qerList []*context.QER) (seqNum uint32) {
+	pfcpMsg, err := BuildPfcpSessionModificationRequest(upNodeID, ctx, pdrList, farList, barList, qerList)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Modification Request failed: %v", err)
 		return
@@ -309,6 +308,27 @@ func SendPfcpSessionReportResponse(addr *net.UDPAddr, cause pfcpType.Cause, seqF
 			MessageType:    pfcp.PFCP_SESSION_REPORT_RESPONSE,
 			SequenceNumber: seqFromUPF,
 			SEID:           SEID,
+		},
+		Body: pfcpMsg,
+	}
+
+	udp.SendPfcp(message, addr)
+}
+
+func SendHeartbeatResponse(addr *net.UDPAddr, seq uint32) {
+	pfcpMsg := pfcp.HeartbeatResponse{
+		RecoveryTimeStamp: &pfcpType.RecoveryTimeStamp{
+			RecoveryTimeStamp: udp.ServerStartTime,
+		},
+	}
+
+	message := pfcp.Message{
+		Header: pfcp.Header{
+			Version:        pfcp.PfcpVersion,
+			MP:             0,
+			S:              pfcp.SEID_NOT_PRESENT,
+			MessageType:    pfcp.PFCP_HEARTBEAT_RESPONSE,
+			SequenceNumber: seq,
 		},
 		Body: pfcpMsg,
 	}

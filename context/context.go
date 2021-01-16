@@ -4,19 +4,18 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"sync"
 	"sync/atomic"
 
 	"github.com/google/uuid"
 
-	"free5gc/lib/openapi/Nnrf_NFDiscovery"
-	"free5gc/lib/openapi/Nnrf_NFManagement"
-	"free5gc/lib/openapi/Nudm_SubscriberDataManagement"
-	"free5gc/lib/openapi/models"
-	"free5gc/lib/pfcp/pfcpType"
-	"free5gc/lib/pfcp/pfcpUdp"
-	"free5gc/src/smf/factory"
-	"free5gc/src/smf/logger"
+	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
+	"github.com/free5gc/openapi/Nnrf_NFManagement"
+	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
+	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/pfcp/pfcpType"
+	"github.com/free5gc/pfcp/pfcpUdp"
+	"github.com/free5gc/smf/factory"
+	"github.com/free5gc/smf/logger"
 )
 
 func init() {
@@ -37,22 +36,17 @@ type SMFContext struct {
 
 	UDMProfile models.NfProfile
 
-	SnssaiInfos []models.SnssaiSmfInfoItem
-
 	UPNodeIDs []pfcpType.NodeID
 	Key       string
 	PEM       string
 	KeyLog    string
 
-	UESubNet      *net.IPNet
-	UEAddressTemp net.IP
-	UEAddressLock sync.Mutex
+	SnssaiInfos []SnssaiSmfInfo
 
 	NrfUri                         string
 	NFManagementClient             *Nnrf_NFManagement.APIClient
 	NFDiscoveryClient              *Nnrf_NFDiscovery.APIClient
 	SubscriberDataManagementClient *Nudm_SubscriberDataManagement.APIClient
-	DNNInfo                        map[string]factory.DNNInfo
 
 	UserPlaneInformation *UserPlaneInformation
 	OnlySupportIPv4      bool
@@ -63,11 +57,14 @@ type SMFContext struct {
 	LocalSEIDCount      uint64
 }
 
-func AllocUEIP() net.IP {
-	smfContext.UEAddressLock.Lock()
-	defer smfContext.UEAddressLock.Unlock()
-	smfContext.UEAddressTemp[3]++
-	return smfContext.UEAddressTemp
+// RetrieveDnnInformation gets the corresponding dnn info from S-NSSAI and DNN
+func RetrieveDnnInformation(Snssai models.Snssai, dnn string) *SnssaiSmfDnnInfo {
+	for _, snssaiInfo := range SMF_Self().SnssaiInfos {
+		if snssaiInfo.Snssai.Sst == Snssai.Sst && snssaiInfo.Snssai.Sd == Snssai.Sd {
+			return snssaiInfo.DnnInfos[dnn]
+		}
+	}
+	return nil
 }
 
 func AllocateLocalSEID() uint64 {
@@ -93,8 +90,8 @@ func InitSmfContext(config *factory.Config) {
 		return
 	} else {
 		smfContext.URIScheme = models.UriScheme(sbi.Scheme)
-		smfContext.RegisterIPv4 = "127.0.0.1" // default localhost
-		smfContext.SBIPort = 29502            // default port
+		smfContext.RegisterIPv4 = factory.SMF_DEFAULT_IPV4 // default localhost
+		smfContext.SBIPort = factory.SMF_DEFAULT_PORT_INT  // default port
 		if sbi.RegisterIPv4 != "" {
 			smfContext.RegisterIPv4 = sbi.RegisterIPv4
 		}
@@ -148,14 +145,31 @@ func InitSmfContext(config *factory.Config) {
 		smfContext.CPNodeID.NodeIdValue = addr.IP.To4()
 	}
 
-	_, ipNet, err := net.ParseCIDR(configuration.UESubnet)
-	if err != nil {
-		logger.InitLog.Errorln(err)
-	}
+	smfContext.SnssaiInfos = make([]SnssaiSmfInfo, 0, len(configuration.SNssaiInfo))
 
-	smfContext.DNNInfo = configuration.DNN
-	smfContext.UESubNet = ipNet
-	smfContext.UEAddressTemp = ipNet.IP
+	for _, snssaiInfoConfig := range configuration.SNssaiInfo {
+		snssaiInfo := SnssaiSmfInfo{}
+		snssaiInfo.Snssai = SNssai{
+			Sst: snssaiInfoConfig.SNssai.Sst,
+			Sd:  snssaiInfoConfig.SNssai.Sd,
+		}
+
+		snssaiInfo.DnnInfos = make(map[string]*SnssaiSmfDnnInfo)
+
+		for _, dnnInfoConfig := range snssaiInfoConfig.DnnInfos {
+			dnnInfo := SnssaiSmfDnnInfo{}
+			dnnInfo.DNS.IPv4Addr = net.ParseIP(dnnInfoConfig.DNS.IPv4Addr).To4()
+			dnnInfo.DNS.IPv6Addr = net.ParseIP(dnnInfoConfig.DNS.IPv6Addr).To4()
+			if allocator, err := NewIPAllocator(dnnInfoConfig.UESubnet); err != nil {
+				logger.InitLog.Errorf("create ip allocator[%s] failed: %s", dnnInfoConfig.UESubnet, err)
+				continue
+			} else {
+				dnnInfo.UeIPAllocator = allocator
+			}
+			snssaiInfo.DnnInfos[dnnInfoConfig.Dnn] = &dnnInfo
+		}
+		smfContext.SnssaiInfos = append(smfContext.SnssaiInfos, snssaiInfo)
+	}
 
 	// Set client and set url
 	ManagementConfig := Nnrf_NFManagement.NewConfiguration()
@@ -168,8 +182,6 @@ func InitSmfContext(config *factory.Config) {
 
 	smfContext.ULCLSupport = configuration.ULCL
 
-	smfContext.SnssaiInfos = configuration.SNssaiInfo
-
 	smfContext.OnlySupportIPv4 = true
 
 	smfContext.UserPlaneInformation = NewUserPlaneInformation(&configuration.UserPlaneInformation)
@@ -178,7 +190,6 @@ func InitSmfContext(config *factory.Config) {
 }
 
 func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
-
 	if !smfContext.ULCLSupport {
 		return
 	}
@@ -204,7 +215,6 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 
 		smfContext.UEPreConfigPathPool[supi] = uePreConfigPaths
 	}
-
 }
 
 func SMF_Self() *SMFContext {
