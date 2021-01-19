@@ -1,14 +1,15 @@
 package producer
 
 import (
-	"free5gc/lib/flowdesc"
-	"free5gc/lib/pfcp/pfcpType"
-	"free5gc/lib/pfcp/pfcpUdp"
-	"free5gc/src/smf/context"
-	"free5gc/src/smf/logger"
-	"free5gc/src/smf/pfcp/message"
 	"net"
 	"reflect"
+
+	"github.com/free5gc/flowdesc"
+	"github.com/free5gc/pfcp/pfcpType"
+	"github.com/free5gc/pfcp/pfcpUdp"
+	"github.com/free5gc/smf/context"
+	"github.com/free5gc/smf/logger"
+	"github.com/free5gc/smf/pfcp/message"
 )
 
 func AddPDUSessionAnchorAndULCL(smContext *context.SMContext, nodeID pfcpType.NodeID) {
@@ -17,21 +18,21 @@ func AddPDUSessionAnchorAndULCL(smContext *context.SMContext, nodeID pfcpType.No
 
 	switch bpMGR.AddingPSAState {
 	case context.ActivatingDataPath:
-		//select PSA2
+		// select PSA2
 		bpMGR.SelectPSA2(smContext)
 		smContext.AllocateLocalSEIDForDataPath(bpMGR.ActivatingPath)
-		//select an upf as ULCL
+		// select an upf as ULCL
 		err := bpMGR.FindULCL(smContext)
 		if err != nil {
 			logger.PduSessLog.Errorln(err)
 			return
 		}
 
-		//Allocate Path PDR and TEID
-		bpMGR.ActivatingPath.ActivateTunnelAndPDR(smContext)
-		//N1N2MessageTransfer Here
+		// Allocate Path PDR and TEID
+		bpMGR.ActivatingPath.ActivateTunnelAndPDR(smContext, 255)
+		// N1N2MessageTransfer Here
 
-		//Establish PSA2
+		// Establish PSA2
 		EstablishPSA2(smContext)
 	case context.EstablishingNewPSA:
 
@@ -48,7 +49,7 @@ func AddPDUSessionAnchorAndULCL(smContext *context.SMContext, nodeID pfcpType.No
 
 		if pendingUPF.IsEmpty() {
 			EstablishRANTunnelInfo(smContext)
-			//Establish ULCL
+			// Establish ULCL
 			EstablishULCL(smContext)
 		}
 
@@ -103,7 +104,6 @@ func AddPDUSessionAnchorAndULCL(smContext *context.SMContext, nodeID pfcpType.No
 			logger.CtxLog.Infoln("[SMF] Add PSA success")
 		}
 	}
-
 }
 
 func EstablishPSA2(smContext *context.SMContext) {
@@ -114,7 +114,6 @@ func EstablishPSA2(smContext *context.SMContext) {
 	logger.PduSessLog.Infoln("In EstablishPSA2")
 	nodeAfterULCL := false
 	for curDataPathNode := activatingPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
-
 		if nodeAfterULCL {
 			addr := net.UDPAddr{
 				IP:   curDataPathNode.UPF.NodeID.NodeIdValue,
@@ -128,6 +127,7 @@ func EstablishPSA2(smContext *context.SMContext) {
 			pdrList := []*context.PDR{upLinkPDR}
 			farList := []*context.FAR{upLinkPDR.FAR}
 			barList := []*context.BAR{}
+			qerList := upLinkPDR.QER
 
 			lastNode := curDataPathNode.Prev()
 
@@ -139,13 +139,13 @@ func EstablishPSA2(smContext *context.SMContext) {
 
 			curDPNodeIP := curDataPathNode.UPF.NodeID.ResolveNodeIdToIp().String()
 			bpMGR.PendingUPF[curDPNodeIP] = true
-			message.SendPfcpSessionEstablishmentRequest(curDataPathNode.UPF.NodeID, smContext, pdrList, farList, barList)
+			message.SendPfcpSessionEstablishmentRequest(
+				curDataPathNode.UPF.NodeID, smContext, pdrList, farList, barList, qerList)
 		} else {
 			if reflect.DeepEqual(curDataPathNode.UPF.NodeID, ulcl.NodeID) {
 				nodeAfterULCL = true
 			}
 		}
-
 	}
 
 	bpMGR.AddingPSAState = context.EstablishingNewPSA
@@ -153,7 +153,6 @@ func EstablishPSA2(smContext *context.SMContext) {
 }
 
 func EstablishULCL(smContext *context.SMContext) {
-
 	logger.PduSessLog.Infoln("In EstablishULCL")
 
 	bpMGR := smContext.BPManager
@@ -162,7 +161,7 @@ func EstablishULCL(smContext *context.SMContext) {
 	dest := activatingPath.Destination
 	ulcl := bpMGR.ULCL
 
-	//find updatedUPF in activatingPath
+	// find updatedUPF in activatingPath
 	for curDPNode := activatingPath.FirstDPNode; curDPNode != nil; curDPNode = curDPNode.Next() {
 		if reflect.DeepEqual(ulcl.NodeID, curDPNode.UPF.NodeID) {
 			UPLinkPDR := curDPNode.UpLinkTunnel.PDR
@@ -170,11 +169,11 @@ func EstablishULCL(smContext *context.SMContext) {
 			UPLinkPDR.State = context.RULE_INITIAL
 
 			FlowDespcription := flowdesc.NewIPFilterRule()
-			err := FlowDespcription.SetAction(flowdesc.Permit) //permit
+			err := FlowDespcription.SetAction(flowdesc.Permit) // permit
 			if err != nil {
 				logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
 			}
-			err = FlowDespcription.SetDirection(flowdesc.Out) //uplink
+			err = FlowDespcription.SetDirection(flowdesc.Out) // uplink
 			if err != nil {
 				logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
 			}
@@ -192,7 +191,6 @@ func EstablishULCL(smContext *context.SMContext) {
 			}
 
 			FlowDespcriptionStr, err := flowdesc.Encode(FlowDespcription)
-
 			if err != nil {
 				logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
 			}
@@ -212,17 +210,17 @@ func EstablishULCL(smContext *context.SMContext) {
 			pdrList := []*context.PDR{UPLinkPDR, DownLinkPDR}
 			farList := []*context.FAR{UPLinkPDR.FAR, DownLinkPDR.FAR}
 			barList := []*context.BAR{}
+			qerList := UPLinkPDR.QER
 
 			curDPNodeIP := ulcl.NodeID.ResolveNodeIdToIp().String()
 			bpMGR.PendingUPF[curDPNodeIP] = true
-			message.SendPfcpSessionModificationRequest(ulcl.NodeID, smContext, pdrList, farList, barList)
+			message.SendPfcpSessionModificationRequest(ulcl.NodeID, smContext, pdrList, farList, barList, qerList)
 			break
 		}
 	}
 
 	bpMGR.AddingPSAState = context.EstablishingULCL
 	logger.PfcpLog.Info("[SMF] Establish ULCL msg has been send")
-
 }
 
 func UpdatePSA2DownLink(smContext *context.SMContext) {
@@ -236,6 +234,7 @@ func UpdatePSA2DownLink(smContext *context.SMContext) {
 	farList := []*context.FAR{}
 	pdrList := []*context.PDR{}
 	barList := []*context.BAR{}
+	qerList := []*context.QER{}
 
 	for curDataPathNode := activatingPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
 		lastNode := curDataPathNode.Prev()
@@ -248,10 +247,12 @@ func UpdatePSA2DownLink(smContext *context.SMContext) {
 
 				pdrList = append(pdrList, downLinkPDR)
 				farList = append(farList, downLinkPDR.FAR)
+				qerList = append(qerList, downLinkPDR.QER...)
 
 				curDPNodeIP := curDataPathNode.UPF.NodeID.ResolveNodeIdToIp().String()
 				bpMGR.PendingUPF[curDPNodeIP] = true
-				message.SendPfcpSessionModificationRequest(curDataPathNode.UPF.NodeID, smContext, pdrList, farList, barList)
+				message.SendPfcpSessionModificationRequest(
+					curDataPathNode.UPF.NodeID, smContext, pdrList, farList, barList, qerList)
 				logger.PfcpLog.Info("[SMF] Update PSA2 downlink msg has been send")
 				break
 			}
@@ -259,7 +260,6 @@ func UpdatePSA2DownLink(smContext *context.SMContext) {
 	}
 
 	bpMGR.AddingPSAState = context.UpdatingPSA2DownLink
-
 }
 
 func EstablishRANTunnelInfo(smContext *context.SMContext) {
@@ -273,11 +273,11 @@ func EstablishRANTunnelInfo(smContext *context.SMContext) {
 
 	activatingANUPF := activatingPath.FirstDPNode
 
-	//Uplink ANUPF In TEID
+	// Uplink ANUPF In TEID
 	activatingANUPF.UpLinkTunnel.TEID = defaultANUPF.UpLinkTunnel.TEID
 	activatingANUPF.UpLinkTunnel.PDR.PDI.LocalFTeid.Teid = defaultANUPF.UpLinkTunnel.PDR.PDI.LocalFTeid.Teid
 
-	//Downlink ANUPF OutTEID
+	// Downlink ANUPF OutTEID
 
 	defaultANUPFDLFAR := defaultANUPF.DownLinkTunnel.PDR.FAR
 	activatingANUPFDLFAR := activatingANUPF.DownLinkTunnel.PDR.FAR
@@ -301,11 +301,9 @@ func EstablishRANTunnelInfo(smContext *context.SMContext) {
 	anOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
 	anOuterHeaderCreation.Teid = defaultANUPFDLFAR.ForwardingParameters.OuterHeaderCreation.Teid
 	anOuterHeaderCreation.Ipv4Address = defaultANUPFDLFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address
-
 }
 
 func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
-
 	bpMGR := smContext.BPManager
 	bpMGR.PendingUPF = make(context.PendingUPF)
 	activatingPath := bpMGR.ActivatingPath
@@ -313,7 +311,6 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 	ulcl := bpMGR.ULCL
 
 	for curDPNode := activatingPath.FirstDPNode; curDPNode != nil; curDPNode = curDPNode.Next() {
-
 		if reflect.DeepEqual(ulcl.NodeID, curDPNode.UPF.NodeID) {
 			break
 		} else {
@@ -323,13 +320,13 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 			DownLinkPDR.State = context.RULE_INITIAL
 
 			if _, exist := bpMGR.UpdatedBranchingPoint[curDPNode.UPF]; exist {
-				//add SDF Filter
+				// add SDF Filter
 				FlowDespcription := flowdesc.NewIPFilterRule()
-				err := FlowDespcription.SetAction(flowdesc.Permit) //permit
+				err := FlowDespcription.SetAction(flowdesc.Permit) // permit
 				if err != nil {
 					logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
 				}
-				err = FlowDespcription.SetDirection(flowdesc.Out) //uplink
+				err = FlowDespcription.SetDirection(flowdesc.Out) // uplink
 				if err != nil {
 					logger.PduSessLog.Errorf("Error occurs when setting flow despcription: %s\n", err)
 				}
@@ -347,7 +344,6 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 				}
 
 				FlowDespcriptionStr, err := flowdesc.Encode(FlowDespcription)
-
 				if err != nil {
 					logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
 				}
@@ -366,20 +362,19 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 			pdrList := []*context.PDR{UPLinkPDR, DownLinkPDR}
 			farList := []*context.FAR{UPLinkPDR.FAR, DownLinkPDR.FAR}
 			barList := []*context.BAR{}
+			qerList := UPLinkPDR.QER
 
 			curDPNodeIP := curDPNode.UPF.NodeID.ResolveNodeIdToIp().String()
 			bpMGR.PendingUPF[curDPNodeIP] = true
-			message.SendPfcpSessionModificationRequest(curDPNode.UPF.NodeID, smContext, pdrList, farList, barList)
+			message.SendPfcpSessionModificationRequest(curDPNode.UPF.NodeID, smContext, pdrList, farList, barList, qerList)
 		}
 	}
 
 	if bpMGR.PendingUPF.IsEmpty() {
-
 		bpMGR.AddingPSAState = context.Finished
 		bpMGR.BPStatus = context.AddPSASuccess
 		logger.CtxLog.Infoln("[SMF] Add PSA success")
 	} else {
 		bpMGR.AddingPSAState = context.UpdatingRANAndIUPFUpLink
 	}
-
 }

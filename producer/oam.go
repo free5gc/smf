@@ -1,11 +1,12 @@
 package producer
 
 import (
-	"free5gc/lib/http_wrapper"
-	"free5gc/lib/openapi/models"
-	"free5gc/src/smf/context"
 	"net/http"
 	"strconv"
+
+	"github.com/free5gc/http_wrapper"
+	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/smf/context"
 )
 
 type PDUSessionInfo struct {
@@ -24,7 +25,6 @@ type PDUSessionInfo struct {
 func HandleOAMGetUEPDUSessionInfo(smContextRef string) *http_wrapper.Response {
 	smContext := context.GetSMContext(smContextRef)
 	if smContext == nil {
-
 		httpResponse := &http_wrapper.Response{
 			Header: nil,
 			Status: http.StatusNotFound,
@@ -53,5 +53,4 @@ func HandleOAMGetUEPDUSessionInfo(smContextRef string) *http_wrapper.Response {
 		},
 	}
 	return httpResponse
-
 }

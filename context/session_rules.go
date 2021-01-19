@@ -1,6 +1,8 @@
 package context
 
-import "free5gc/lib/openapi/models"
+import (
+	"github.com/free5gc/openapi/models"
+)
 
 // SessionRule - A session rule consists of policy information elements
 // associated with PDU session.

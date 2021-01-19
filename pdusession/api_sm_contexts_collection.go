@@ -10,14 +10,16 @@
 package pdusession
 
 import (
-	"free5gc/lib/http_wrapper"
-	"free5gc/lib/openapi"
-	"free5gc/lib/openapi/models"
-	"free5gc/src/smf/logger"
-	"free5gc/src/smf/producer"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strings"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/free5gc/http_wrapper"
+	"github.com/free5gc/openapi"
+	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/smf/logger"
+	"github.com/free5gc/smf/producer"
 )
 
 // HTTPPostSmContexts - Create SM Context
@@ -50,7 +52,7 @@ func HTTPPostSmContexts(c *gin.Context) {
 
 	req := http_wrapper.NewRequest(c.Request, request)
 	HTTPResponse := producer.HandlePDUSessionSMContextCreate(req.Body.(models.PostSmContextsRequest))
-	//Http Response to AMF
+	// Http Response to AMF
 	for key, val := range HTTPResponse.Header {
 		c.Header(key, val[0])
 	}

@@ -5,42 +5,54 @@
 package factory
 
 import (
-	"free5gc/lib/openapi/models"
 	"time"
+
+	"github.com/free5gc/logger_util"
+	"github.com/free5gc/openapi/models"
+)
+
+const (
+	SMF_EXPECTED_CONFIG_VERSION        = "1.0.0"
+	UE_ROUTING_EXPECTED_CONFIG_VERSION = "1.0.0"
 )
 
 type Config struct {
-	Info Info `yaml:"info"`
-
-	Configuration Configuration `yaml:"configuration"`
+	Info          *Info               `yaml:"info"`
+	Configuration *Configuration      `yaml:"configuration"`
+	Logger        *logger_util.Logger `yaml:"logger"`
 }
 
 type Info struct {
-	Version string `yaml:"version,omitempty"`
-
+	Version     string `yaml:"version,omitempty"`
 	Description string `yaml:"description,omitempty"`
 }
 
+const (
+	SMF_DEFAULT_IPV4     = "127.0.0.2"
+	SMF_DEFAULT_PORT     = "8000"
+	SMF_DEFAULT_PORT_INT = 8000
+)
+
 type Configuration struct {
-	SmfName string `yaml:"smfName,omitempty"`
-
-	Sbi *Sbi `yaml:"sbi,omitempty"`
-
-	PFCP *PFCP `yaml:"pfcp,omitempty"`
-
-	DNN map[string]DNNInfo `yaml:"dnn,omitempty"`
-
-	NrfUri string `yaml:"nrfUri,omitempty"`
-
+	SmfName              string               `yaml:"smfName,omitempty"`
+	Sbi                  *Sbi                 `yaml:"sbi,omitempty"`
+	PFCP                 *PFCP                `yaml:"pfcp,omitempty"`
+	NrfUri               string               `yaml:"nrfUri,omitempty"`
 	UserPlaneInformation UserPlaneInformation `yaml:"userplane_information"`
+	ServiceNameList      []string             `yaml:"serviceNameList,omitempty"`
+	SNssaiInfo           []SnssaiInfoItem     `yaml:"snssaiInfos,omitempty"`
+	ULCL                 bool                 `yaml:"ulcl,omitempty"`
+}
 
-	UESubnet string `yaml:"ue_subnet"`
+type SnssaiInfoItem struct {
+	SNssai   *models.Snssai      `yaml:"sNssai"`
+	DnnInfos []SnssaiDnnInfoItem `yaml:"dnnInfos"`
+}
 
-	ServiceNameList []string `yaml:"serviceNameList,omitempty"`
-
-	SNssaiInfo []models.SnssaiSmfInfoItem `yaml:"snssai_info,omitempty"`
-
-	ULCL bool `yaml:"ulcl,omitempty"`
+type SnssaiDnnInfoItem struct {
+	Dnn      string `yaml:"dnn"`
+	DNS      DNS    `yaml:"dns"`
+	UESubnet string `yaml:"ueSubnet"`
 }
 
 type Sbi struct {
@@ -62,28 +74,20 @@ type PFCP struct {
 	Port uint16 `yaml:"port,omitempty"`
 }
 
-type DNNInfo struct {
-	DNS DNS `yaml:"dns,omitempty"`
-}
-
 type DNS struct {
 	IPv4Addr string `yaml:"ipv4,omitempty"`
 	IPv6Addr string `yaml:"ipv6,omitempty"`
 }
 
 type Path struct {
-	DestinationIP string `yaml:"DestinationIP,omitempty"`
-
-	DestinationPort string `yaml:"DestinationPort,omitempty"`
-
-	UPF []string `yaml:"UPF,omitempty"`
+	DestinationIP   string   `yaml:"DestinationIP,omitempty"`
+	DestinationPort string   `yaml:"DestinationPort,omitempty"`
+	UPF             []string `yaml:"UPF,omitempty"`
 }
 
 type UERoutingInfo struct {
-	SUPI string `yaml:"SUPI,omitempty"`
-
-	AN string `yaml:"AN,omitempty"`
-
+	SUPI     string `yaml:"SUPI,omitempty"`
+	AN       string `yaml:"AN,omitempty"`
 	PathList []Path `yaml:"PathList,omitempty"`
 }
 
@@ -122,13 +126,10 @@ type PfdDataForApp struct {
 }
 
 type RoutingConfig struct {
-	Info *Info `yaml:"info"`
-
-	UERoutingInfo []*UERoutingInfo `yaml:"ueRoutingInfo"`
-
-	RouteProf map[RouteProfID]RouteProfile `yaml:"routeProfile,omitempty"`
-
-	PfdDatas []*PfdDataForApp `yaml:"pfdDataForApp,omitempty"`
+	Info          *Info                        `yaml:"info"`
+	UERoutingInfo []*UERoutingInfo             `yaml:"ueRoutingInfo"`
+	RouteProf     map[RouteProfID]RouteProfile `yaml:"routeProfile,omitempty"`
+	PfdDatas      []*PfdDataForApp             `yaml:"pfdDataForApp,omitempty"`
 }
 
 // UserPlaneInformation describe core network userplane information
@@ -139,13 +140,35 @@ type UserPlaneInformation struct {
 
 // UPNode represent the user plane node
 type UPNode struct {
-	Type   string `yaml:"type"`
-	NodeID string `yaml:"node_id"`
-	ANIP   string `yaml:"an_ip"`
-	Dnn    string `yaml:"dnn"`
+	Type                 string                     `yaml:"type"`
+	NodeID               string                     `yaml:"node_id"`
+	ANIP                 string                     `yaml:"an_ip"`
+	Dnn                  string                     `yaml:"dnn"`
+	SNssaiInfos          []models.SnssaiUpfInfoItem `yaml:"sNssaiUpfInfos,omitempty"`
+	InterfaceUpfInfoList []InterfaceUpfInfoItem     `yaml:"interfaces,omitempty"`
+}
+
+type InterfaceUpfInfoItem struct {
+	InterfaceType   models.UpInterfaceType `yaml:"interfaceType"`
+	Endpoints       []string               `yaml:"endpoints"`
+	NetworkInstance string                 `yaml:"networkInstance"`
 }
 
 type UPLink struct {
 	A string `yaml:"A"`
 	B string `yaml:"B"`
+}
+
+func (c *Config) GetVersion() string {
+	if c.Info != nil && c.Info.Version != "" {
+		return c.Info.Version
+	}
+	return ""
+}
+
+func (r *RoutingConfig) GetVersion() string {
+	if r.Info != nil && r.Info.Version != "" {
+		return r.Info.Version
+	}
+	return ""
 }

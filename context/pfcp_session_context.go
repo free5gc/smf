@@ -2,7 +2,8 @@ package context
 
 import (
 	"fmt"
-	"free5gc/lib/pfcp/pfcpType"
+
+	"github.com/free5gc/pfcp/pfcpType"
 )
 
 type PFCPSessionResponseStatus int
@@ -21,11 +22,9 @@ type PFCPSessionContext struct {
 	RemoteSEID uint64
 }
 
-func (pfcpSessionContext *PFCPSessionContext) ToString() (str string) {
-
-	str += "\n"
+func (pfcpSessionContext *PFCPSessionContext) String() string {
+	str := "\n"
 	for pdrID, pdr := range pfcpSessionContext.PDRs {
-
 		str += fmt.Sprintln("PDR ID: ", pdrID)
 		str += fmt.Sprintf("PDR: %v\n", pdr)
 	}
@@ -35,7 +34,7 @@ func (pfcpSessionContext *PFCPSessionContext) ToString() (str string) {
 	str += fmt.Sprintln("RemoteSEID: ", pfcpSessionContext.RemoteSEID)
 	str += "\n"
 
-	return
+	return str
 }
 
 func (pfcpSessionResponseStatus PFCPSessionResponseStatus) String() string {

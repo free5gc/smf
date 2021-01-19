@@ -10,15 +10,17 @@
 package pdusession
 
 import (
-	"free5gc/lib/http_wrapper"
-	"free5gc/lib/openapi"
-	"free5gc/lib/openapi/models"
-	"free5gc/src/smf/logger"
-	"free5gc/src/smf/producer"
-	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/free5gc/http_wrapper"
+	"github.com/free5gc/openapi"
+	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/smf/logger"
+	"github.com/free5gc/smf/producer"
 )
 
 // HTTPReleaseSmContext - Release SM Context
@@ -48,7 +50,6 @@ func HTTPReleaseSmContext(c *gin.Context) {
 		smContextRef, req.Body.(models.ReleaseSmContextRequest))
 
 	c.Status(http.StatusNoContent)
-
 }
 
 // RetrieveSmContext - Retrieve SM Context

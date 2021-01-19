@@ -2,11 +2,12 @@ package consumer
 
 import (
 	"context"
-	"free5gc/lib/openapi"
-	"free5gc/lib/openapi/Nsmf_PDUSession"
-	"free5gc/lib/openapi/models"
-	"free5gc/src/smf/logger"
 	"net/http"
+
+	"github.com/free5gc/openapi"
+	"github.com/free5gc/openapi/Nsmf_PDUSession"
+	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/smf/logger"
 )
 
 func SendSMContextStatusNotification(uri string) (*models.ProblemDetails, error) {
@@ -26,11 +27,15 @@ func SendSMContextStatusNotification(uri string) (*models.ProblemDetails, error)
 		if localErr == nil {
 			if httpResp.StatusCode != http.StatusNoContent {
 				return nil, openapi.ReportError("Send SMContextStatus Notification Failed")
-
 			}
 
 			logger.PduSessLog.Tracef("Send SMContextStatus Notification Success")
 		} else if httpResp != nil {
+			defer func() {
+				if resCloseErr := httpResp.Body.Close(); resCloseErr != nil {
+					logger.ConsumerLog.Errorf("SMContextNotification response body cannot close: %+v", resCloseErr)
+				}
+			}()
 			logger.PduSessLog.Warnf("Send SMContextStatus Notification Error[%s]", httpResp.Status)
 			if httpResp.Status != localErr.Error() {
 				return nil, localErr
@@ -41,7 +46,6 @@ func SendSMContextStatusNotification(uri string) (*models.ProblemDetails, error)
 			logger.PduSessLog.Warnln("Http Response is nil in comsumer API SMContextNotification")
 			return nil, openapi.ReportError("Send SMContextStatus Notification Failed[%s]", localErr.Error())
 		}
-
 	}
 	return nil, nil
 }

@@ -11,13 +11,14 @@ package main
 
 import (
 	"fmt"
-	"free5gc/src/app"
-	"free5gc/src/smf/logger"
-	"free5gc/src/smf/service"
-	"free5gc/src/smf/version"
+	"os"
+
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
-	"os"
+
+	"github.com/free5gc/smf/logger"
+	"github.com/free5gc/smf/service"
+	"github.com/free5gc/version"
 )
 
 var SMF = &service.SMF{}
@@ -38,12 +39,17 @@ func main() {
 	app.Flags = SMF.GetCliCmd()
 
 	if err := app.Run(os.Args); err != nil {
-		logger.AppLog.Errorf("SMF Run error: %v", err)
+		appLog.Errorf("SMF Run error: %v", err)
 	}
 }
 
-func action(c *cli.Context) {
-	app.AppInitializeWillInitialize(c.String("free5gccfg"))
-	SMF.Initialize(c)
+func action(c *cli.Context) error {
+	if err := SMF.Initialize(c); err != nil {
+		logger.CfgLog.Errorf("%+v", err)
+		return fmt.Errorf("Failed to initialize !!")
+	}
+
 	SMF.Start()
+
+	return nil
 }

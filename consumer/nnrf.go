@@ -3,24 +3,29 @@ package consumer
 import (
 	"context"
 	"fmt"
-	"free5gc/lib/openapi"
-	"free5gc/lib/openapi/Nnrf_NFDiscovery"
-	"free5gc/lib/openapi/Nudm_SubscriberDataManagement"
-	"free5gc/lib/openapi/models"
-	smf_context "free5gc/src/smf/context"
-	"free5gc/src/smf/logger"
 	"net/http"
-
 	"strings"
 	"time"
 
 	"github.com/antihax/optional"
 	"github.com/mohae/deepcopy"
+
+	"github.com/free5gc/openapi"
+	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
+	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
+	"github.com/free5gc/openapi/models"
+	smf_context "github.com/free5gc/smf/context"
+	"github.com/free5gc/smf/logger"
 )
 
 func SendNFRegistration() error {
+	sNssais := []models.Snssai{}
 
-	//set nfProfile
+	for _, snssaiSmfInfo := range *smf_context.SmfInfo.SNssaiSmfInfoList {
+		sNssais = append(sNssais, *snssaiSmfInfo.SNssai)
+	}
+
+	// set nfProfile
 	profile := models.NfProfile{
 		NfInstanceId:  smf_context.SMF_Self().NfInstanceID,
 		NfType:        models.NfType_SMF,
@@ -28,6 +33,7 @@ func SendNFRegistration() error {
 		Ipv4Addresses: []string{smf_context.SMF_Self().RegisterIPv4},
 		NfServices:    smf_context.NFServices,
 		SmfInfo:       smf_context.SmfInfo,
+		SNssais:       &sNssais,
 	}
 	var rep models.NfProfile
 	var res *http.Response
@@ -40,10 +46,15 @@ func SendNFRegistration() error {
 			NFInstanceIDDocumentApi.
 			RegisterNFInstance(context.TODO(), smf_context.SMF_Self().NfInstanceID, profile)
 		if err != nil || res == nil {
-			logger.AppLog.Infof("SMF register to NRF Error[%s]", err.Error())
+			logger.ConsumerLog.Infof("SMF register to NRF Error[%s]", err.Error())
 			time.Sleep(2 * time.Second)
 			continue
 		}
+		defer func() {
+			if resCloseErr := res.Body.Close(); resCloseErr != nil {
+				logger.ConsumerLog.Errorf("RegisterNFInstance response body cannot close: %+v", resCloseErr)
+			}
+		}()
 
 		status := res.StatusCode
 		if status == http.StatusOK {
@@ -56,7 +67,7 @@ func SendNFRegistration() error {
 			smf_context.SMF_Self().NfInstanceID = resourceUri[strings.LastIndex(resourceUri, "/")+1:]
 			break
 		} else {
-			logger.AppLog.Infof("handler returned wrong status code %d", status)
+			logger.ConsumerLog.Infof("handler returned wrong status code %d", status)
 			// fmt.Errorf("NRF return wrong status code %d", status)
 		}
 	}
@@ -66,14 +77,13 @@ func SendNFRegistration() error {
 }
 
 func RetrySendNFRegistration(MaxRetry int) error {
-
 	retryCount := 0
 	for retryCount < MaxRetry {
 		err := SendNFRegistration()
 		if err == nil {
 			return nil
 		}
-		logger.AppLog.Warnf("Send NFRegistration Failed by %v", err)
+		logger.ConsumerLog.Warnf("Send NFRegistration Failed by %v", err)
 		retryCount++
 	}
 
@@ -81,19 +91,23 @@ func RetrySendNFRegistration(MaxRetry int) error {
 }
 
 func SendNFDeregistration() error {
-
 	// Check data (Use RESTful DELETE)
 	res, localErr := smf_context.SMF_Self().
 		NFManagementClient.
 		NFInstanceIDDocumentApi.
 		DeregisterNFInstance(context.TODO(), smf_context.SMF_Self().NfInstanceID)
 	if localErr != nil {
-		logger.AppLog.Warnln(localErr)
+		logger.ConsumerLog.Warnln(localErr)
 		return localErr
 	}
+	defer func() {
+		if resCloseErr := res.Body.Close(); resCloseErr != nil {
+			logger.ConsumerLog.Errorf("DeregisterNFInstance response body cannot close: %+v", resCloseErr)
+		}
+	}()
 	if res != nil {
 		if status := res.StatusCode; status != http.StatusNoContent {
-			logger.AppLog.Warnln("handler returned wrong status code ", status)
+			logger.ConsumerLog.Warnln("handler returned wrong status code ", status)
 			return openapi.ReportError("handler returned wrong status code %d", status)
 		}
 	}
@@ -101,7 +115,6 @@ func SendNFDeregistration() error {
 }
 
 func SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
-
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
 
 	// Check data
@@ -122,10 +135,15 @@ func SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 		}
 
 		if smf_context.SMF_Self().SubscriberDataManagementClient == nil {
-			logger.AppLog.Warnln("sdm client failed")
+			logger.ConsumerLog.Warnln("sdm client failed")
 		}
 	} else if httpResp != nil {
-		logger.AppLog.Warnln("handler returned wrong status code ", httpResp.Status)
+		defer func() {
+			if resCloseErr := httpResp.Body.Close(); resCloseErr != nil {
+				logger.ConsumerLog.Errorf("SearchNFInstances response body cannot close: %+v", resCloseErr)
+			}
+		}()
+		logger.ConsumerLog.Warnln("handler returned wrong status code ", httpResp.Status)
 		if httpResp.Status != localErr.Error() {
 			return nil, localErr
 		}
@@ -138,7 +156,6 @@ func SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 }
 
 func SendNFDiscoveryPCF() (problemDetails *models.ProblemDetails, err error) {
-
 	// Set targetNfType
 	targetNfType := models.NfType_PCF
 	// Set requestNfType
@@ -152,9 +169,14 @@ func SendNFDiscoveryPCF() (problemDetails *models.ProblemDetails, err error) {
 		SearchNFInstances(context.TODO(), targetNfType, requesterNfType, &localVarOptionals)
 
 	if localErr == nil {
-		logger.AppLog.Traceln(result.NfInstances)
+		logger.ConsumerLog.Traceln(result.NfInstances)
 	} else if httpResp != nil {
-		logger.AppLog.Warnln("handler returned wrong status code ", httpResp.Status)
+		defer func() {
+			if resCloseErr := httpResp.Body.Close(); resCloseErr != nil {
+				logger.ConsumerLog.Errorf("SearchNFInstances response body cannot close: %+v", resCloseErr)
+			}
+		}()
+		logger.ConsumerLog.Warnln("handler returned wrong status code ", httpResp.Status)
 		if httpResp.Status != localErr.Error() {
 			err = localErr
 			return
@@ -165,7 +187,7 @@ func SendNFDiscoveryPCF() (problemDetails *models.ProblemDetails, err error) {
 		err = openapi.ReportError("server no response")
 	}
 
-	return
+	return problemDetails, err
 }
 
 func SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.ProblemDetails, error) {
@@ -185,14 +207,19 @@ func SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.Proble
 	if localErr == nil {
 		if result.NfInstances == nil {
 			if status := httpResp.StatusCode; status != http.StatusOK {
-				logger.AppLog.Warnln("handler returned wrong status code", status)
+				logger.ConsumerLog.Warnln("handler returned wrong status code", status)
 			}
-			logger.AppLog.Warnln("NfInstances is nil")
+			logger.ConsumerLog.Warnln("NfInstances is nil")
 			return nil, openapi.ReportError("NfInstances is nil")
 		}
-		logger.AppLog.Info("SendNFDiscoveryServingAMF ok")
+		logger.ConsumerLog.Info("SendNFDiscoveryServingAMF ok")
 		smContext.AMFProfile = deepcopy.Copy(result.NfInstances[0]).(models.NfProfile)
 	} else if httpResp != nil {
+		defer func() {
+			if resCloseErr := httpResp; resCloseErr != nil {
+				logger.ConsumerLog.Errorf("SearchNFInstances response body cannot close: %+v", resCloseErr)
+			}
+		}()
 		if httpResp.Status != localErr.Error() {
 			return nil, localErr
 		}
@@ -203,25 +230,26 @@ func SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.Proble
 	}
 
 	return nil, nil
-
 }
 
 func SendDeregisterNFInstance() (*models.ProblemDetails, error) {
-	logger.AppLog.Infof("Send Deregister NFInstance")
+	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
 	smfSelf := smf_context.SMF_Self()
 	// Set client and set url
 
-	var res *http.Response
-
-	var err error
-	res, err = smfSelf.
+	res, err := smfSelf.
 		NFManagementClient.
 		NFInstanceIDDocumentApi.
 		DeregisterNFInstance(context.Background(), smfSelf.NfInstanceID)
 	if err == nil {
 		return nil, err
 	} else if res != nil {
+		defer func() {
+			if resCloseErr := res.Body.Close(); resCloseErr != nil {
+				logger.ConsumerLog.Errorf("DeregisterNFInstance response body cannot close: %+v", resCloseErr)
+			}
+		}()
 		if res.Status != err.Error() {
 			return nil, err
 		}

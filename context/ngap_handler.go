@@ -1,15 +1,14 @@
 package context
 
 import (
-	"errors"
-
 	"bytes"
+	"encoding/binary"
+	"errors"
 	"fmt"
 
-	"encoding/binary"
-	"free5gc/lib/aper"
-	"free5gc/lib/ngap/ngapType"
-	"free5gc/lib/pfcp/pfcpType"
+	"github.com/free5gc/aper"
+	"github.com/free5gc/ngap/ngapType"
+	"github.com/free5gc/pfcp/pfcpType"
 )
 
 func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) (err error) {
@@ -21,7 +20,7 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) (er
 		return err
 	}
 
-	QosFlowPerTNLInformation := resourceSetupResponseTransfer.QosFlowPerTNLInformation
+	QosFlowPerTNLInformation := resourceSetupResponseTransfer.DLQosFlowPerTNLInformation
 
 	if QosFlowPerTNLInformation.UPTransportLayerInformation.Present !=
 		ngapType.UPTransportLayerInformationPresentGTPTunnel {
@@ -36,7 +35,6 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) (er
 	ctx.Tunnel.ANInformation.TEID = teid
 
 	for _, dataPath := range ctx.Tunnel.DataPathPool {
-
 		if dataPath.Activated {
 			ANUPF := dataPath.FirstDPNode
 			DLPDR := ANUPF.DownLinkTunnel.PDR
@@ -47,7 +45,6 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) (er
 			dlOuterHeaderCreation.Teid = teid
 			dlOuterHeaderCreation.Ipv4Address = ctx.Tunnel.ANInformation.IPAddress.To4()
 		}
-
 	}
 
 	return nil
@@ -74,7 +71,6 @@ func HandlePathSwitchRequestTransfer(b []byte, ctx *SMContext) error {
 	}
 
 	for _, dataPath := range ctx.Tunnel.DataPathPool {
-
 		if dataPath.Activated {
 			ANUPF := dataPath.FirstDPNode
 			DLPDR := ANUPF.DownLinkTunnel.PDR
@@ -86,7 +82,6 @@ func HandlePathSwitchRequestTransfer(b []byte, ctx *SMContext) error {
 			dlOuterHeaderCreation.Ipv4Address = gtpTunnel.TransportLayerAddress.Value.Bytes
 			DLPDR.FAR.State = RULE_UPDATE
 		}
-
 	}
 
 	return nil
@@ -136,7 +131,6 @@ func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) (err err
 	}
 
 	for _, dataPath := range ctx.Tunnel.DataPathPool {
-
 		if dataPath.Activated {
 			ANUPF := dataPath.FirstDPNode
 			DLPDR := ANUPF.DownLinkTunnel.PDR

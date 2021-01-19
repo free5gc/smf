@@ -4,15 +4,15 @@ import (
 	"net"
 	"time"
 
-	"free5gc/lib/pfcp"
-	"free5gc/lib/pfcp/pfcpUdp"
-	"free5gc/src/smf/context"
-	"free5gc/src/smf/logger"
+	"github.com/free5gc/pfcp"
+	"github.com/free5gc/pfcp/pfcpUdp"
+	"github.com/free5gc/smf/context"
+	"github.com/free5gc/smf/logger"
 )
 
 const MaxPfcpUdpDataSize = 1024
 
-var Server pfcpUdp.PfcpServer
+var Server *pfcpUdp.PfcpServer
 
 var ServerStartTime time.Time
 
@@ -42,18 +42,15 @@ func Run(Dispatch func(*pfcpUdp.Message)) {
 
 			msg := pfcpUdp.NewMessage(remoteAddr, &pfcpMessage)
 			go Dispatch(&msg)
-
 		}
-	}(&Server)
+	}(Server)
 
 	ServerStartTime = time.Now()
 }
 
 func SendPfcp(msg pfcp.Message, addr *net.UDPAddr) {
-
 	err := Server.WriteTo(msg, addr)
 	if err != nil {
 		logger.PfcpLog.Errorf("Failed to send PFCP message: %v", err)
 	}
-
 }
