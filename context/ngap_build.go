@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/free5gc/aper"
+	"github.com/free5gc/ngap/ngapConvert"
 	"github.com/free5gc/ngap/ngapType"
 )
 
@@ -18,8 +19,31 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 
 	resourceSetupRequestTransfer := ngapType.PDUSessionResourceSetupRequestTransfer{}
 
-	// UL NG-U UP TNL Information
+	// PDU Session Aggregate Maximum Bit Rate
+	// This IE is Conditional and shall be present when at least one NonGBR QoS flow is being setup.
+	// TODO: should check if there is at least one NonGBR QoS flow
 	ie := ngapType.PDUSessionResourceSetupRequestTransferIEs{}
+	ie.Id.Value = ngapType.ProtocolIEIDPDUSessionAggregateMaximumBitRate
+	ie.Criticality.Value = ngapType.CriticalityPresentReject
+	sessRule := ctx.SelectedSessionRule()
+	if sessRule == nil || sessRule.AuthSessAmbr == nil {
+		return nil, fmt.Errorf("No PDU Session AMBR")
+	}
+	ie.Value = ngapType.PDUSessionResourceSetupRequestTransferIEsValue{
+		Present: ngapType.PDUSessionResourceSetupRequestTransferIEsPresentPDUSessionAggregateMaximumBitRate,
+		PDUSessionAggregateMaximumBitRate: &ngapType.PDUSessionAggregateMaximumBitRate{
+			PDUSessionAggregateMaximumBitRateDL: ngapType.BitRate{
+				Value: ngapConvert.UEAmbrToInt64(sessRule.AuthSessAmbr.Downlink),
+			},
+			PDUSessionAggregateMaximumBitRateUL: ngapType.BitRate{
+				Value: ngapConvert.UEAmbrToInt64(sessRule.AuthSessAmbr.Uplink),
+			},
+		},
+	}
+	resourceSetupRequestTransfer.ProtocolIEs.List = append(resourceSetupRequestTransfer.ProtocolIEs.List, ie)
+
+	// UL NG-U UP TNL Information
+	ie = ngapType.PDUSessionResourceSetupRequestTransferIEs{}
 	ie.Id.Value = ngapType.ProtocolIEIDULNGUUPTNLInformation
 	ie.Criticality.Value = ngapType.CriticalityPresentReject
 	if n3IP, err := UpNode.N3Interfaces[0].IP(ctx.SelectedPDUSessionType); err != nil {
