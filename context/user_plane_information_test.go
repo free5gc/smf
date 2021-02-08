@@ -19,13 +19,13 @@ var configuration = &factory.UserPlaneInformation{
 		"UPF1": {
 			Type:   "UPF",
 			NodeID: "192.168.179.1",
-			SNssaiInfos: []models.SnssaiUpfInfoItem{
+			SNssaiInfos: []factory.SnssaiUpfInfoItem{
 				{
 					SNssai: &models.Snssai{
 						Sst: 1,
 						Sd:  "112232",
 					},
-					DnnUpfInfoList: []models.DnnUpfInfoItem{
+					DnnUpfInfoList: []factory.DnnUpfInfoItem{
 						{Dnn: "internet"},
 					},
 				},
@@ -34,7 +34,7 @@ var configuration = &factory.UserPlaneInformation{
 						Sst: 1,
 						Sd:  "112235",
 					},
-					DnnUpfInfoList: []models.DnnUpfInfoItem{
+					DnnUpfInfoList: []factory.DnnUpfInfoItem{
 						{Dnn: "internet"},
 					},
 				},
@@ -43,13 +43,13 @@ var configuration = &factory.UserPlaneInformation{
 		"UPF2": {
 			Type:   "UPF",
 			NodeID: "192.168.179.2",
-			SNssaiInfos: []models.SnssaiUpfInfoItem{
+			SNssaiInfos: []factory.SnssaiUpfInfoItem{
 				{
 					SNssai: &models.Snssai{
 						Sst: 2,
 						Sd:  "112233",
 					},
-					DnnUpfInfoList: []models.DnnUpfInfoItem{
+					DnnUpfInfoList: []factory.DnnUpfInfoItem{
 						{Dnn: "internet"},
 					},
 				},
@@ -58,13 +58,13 @@ var configuration = &factory.UserPlaneInformation{
 		"UPF3": {
 			Type:   "UPF",
 			NodeID: "192.168.179.3",
-			SNssaiInfos: []models.SnssaiUpfInfoItem{
+			SNssaiInfos: []factory.SnssaiUpfInfoItem{
 				{
 					SNssai: &models.Snssai{
 						Sst: 3,
 						Sd:  "112234",
 					},
-					DnnUpfInfoList: []models.DnnUpfInfoItem{
+					DnnUpfInfoList: []factory.DnnUpfInfoItem{
 						{Dnn: "internet"},
 					},
 				},
@@ -73,13 +73,13 @@ var configuration = &factory.UserPlaneInformation{
 		"UPF4": {
 			Type:   "UPF",
 			NodeID: "192.168.179.4",
-			SNssaiInfos: []models.SnssaiUpfInfoItem{
+			SNssaiInfos: []factory.SnssaiUpfInfoItem{
 				{
 					SNssai: &models.Snssai{
 						Sst: 1,
 						Sd:  "112235",
 					},
-					DnnUpfInfoList: []models.DnnUpfInfoItem{
+					DnnUpfInfoList: []factory.DnnUpfInfoItem{
 						{Dnn: "internet"},
 					},
 				},

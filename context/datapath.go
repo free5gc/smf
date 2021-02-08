@@ -568,3 +568,24 @@ func (dataPath *DataPath) DeactivateTunnelAndPDR(smContext *SMContext) {
 
 	dataPath.Activated = false
 }
+
+func (dataPath *DataPath) CopyFirstDPNode() *DataPathNode {
+	if dataPath.FirstDPNode == nil {
+		return nil
+	}
+	var firstNode *DataPathNode = nil
+	var parentNode *DataPathNode = nil
+	for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
+		newNode := NewDataPathNode()
+		if firstNode == nil {
+			firstNode = newNode
+		}
+		newNode.UPF = curDataPathNode.UPF
+		if parentNode != nil {
+			newNode.AddPrev(parentNode)
+			parentNode.AddNext(newNode)
+		}
+		parentNode = newNode
+	}
+	return firstNode
+}
