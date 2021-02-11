@@ -103,11 +103,11 @@ func NewUPFInterfaceInfo(i *factory.InterfaceUpfInfoItem) *UPFInterfaceInfo {
 //*** add unit test ***//
 // IP returns the IP of the user plane IP information of the pduSessType
 func (i *UPFInterfaceInfo) IP(pduSessType uint8) (net.IP, error) {
-	if pduSessType == nasMessage.PDUSessionTypeIPv4 && len(i.IPv4EndPointAddresses) != 0 {
+	if (pduSessType == nasMessage.PDUSessionTypeIPv4 || pduSessType == nasMessage.PDUSessionTypeIPv4IPv6) && len(i.IPv4EndPointAddresses) != 0 {
 		return i.IPv4EndPointAddresses[0], nil
 	}
 
-	if pduSessType == nasMessage.PDUSessionTypeIPv6 && len(i.IPv6EndPointAddresses) != 0 {
+	if (pduSessType == nasMessage.PDUSessionTypeIPv6 || pduSessType == nasMessage.PDUSessionTypeIPv4IPv6) && len(i.IPv6EndPointAddresses) != 0 {
 		return i.IPv6EndPointAddresses[0], nil
 	}
 
