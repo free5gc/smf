@@ -1,5 +1,5 @@
 /*
- * AMF Configuration Factory
+ * SMF Configuration Factory
  */
 
 package factory
@@ -42,6 +42,7 @@ type Configuration struct {
 	ServiceNameList      []string             `yaml:"serviceNameList,omitempty"`
 	SNssaiInfo           []SnssaiInfoItem     `yaml:"snssaiInfos,omitempty"`
 	ULCL                 bool                 `yaml:"ulcl,omitempty"`
+	TrackChargingData    bool                 `yaml:"trackChargingData"`
 }
 
 type SnssaiInfoItem struct {

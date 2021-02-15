@@ -15,8 +15,10 @@ import (
 	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
+	"github.com/free5gc/smf/chf_util"
 	"github.com/free5gc/smf/consumer"
 	smf_context "github.com/free5gc/smf/context"
+	"github.com/free5gc/smf/factory"
 	"github.com/free5gc/smf/logger"
 	pfcp_message "github.com/free5gc/smf/pfcp/message"
 )
@@ -154,6 +156,18 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 			smContext.Tunnel.AddDataPath(defaultPath)
 			defaultPath.ActivateTunnelAndPDR(smContext, 255)
 		}
+	}
+
+	// Create initial Charging Data Record
+	trackChargingData := factory.SmfConfig.Configuration.TrackChargingData
+	if trackChargingData {
+		_, problemDetail := chf_util.CreateInitialChargingData(smPlmnID, smContext)
+
+		if problemDetail != nil {
+			logger.PduSessLog.Warnf("Create Initial Charging Data problem[%+v]", problemDetail)
+		}
+
+		// Todo handle create initial charging data response if needed
 	}
 
 	if defaultPath == nil {

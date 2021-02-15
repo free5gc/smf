@@ -20,11 +20,11 @@ require (
 	github.com/free5gc/util_3gpp v1.0.0
 	github.com/free5gc/version v1.0.0
 	github.com/gin-gonic/gin v1.6.3
-	github.com/google/uuid v1.1.2
+	github.com/google/uuid v1.2.0
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.7.0
 	github.com/stretchr/testify v1.6.1
-	github.com/urfave/cli v1.22.4
+	github.com/urfave/cli v1.22.5
 	gopkg.in/yaml.v2 v2.4.0
 )
