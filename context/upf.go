@@ -119,6 +119,13 @@ func (i *UPFInterfaceInfo) IP(pduSessType uint8) (net.IP, error) {
 				return resolvedAddr.IP.To4(), nil
 			} else if pduSessType == nasMessage.PDUSessionTypeIPv6 {
 				return resolvedAddr.IP.To16(), nil
+			} else {
+				v4addr := resolvedAddr.IP.To4()
+				if v4addr != nil {
+					return v4addr, nil
+				} else {
+					return resolvedAddr.IP.To16(), nil
+				}
 			}
 		}
 	}
