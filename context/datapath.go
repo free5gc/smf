@@ -163,6 +163,7 @@ func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 	pdr := node.UpLinkTunnel.PDR
 	far := node.UpLinkTunnel.PDR.FAR
 	bar := node.UpLinkTunnel.PDR.FAR.BAR
+	teid := node.UpLinkTunnel.TEID
 	qerList := node.UpLinkTunnel.PDR.QER
 
 	smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
@@ -193,6 +194,7 @@ func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 		}
 	}
 
+	node.UPF.teidGenerator.FreeID(int64(teid))
 	node.UpLinkTunnel = &GTPTunnel{}
 }
 
@@ -200,6 +202,7 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 	pdr := node.DownLinkTunnel.PDR
 	far := node.DownLinkTunnel.PDR.FAR
 	bar := node.DownLinkTunnel.PDR.FAR.BAR
+	teid := node.DownLinkTunnel.TEID
 	qerList := node.DownLinkTunnel.PDR.QER
 
 	smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
@@ -230,6 +233,7 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 		}
 	}
 
+	node.UPF.teidGenerator.FreeID(int64(teid))
 	node.DownLinkTunnel = &GTPTunnel{}
 }
 

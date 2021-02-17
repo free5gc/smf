@@ -334,7 +334,7 @@ func (upf *UPF) pdrID() (uint16, error) {
 	}
 
 	var pdrID uint16
-	if tmpID, err := upf.farIDGenerator.Allocate(); err != nil {
+	if tmpID, err := upf.pdrIDGenerator.Allocate(); err != nil {
 		return 0, err
 	} else {
 		pdrID = uint16(tmpID)
@@ -366,7 +366,7 @@ func (upf *UPF) barID() (uint8, error) {
 	}
 
 	var barID uint8
-	if tmpID, err := upf.farIDGenerator.Allocate(); err != nil {
+	if tmpID, err := upf.barIDGenerator.Allocate(); err != nil {
 		return 0, err
 	} else {
 		barID = uint8(tmpID)
