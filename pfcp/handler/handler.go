@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp"
@@ -279,6 +280,8 @@ func HandlePfcpSessionDeletionResponse(msg *pfcpUdp.Message) {
 	}
 
 	if pfcpRsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
+		waitForPFCPModificationCount := 10
+	spin:
 		if smContext.SMContextState == smf_context.PFCPModification {
 			upfNodeID := smContext.GetNodeIDByLocalSEID(SEID)
 			upfIP := upfNodeID.ResolveNodeIdToIp().String()
@@ -288,6 +291,16 @@ func HandlePfcpSessionDeletionResponse(msg *pfcpUdp.Message) {
 			if smContext.PendingUPF.IsEmpty() {
 				smContext.SBIPFCPCommunicationChan <- smf_context.SessionReleaseSuccess
 			}
+		} else if smContext.SMContextState == smf_context.Active {
+			waitForPFCPModificationCount--
+			if waitForPFCPModificationCount > 0 {
+				logger.PfcpLog.Tracef("smf_context is still Active, retrying. count: %d", waitForPFCPModificationCount)
+				time.Sleep(1 * time.Millisecond)
+				goto spin
+			}
+			logger.PfcpLog.Debugln("Timeout waiting for sm_context status change from Active")
+			smContext.SBIPFCPCommunicationChan <- smf_context.SessionReleaseFailed
+			logger.PfcpLog.Infof("PFCP Session Deletion Failed[%d]\n", SEID)
 		}
 		logger.PfcpLog.Infof("PFCP Session Deletion Success[%d]\n", SEID)
 	} else {
