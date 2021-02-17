@@ -109,47 +109,45 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	pDUSessionEstablishmentAccept.DNN.SetLen(uint8(len(dnn)))
 	pDUSessionEstablishmentAccept.DNN.SetDNN(dnn)
 
-	if smContext.ProtocolConfigurationOptions.DNSIPv4Request || smContext.ProtocolConfigurationOptions.DNSIPv6Request {
-		if smContext.ProtocolConfigurationOptions.IPv4LinkMTURequest {
-			pDUSessionEstablishmentAccept.ExtendedProtocolConfigurationOptions =
-				nasType.NewExtendedProtocolConfigurationOptions(
-					nasMessage.PDUSessionEstablishmentAcceptExtendedProtocolConfigurationOptionsType,
-				)
-			protocolConfigurationOptions := nasConvert.NewProtocolConfigurationOptions()
+	if smContext.ProtocolConfigurationOptions.DNSIPv4Request || smContext.ProtocolConfigurationOptions.DNSIPv6Request || smContext.ProtocolConfigurationOptions.IPv4LinkMTURequest {
+		pDUSessionEstablishmentAccept.ExtendedProtocolConfigurationOptions =
+			nasType.NewExtendedProtocolConfigurationOptions(
+				nasMessage.PDUSessionEstablishmentAcceptExtendedProtocolConfigurationOptionsType,
+			)
+		protocolConfigurationOptions := nasConvert.NewProtocolConfigurationOptions()
 
-			// IPv4 DNS
-			if smContext.ProtocolConfigurationOptions.DNSIPv4Request {
-				err := protocolConfigurationOptions.AddDNSServerIPv4Address(smContext.DNNInfo.DNS.IPv4Addr)
-				if err != nil {
-					logger.GsmLog.Warnln("Error while adding DNS IPv4 Addr: ", err)
-				}
+		// IPv4 DNS
+		if smContext.ProtocolConfigurationOptions.DNSIPv4Request {
+			err := protocolConfigurationOptions.AddDNSServerIPv4Address(smContext.DNNInfo.DNS.IPv4Addr)
+			if err != nil {
+				logger.GsmLog.Warnln("Error while adding DNS IPv4 Addr: ", err)
 			}
-
-			// IPv6 DNS
-			if smContext.ProtocolConfigurationOptions.DNSIPv6Request {
-				err := protocolConfigurationOptions.AddDNSServerIPv6Address(smContext.DNNInfo.DNS.IPv6Addr)
-				if err != nil {
-					logger.GsmLog.Warnln("Error while adding DNS IPv6 Addr: ", err)
-				}
-			}
-
-			// MTU
-			if smContext.ProtocolConfigurationOptions.IPv4LinkMTURequest {
-				err := protocolConfigurationOptions.AddIPv4LinkMTU(1400)
-				if err != nil {
-					logger.GsmLog.Warnln("Error while adding MTU: ", err)
-				}
-			}
-
-			pcoContents := protocolConfigurationOptions.Marshal()
-			pcoContentsLength := len(pcoContents)
-			pDUSessionEstablishmentAccept.
-				ExtendedProtocolConfigurationOptions.
-				SetLen(uint16(pcoContentsLength))
-			pDUSessionEstablishmentAccept.
-				ExtendedProtocolConfigurationOptions.
-				SetExtendedProtocolConfigurationOptionsContents(pcoContents)
 		}
+
+		// IPv6 DNS
+		if smContext.ProtocolConfigurationOptions.DNSIPv6Request {
+			err := protocolConfigurationOptions.AddDNSServerIPv6Address(smContext.DNNInfo.DNS.IPv6Addr)
+			if err != nil {
+				logger.GsmLog.Warnln("Error while adding DNS IPv6 Addr: ", err)
+			}
+		}
+
+		// MTU
+		if smContext.ProtocolConfigurationOptions.IPv4LinkMTURequest {
+			err := protocolConfigurationOptions.AddIPv4LinkMTU(1400)
+			if err != nil {
+				logger.GsmLog.Warnln("Error while adding MTU: ", err)
+			}
+		}
+
+		pcoContents := protocolConfigurationOptions.Marshal()
+		pcoContentsLength := len(pcoContents)
+		pDUSessionEstablishmentAccept.
+			ExtendedProtocolConfigurationOptions.
+			SetLen(uint16(pcoContentsLength))
+		pDUSessionEstablishmentAccept.
+			ExtendedProtocolConfigurationOptions.
+			SetExtendedProtocolConfigurationOptionsContents(pcoContents)
 	}
 	return m.PlainNasEncode()
 }
