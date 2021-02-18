@@ -163,6 +163,10 @@ func InitSmfContext(config *factory.Config) {
 			dnnInfo := SnssaiSmfDnnInfo{}
 			dnnInfo.DNS.IPv4Addr = net.ParseIP(dnnInfoConfig.DNS.IPv4Addr).To4()
 			dnnInfo.DNS.IPv6Addr = net.ParseIP(dnnInfoConfig.DNS.IPv6Addr).To4()
+			if dnnInfoConfig.PCSCFIPv4Address != "" {
+				pCSCFIPv4Address := net.ParseIP(dnnInfoConfig.PCSCFIPv4Address).To4()
+				dnnInfo.PCSCFIPv4Address = &pCSCFIPv4Address
+			}
 			if allocator, err := NewIPAllocator(dnnInfoConfig.UESubnet); err != nil {
 				logger.InitLog.Errorf("create ip allocator[%s] failed: %s", dnnInfoConfig.UESubnet, err)
 				continue
