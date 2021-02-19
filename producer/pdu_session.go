@@ -304,6 +304,9 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 				response.BinaryDataN2SmInformation = buf
 			}
 
+			smContext.SMContextState = smf_context.PFCPModification
+			logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+
 			deletedPFCPNode := make(map[string]bool)
 			smContext.PendingUPF = make(smf_context.PendingUPF)
 			for _, dataPath := range smContext.Tunnel.DataPathPool {
@@ -323,8 +326,6 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			}
 
 			sendPFCPDelete = true
-			smContext.SMContextState = smf_context.PFCPModification
-			logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 		case nas.MsgTypePDUSessionReleaseComplete:
 			if smContext.SMContextState != smf_context.InActivePending {
 				// Wait till the state becomes Active again
@@ -661,6 +662,11 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			logger.PduSessLog.Error(err)
 		}
 
+		logger.CtxLog.Infoln("[SMF] Cause_REL_DUE_TO_DUPLICATE_SESSION_ID")
+
+		smContext.SMContextState = smf_context.PFCPModification
+		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+
 		deletedPFCPNode := make(map[string]bool)
 		smContext.PendingUPF = make(smf_context.PendingUPF)
 		for _, dataPath := range smContext.Tunnel.DataPathPool {
@@ -680,9 +686,6 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		}
 
 		sendPFCPDelete = true
-		smContext.SMContextState = smf_context.PFCPModification
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
-		logger.CtxLog.Infoln("[SMF] Cause_REL_DUE_TO_DUPLICATE_SESSION_ID")
 	}
 
 	var httpResponse *http_wrapper.Response
@@ -794,6 +797,9 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 	defer smContext.SMLock.Unlock()
 	// smf_context.RemoveSMContext(smContext.Ref)
 
+	smContext.SMContextState = smf_context.PFCPModification
+	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+
 	deletedPFCPNode := make(map[string]bool)
 	smContext.PendingUPF = make(smf_context.PendingUPF)
 	for _, dataPath := range smContext.Tunnel.DataPathPool {
@@ -811,9 +817,6 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 			}
 		}
 	}
-
-	smContext.SMContextState = smf_context.PFCPModification
-	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 
 	var httpResponse *http_wrapper.Response
 	PFCPResponseStatus := <-smContext.SBIPFCPCommunicationChan
