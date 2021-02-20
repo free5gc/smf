@@ -17,16 +17,24 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 	// Handle PDUSessionType
 	if req.PDUSessionType != nil {
 		requestedPDUSessionType := req.PDUSessionType.GetPDUSessionTypeValue()
-		if smContext.isAllowedPDUSessionType(requestedPDUSessionType) {
-			smContext.SelectedPDUSessionType = requestedPDUSessionType
-		} else {
-			logger.CtxLog.Errorf("requested pdu session type [%s] is not in allowed type\n",
-				nasConvert.PDUSessionTypeToModels(requestedPDUSessionType))
+		if err := smContext.isAllowedPDUSessionType(requestedPDUSessionType); err != nil {
+			logger.CtxLog.Errorf("%s", err)
+			return
 		}
 	} else {
-		// Default to IPv4
-		// TODO: use Default PDU Session Type
-		smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4
+		// Set to default supported PDU Session Type
+		switch SMF_Self().SupportedPDUSessionType {
+		case "IPv4":
+			smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4
+		case "IPv6":
+			smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv6
+		case "IPv4v6":
+			smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4IPv6
+		case "Ethernet":
+			smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeEthernet
+		default:
+			smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4
+		}
 	}
 
 	if req.ExtendedProtocolConfigurationOptions != nil {

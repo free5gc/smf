@@ -7,7 +7,6 @@ import (
 	"github.com/free5gc/nas/nasConvert"
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/nas/nasType"
-	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/logger"
 )
 
@@ -27,21 +26,9 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	pDUSessionEstablishmentAccept.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
 	pDUSessionEstablishmentAccept.SetPTI(smContext.Pti)
 
-	selectedPDUSessionType := nasConvert.PDUSessionTypeToModels(smContext.SelectedPDUSessionType)
-	if selectedPDUSessionType == models.PduSessionType_IPV4_V6 {
-		onlySupportIPv4 := SMF_Self().OnlySupportIPv4
-		onlySupportIPv6 := SMF_Self().OnlySupportIPv6
-
-		if onlySupportIPv4 {
-			smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4
-			pDUSessionEstablishmentAccept.Cause5GSM = nasType.NewCause5GSM(nasMessage.PDUSessionEstablishmentAcceptCause5GSMType)
-			pDUSessionEstablishmentAccept.SetCauseValue(nasMessage.Cause5GSMPDUSessionTypeIPv4OnlyAllowed)
-		}
-		if onlySupportIPv6 {
-			smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv6
-			pDUSessionEstablishmentAccept.Cause5GSM = nasType.NewCause5GSM(nasMessage.PDUSessionEstablishmentAcceptCause5GSMType)
-			pDUSessionEstablishmentAccept.SetCauseValue(nasMessage.Cause5GSMPDUSessionTypeIPv6OnlyAllowed)
-		}
+	if v := smContext.EstAcceptCause5gSMValue; v != 0 {
+		pDUSessionEstablishmentAccept.Cause5GSM = nasType.NewCause5GSM(nasMessage.PDUSessionEstablishmentAcceptCause5GSMType)
+		pDUSessionEstablishmentAccept.Cause5GSM.SetCauseValue(v)
 	}
 	pDUSessionEstablishmentAccept.SetPDUSessionType(smContext.SelectedPDUSessionType)
 
@@ -87,9 +74,6 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 		nasType.NewAuthorizedQosFlowDescriptions(nasMessage.PDUSessionEstablishmentAcceptAuthorizedQosFlowDescriptionsType)
 	pDUSessionEstablishmentAccept.AuthorizedQosFlowDescriptions.SetLen(6)
 	pDUSessionEstablishmentAccept.SetQoSFlowDescriptions([]uint8{uint8(authDefQos.Var5qi), 0x20, 0x41, 0x01, 0x01, 0x09})
-
-	pDUSessionEstablishmentAccept.Cause5GSM = nasType.NewCause5GSM(nasMessage.PDUSessionEstablishmentAcceptCause5GSMType)
-	pDUSessionEstablishmentAccept.Cause5GSM.SetCauseValue(nasMessage.Cause5GSMPDUSessionTypeIPv4OnlyAllowed)
 
 	var sd [3]uint8
 
