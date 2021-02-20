@@ -109,7 +109,8 @@ type SMContext struct {
 	TrafficControlPool map[string]*TrafficControlData
 
 	// NAS
-	Pti uint8
+	Pti                     uint8
+	EstAcceptCause5gSMValue uint8
 
 	// PCO Related
 	ProtocolConfigurationOptions *ProtocolConfigurationOptions
@@ -333,11 +334,10 @@ func (smContext *SMContext) RemovePDRfromPFCPSession(nodeID pfcpType.NodeID, pdr
 	delete(pfcpSessCtx.PDRs, pdr.PDRID)
 }
 
-func (smContext *SMContext) isAllowedPDUSessionType(nasPDUSessionType uint8) bool {
+func (smContext *SMContext) isAllowedPDUSessionType(requestedPDUSessionType uint8) error {
 	dnnPDUSessionType := smContext.DnnConfiguration.PduSessionTypes
 	if dnnPDUSessionType == nil {
-		logger.CtxLog.Errorf("this SMContext[%s] has no subscription pdu session type info\n", smContext.Ref)
-		return false
+		return fmt.Errorf("this SMContext[%s] has no subscription pdu session type info", smContext.Ref)
 	}
 
 	allowIPv4 := false
@@ -358,35 +358,62 @@ func (smContext *SMContext) isAllowedPDUSessionType(nasPDUSessionType uint8) boo
 		}
 	}
 
-	switch nasConvert.PDUSessionTypeToModels(nasPDUSessionType) {
+	supportedPDUSessionType := SMF_Self().SupportedPDUSessionType
+	switch supportedPDUSessionType {
+	case "IPv4":
+		if !allowIPv4 {
+			return fmt.Errorf("No SupportedPDUSessionType[%q] in DNN[%s] configuration", supportedPDUSessionType, smContext.Dnn)
+		}
+	case "IPv6":
+		if !allowIPv6 {
+			return fmt.Errorf("No SupportedPDUSessionType[%q] in DNN[%s] configuration", supportedPDUSessionType, smContext.Dnn)
+		}
+	case "IPv4v6":
+		if !allowIPv4 && !allowIPv6 {
+			return fmt.Errorf("No SupportedPDUSessionType[%q] in DNN[%s] configuration", supportedPDUSessionType, smContext.Dnn)
+		}
+	case "Ethernet":
+		if !allowEthernet {
+			return fmt.Errorf("No SupportedPDUSessionType[%q] in DNN[%s] configuration", supportedPDUSessionType, smContext.Dnn)
+		}
+	}
+
+	smContext.EstAcceptCause5gSMValue = 0
+	switch nasConvert.PDUSessionTypeToModels(requestedPDUSessionType) {
 	case models.PduSessionType_IPV4:
 		if allowIPv4 {
-			return true
+			smContext.SelectedPDUSessionType = nasConvert.ModelsToPDUSessionType(models.PduSessionType_IPV4)
 		} else {
-			return false
+			return fmt.Errorf("PduSessionType_IPV4 is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
-
 	case models.PduSessionType_IPV6:
 		if allowIPv6 {
-			return true
+			smContext.SelectedPDUSessionType = nasConvert.ModelsToPDUSessionType(models.PduSessionType_IPV6)
 		} else {
-			return false
+			return fmt.Errorf("PduSessionType_IPV6 is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	case models.PduSessionType_IPV4_V6:
-		if allowIPv4 || allowIPv6 {
-			return true
+		if allowIPv4 && allowIPv6 {
+			smContext.SelectedPDUSessionType = nasConvert.ModelsToPDUSessionType(models.PduSessionType_IPV4_V6)
+		} else if allowIPv4 {
+			smContext.SelectedPDUSessionType = nasConvert.ModelsToPDUSessionType(models.PduSessionType_IPV4)
+			smContext.EstAcceptCause5gSMValue = nasMessage.Cause5GSMPDUSessionTypeIPv4OnlyAllowed
+		} else if allowIPv6 {
+			smContext.SelectedPDUSessionType = nasConvert.ModelsToPDUSessionType(models.PduSessionType_IPV6)
+			smContext.EstAcceptCause5gSMValue = nasMessage.Cause5GSMPDUSessionTypeIPv6OnlyAllowed
 		} else {
-			return false
+			return fmt.Errorf("PduSessionType_IPV4_V6 is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	case models.PduSessionType_ETHERNET:
 		if allowEthernet {
-			return true
+			smContext.SelectedPDUSessionType = nasConvert.ModelsToPDUSessionType(models.PduSessionType_ETHERNET)
 		} else {
-			return false
+			return fmt.Errorf("PduSessionType_ETHERNET is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	default:
-		return false
+		return fmt.Errorf("Requested PDU Sesstion type[%d] is not supported", requestedPDUSessionType)
 	}
+	return nil
 }
 
 // SM Policy related operation

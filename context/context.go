@@ -49,8 +49,11 @@ type SMFContext struct {
 	SubscriberDataManagementClient *Nudm_SubscriberDataManagement.APIClient
 
 	UserPlaneInformation *UserPlaneInformation
-	OnlySupportIPv4      bool
-	OnlySupportIPv6      bool
+
+	// Now only "IPv4" supported
+	// TODO: support "IPv6", "IPv4v6", "Ethernet"
+	SupportedPDUSessionType string
+
 	//*** For ULCL ** //
 	ULCLSupport         bool
 	UEPreConfigPathPool map[string]*UEPreConfigPaths
@@ -182,7 +185,7 @@ func InitSmfContext(config *factory.Config) {
 
 	smfContext.ULCLSupport = configuration.ULCL
 
-	smfContext.OnlySupportIPv4 = true
+	smfContext.SupportedPDUSessionType = "IPv4"
 
 	smfContext.UserPlaneInformation = NewUserPlaneInformation(&configuration.UserPlaneInformation)
 
