@@ -307,23 +307,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			smContext.SMContextState = smf_context.PFCPModification
 			logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 
-			deletedPFCPNode := make(map[string]bool)
-			smContext.PendingUPF = make(smf_context.PendingUPF)
-			for _, dataPath := range smContext.Tunnel.DataPathPool {
-				dataPath.DeactivateTunnelAndPDR(smContext)
-				for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
-					curUPFID, err := curDataPathNode.GetUPFID()
-					if err != nil {
-						logger.PduSessLog.Error("DataPath UPFID not found")
-						continue
-					}
-					if _, exist := deletedPFCPNode[curUPFID]; !exist {
-						pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
-						deletedPFCPNode[curUPFID] = true
-						smContext.PendingUPF[curDataPathNode.GetNodeIP()] = true
-					}
-				}
-			}
+			releaseTunnel(smContext)
 
 			sendPFCPDelete = true
 		case nas.MsgTypePDUSessionReleaseComplete:
@@ -667,23 +651,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		smContext.SMContextState = smf_context.PFCPModification
 		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 
-		deletedPFCPNode := make(map[string]bool)
-		smContext.PendingUPF = make(smf_context.PendingUPF)
-		for _, dataPath := range smContext.Tunnel.DataPathPool {
-			dataPath.DeactivateTunnelAndPDR(smContext)
-			for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
-				curUPFID, err := curDataPathNode.GetUPFID()
-				if err != nil {
-					logger.PduSessLog.Error("DataPath UPFID not found")
-					continue
-				}
-				if _, exist := deletedPFCPNode[curUPFID]; !exist {
-					pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
-					deletedPFCPNode[curUPFID] = true
-					smContext.PendingUPF[curDataPathNode.GetNodeIP()] = true
-				}
-			}
-		}
+		releaseTunnel(smContext)
 
 		sendPFCPDelete = true
 	}
@@ -800,23 +768,7 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 	smContext.SMContextState = smf_context.PFCPModification
 	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 
-	deletedPFCPNode := make(map[string]bool)
-	smContext.PendingUPF = make(smf_context.PendingUPF)
-	for _, dataPath := range smContext.Tunnel.DataPathPool {
-		dataPath.DeactivateTunnelAndPDR(smContext)
-		for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
-			curUPFID, err := curDataPathNode.GetUPFID()
-			if err != nil {
-				logger.PduSessLog.Error("DataPath UPFID not found")
-				continue
-			}
-			if _, exist := deletedPFCPNode[curUPFID]; !exist {
-				pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
-				deletedPFCPNode[curUPFID] = true
-				smContext.PendingUPF[curDataPathNode.GetNodeIP()] = true
-			}
-		}
-	}
+	releaseTunnel(smContext)
 
 	var httpResponse *http_wrapper.Response
 	PFCPResponseStatus := <-smContext.SBIPFCPCommunicationChan
@@ -886,4 +838,24 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 	}
 
 	return httpResponse
+}
+
+func releaseTunnel(smContext *smf_context.SMContext) {
+	deletedPFCPNode := make(map[string]bool)
+	smContext.PendingUPF = make(smf_context.PendingUPF)
+	for _, dataPath := range smContext.Tunnel.DataPathPool {
+		dataPath.DeactivateTunnelAndPDR(smContext)
+		for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
+			curUPFID, err := curDataPathNode.GetUPFID()
+			if err != nil {
+				logger.PduSessLog.Error(err)
+				continue
+			}
+			if _, exist := deletedPFCPNode[curUPFID]; !exist {
+				pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
+				deletedPFCPNode[curUPFID] = true
+				smContext.PendingUPF[curDataPathNode.GetNodeIP()] = true
+			}
+		}
+	}
 }
