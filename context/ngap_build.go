@@ -146,11 +146,15 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 	ULNGUUPTNLInformation.Present = ngapType.UPTransportLayerInformationPresentGTPTunnel
 	ULNGUUPTNLInformation.GTPTunnel = new(ngapType.GTPTunnel)
 
-	gtpTunnel := pathSwitchRequestAcknowledgeTransfer.ULNGUUPTNLInformation.GTPTunnel
-	gtpTunnel.GTPTEID.Value = teidOct
-	gtpTunnel.TransportLayerAddress.Value = aper.BitString{
-		Bytes:     UpNode.NodeID.NodeIdValue,
-		BitLength: uint64(len(UpNode.NodeID.NodeIdValue) * 8),
+	if n3IP, err := UpNode.N3Interfaces[0].IP(ctx.SelectedPDUSessionType); err != nil {
+		return nil, err
+	} else {
+		gtpTunnel := ULNGUUPTNLInformation.GTPTunnel
+		gtpTunnel.GTPTEID.Value = teidOct
+		gtpTunnel.TransportLayerAddress.Value = aper.BitString{
+			Bytes:     n3IP,
+			BitLength: uint64(len(n3IP) * 8),
+		}
 	}
 
 	// Security Indication(optional) TS 38.413 9.3.1.27
@@ -225,7 +229,7 @@ func BuildPDUSessionResourceReleaseCommandTransfer(ctx *SMContext) (buf []byte, 
 	return
 }
 
-func BuildHandoverCommandTransfer(ctx *SMContext) (buf []byte, err error) {
+func BuildHandoverCommandTransfer(ctx *SMContext) ([]byte, error) {
 	ANUPF := ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
 	UpNode := ANUPF.UPF
 	teidOct := make([]byte, 4)
@@ -236,16 +240,20 @@ func BuildHandoverCommandTransfer(ctx *SMContext) (buf []byte, err error) {
 	handoverCommandTransfer.DLForwardingUPTNLInformation.Present = ngapType.UPTransportLayerInformationPresentGTPTunnel
 	handoverCommandTransfer.DLForwardingUPTNLInformation.GTPTunnel = new(ngapType.GTPTunnel)
 
-	gtpTunnel := handoverCommandTransfer.DLForwardingUPTNLInformation.GTPTunnel
-	gtpTunnel.GTPTEID.Value = teidOct
-	gtpTunnel.TransportLayerAddress.Value = aper.BitString{
-		Bytes:     UpNode.NodeID.NodeIdValue,
-		BitLength: uint64(len(UpNode.NodeID.NodeIdValue) * 8),
+	if n3IP, err := UpNode.N3Interfaces[0].IP(ctx.SelectedPDUSessionType); err != nil {
+		return nil, err
+	} else {
+		gtpTunnel := handoverCommandTransfer.DLForwardingUPTNLInformation.GTPTunnel
+		gtpTunnel.GTPTEID.Value = teidOct
+		gtpTunnel.TransportLayerAddress.Value = aper.BitString{
+			Bytes:     n3IP,
+			BitLength: uint64(len(n3IP) * 8),
+		}
 	}
 
-	buf, err = aper.MarshalWithParams(handoverCommandTransfer, "valueExt")
-	if err != nil {
+	if buf, err := aper.MarshalWithParams(handoverCommandTransfer, "valueExt"); err != nil {
 		return nil, err
+	} else {
+		return buf, nil
 	}
-	return
 }

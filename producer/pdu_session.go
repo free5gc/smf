@@ -76,6 +76,8 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		logger.PduSessLog.Errorln("failed allocate IP address for this SM:", err)
 	} else {
 		smContext.PDUAddress = ip
+		logger.PduSessLog.Infof("UE[%s] PDUSessionID[%d] IP[%s]",
+			smContext.Supi, smContext.PDUSessionID, smContext.PDUAddress.String())
 	}
 
 	smPlmnID := createData.Guami.PlmnId
