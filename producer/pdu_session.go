@@ -2,6 +2,7 @@ package producer
 
 import (
 	"context"
+	"net"
 	"net/http"
 
 	"github.com/antihax/optional"
@@ -72,13 +73,70 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 	}
 
 	// IP Allocation
-	if ip, err := smContext.DNNInfo.UeIPAllocator.Allocate(); err != nil {
-		logger.PduSessLog.Errorln("failed allocate IP address for this SM:", err)
+	upfSelectionParams := &smf_context.UPFSelectionParams{
+		Dnn: createData.Dnn,
+		SNssai: &smf_context.SNssai{
+			Sst: createData.SNssai.Sst,
+			Sd:  createData.SNssai.Sd,
+		},
+	}
+	var selectedUPF *smf_context.UPNode
+	var ip net.IP
+	selectedUPFName := ""
+	if smf_context.SMF_Self().ULCLSupport && smf_context.CheckUEHasPreConfig(createData.Supi) {
+		groupName := smf_context.GetULCLGroupNameFromSUPI(createData.Supi)
+		defaultPathPool := smf_context.GetUEDefaultPathPool(groupName)
+		if defaultPathPool != nil {
+			selectedUPFName, ip = defaultPathPool.SelectUPFAndAllocUEIPForULCL(smf_context.GetUserPlaneInformation(), upfSelectionParams)
+			selectedUPF = smf_context.GetUserPlaneInformation().UPFs[selectedUPFName]
+		}
 	} else {
+		selectedUPF, ip = smf_context.GetUserPlaneInformation().SelectUPFAndAllocUEIP(upfSelectionParams)
 		smContext.PDUAddress = ip
 		logger.PduSessLog.Infof("UE[%s] PDUSessionID[%d] IP[%s]",
 			smContext.Supi, smContext.PDUSessionID, smContext.PDUAddress.String())
 	}
+	if ip == nil && (selectedUPF == nil || selectedUPFName == "") {
+		logger.PduSessLog.Error("failed allocate IP address for this SM")
+
+		smContext.SMContextState = smf_context.InActive
+		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.PduSessLog.Warnf("Data Path not found\n")
+		logger.PduSessLog.Warnln("Selection Parameter: ", upfSelectionParams.String())
+
+		var httpResponse *http_wrapper.Response
+		if buf, err := smf_context.
+			BuildGSMPDUSessionEstablishmentReject(
+				smContext,
+				nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN); err != nil {
+			httpResponse = &http_wrapper.Response{
+				Header: nil,
+				Status: http.StatusForbidden,
+				Body: models.PostSmContextsErrorResponse{
+					JsonData: &models.SmContextCreateError{
+						Error:   &Nsmf_PDUSession.InsufficientResourceSliceDnn,
+						N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
+					},
+				},
+			}
+		} else {
+			httpResponse = &http_wrapper.Response{
+				Header: nil,
+				Status: http.StatusForbidden,
+				Body: models.PostSmContextsErrorResponse{
+					JsonData: &models.SmContextCreateError{
+						Error:   &Nsmf_PDUSession.InsufficientResourceSliceDnn,
+						N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
+					},
+					BinaryDataN1SmMessage: buf,
+				},
+			}
+		}
+
+		return httpResponse
+	}
+	smContext.PDUAddress = ip
+	smContext.SelectedUPF = selectedUPF
 
 	smPlmnID := createData.Guami.PlmnId
 
@@ -129,17 +187,10 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		logger.PduSessLog.Errorf("apply sm policy decision error: %+v", err)
 	}
 	var defaultPath *smf_context.DataPath
-	upfSelectionParams := &smf_context.UPFSelectionParams{
-		Dnn: createData.Dnn,
-		SNssai: &smf_context.SNssai{
-			Sst: createData.SNssai.Sst,
-			Sd:  createData.SNssai.Sd,
-		},
-	}
 
 	if smf_context.SMF_Self().ULCLSupport && smf_context.CheckUEHasPreConfig(createData.Supi) {
 		logger.PduSessLog.Infof("SUPI[%s] has pre-config route", createData.Supi)
-		uePreConfigPaths := smf_context.GetUEPreConfigPaths(createData.Supi)
+		uePreConfigPaths := smf_context.GetUEPreConfigPaths(createData.Supi, selectedUPFName)
 		smContext.Tunnel.DataPathPool = uePreConfigPaths.DataPathPool
 		smContext.Tunnel.PathIDGenerator = uePreConfigPaths.PathIDGenerator
 		defaultPath = smContext.Tunnel.DataPathPool.GetDefaultPath()
@@ -149,7 +200,8 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		// UE has no pre-config path.
 		// Use default route
 		logger.PduSessLog.Infof("SUPI[%s] has no pre-config route", createData.Supi)
-		defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(upfSelectionParams)
+		defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNNAndUPF(
+			upfSelectionParams, smContext.SelectedUPF)
 		defaultPath = smf_context.GenerateDataPath(defaultUPPath, smContext)
 		if defaultPath != nil {
 			defaultPath.IsDefaultPath = true
@@ -289,6 +341,11 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			}
 
 			smContext.HandlePDUSessionReleaseRequest(m.PDUSessionReleaseRequest)
+			if smContext.SelectedUPF != nil {
+				logger.PduSessLog.Infof("UE[%s] PDUSessionID[%d] Release IP[%s]",
+					smContext.Supi, smContext.PDUSessionID, smContext.PDUAddress.String())
+				smf_context.GetUserPlaneInformation().ReleaseUEIP(smContext.SelectedUPF, smContext.PDUAddress)
+			}
 			if buf, err := smf_context.BuildGSMPDUSessionReleaseCommand(smContext); err != nil {
 				logger.PduSessLog.Errorf("Build GSM PDUSessionReleaseCommand failed: %+v", err)
 			} else {

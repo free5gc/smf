@@ -1,6 +1,11 @@
 package context
 
-import "github.com/free5gc/openapi/models"
+import (
+	"net"
+
+	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/smf/context/pool"
+)
 
 type SNssai struct {
 	Sst int32
@@ -22,6 +27,13 @@ type DnnUPFInfoItem struct {
 	Dnn             string
 	DnaiList        []string
 	PduSessionTypes []models.PduSessionType
+	UeIPPools       []*UeIPPool
+}
+
+// UeIPPool represent IP address pool for UE
+type UeIPPool struct {
+	ueSubNet *net.IPNet
+	pool     *pool.LazyReusePool
 }
 
 // ContainsDNAI return true if the this dnn Info contains the specify DNAI

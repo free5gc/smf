@@ -10,8 +10,7 @@ type SnssaiSmfInfo struct {
 
 // SnssaiSmfDnnInfo records the SMF per S-NSSAI DNN information
 type SnssaiSmfDnnInfo struct {
-	DNS           DNS
-	UeIPAllocator *IPAllocator
+	DNS DNS
 }
 
 type DNS struct {
