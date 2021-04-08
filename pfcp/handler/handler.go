@@ -318,63 +318,65 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 	smContext.SMLock.Lock()
 	defer smContext.SMLock.Unlock()
 
-	if req.ReportType.Dldr {
-		downlinkDataReport := req.DownlinkDataReport
+	if smContext.UpCnxState == models.UpCnxState_DEACTIVATED {
+		if req.ReportType.Dldr {
+			downlinkDataReport := req.DownlinkDataReport
 
-		if downlinkDataReport.DownlinkDataServiceInformation != nil {
-			logger.PfcpLog.Warnf("PFCP Session Report Request DownlinkDataServiceInformation handling is not implemented")
-		}
+			if downlinkDataReport.DownlinkDataServiceInformation != nil {
+				logger.PfcpLog.Warnf("PFCP Session Report Request DownlinkDataServiceInformation handling is not implemented")
+			}
 
-		// TS 23.502 4.2.3.3 2b. Send Data Notification Ack, SMF->UPF
-		cause.CauseValue = pfcpType.CauseRequestAccepted
-		// TODO fix: SEID should be the value sent by UPF but now the SEID value is from sm context
-		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, SEID)
+			n1n2Request := models.N1N2MessageTransferRequest{}
 
-		n1n2Request := models.N1N2MessageTransferRequest{}
+			// TS 23.502 4.2.3.3 3a. Send Namf_Communication_N1N2MessageTransfer Request, SMF->AMF
+			if n2SmBuf, err := smf_context.BuildPDUSessionResourceSetupRequestTransfer(smContext); err != nil {
+				logger.PduSessLog.Errorln("Build PDUSessionResourceSetupRequestTransfer failed:", err)
+			} else {
+				n1n2Request.BinaryDataN2Information = n2SmBuf
+			}
 
-		// TS 23.502 4.2.3.3 3a. Send Namf_Communication_N1N2MessageTransfer Request, SMF->AMF
-		if n2SmBuf, err := smf_context.BuildPDUSessionResourceSetupRequestTransfer(smContext); err != nil {
-			logger.PduSessLog.Errorln("Build PDUSessionResourceSetupRequestTransfer failed:", err)
-		} else {
-			n1n2Request.BinaryDataN2Information = n2SmBuf
-		}
-
-		n1n2Request.JsonData = &models.N1N2MessageTransferReqData{
-			PduSessionId: smContext.PDUSessionID,
-			// Temporarily assign SMF itself, TODO: TS 23.502 4.2.3.3 5. Namf_Communication_N1N2TransferFailureNotification
-			N1n2FailureTxfNotifURI: fmt.Sprintf("%s://%s:%d",
-				smf_context.SMF_Self().URIScheme,
-				smf_context.SMF_Self().RegisterIPv4,
-				smf_context.SMF_Self().SBIPort),
-			N2InfoContainer: &models.N2InfoContainer{
-				N2InformationClass: models.N2InformationClass_SM,
-				SmInfo: &models.N2SmInformation{
-					PduSessionId: smContext.PDUSessionID,
-					N2InfoContent: &models.N2InfoContent{
-						NgapIeType: models.NgapIeType_PDU_RES_SETUP_REQ,
-						NgapData: &models.RefToBinaryData{
-							ContentId: "N2SmInformation",
+			n1n2Request.JsonData = &models.N1N2MessageTransferReqData{
+				PduSessionId: smContext.PDUSessionID,
+				// Temporarily assign SMF itself, TODO: TS 23.502 4.2.3.3 5. Namf_Communication_N1N2TransferFailureNotification
+				N1n2FailureTxfNotifURI: fmt.Sprintf("%s://%s:%d",
+					smf_context.SMF_Self().URIScheme,
+					smf_context.SMF_Self().RegisterIPv4,
+					smf_context.SMF_Self().SBIPort),
+				N2InfoContainer: &models.N2InfoContainer{
+					N2InformationClass: models.N2InformationClass_SM,
+					SmInfo: &models.N2SmInformation{
+						PduSessionId: smContext.PDUSessionID,
+						N2InfoContent: &models.N2InfoContent{
+							NgapIeType: models.NgapIeType_PDU_RES_SETUP_REQ,
+							NgapData: &models.RefToBinaryData{
+								ContentId: "N2SmInformation",
+							},
 						},
+						SNssai: smContext.Snssai,
 					},
-					SNssai: smContext.Snssai,
 				},
-			},
-		}
+			}
 
-		rspData, _, err := smContext.CommunicationClient.
-			N1N2MessageCollectionDocumentApi.
-			N1N2MessageTransfer(context.Background(), smContext.Supi, n1n2Request)
-		if err != nil {
-			logger.PfcpLog.Warnf("Send N1N2Transfer failed")
-		}
-		if rspData.Cause == models.N1N2MessageTransferCause_ATTEMPTING_TO_REACH_UE {
-			logger.PfcpLog.Infof("Receive %v, AMF is able to page the UE", rspData.Cause)
-		}
-		if rspData.Cause == models.N1N2MessageTransferCause_UE_NOT_RESPONDING {
-			logger.PfcpLog.Warnf("%v", rspData.Cause)
-			// TODO: TS 23.502 4.2.3.3 3c. Failure indication
+			rspData, _, err := smContext.CommunicationClient.
+				N1N2MessageCollectionDocumentApi.
+				N1N2MessageTransfer(context.Background(), smContext.Supi, n1n2Request)
+			if err != nil {
+				logger.PfcpLog.Warnf("Send N1N2Transfer failed")
+			}
+			if rspData.Cause == models.N1N2MessageTransferCause_ATTEMPTING_TO_REACH_UE {
+				logger.PfcpLog.Infof("Receive %v, AMF is able to page the UE", rspData.Cause)
+			}
+			if rspData.Cause == models.N1N2MessageTransferCause_UE_NOT_RESPONDING {
+				logger.PfcpLog.Warnf("%v", rspData.Cause)
+				// TODO: TS 23.502 4.2.3.3 3c. Failure indication
+			}
 		}
 	}
+
+	// TS 23.502 4.2.3.3 2b. Send Data Notification Ack, SMF->UPF
+	cause.CauseValue = pfcpType.CauseRequestAccepted
+	// TODO fix: SEID should be the value sent by UPF but now the SEID value is from sm context
+	pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, SEID)
 }
 
 func HandlePfcpSessionReportResponse(msg *pfcpUdp.Message) {

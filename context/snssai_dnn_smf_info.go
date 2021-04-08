@@ -11,7 +11,6 @@ type SnssaiSmfInfo struct {
 // SnssaiSmfDnnInfo records the SMF per S-NSSAI DNN information
 type SnssaiSmfDnnInfo struct {
 	DNS              DNS
-	UeIPAllocator    *IPAllocator
 	PCSCFIPv4Address *net.IP
 }
 

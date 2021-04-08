@@ -13,7 +13,7 @@ require (
 	github.com/free5gc/logger_conf v1.0.0
 	github.com/free5gc/logger_util v1.0.0
 	github.com/free5gc/nas v1.0.0
-	github.com/free5gc/ngap v1.0.0
+	github.com/free5gc/ngap v1.0.1
 	github.com/free5gc/openapi v1.0.0
 	github.com/free5gc/path_util v1.0.0
 	github.com/free5gc/pfcp v1.0.0

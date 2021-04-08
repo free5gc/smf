@@ -2,6 +2,7 @@ package producer
 
 import (
 	"context"
+	"net"
 	"net/http"
 
 	"github.com/antihax/optional"
@@ -72,11 +73,70 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 	}
 
 	// IP Allocation
-	if ip, err := smContext.DNNInfo.UeIPAllocator.Allocate(); err != nil {
-		logger.PduSessLog.Errorln("failed allocate IP address for this SM:", err)
-	} else {
-		smContext.PDUAddress = ip
+	upfSelectionParams := &smf_context.UPFSelectionParams{
+		Dnn: createData.Dnn,
+		SNssai: &smf_context.SNssai{
+			Sst: createData.SNssai.Sst,
+			Sd:  createData.SNssai.Sd,
+		},
 	}
+	var selectedUPF *smf_context.UPNode
+	var ip net.IP
+	selectedUPFName := ""
+	if smf_context.SMF_Self().ULCLSupport && smf_context.CheckUEHasPreConfig(createData.Supi) {
+		groupName := smf_context.GetULCLGroupNameFromSUPI(createData.Supi)
+		defaultPathPool := smf_context.GetUEDefaultPathPool(groupName)
+		if defaultPathPool != nil {
+			selectedUPFName, ip = defaultPathPool.SelectUPFAndAllocUEIPForULCL(smf_context.GetUserPlaneInformation(), upfSelectionParams)
+			selectedUPF = smf_context.GetUserPlaneInformation().UPFs[selectedUPFName]
+		}
+	} else {
+		selectedUPF, ip = smf_context.GetUserPlaneInformation().SelectUPFAndAllocUEIP(upfSelectionParams)
+		smContext.PDUAddress = ip
+		logger.PduSessLog.Infof("UE[%s] PDUSessionID[%d] IP[%s]",
+			smContext.Supi, smContext.PDUSessionID, smContext.PDUAddress.String())
+	}
+	if ip == nil && (selectedUPF == nil || selectedUPFName == "") {
+		logger.PduSessLog.Error("failed allocate IP address for this SM")
+
+		smContext.SMContextState = smf_context.InActive
+		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.PduSessLog.Warnf("Data Path not found\n")
+		logger.PduSessLog.Warnln("Selection Parameter: ", upfSelectionParams.String())
+
+		var httpResponse *http_wrapper.Response
+		if buf, err := smf_context.
+			BuildGSMPDUSessionEstablishmentReject(
+				smContext,
+				nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN); err != nil {
+			httpResponse = &http_wrapper.Response{
+				Header: nil,
+				Status: http.StatusForbidden,
+				Body: models.PostSmContextsErrorResponse{
+					JsonData: &models.SmContextCreateError{
+						Error:   &Nsmf_PDUSession.InsufficientResourceSliceDnn,
+						N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
+					},
+				},
+			}
+		} else {
+			httpResponse = &http_wrapper.Response{
+				Header: nil,
+				Status: http.StatusForbidden,
+				Body: models.PostSmContextsErrorResponse{
+					JsonData: &models.SmContextCreateError{
+						Error:   &Nsmf_PDUSession.InsufficientResourceSliceDnn,
+						N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
+					},
+					BinaryDataN1SmMessage: buf,
+				},
+			}
+		}
+
+		return httpResponse
+	}
+	smContext.PDUAddress = ip
+	smContext.SelectedUPF = selectedUPF
 
 	smPlmnID := createData.Guami.PlmnId
 
@@ -127,17 +187,10 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		logger.PduSessLog.Errorf("apply sm policy decision error: %+v", err)
 	}
 	var defaultPath *smf_context.DataPath
-	upfSelectionParams := &smf_context.UPFSelectionParams{
-		Dnn: createData.Dnn,
-		SNssai: &smf_context.SNssai{
-			Sst: createData.SNssai.Sst,
-			Sd:  createData.SNssai.Sd,
-		},
-	}
 
 	if smf_context.SMF_Self().ULCLSupport && smf_context.CheckUEHasPreConfig(createData.Supi) {
 		logger.PduSessLog.Infof("SUPI[%s] has pre-config route", createData.Supi)
-		uePreConfigPaths := smf_context.GetUEPreConfigPaths(createData.Supi)
+		uePreConfigPaths := smf_context.GetUEPreConfigPaths(createData.Supi, selectedUPFName)
 		smContext.Tunnel.DataPathPool = uePreConfigPaths.DataPathPool
 		smContext.Tunnel.PathIDGenerator = uePreConfigPaths.PathIDGenerator
 		defaultPath = smContext.Tunnel.DataPathPool.GetDefaultPath()
@@ -147,7 +200,8 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		// UE has no pre-config path.
 		// Use default route
 		logger.PduSessLog.Infof("SUPI[%s] has no pre-config route", createData.Supi)
-		defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(upfSelectionParams)
+		defaultUPPath := smf_context.GetUserPlaneInformation().GetDefaultUserPlanePathByDNNAndUPF(
+			upfSelectionParams, smContext.SelectedUPF)
 		defaultPath = smf_context.GenerateDataPath(defaultUPPath, smContext)
 		if defaultPath != nil {
 			defaultPath.IsDefaultPath = true
@@ -232,7 +286,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 	smContext := smf_context.GetSMContext(smContextRef)
 
 	if smContext == nil {
-		logger.PduSessLog.Warnln("SMContext is nil")
+		logger.PduSessLog.Warnf("SMContext[%s] is not found", smContextRef)
 
 		httpResponse := &http_wrapper.Response{
 			Header: nil,
@@ -287,6 +341,11 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			}
 
 			smContext.HandlePDUSessionReleaseRequest(m.PDUSessionReleaseRequest)
+			if smContext.SelectedUPF != nil {
+				logger.PduSessLog.Infof("UE[%s] PDUSessionID[%d] Release IP[%s]",
+					smContext.Supi, smContext.PDUSessionID, smContext.PDUAddress.String())
+				smf_context.GetUserPlaneInformation().ReleaseUEIP(smContext.SelectedUPF, smContext.PDUAddress)
+			}
 			if buf, err := smf_context.BuildGSMPDUSessionReleaseCommand(smContext); err != nil {
 				logger.PduSessLog.Errorf("Build GSM PDUSessionReleaseCommand failed: %+v", err)
 			} else {
@@ -307,23 +366,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			smContext.SMContextState = smf_context.PFCPModification
 			logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 
-			deletedPFCPNode := make(map[string]bool)
-			smContext.PendingUPF = make(smf_context.PendingUPF)
-			for _, dataPath := range smContext.Tunnel.DataPathPool {
-				dataPath.DeactivateTunnelAndPDR(smContext)
-				for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
-					curUPFID, err := curDataPathNode.GetUPFID()
-					if err != nil {
-						logger.PduSessLog.Error("DataPath UPFID not found")
-						continue
-					}
-					if _, exist := deletedPFCPNode[curUPFID]; !exist {
-						pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
-						deletedPFCPNode[curUPFID] = true
-						smContext.PendingUPF[curDataPathNode.GetNodeIP()] = true
-					}
-				}
-			}
+			releaseTunnel(smContext)
 
 			sendPFCPDelete = true
 		case nas.MsgTypePDUSessionReleaseComplete:
@@ -338,7 +381,6 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			smContext.SMContextState = smf_context.InActive
 			logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 			response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
-			smf_context.RemoveSMContext(smContext.Ref)
 			problemDetails, err := consumer.SendSMContextStatusNotification(smContext.SmStatusNotifyUri)
 			if problemDetails != nil || err != nil {
 				if problemDetails != nil {
@@ -380,6 +422,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		if err != nil {
 			logger.PduSessLog.Errorf("Build PDUSession Resource Setup Request Transfer Error(%s)", err.Error())
 		}
+		smContext.UpCnxState = models.UpCnxState_ACTIVATING
 		response.BinaryDataN2SmInformation = n2Buf
 		response.JsonData.N2SmInfoType = models.N2SmInfoType_PDU_RES_SETUP_REQ
 	case models.UpCnxState_DEACTIVATED:
@@ -465,6 +508,11 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		sendPFCPModification = true
 		smContext.SMContextState = smf_context.PFCPModification
 		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+	case models.N2SmInfoType_PDU_RES_SETUP_FAIL:
+		if err := smf_context.
+			HandlePDUSessionResourceSetupResponseTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
+			logger.PduSessLog.Errorf("Handle PDUSessionResourceSetupResponseTransfer failed: %+v", err)
+		}
 	case models.N2SmInfoType_PDU_RES_REL_RSP:
 		logger.PduSessLog.Infoln("[SMF] N2 PDUSession Release Complete ")
 		if smContext.PDUSessionRelease_DUE_TO_DUP_PDU_ID {
@@ -667,23 +715,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		smContext.SMContextState = smf_context.PFCPModification
 		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 
-		deletedPFCPNode := make(map[string]bool)
-		smContext.PendingUPF = make(smf_context.PendingUPF)
-		for _, dataPath := range smContext.Tunnel.DataPathPool {
-			dataPath.DeactivateTunnelAndPDR(smContext)
-			for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
-				curUPFID, err := curDataPathNode.GetUPFID()
-				if err != nil {
-					logger.PduSessLog.Error("DataPath UPFID not found")
-					continue
-				}
-				if _, exist := deletedPFCPNode[curUPFID]; !exist {
-					pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
-					deletedPFCPNode[curUPFID] = true
-					smContext.PendingUPF[curDataPathNode.GetNodeIP()] = true
-				}
-			}
-		}
+		releaseTunnel(smContext)
 
 		sendPFCPDelete = true
 	}
@@ -793,30 +825,34 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSmContextRequest) *http_wrapper.Response {
 	logger.PduSessLog.Infoln("In HandlePDUSessionSMContextRelease")
 	smContext := smf_context.GetSMContext(smContextRef)
+
+	if smContext == nil {
+		logger.PduSessLog.Warnf("SMContext[%s] is not found", smContextRef)
+
+		httpResponse := &http_wrapper.Response{
+			Header: nil,
+			Status: http.StatusNotFound,
+			Body: models.UpdateSmContextErrorResponse{
+				JsonData: &models.SmContextUpdateError{
+					UpCnxState: models.UpCnxState_DEACTIVATED,
+					Error: &models.ProblemDetails{
+						Type:   "Resource Not Found",
+						Title:  "SMContext Ref is not found",
+						Status: http.StatusNotFound,
+					},
+				},
+			},
+		}
+		return httpResponse
+	}
+
 	smContext.SMLock.Lock()
 	defer smContext.SMLock.Unlock()
-	// smf_context.RemoveSMContext(smContext.Ref)
 
 	smContext.SMContextState = smf_context.PFCPModification
 	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 
-	deletedPFCPNode := make(map[string]bool)
-	smContext.PendingUPF = make(smf_context.PendingUPF)
-	for _, dataPath := range smContext.Tunnel.DataPathPool {
-		dataPath.DeactivateTunnelAndPDR(smContext)
-		for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
-			curUPFID, err := curDataPathNode.GetUPFID()
-			if err != nil {
-				logger.PduSessLog.Error("DataPath UPFID not found")
-				continue
-			}
-			if _, exist := deletedPFCPNode[curUPFID]; !exist {
-				pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
-				deletedPFCPNode[curUPFID] = true
-				smContext.PendingUPF[curDataPathNode.GetNodeIP()] = true
-			}
-		}
-	}
+	releaseTunnel(smContext)
 
 	var httpResponse *http_wrapper.Response
 	PFCPResponseStatus := <-smContext.SBIPFCPCommunicationChan
@@ -885,5 +921,27 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 		httpResponse.Body = errResponse
 	}
 
+	smf_context.RemoveSMContext(smContext.Ref)
+
 	return httpResponse
+}
+
+func releaseTunnel(smContext *smf_context.SMContext) {
+	deletedPFCPNode := make(map[string]bool)
+	smContext.PendingUPF = make(smf_context.PendingUPF)
+	for _, dataPath := range smContext.Tunnel.DataPathPool {
+		dataPath.DeactivateTunnelAndPDR(smContext)
+		for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
+			curUPFID, err := curDataPathNode.GetUPFID()
+			if err != nil {
+				logger.PduSessLog.Error(err)
+				continue
+			}
+			if _, exist := deletedPFCPNode[curUPFID]; !exist {
+				pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
+				deletedPFCPNode[curUPFID] = true
+				smContext.PendingUPF[curDataPathNode.GetNodeIP()] = true
+			}
+		}
+	}
 }

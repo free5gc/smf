@@ -52,7 +52,6 @@ type SnssaiInfoItem struct {
 type SnssaiDnnInfoItem struct {
 	Dnn              string `yaml:"dnn"`
 	DNS              DNS    `yaml:"dns"`
-	UESubnet         string `yaml:"ueSubnet"`
 	PCSCFIPv4Address string `yaml:"pcscfIpv4,omitempty"`
 }
 
@@ -87,9 +86,10 @@ type Path struct {
 }
 
 type UERoutingInfo struct {
-	SUPI     string `yaml:"SUPI,omitempty"`
-	AN       string `yaml:"AN,omitempty"`
-	PathList []Path `yaml:"PathList,omitempty"`
+	Members       []string       `yaml:"members"`
+	AN            string         `yaml:"AN,omitempty"`
+	Topology      []UPLink       `yaml:"topology"`
+	SpecificPaths []SpecificPath `yaml:"specificPath,omitempty"`
 }
 
 // RouteProfID is string providing a Route Profile identifier.
@@ -128,7 +128,7 @@ type PfdDataForApp struct {
 
 type RoutingConfig struct {
 	Info          *Info                        `yaml:"info"`
-	UERoutingInfo []*UERoutingInfo             `yaml:"ueRoutingInfo"`
+	UERoutingInfo map[string]UERoutingInfo     `yaml:"ueRoutingInfo"`
 	RouteProf     map[RouteProfID]RouteProfile `yaml:"routeProfile,omitempty"`
 	PfdDatas      []*PfdDataForApp             `yaml:"pfdDataForApp,omitempty"`
 }
@@ -141,12 +141,12 @@ type UserPlaneInformation struct {
 
 // UPNode represent the user plane node
 type UPNode struct {
-	Type                 string                     `yaml:"type"`
-	NodeID               string                     `yaml:"node_id"`
-	ANIP                 string                     `yaml:"an_ip"`
-	Dnn                  string                     `yaml:"dnn"`
-	SNssaiInfos          []models.SnssaiUpfInfoItem `yaml:"sNssaiUpfInfos,omitempty"`
-	InterfaceUpfInfoList []InterfaceUpfInfoItem     `yaml:"interfaces,omitempty"`
+	Type                 string                 `yaml:"type"`
+	NodeID               string                 `yaml:"node_id"`
+	ANIP                 string                 `yaml:"an_ip"`
+	Dnn                  string                 `yaml:"dnn"`
+	SNssaiInfos          []SnssaiUpfInfoItem    `yaml:"sNssaiUpfInfos,omitempty"`
+	InterfaceUpfInfoList []InterfaceUpfInfoItem `yaml:"interfaces,omitempty"`
 }
 
 type InterfaceUpfInfoItem struct {
@@ -155,9 +155,31 @@ type InterfaceUpfInfoItem struct {
 	NetworkInstance string                 `yaml:"networkInstance"`
 }
 
+type SnssaiUpfInfoItem struct {
+	SNssai         *models.Snssai   `json:"sNssai" yaml:"sNssai" bson:"sNssai" mapstructure:"SNssai"`
+	DnnUpfInfoList []DnnUpfInfoItem `json:"dnnUpfInfoList" yaml:"dnnUpfInfoList" bson:"dnnUpfInfoList" mapstructure:"DnnUpfInfoList"`
+}
+
+type DnnUpfInfoItem struct {
+	Dnn             string                  `json:"dnn" yaml:"dnn" bson:"dnn" mapstructure:"Dnn"`
+	DnaiList        []string                `json:"dnaiList,omitempty" yaml:"dnaiList" bson:"dnaiList" mapstructure:"DnaiList"`
+	PduSessionTypes []models.PduSessionType `json:"pduSessionTypes,omitempty" yaml:"pduSessionTypes" bson:"pduSessionTypes" mapstructure:"PduSessionTypes"`
+	Pools           []UEIPPool              `yaml:"pools"`
+}
+
 type UPLink struct {
 	A string `yaml:"A"`
 	B string `yaml:"B"`
+}
+
+type UEIPPool struct {
+	Cidr string `yaml:"cidr"`
+}
+
+type SpecificPath struct {
+	DestinationIP   string   `yaml:"dest,omitempty"`
+	DestinationPort string   `yaml:"DestinationPort,omitempty"`
+	Path            []string `yaml:"path"`
 }
 
 func (c *Config) GetVersion() string {

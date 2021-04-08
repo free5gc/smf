@@ -160,79 +160,79 @@ func (node *DataPathNode) ActivateDownLinkTunnel(smContext *SMContext) error {
 }
 
 func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
-	pdr := node.UpLinkTunnel.PDR
-	far := node.UpLinkTunnel.PDR.FAR
-	bar := node.UpLinkTunnel.PDR.FAR.BAR
-	teid := node.UpLinkTunnel.TEID
-	qerList := node.UpLinkTunnel.PDR.QER
-
-	smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
-
-	err := node.UPF.RemovePDR(pdr)
-	if err != nil {
-		logger.CtxLog.Warnln("Deactivaed UpLinkTunnel", err)
-	}
-
-	err = node.UPF.RemoveFAR(far)
-	if err != nil {
-		logger.CtxLog.Warnln("Deactivaed UpLinkTunnel", err)
-	}
-
-	if bar != nil {
-		err = node.UPF.RemoveBAR(bar)
+	if pdr := node.UpLinkTunnel.PDR; pdr != nil {
+		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
+		err := node.UPF.RemovePDR(pdr)
 		if err != nil {
 			logger.CtxLog.Warnln("Deactivaed UpLinkTunnel", err)
 		}
-	}
 
-	for _, qer := range qerList {
-		if qer != nil {
-			err = node.UPF.RemoveQER(qer)
+		if far := pdr.FAR; far != nil {
+			err = node.UPF.RemoveFAR(far)
 			if err != nil {
 				logger.CtxLog.Warnln("Deactivaed UpLinkTunnel", err)
+			}
+
+			bar := far.BAR
+			if bar != nil {
+				err = node.UPF.RemoveBAR(bar)
+				if err != nil {
+					logger.CtxLog.Warnln("Deactivaed UpLinkTunnel", err)
+				}
+			}
+		}
+		if qerList := pdr.QER; qerList != nil {
+			for _, qer := range qerList {
+				if qer != nil {
+					err = node.UPF.RemoveQER(qer)
+					if err != nil {
+						logger.CtxLog.Warnln("Deactivaed UpLinkTunnel", err)
+					}
+				}
 			}
 		}
 	}
 
+	teid := node.DownLinkTunnel.TEID
 	node.UPF.teidGenerator.FreeID(int64(teid))
-	node.UpLinkTunnel = &GTPTunnel{}
+	node.DownLinkTunnel = &GTPTunnel{}
 }
 
 func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
-	pdr := node.DownLinkTunnel.PDR
-	far := node.DownLinkTunnel.PDR.FAR
-	bar := node.DownLinkTunnel.PDR.FAR.BAR
-	teid := node.DownLinkTunnel.TEID
-	qerList := node.DownLinkTunnel.PDR.QER
-
-	smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
-
-	err := node.UPF.RemovePDR(pdr)
-	if err != nil {
-		logger.CtxLog.Warnln("Deactivaed DownLinkTunnel", err)
-	}
-
-	err = node.UPF.RemoveFAR(far)
-	if err != nil {
-		logger.CtxLog.Warnln("Deactivaed DownLinkTunnel", err)
-	}
-
-	if bar != nil {
-		err = node.UPF.RemoveBAR(bar)
+	if pdr := node.DownLinkTunnel.PDR; pdr != nil {
+		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
+		err := node.UPF.RemovePDR(pdr)
 		if err != nil {
 			logger.CtxLog.Warnln("Deactivaed DownLinkTunnel", err)
 		}
-	}
 
-	for _, qer := range qerList {
-		if qer != nil {
-			err = node.UPF.RemoveQER(qer)
+		if far := pdr.FAR; far != nil {
+			err = node.UPF.RemoveFAR(far)
 			if err != nil {
-				logger.CtxLog.Warnln("Deactivaed UpLinkTunnel", err)
+				logger.CtxLog.Warnln("Deactivaed DownLinkTunnel", err)
+			}
+
+			bar := far.BAR
+			if bar != nil {
+				err = node.UPF.RemoveBAR(bar)
+				if err != nil {
+					logger.CtxLog.Warnln("Deactivaed DownLinkTunnel", err)
+				}
+			}
+		}
+		if qerList := pdr.QER; qerList != nil {
+			for _, qer := range qerList {
+				if qer != nil {
+					err = node.UPF.RemoveQER(qer)
+					if err != nil {
+						logger.CtxLog.Warnln("Deactivaed UpLinkTunnel", err)
+					}
+				}
 			}
 		}
 	}
 
+	teid := node.DownLinkTunnel.TEID
 	node.UPF.teidGenerator.FreeID(int64(teid))
 	node.DownLinkTunnel = &GTPTunnel{}
 }
@@ -242,7 +242,7 @@ func (node *DataPathNode) GetUPFID() (id string, err error) {
 	var exist bool
 
 	if id, exist = smfContext.UserPlaneInformation.UPFsIPtoID[node_ip]; !exist {
-		err = fmt.Errorf("UPNode IP %s doesn't exist in smfcfg.yaml, please sync the config files!", node_ip)
+		err = fmt.Errorf("UPNode IP %s doesn't exist in smfcfg.yaml", node_ip)
 		return "", err
 	}
 
@@ -567,4 +567,25 @@ func (dataPath *DataPath) DeactivateTunnelAndPDR(smContext *SMContext) {
 	}
 
 	dataPath.Activated = false
+}
+
+func (dataPath *DataPath) CopyFirstDPNode() *DataPathNode {
+	if dataPath.FirstDPNode == nil {
+		return nil
+	}
+	var firstNode *DataPathNode = nil
+	var parentNode *DataPathNode = nil
+	for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
+		newNode := NewDataPathNode()
+		if firstNode == nil {
+			firstNode = newNode
+		}
+		newNode.UPF = curDataPathNode.UPF
+		if parentNode != nil {
+			newNode.AddPrev(parentNode)
+			parentNode.AddNext(newNode)
+		}
+		parentNode = newNode
+	}
+	return firstNode
 }

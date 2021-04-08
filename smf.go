@@ -11,7 +11,9 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -37,6 +39,7 @@ func main() {
 	app.Usage = "-free5gccfg common configuration file -smfcfg smf configuration file"
 	app.Action = action
 	app.Flags = SMF.GetCliCmd()
+	rand.Seed(time.Now().UnixNano())
 
 	if err := app.Run(os.Args); err != nil {
 		appLog.Errorf("SMF Run error: %v", err)

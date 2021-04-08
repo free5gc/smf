@@ -56,7 +56,9 @@ type SMFContext struct {
 
 	//*** For ULCL ** //
 	ULCLSupport         bool
+	ULCLGroups          map[string][]string
 	UEPreConfigPathPool map[string]*UEPreConfigPaths
+	UEDefaultPathPool   map[string]*UEDefaultPaths
 	LocalSEIDCount      uint64
 }
 
@@ -167,12 +169,6 @@ func InitSmfContext(config *factory.Config) {
 				pCSCFIPv4Address := net.ParseIP(dnnInfoConfig.PCSCFIPv4Address).To4()
 				dnnInfo.PCSCFIPv4Address = &pCSCFIPv4Address
 			}
-			if allocator, err := NewIPAllocator(dnnInfoConfig.UESubnet); err != nil {
-				logger.InitLog.Errorf("create ip allocator[%s] failed: %s", dnnInfoConfig.UESubnet, err)
-				continue
-			} else {
-				dnnInfo.UeIPAllocator = allocator
-			}
 			snssaiInfo.DnnInfos[dnnInfoConfig.Dnn] = &dnnInfo
 		}
 		smfContext.SnssaiInfos = append(smfContext.SnssaiInfos, snssaiInfo)
@@ -211,16 +207,24 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 
 	UERoutingInfo := routingConfig.UERoutingInfo
 	smfContext.UEPreConfigPathPool = make(map[string]*UEPreConfigPaths)
+	smfContext.UEDefaultPathPool = make(map[string]*UEDefaultPaths)
+	smfContext.ULCLGroups = make(map[string][]string)
 
-	for _, routingInfo := range UERoutingInfo {
-		supi := routingInfo.SUPI
-		uePreConfigPaths, err := NewUEPreConfigPaths(supi, routingInfo.PathList)
+	for groupName, routingInfo := range UERoutingInfo {
+		logger.CtxLog.Debugln("Set context for ULCL group: ", groupName)
+		smfContext.ULCLGroups[groupName] = routingInfo.Members
+		uePreConfigPaths, err := NewUEPreConfigPaths(routingInfo.SpecificPaths)
 		if err != nil {
 			logger.CtxLog.Warnln(err)
-			continue
+		} else {
+			smfContext.UEPreConfigPathPool[groupName] = uePreConfigPaths
 		}
-
-		smfContext.UEPreConfigPathPool[supi] = uePreConfigPaths
+		ueDefaultPaths, err := NewUEDefaultPaths(smfContext.UserPlaneInformation, routingInfo.Topology)
+		if err != nil {
+			logger.CtxLog.Warnln(err)
+		} else {
+			smfContext.UEDefaultPathPool[groupName] = ueDefaultPaths
+		}
 	}
 }
 
@@ -230,4 +234,8 @@ func SMF_Self() *SMFContext {
 
 func GetUserPlaneInformation() *UserPlaneInformation {
 	return smfContext.UserPlaneInformation
+}
+
+func GetUEDefaultPathPool(groupName string) *UEDefaultPaths {
+	return smfContext.UEDefaultPathPool[groupName]
 }

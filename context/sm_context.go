@@ -93,8 +93,9 @@ type SMContext struct {
 
 	SMContextState SMContextState
 
-	Tunnel    *UPTunnel
-	BPManager *BPManager
+	Tunnel      *UPTunnel
+	SelectedUPF *UPNode
+	BPManager   *BPManager
 	// NodeID(string form) to PFCP Session Context
 	PFCPContext                         map[string]*PFCPSessionContext
 	SBIPFCPCommunicationChan            chan PFCPSessionResponseStatus
@@ -176,6 +177,12 @@ func RemoveSMContext(ref string) {
 	var smContext *SMContext
 	if value, ok := smContextPool.Load(ref); ok {
 		smContext = value.(*SMContext)
+	}
+
+	if smContext.SelectedUPF != nil {
+		logger.PduSessLog.Infof("UE[%s] PDUSessionID[%d] Release IP[%s]",
+			smContext.Supi, smContext.PDUSessionID, smContext.PDUAddress.String())
+		GetUserPlaneInformation().ReleaseUEIP(smContext.SelectedUPF, smContext.PDUAddress)
 	}
 
 	for _, pfcpSessionContext := range smContext.PFCPContext {
