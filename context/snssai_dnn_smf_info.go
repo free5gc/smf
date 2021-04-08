@@ -10,7 +10,8 @@ type SnssaiSmfInfo struct {
 
 // SnssaiSmfDnnInfo records the SMF per S-NSSAI DNN information
 type SnssaiSmfDnnInfo struct {
-	DNS DNS
+	DNS              DNS
+	PCSCFIPv4Address *net.IP
 }
 
 type DNS struct {

@@ -50,8 +50,9 @@ type SnssaiInfoItem struct {
 }
 
 type SnssaiDnnInfoItem struct {
-	Dnn string `yaml:"dnn"`
-	DNS DNS    `yaml:"dns"`
+	Dnn              string `yaml:"dnn"`
+	DNS              DNS    `yaml:"dns"`
+	PCSCFIPv4Address string `yaml:"pcscfIpv4,omitempty"`
 }
 
 type Sbi struct {
