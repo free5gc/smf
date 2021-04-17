@@ -72,7 +72,7 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 			case nasMessage.IPv4AddressAllocationViaDHCPv4UL:
 				logger.GsmLog.Infoln("Didn't Implement container type IPv4AddressAllocationViaDHCPv4UL")
 			case nasMessage.PCSCFIPv4AddressRequestUL:
-				logger.GsmLog.Infoln("Didn't Implement container type PCSCFIPv4AddressRequestUL")
+				smContext.ProtocolConfigurationOptions.PCSCFIPv4Request = true
 			case nasMessage.DNSServerIPv4AddressRequestUL:
 				smContext.ProtocolConfigurationOptions.DNSIPv4Request = true
 			case nasMessage.MSISDNRequestUL:

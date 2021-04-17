@@ -163,11 +163,12 @@ func InitSmfContext(config *factory.Config) {
 
 		for _, dnnInfoConfig := range snssaiInfoConfig.DnnInfos {
 			dnnInfo := SnssaiSmfDnnInfo{}
-			dnnInfo.DNS.IPv4Addr = net.ParseIP(dnnInfoConfig.DNS.IPv4Addr).To4()
-			dnnInfo.DNS.IPv6Addr = net.ParseIP(dnnInfoConfig.DNS.IPv6Addr).To4()
-			if dnnInfoConfig.PCSCFIPv4Address != "" {
-				pCSCFIPv4Address := net.ParseIP(dnnInfoConfig.PCSCFIPv4Address).To4()
-				dnnInfo.PCSCFIPv4Address = &pCSCFIPv4Address
+			if dnnInfoConfig.DNS != nil {
+				dnnInfo.DNS.IPv4Addr = net.ParseIP(dnnInfoConfig.DNS.IPv4Addr).To4()
+				dnnInfo.DNS.IPv6Addr = net.ParseIP(dnnInfoConfig.DNS.IPv6Addr).To16()
+			}
+			if dnnInfoConfig.PCSCF != nil {
+				dnnInfo.PCSCF.IPv4Addr = net.ParseIP(dnnInfoConfig.PCSCF.IPv4Addr).To4()
 			}
 			snssaiInfo.DnnInfos[dnnInfoConfig.Dnn] = &dnnInfo
 		}

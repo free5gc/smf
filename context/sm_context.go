@@ -155,10 +155,7 @@ func NewSMContext(identifier string, pduSessID int32) (smContext *SMContext) {
 	smContext.TrafficControlPool = make(map[string]*TrafficControlData)
 	smContext.SBIPFCPCommunicationChan = make(chan PFCPSessionResponseStatus, 1)
 
-	smContext.ProtocolConfigurationOptions = &ProtocolConfigurationOptions{
-		DNSIPv4Request: false,
-		DNSIPv6Request: false,
-	}
+	smContext.ProtocolConfigurationOptions = &ProtocolConfigurationOptions{}
 
 	return smContext
 }

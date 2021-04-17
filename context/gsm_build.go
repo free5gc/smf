@@ -93,7 +93,10 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	pDUSessionEstablishmentAccept.DNN.SetLen(uint8(len(dnn)))
 	pDUSessionEstablishmentAccept.DNN.SetDNN(dnn)
 
-	if smContext.ProtocolConfigurationOptions.DNSIPv4Request || smContext.ProtocolConfigurationOptions.DNSIPv6Request || smContext.ProtocolConfigurationOptions.IPv4LinkMTURequest {
+	if smContext.ProtocolConfigurationOptions.DNSIPv4Request ||
+		smContext.ProtocolConfigurationOptions.DNSIPv6Request ||
+		smContext.ProtocolConfigurationOptions.PCSCFIPv4Request ||
+		smContext.ProtocolConfigurationOptions.IPv4LinkMTURequest {
 		pDUSessionEstablishmentAccept.ExtendedProtocolConfigurationOptions =
 			nasType.NewExtendedProtocolConfigurationOptions(
 				nasMessage.PDUSessionEstablishmentAcceptExtendedProtocolConfigurationOptionsType,
@@ -116,9 +119,12 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 			}
 		}
 
-		// IPv4 PCSCF IP, needed for ims DNNs
-		if smContext.DNNInfo.PCSCFIPv4Address != nil {
-			protocolConfigurationOptions.AddPCSCFIPv4Address(*smContext.DNNInfo.PCSCFIPv4Address) //
+		// IPv4 PCSCF (need for ims DNN)
+		if smContext.ProtocolConfigurationOptions.PCSCFIPv4Request {
+			err := protocolConfigurationOptions.AddPCSCFIPv4Address(smContext.DNNInfo.PCSCF.IPv4Addr)
+			if err != nil {
+				logger.GsmLog.Warnln("Error while adding PCSCF IPv4 Addr: ", err)
+			}
 		}
 
 		// MTU

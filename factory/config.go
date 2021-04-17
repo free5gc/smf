@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	SMF_EXPECTED_CONFIG_VERSION        = "1.0.0"
-	UE_ROUTING_EXPECTED_CONFIG_VERSION = "1.0.0"
+	SMF_EXPECTED_CONFIG_VERSION        = "1.0.1"
+	UE_ROUTING_EXPECTED_CONFIG_VERSION = "1.0.1"
 )
 
 type Config struct {
@@ -50,9 +50,9 @@ type SnssaiInfoItem struct {
 }
 
 type SnssaiDnnInfoItem struct {
-	Dnn              string `yaml:"dnn"`
-	DNS              DNS    `yaml:"dns"`
-	PCSCFIPv4Address string `yaml:"pcscfIpv4,omitempty"`
+	Dnn   string `yaml:"dnn"`
+	DNS   *DNS   `yaml:"dns"`
+	PCSCF *PCSCF `yaml:"pcscf,omitempty"`
 }
 
 type Sbi struct {
@@ -77,6 +77,10 @@ type PFCP struct {
 type DNS struct {
 	IPv4Addr string `yaml:"ipv4,omitempty"`
 	IPv6Addr string `yaml:"ipv6,omitempty"`
+}
+
+type PCSCF struct {
+	IPv4Addr string `yaml:"ipv4,omitempty" valid:"ipv4,required"`
 }
 
 type Path struct {
