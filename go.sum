@@ -79,8 +79,8 @@ github.com/free5gc/openapi v1.0.0 h1:DaGVt05b1pSDBOailKAlLj6hAk6vunN0Nhzvl/xcWCY
 github.com/free5gc/openapi v1.0.0/go.mod h1:7OzxoWBj6KQgznMW2ZiUtZdCGY+t89v4wtgKLhluKgU=
 github.com/free5gc/path_util v1.0.0 h1:vJPGTymaWtavz6fJ/7k6WKEYv5BQLAq/O04RP54sab0=
 github.com/free5gc/path_util v1.0.0/go.mod h1:OpmcebEKrMPnH7Jg5lZ8y9ZWJNAjQ4l9FGWXUv58Mo0=
-github.com/free5gc/pfcp v1.0.0 h1:ciziTi4+oOD3vwpu1noHqpYAtnPKy/RQN7I3A01zMb8=
-github.com/free5gc/pfcp v1.0.0/go.mod h1:Ew7nJkt2nOsGh3hgDD7SLWVsQL2kCmbfgvaYwmAYTRg=
+github.com/free5gc/pfcp v1.0.1 h1:btAMuCjUqDjQr+5FBv+3+ZbIouKAZkKeh0MF/TdZ1kc=
+github.com/free5gc/pfcp v1.0.1/go.mod h1:Qg38TjXLgo6Bk2gvPhEqf8l5GHz0FPgJz2DKCdLvwK0=
 github.com/free5gc/tlv v1.0.0 h1:jKXJvOD6lMamJMLSGm+Ry8FdQfrjmXR3Ai4tyrx1vhQ=
 github.com/free5gc/tlv v1.0.0/go.mod h1:ba4cBLpig9x0GsEFlZEqUuTUeJez0Uhv36dnnqUkO6U=
 github.com/free5gc/util_3gpp v1.0.0 h1:yDuCFVlzLWKu6+vKBNG/PVAxjtrr8hPlJaTE/00hX8A=
