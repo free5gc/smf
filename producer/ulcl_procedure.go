@@ -107,11 +107,11 @@ func AddPDUSessionAnchorAndULCL(smContext *context.SMContext, nodeID pfcpType.No
 }
 
 func EstablishPSA2(smContext *context.SMContext) {
+	logger.PduSessLog.Infoln("Establish PSA2")
 	bpMGR := smContext.BPManager
 	bpMGR.PendingUPF = make(context.PendingUPF)
 	activatingPath := bpMGR.ActivatingPath
 	ulcl := bpMGR.ULCL
-	logger.PduSessLog.Infoln("In EstablishPSA2")
 	nodeAfterULCL := false
 	for curDataPathNode := activatingPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
 		if nodeAfterULCL {
@@ -139,8 +139,15 @@ func EstablishPSA2(smContext *context.SMContext) {
 
 			curDPNodeIP := curDataPathNode.UPF.NodeID.ResolveNodeIdToIp().String()
 			bpMGR.PendingUPF[curDPNodeIP] = true
-			message.SendPfcpSessionEstablishmentRequest(
-				curDataPathNode.UPF.NodeID, smContext, pdrList, farList, barList, qerList)
+
+			sessionContext, exist := smContext.PFCPContext[curDataPathNode.GetNodeIP()]
+			if !exist || sessionContext.RemoteSEID == 0 {
+				message.SendPfcpSessionEstablishmentRequest(
+					curDataPathNode.UPF.NodeID, smContext, pdrList, farList, barList, qerList)
+			} else {
+				message.SendPfcpSessionModificationRequest(
+					curDataPathNode.UPF.NodeID, smContext, pdrList, farList, barList, qerList)
+			}
 		} else {
 			if reflect.DeepEqual(curDataPathNode.UPF.NodeID, ulcl.NodeID) {
 				nodeAfterULCL = true
