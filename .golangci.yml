@@ -204,7 +204,7 @@ linters-settings:
     multi-if: false   # Enforces newlines (or comments) after every multi-line if statement
     multi-func: false # Enforces newlines (or comments) after every multi-line function signature
   gci:
-    local-prefixes: "bitbucket.org"
+    local-prefixes: "github.com/free5gc"
   misspell:
     #locale: US
     ignore-words:

@@ -5,7 +5,7 @@ go 1.14
 require (
 	github.com/antihax/optional v1.0.0
 	github.com/antonfisher/nested-logrus-formatter v1.3.0
-	github.com/free5gc/aper v1.0.0
+	github.com/free5gc/aper v1.0.1
 	github.com/free5gc/flowdesc v1.0.0
 	github.com/free5gc/http2_util v1.0.0
 	github.com/free5gc/http_wrapper v1.0.0
@@ -13,7 +13,7 @@ require (
 	github.com/free5gc/logger_conf v1.0.0
 	github.com/free5gc/logger_util v1.0.0
 	github.com/free5gc/nas v1.0.0
-	github.com/free5gc/ngap v1.0.1
+	github.com/free5gc/ngap v1.0.2
 	github.com/free5gc/openapi v1.0.0
 	github.com/free5gc/path_util v1.0.0
 	github.com/free5gc/pfcp v1.0.1
