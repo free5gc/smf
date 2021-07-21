@@ -8,18 +8,19 @@ import (
 	"github.com/free5gc/smf/factory"
 )
 
-var NFServices *[]models.NfService
-
-var NfServiceVersion *[]models.NfServiceVersion
-
-var SmfInfo *models.SmfInfo
+var NFProfile struct {
+	NFServices       *[]models.NfService
+	NFServiceVersion *[]models.NfServiceVersion
+	SMFInfo          *models.SmfInfo
+	PLMNList         *[]models.PlmnId
+}
 
 func SetupNFProfile(config *factory.Config) {
 	// Set time
 	nfSetupTime := time.Now()
 
 	// set NfServiceVersion
-	NfServiceVersion = &[]models.NfServiceVersion{
+	NFProfile.NFServiceVersion = &[]models.NfServiceVersion{
 		{
 			ApiVersionInUri: "v1",
 			ApiFullVersion:  fmt.Sprintf("https://%s:%d/nsmf-pdusession/v1", SMF_Self().RegisterIPv4, SMF_Self().SBIPort),
@@ -28,12 +29,12 @@ func SetupNFProfile(config *factory.Config) {
 	}
 
 	// set NFServices
-	NFServices = new([]models.NfService)
+	NFProfile.NFServices = new([]models.NfService)
 	for _, serviceName := range config.Configuration.ServiceNameList {
-		*NFServices = append(*NFServices, models.NfService{
+		*NFProfile.NFServices = append(*NFProfile.NFServices, models.NfService{
 			ServiceInstanceId: SMF_Self().NfInstanceID + serviceName,
 			ServiceName:       models.ServiceName(serviceName),
-			Versions:          NfServiceVersion,
+			Versions:          NFProfile.NFServiceVersion,
 			Scheme:            models.UriScheme_HTTPS,
 			NfServiceStatus:   models.NfServiceStatus_REGISTERED,
 			ApiPrefix:         fmt.Sprintf("%s://%s:%d", SMF_Self().URIScheme, SMF_Self().RegisterIPv4, SMF_Self().SBIPort),
@@ -41,8 +42,17 @@ func SetupNFProfile(config *factory.Config) {
 	}
 
 	// set smfInfo
-	SmfInfo = &models.SmfInfo{
+	NFProfile.SMFInfo = &models.SmfInfo{
 		SNssaiSmfInfoList: SNssaiSmfInfo(),
+	}
+
+	// set PlmnList
+	NFProfile.PLMNList = new([]models.PlmnId)
+	for _, plmn := range config.Configuration.PLMNList {
+		*NFProfile.PLMNList = append(*NFProfile.PLMNList, models.PlmnId{
+			Mcc: plmn.MCC,
+			Mnc: plmn.MNC,
+		})
 	}
 }
 
