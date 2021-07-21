@@ -46,13 +46,15 @@ func SetupNFProfile(config *factory.Config) {
 		SNssaiSmfInfoList: SNssaiSmfInfo(),
 	}
 
-	// set PlmnList
-	NFProfile.PLMNList = new([]models.PlmnId)
-	for _, plmn := range config.Configuration.PLMNList {
-		*NFProfile.PLMNList = append(*NFProfile.PLMNList, models.PlmnId{
-			Mcc: plmn.MCC,
-			Mnc: plmn.MNC,
-		})
+	// set PlmnList if exists
+	if plmnList := config.Configuration.PLMNList; plmnList != nil {
+		NFProfile.PLMNList = new([]models.PlmnId)
+		for _, plmn := range plmnList {
+			*NFProfile.PLMNList = append(*NFProfile.PLMNList, models.PlmnId{
+				Mcc: plmn.MCC,
+				Mnc: plmn.MNC,
+			})
+		}
 	}
 }
 
