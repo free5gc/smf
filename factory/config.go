@@ -43,6 +43,7 @@ type Configuration struct {
 	SNssaiInfo           []SnssaiInfoItem     `yaml:"snssaiInfos,omitempty"`
 	ULCL                 bool                 `yaml:"ulcl,omitempty"`
 	PLMNList             []PLMNID             `yaml:"plmnList,omitempty"`
+	Locality             string               `yaml:"locality,omitempty"`
 }
 
 type SnssaiInfoItem struct {

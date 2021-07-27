@@ -37,6 +37,9 @@ func SendNFRegistration() error {
 		SNssais:       &sNssais,
 		PlmnList:      smfProfile.PLMNList,
 	}
+	if smf_context.SMF_Self().Locality != "" {
+		profile.Locality = smf_context.SMF_Self().Locality
+	}
 	var rep models.NfProfile
 	var res *http.Response
 	var err error
