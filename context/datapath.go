@@ -401,6 +401,7 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 						Ipv4Address: upIP,
 						Teid:        curULTunnel.TEID,
 					},
+					NetworkInstance: util_3gpp.Dnn(smContext.Dnn),
 					UEIPAddress: &pfcpType.UEIPAddress{
 						V4:          true,
 						Ipv4Address: smContext.PDUAddress.To4(),
