@@ -42,6 +42,7 @@ type Configuration struct {
 	ServiceNameList      []string             `yaml:"serviceNameList,omitempty"`
 	SNssaiInfo           []SnssaiInfoItem     `yaml:"snssaiInfos,omitempty"`
 	ULCL                 bool                 `yaml:"ulcl,omitempty"`
+	Locality             string               `yaml:"locality,omitempty"`
 }
 
 type SnssaiInfoItem struct {

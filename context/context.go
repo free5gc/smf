@@ -47,6 +47,7 @@ type SMFContext struct {
 	NFManagementClient             *Nnrf_NFManagement.APIClient
 	NFDiscoveryClient              *Nnrf_NFDiscovery.APIClient
 	SubscriberDataManagementClient *Nudm_SubscriberDataManagement.APIClient
+	Locality                       string
 
 	UserPlaneInformation *UserPlaneInformation
 
@@ -191,6 +192,8 @@ func InitSmfContext(config *factory.Config) {
 	smfContext.UserPlaneInformation = NewUserPlaneInformation(&configuration.UserPlaneInformation)
 
 	SetupNFProfile(config)
+
+	smfContext.Locality = configuration.Locality
 }
 
 func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
