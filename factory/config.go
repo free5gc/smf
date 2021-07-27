@@ -1,5 +1,5 @@
 /*
- * AMF Configuration Factory
+ * SMF Configuration Factory
  */
 
 package factory
@@ -42,6 +42,7 @@ type Configuration struct {
 	ServiceNameList      []string             `yaml:"serviceNameList,omitempty"`
 	SNssaiInfo           []SnssaiInfoItem     `yaml:"snssaiInfos,omitempty"`
 	ULCL                 bool                 `yaml:"ulcl,omitempty"`
+	PLMNList             []PLMNID             `yaml:"plmnList,omitempty"`
 	Locality             string               `yaml:"locality,omitempty"`
 }
 
@@ -185,6 +186,11 @@ type SpecificPath struct {
 	DestinationIP   string   `yaml:"dest,omitempty"`
 	DestinationPort string   `yaml:"DestinationPort,omitempty"`
 	Path            []string `yaml:"path"`
+}
+
+type PLMNID struct {
+	MCC string `yaml:"mcc"`
+	MNC string `yaml:"mnc"`
 }
 
 func (c *Config) GetVersion() string {
