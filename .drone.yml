@@ -16,7 +16,3 @@ steps:
     commands:
       - gotestsum ./... -v -cover -race
       - make
-
-trigger:
-    branch:
-        - SVC-184-setup-droneci-for-all-repos-on-github
