@@ -101,12 +101,10 @@ func HandlePathSwitchRequestTransfer(b []byte, ctx *SMContext) error {
 
 	gtpTunnel := pathSwitchRequestTransfer.DLNGUUPTNLInformation.GTPTunnel
 
-	TEIDReader := bytes.NewBuffer(gtpTunnel.GTPTEID.Value)
+	teid := binary.BigEndian.Uint32(gtpTunnel.GTPTEID.Value)
 
-	teid, err := binary.ReadUvarint(TEIDReader)
-	if err != nil {
-		return fmt.Errorf("Parse TEID error %s", err.Error())
-	}
+	ctx.Tunnel.ANInformation.IPAddress = gtpTunnel.TransportLayerAddress.Value.Bytes
+	ctx.Tunnel.ANInformation.TEID = teid
 
 	for _, dataPath := range ctx.Tunnel.DataPathPool {
 		if dataPath.Activated {
@@ -116,8 +114,8 @@ func HandlePathSwitchRequestTransfer(b []byte, ctx *SMContext) error {
 			DLPDR.FAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
 			dlOuterHeaderCreation := DLPDR.FAR.ForwardingParameters.OuterHeaderCreation
 			dlOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-			dlOuterHeaderCreation.Teid = uint32(teid)
-			dlOuterHeaderCreation.Ipv4Address = gtpTunnel.TransportLayerAddress.Value.Bytes
+			dlOuterHeaderCreation.Teid = teid
+			dlOuterHeaderCreation.Ipv4Address = ctx.Tunnel.ANInformation.IPAddress.To4()
 			DLPDR.FAR.State = RULE_UPDATE
 		}
 	}
