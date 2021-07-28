@@ -16,3 +16,4 @@ steps:
     commands:
       - gotestsum ./... -v -cover -race
       - make
+
