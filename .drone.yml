@@ -16,4 +16,7 @@ steps:
     commands:
       - gotestsum ./... -v -cover -race
       - make
-      - echo "Drone test"
+
+trigger:
+    branch:
+        - SVC-184-setup-droneci-for-all-repos-on-github
