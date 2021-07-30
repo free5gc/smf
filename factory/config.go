@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	SMF_EXPECTED_CONFIG_VERSION        = "1.0.1"
+	SMF_EXPECTED_CONFIG_VERSION        = "1.0.2"
 	UE_ROUTING_EXPECTED_CONFIG_VERSION = "1.0.1"
 )
 
