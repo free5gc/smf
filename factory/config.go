@@ -162,14 +162,14 @@ type InterfaceUpfInfoItem struct {
 }
 
 type SnssaiUpfInfoItem struct {
-	SNssai         *models.Snssai   `json:"sNssai" yaml:"sNssai" bson:"sNssai" mapstructure:"SNssai"`
-	DnnUpfInfoList []DnnUpfInfoItem `json:"dnnUpfInfoList" yaml:"dnnUpfInfoList" bson:"dnnUpfInfoList" mapstructure:"DnnUpfInfoList"`
+	SNssai         *models.Snssai   `yaml:"sNssai"`
+	DnnUpfInfoList []DnnUpfInfoItem `yaml:"dnnUpfInfoList"`
 }
 
 type DnnUpfInfoItem struct {
-	Dnn             string                  `json:"dnn" yaml:"dnn" bson:"dnn" mapstructure:"Dnn"`
-	DnaiList        []string                `json:"dnaiList,omitempty" yaml:"dnaiList" bson:"dnaiList" mapstructure:"DnaiList"`
-	PduSessionTypes []models.PduSessionType `json:"pduSessionTypes,omitempty" yaml:"pduSessionTypes" bson:"pduSessionTypes" mapstructure:"PduSessionTypes"`
+	Dnn             string                  `yaml:"dnn"`
+	DnaiList        []string                `yaml:"dnaiList"`
+	PduSessionTypes []models.PduSessionType `yaml:"pduSessionTypes"`
 	Pools           []UEIPPool              `yaml:"pools"`
 }
 

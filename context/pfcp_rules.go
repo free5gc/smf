@@ -82,5 +82,4 @@ type QER struct {
 }
 
 // Usage Report Rule
-type URR struct {
-}
+type URR struct{}

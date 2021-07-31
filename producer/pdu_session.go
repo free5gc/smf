@@ -87,7 +87,8 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		groupName := smf_context.GetULCLGroupNameFromSUPI(createData.Supi)
 		defaultPathPool := smf_context.GetUEDefaultPathPool(groupName)
 		if defaultPathPool != nil {
-			selectedUPFName, ip = defaultPathPool.SelectUPFAndAllocUEIPForULCL(smf_context.GetUserPlaneInformation(), upfSelectionParams)
+			selectedUPFName, ip = defaultPathPool.SelectUPFAndAllocUEIPForULCL(
+				smf_context.GetUserPlaneInformation(), upfSelectionParams)
 			selectedUPF = smf_context.GetUserPlaneInformation().UPFs[selectedUPFName]
 		}
 	} else {

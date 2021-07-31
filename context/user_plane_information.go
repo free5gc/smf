@@ -264,9 +264,9 @@ func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNN(selection *UPFSele
 	return nil
 }
 
-func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNNAndUPF(selection *UPFSelectionParams, upf *UPNode) (path UPPath) {
+func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNNAndUPF(selection *UPFSelectionParams,
+	upf *UPNode) (path UPPath) {
 	nodeID := upf.NodeID.ResolveNodeIdToIp().String()
-	var pathExist bool
 
 	if upi.DefaultUserPlanePathToUPF[selection.String()] != nil {
 		path, pathExist := upi.DefaultUserPlanePathToUPF[selection.String()][nodeID]
@@ -276,8 +276,7 @@ func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNNAndUPF(selection *U
 			return path
 		}
 	}
-	pathExist = upi.GenerateDefaultPathToUPF(selection, upf)
-	if pathExist {
+	if pathExist := upi.GenerateDefaultPathToUPF(selection, upf); pathExist {
 		return upi.DefaultUserPlanePathToUPF[selection.String()][nodeID]
 	}
 	return nil
@@ -552,7 +551,7 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionPa
 		logger.CtxLog.Debugf("check start UPF: %s",
 			upi.GetUPFNameByIp(upf.NodeID.ResolveNodeIdToIp().String()))
 		pools := getUEIPPool(upf, selection)
-		if pools == nil || len(pools) == 0 {
+		if len(pools) == 0 {
 			continue
 		}
 		sortedPoolList := createPoolListForSelection(pools)
@@ -617,7 +616,7 @@ func (ueIPPool *UeIPPool) allocate() net.IP {
 func (upi *UserPlaneInformation) ReleaseUEIP(upf *UPNode, addr net.IP) {
 	pool := findPoolByAddr(upf, addr)
 	if pool == nil {
-		//nothing to do
+		// nothing to do
 		logger.CtxLog.Warnf("Fail to release UE IP address: %v to UPF: %s",
 			upi.GetUPFNameByIp(upf.NodeID.ResolveNodeIdToIp().String()), addr)
 		return

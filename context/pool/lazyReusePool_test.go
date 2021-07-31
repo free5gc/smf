@@ -31,7 +31,8 @@ func TestNewLazyReusePool(t *testing.T) {
 
 func TestLazyReusePool_SingleSegment(t *testing.T) {
 	// Allocation OK
-	p, _ := NewLazyReusePool(1, 2)
+	p, err := NewLazyReusePool(1, 2)
+	assert.NoError(t, err)
 	a, ok := p.Allocate()
 	assert.Equal(t, 1, a)
 	assert.True(t, ok)
@@ -48,6 +49,7 @@ func TestLazyReusePool_SingleSegment(t *testing.T) {
 
 	// free 1
 	ok = p.Free(1)
+	assert.True(t, ok)
 	assert.Equal(t, 1, p.head.first)
 	assert.Equal(t, 1, p.head.last)
 	assert.Empty(t, p.head.next)
@@ -75,7 +77,8 @@ func TestLazyReusePool_SingleSegment(t *testing.T) {
 }
 
 func TestLazyReusePool_ManySegment(t *testing.T) {
-	p, _ := NewLazyReusePool(1, 100)
+	p, err := NewLazyReusePool(1, 100)
+	assert.NoError(t, err)
 	assert.Equal(t, 100, p.Remain())
 
 	// -> 1-100
@@ -173,7 +176,8 @@ func TestLazyReusePool_ManySegment(t *testing.T) {
 }
 
 func TestLazyReusePool_ManyGoroutine(t *testing.T) {
-	p, _ := NewLazyReusePool(101, 1000)
+	p, err := NewLazyReusePool(101, 1000)
+	assert.NoError(t, err)
 	assert.Equal(t, 900, p.Remain())
 	ch := make(chan int)
 

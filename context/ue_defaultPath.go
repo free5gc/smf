@@ -113,11 +113,7 @@ func extractAnchorUPFForULCL(upi *UserPlaneInformation, source string, topology 
 }
 
 func generateDefaultDataPath(source string, destination string, topology []factory.UPLink) (*DataPath, error) {
-	visited := make(map[string]bool)
-	currentPath := []string{}
-	allPaths := make(map[int][]string)
-	count := 0
-	getPathBetweenByNodeName(source, destination, topology, visited, currentPath, allPaths, &count)
+	allPaths, _ := getAllPathByNodeName(source, destination, topology)
 	if len(allPaths) == 0 {
 		return nil, fmt.Errorf("Path not exist: %s to %s", source, destination)
 	}
@@ -146,30 +142,37 @@ func generateDefaultDataPath(source string, destination string, topology []facto
 	return dataPath, nil
 }
 
-func getPathBetweenByNodeName(src string, dest string, links []factory.UPLink, visited map[string]bool,
-	currentPath []string, allPaths map[int][]string, count *int) {
-	if visited[src] {
-		return
-	}
-	visited[src] = true
-	currentPath = append(currentPath, src)
-	logger.InitLog.Traceln("current path:", currentPath)
-	if src == dest {
-		allPaths[*count] = currentPath[1:]
-		(*count)++
-		logger.InitLog.Traceln("all path:", allPaths)
-		visited[src] = false
-		currentPath = []string{}
-		return
-	}
-	for _, link := range links {
-		// search A to B only
-		if link.A == src {
-			getPathBetweenByNodeName(link.B, dest, links, visited, currentPath, allPaths, count)
+func getAllPathByNodeName(src, dest string, links []factory.UPLink) (map[int][]string, int) {
+	visited := make(map[string]bool)
+	allPaths := make(map[int][]string)
+	count := 0
+	var findPath func(src, dest string, links []factory.UPLink, currentPath []string)
+
+	findPath = func(src, dest string, links []factory.UPLink, currentPath []string) {
+		if visited[src] {
+			return
 		}
+		visited[src] = true
+		currentPath = append(currentPath, src)
+		logger.InitLog.Traceln("current path:", currentPath)
+		if src == dest {
+			allPaths[count] = currentPath[1:]
+			count++
+			logger.InitLog.Traceln("all path:", allPaths)
+			visited[src] = false
+			return
+		}
+		for _, link := range links {
+			// search A to B only
+			if link.A == src {
+				findPath(link.B, dest, links, currentPath)
+			}
+		}
+		visited[src] = false
 	}
-	visited[src] = false
-	currentPath = []string{}
+
+	findPath(src, dest, links, []string{})
+	return allPaths, count
 }
 
 func createUPFListForSelectionULCL(inputList []string) (outputList []string) {
@@ -177,8 +180,8 @@ func createUPFListForSelectionULCL(inputList []string) (outputList []string) {
 	return append(inputList[offset:], inputList[:offset]...)
 }
 
-func (dfp *UEDefaultPaths) SelectUPFAndAllocUEIPForULCL(upi *UserPlaneInformation, selection *UPFSelectionParams) (string, net.IP) {
-
+func (dfp *UEDefaultPaths) SelectUPFAndAllocUEIPForULCL(upi *UserPlaneInformation,
+	selection *UPFSelectionParams) (string, net.IP) {
 	sortedUPFList := createUPFListForSelectionULCL(dfp.AnchorUPFs)
 
 	for _, upfName := range sortedUPFList {
@@ -186,7 +189,7 @@ func (dfp *UEDefaultPaths) SelectUPFAndAllocUEIPForULCL(upi *UserPlaneInformatio
 		upf := upi.UPFs[upfName]
 
 		pools := getUEIPPool(upf, selection)
-		if pools == nil || len(pools) == 0 {
+		if len(pools) == 0 {
 			continue
 		}
 		sortedPoolList := createPoolListForSelection(pools)
