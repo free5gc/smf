@@ -161,6 +161,10 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		}()
 		if len(sessSubData) > 0 {
 			smContext.DnnConfiguration = sessSubData[0].DnnConfigurations[smContext.Dnn]
+			// UP Security info present in session management subscription data
+			if smContext.DnnConfiguration.UpSecurity != nil {
+				smContext.UpSecurity = smContext.DnnConfiguration.UpSecurity
+			}
 		} else {
 			logger.PduSessLog.Errorln("SessionManagementSubscriptionData from UDM is nil")
 		}

@@ -83,6 +83,11 @@ type SMContext struct {
 
 	DnnConfiguration models.DnnConfiguration
 
+	// UP Security support TS 29.502 R16 6.1.6.2.39
+	UpSecurity                                                     *models.UpSecurity
+	MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink   models.MaxIntegrityProtectedDataRate
+	MaximumDataRatePerUEForUserPlaneIntegrityProtectionForDownLink models.MaxIntegrityProtectedDataRate
+
 	// Client
 	SMPolicyClient      *Npcf_SMPolicyControl.APIClient
 	CommunicationClient *Namf_Communication.APIClient
