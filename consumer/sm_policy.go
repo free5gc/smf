@@ -44,7 +44,7 @@ func SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (*models.Sm
 	var smPolicyDecision *models.SmPolicyDecision
 	if smPolicyDecisionFromPCF, _, err := smContext.SMPolicyClient.
 		DefaultApi.SmPoliciesPost(context.Background(), smPolicyData); err != nil {
-		return nil, fmt.Errorf("setup sm policy association failed: %s", err)
+		return nil, err
 	} else {
 		smPolicyDecision = &smPolicyDecisionFromPCF
 	}
