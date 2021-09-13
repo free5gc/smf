@@ -73,11 +73,15 @@ github.com/free5gc/logger_util v1.0.0 h1:hLTCTnKlEqJURrBwooNFQLavWPdJzS0o9KGIYUN
 github.com/free5gc/logger_util v1.0.0/go.mod h1:TK/bAJbm/l2TMNmbsKn83+xUmDNqts69IEir/nCa8w0=
 github.com/free5gc/nas v1.0.0 h1:OO4klCGRhflBrOUMyKfFXwxGu5Sz4B8vYrWtIXA1G9Q=
 github.com/free5gc/nas v1.0.0/go.mod h1:aZkA9pzIy6D1I4mTYExoUsr1pBwC81+aLvhs382TlD0=
+github.com/free5gc/nas v1.0.1 h1:3qOweTX4Ws7y/xKMq7FJ3Is+TlxaXZJCC2qyJ04ITZg=
+github.com/free5gc/nas v1.0.1/go.mod h1:XYUq6xLU3iuDxZHZI6vz5MMTBewmOWpJLCtevWW6JfA=
 github.com/free5gc/ngap v1.0.0/go.mod h1:FIAFElkAuJzusN2kXrCNJlSuCcQid8RZd5qZaf4N7pI=
 github.com/free5gc/ngap v1.0.2 h1:/89OIJVR0AWdMfiUuoe325RnjlF45UvIFdAxWrrbiYU=
 github.com/free5gc/ngap v1.0.2/go.mod h1:n9BWKtM58fxSSjvGFbsYlGiB9B3FAqMAi8ckkOP/X4Q=
 github.com/free5gc/openapi v1.0.0 h1:DaGVt05b1pSDBOailKAlLj6hAk6vunN0Nhzvl/xcWCY=
 github.com/free5gc/openapi v1.0.0/go.mod h1:7OzxoWBj6KQgznMW2ZiUtZdCGY+t89v4wtgKLhluKgU=
+github.com/free5gc/openapi v1.0.1 h1:1KwbQ6/D8U3FEwYv3yr4O4PWpHluXRHj2OOg3TK6dG0=
+github.com/free5gc/openapi v1.0.1/go.mod h1:oP4YVkZkJ0KrFnaVjT0XfRPBJdD7O6m4/PEyGtt5l1U=
 github.com/free5gc/path_util v1.0.0 h1:vJPGTymaWtavz6fJ/7k6WKEYv5BQLAq/O04RP54sab0=
 github.com/free5gc/path_util v1.0.0/go.mod h1:OpmcebEKrMPnH7Jg5lZ8y9ZWJNAjQ4l9FGWXUv58Mo0=
 github.com/free5gc/pfcp v1.0.1 h1:btAMuCjUqDjQr+5FBv+3+ZbIouKAZkKeh0MF/TdZ1kc=

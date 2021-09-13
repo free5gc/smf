@@ -105,36 +105,8 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		logger.PduSessLog.Warnf("Data Path not found\n")
 		logger.PduSessLog.Warnln("Selection Parameter: ", upfSelectionParams.String())
 
-		var httpResponse *http_wrapper.Response
-		if buf, err := smf_context.
-			BuildGSMPDUSessionEstablishmentReject(
-				smContext,
-				nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN); err != nil {
-			httpResponse = &http_wrapper.Response{
-				Header: nil,
-				Status: http.StatusForbidden,
-				Body: models.PostSmContextsErrorResponse{
-					JsonData: &models.SmContextCreateError{
-						Error:   &Nsmf_PDUSession.InsufficientResourceSliceDnn,
-						N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
-					},
-				},
-			}
-		} else {
-			httpResponse = &http_wrapper.Response{
-				Header: nil,
-				Status: http.StatusForbidden,
-				Body: models.PostSmContextsErrorResponse{
-					JsonData: &models.SmContextCreateError{
-						Error:   &Nsmf_PDUSession.InsufficientResourceSliceDnn,
-						N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
-					},
-					BinaryDataN1SmMessage: buf,
-				},
-			}
-		}
-
-		return httpResponse
+		return makeErrorResponse(smContext, nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN,
+			&Nsmf_PDUSession.InsufficientResourceSliceDnn)
 	}
 	smContext.PDUAddress = ip
 	smContext.SelectedUPF = selectedUPF
@@ -177,7 +149,18 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 
 	var smPolicyDecision *models.SmPolicyDecision
 	if smPolicyDecisionRsp, err := consumer.SendSMPolicyAssociationCreate(smContext); err != nil {
-		logger.PduSessLog.Errorf("")
+		openapiError := err.(openapi.GenericOpenAPIError)
+		problemDetails := openapiError.Model().(models.ProblemDetails)
+		logger.PduSessLog.Errorln("setup sm policy association failed:", err, problemDetails)
+		smContext.SMContextState = smf_context.InActive
+		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+
+		if problemDetails.Cause == "USER_UNKNOWN" {
+			return makeErrorResponse(smContext, nasMessage.Cause5GSMRequestRejectedUnspecified,
+				&Nsmf_PDUSession.SubscriptionDenied)
+		} else {
+			return makeErrorResponse(smContext, nasMessage.Cause5GSMNetworkFailure, &Nsmf_PDUSession.NetworkFailure)
+		}
 	} else {
 		smPolicyDecision = smPolicyDecisionRsp
 	}
@@ -217,36 +200,8 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		logger.PduSessLog.Warnf("Data Path not found\n")
 		logger.PduSessLog.Warnln("Selection Parameter: ", upfSelectionParams.String())
 
-		var httpResponse *http_wrapper.Response
-		if buf, err := smf_context.
-			BuildGSMPDUSessionEstablishmentReject(
-				smContext,
-				nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN); err != nil {
-			httpResponse = &http_wrapper.Response{
-				Header: nil,
-				Status: http.StatusForbidden,
-				Body: models.PostSmContextsErrorResponse{
-					JsonData: &models.SmContextCreateError{
-						Error:   &Nsmf_PDUSession.InsufficientResourceSliceDnn,
-						N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
-					},
-				},
-			}
-		} else {
-			httpResponse = &http_wrapper.Response{
-				Header: nil,
-				Status: http.StatusForbidden,
-				Body: models.PostSmContextsErrorResponse{
-					JsonData: &models.SmContextCreateError{
-						Error:   &Nsmf_PDUSession.InsufficientResourceSliceDnn,
-						N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
-					},
-					BinaryDataN1SmMessage: buf,
-				},
-			}
-		}
-
-		return httpResponse
+		return makeErrorResponse(smContext, nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN,
+			&Nsmf_PDUSession.InsufficientResourceSliceDnn)
 	}
 
 	if problemDetails, err := consumer.SendNFDiscoveryServingAMF(smContext); err != nil {
@@ -945,4 +900,38 @@ func releaseTunnel(smContext *smf_context.SMContext) {
 			}
 		}
 	}
+}
+
+func makeErrorResponse(smContext *smf_context.SMContext, nasErrorCause uint8,
+	sbiError *models.ProblemDetails) *http_wrapper.Response {
+	var httpResponse *http_wrapper.Response
+
+	if buf, err := smf_context.
+		BuildGSMPDUSessionEstablishmentReject(
+			smContext,
+			nasErrorCause); err != nil {
+		httpResponse = &http_wrapper.Response{
+			Header: nil,
+			Status: int(sbiError.Status),
+			Body: models.PostSmContextsErrorResponse{
+				JsonData: &models.SmContextCreateError{
+					Error:   sbiError,
+					N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
+				},
+			},
+		}
+	} else {
+		httpResponse = &http_wrapper.Response{
+			Header: nil,
+			Status: int(sbiError.Status),
+			Body: models.PostSmContextsErrorResponse{
+				JsonData: &models.SmContextCreateError{
+					Error:   sbiError,
+					N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
+				},
+				BinaryDataN1SmMessage: buf,
+			},
+		}
+	}
+	return httpResponse
 }
