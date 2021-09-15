@@ -120,6 +120,38 @@ func HandlePathSwitchRequestTransfer(b []byte, ctx *SMContext) error {
 		}
 	}
 
+	ctx.UpSecurityFromPathSwitchRequestSameAsLocalStored = true
+
+	// Verify whether UP security in PathSwitchRequest same as SMF locally stored or not TS 33.501 6.6.1
+	if ctx.UpSecurity != nil && pathSwitchRequestTransfer.UserPlaneSecurityInformation != nil {
+		rcvSecurityIndication := pathSwitchRequestTransfer.UserPlaneSecurityInformation.SecurityIndication
+		rcvUpSecurity := new(models.UpSecurity)
+		switch rcvSecurityIndication.IntegrityProtectionIndication.Value {
+		case ngapType.IntegrityProtectionIndicationPresentRequired:
+			rcvUpSecurity.UpIntegr = models.UpIntegrity_REQUIRED
+		case ngapType.IntegrityProtectionIndicationPresentPreferred:
+			rcvUpSecurity.UpIntegr = models.UpIntegrity_PREFERRED
+		case ngapType.IntegrityProtectionIndicationPresentNotNeeded:
+			rcvUpSecurity.UpIntegr = models.UpIntegrity_NOT_NEEDED
+		}
+		switch rcvSecurityIndication.ConfidentialityProtectionIndication.Value {
+		case ngapType.ConfidentialityProtectionIndicationPresentRequired:
+			rcvUpSecurity.UpConfid = models.UpConfidentiality_REQUIRED
+		case ngapType.ConfidentialityProtectionIndicationPresentPreferred:
+			rcvUpSecurity.UpConfid = models.UpConfidentiality_PREFERRED
+		case ngapType.ConfidentialityProtectionIndicationPresentNotNeeded:
+			rcvUpSecurity.UpConfid = models.UpConfidentiality_NOT_NEEDED
+		}
+
+		if rcvUpSecurity.UpIntegr != ctx.UpSecurity.UpIntegr ||
+			rcvUpSecurity.UpConfid != ctx.UpSecurity.UpConfid {
+			ctx.UpSecurityFromPathSwitchRequestSameAsLocalStored = false
+
+			// SMF shall support logging capabilities for this mismatch event TS 33.501 6.6.1
+			logger.PduSessLog.Warnf("Received UP security policy mismatch from SMF locally stored")
+		}
+	}
+
 	return nil
 }
 

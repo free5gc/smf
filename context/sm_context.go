@@ -87,6 +87,8 @@ type SMContext struct {
 	UpSecurity                                                     *models.UpSecurity
 	MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink   models.MaxIntegrityProtectedDataRate
 	MaximumDataRatePerUEForUserPlaneIntegrityProtectionForDownLink models.MaxIntegrityProtectedDataRate
+	// SMF verified UP security result of Xn-handover TS 33.501 6.6.1
+	UpSecurityFromPathSwitchRequestSameAsLocalStored bool
 
 	// Client
 	SMPolicyClient      *Npcf_SMPolicyControl.APIClient

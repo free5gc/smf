@@ -215,22 +215,53 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 		}
 	}
 
+	// Received UP security policy mismatch from SMF locally stored TS 33.501 6.6.1
 	// Security Indication(optional) TS 38.413 9.3.1.27
-	pathSwitchRequestAcknowledgeTransfer.SecurityIndication = new(ngapType.SecurityIndication)
-	securityIndication := pathSwitchRequestAcknowledgeTransfer.SecurityIndication
-	// TODO: use real value
-	securityIndication.IntegrityProtectionIndication.Value = ngapType.IntegrityProtectionIndicationPresentNotNeeded
-	// TODO: use real value
-	securityIndication.ConfidentialityProtectionIndication.Value =
-		ngapType.ConfidentialityProtectionIndicationPresentNotNeeded
+	if !ctx.UpSecurityFromPathSwitchRequestSameAsLocalStored {
+		pathSwitchRequestAcknowledgeTransfer.SecurityIndication = new(ngapType.SecurityIndication)
+		securityIndication := pathSwitchRequestAcknowledgeTransfer.SecurityIndication
 
-	integrityProtectionInd := securityIndication.IntegrityProtectionIndication.Value
-	if integrityProtectionInd == ngapType.IntegrityProtectionIndicationPresentRequired ||
-		integrityProtectionInd == ngapType.IntegrityProtectionIndicationPresentPreferred {
-		securityIndication.MaximumIntegrityProtectedDataRateUL = new(ngapType.MaximumIntegrityProtectedDataRate)
-		// TODO: use real value
-		securityIndication.MaximumIntegrityProtectedDataRateUL.Value =
-			ngapType.MaximumIntegrityProtectedDataRatePresentBitrate64kbs
+		upSecurity := ctx.UpSecurity
+		maximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink :=
+			ctx.MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink
+
+		switch upSecurity.UpIntegr {
+		case models.UpIntegrity_REQUIRED:
+			securityIndication.IntegrityProtectionIndication.Value =
+				ngapType.IntegrityProtectionIndicationPresentRequired
+		case models.UpIntegrity_PREFERRED:
+			securityIndication.IntegrityProtectionIndication.Value =
+				ngapType.IntegrityProtectionIndicationPresentPreferred
+		case models.UpIntegrity_NOT_NEEDED:
+			securityIndication.IntegrityProtectionIndication.Value =
+				ngapType.IntegrityProtectionIndicationPresentNotNeeded
+		}
+		switch upSecurity.UpConfid {
+		case models.UpConfidentiality_REQUIRED:
+			securityIndication.ConfidentialityProtectionIndication.Value =
+				ngapType.ConfidentialityProtectionIndicationPresentRequired
+		case models.UpConfidentiality_PREFERRED:
+			securityIndication.ConfidentialityProtectionIndication.Value =
+				ngapType.ConfidentialityProtectionIndicationPresentPreferred
+		case models.UpConfidentiality_NOT_NEEDED:
+			securityIndication.ConfidentialityProtectionIndication.Value =
+				ngapType.ConfidentialityProtectionIndicationPresentNotNeeded
+		}
+
+		// Present only when Integrity Indication within the Security Indication is set to "required" or "preferred"
+		integrityProtectionInd := securityIndication.IntegrityProtectionIndication.Value
+		if integrityProtectionInd == ngapType.IntegrityProtectionIndicationPresentRequired ||
+			integrityProtectionInd == ngapType.IntegrityProtectionIndicationPresentPreferred {
+			securityIndication.MaximumIntegrityProtectedDataRateUL = new(ngapType.MaximumIntegrityProtectedDataRate)
+			switch maximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink {
+			case models.MaxIntegrityProtectedDataRate_MAX_UE_RATE:
+				securityIndication.MaximumIntegrityProtectedDataRateUL.Value =
+					ngapType.MaximumIntegrityProtectedDataRatePresentMaximumUERate
+			case models.MaxIntegrityProtectedDataRate__64_KBPS:
+				securityIndication.MaximumIntegrityProtectedDataRateUL.Value =
+					ngapType.MaximumIntegrityProtectedDataRatePresentBitrate64kbs
+			}
+		}
 	}
 
 	if buf, err := aper.MarshalWithParams(pathSwitchRequestAcknowledgeTransfer, "valueExt"); err != nil {
