@@ -115,7 +115,7 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 
 	smDataParams := &Nudm_SubscriberDataManagement.GetSmDataParamOpts{
 		Dnn:         optional.NewString(createData.Dnn),
-		PlmnId:      optional.NewInterface(smPlmnID.Mcc + smPlmnID.Mnc),
+		PlmnId:      optional.NewInterface(openapi.MarshToJsonString(smPlmnID)),
 		SingleNssai: optional.NewInterface(openapi.MarshToJsonString(smContext.Snssai)),
 	}
 
