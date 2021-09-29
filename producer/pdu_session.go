@@ -681,7 +681,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 	// Check FSM and take corresponding action
 	switch smContext.SMContextState {
 	case smf_context.PFCPModification:
-		logger.CtxLog.Traceln("In case PFCPModification")
+		logger.CtxLog.Traceln("In case PFCPModification" + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 
 		if sendPFCPModification {
 			defaultPath := smContext.Tunnel.DataPathPool.GetDefaultPath()
@@ -693,7 +693,9 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			logger.PduSessLog.Infoln("Send PFCP Deletion from HandlePDUSessionSMContextUpdate")
 		}
 
+		logger.CtxLog.Debugln("Before smContext.SBIPFCPCommunicationChan" + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		PFCPResponseStatus := <-smContext.SBIPFCPCommunicationChan
+		logger.CtxLog.Debugln("After smContext.SBIPFCPCommunicationChan" + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 
 		switch PFCPResponseStatus {
 		case smf_context.SessionUpdateSuccess:
@@ -895,7 +897,9 @@ func releaseTunnel(smContext *smf_context.SMContext) {
 				continue
 			}
 			if _, exist := deletedPFCPNode[curUPFID]; !exist {
+				logger.CtxLog.Debugln("Before pfcp_message.SendPfcpSessionDeletionRequest" + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 				pfcp_message.SendPfcpSessionDeletionRequest(curDataPathNode.UPF.NodeID, smContext)
+				logger.CtxLog.Debugln("After pfcp_message.SendPfcpSessionDeletionRequest" + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 				deletedPFCPNode[curUPFID] = true
 				smContext.PendingUPF[curDataPathNode.GetNodeIP()] = true
 			}
