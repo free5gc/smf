@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"strconv"
 
 	"github.com/antihax/optional"
 
@@ -49,7 +50,7 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 	createData := request.JsonData
 	smContext := smf_context.NewSMContext(createData.Supi, createData.PduSessionId)
 	smContext.SMContextState = smf_context.ActivePending
-	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+	logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 	smContext.SetCreateData(createData)
 	smContext.SmStatusNotifyUri = createData.SmContextStatusUri
 
@@ -101,7 +102,7 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		logger.PduSessLog.Error("failed allocate IP address for this SM")
 
 		smContext.SMContextState = smf_context.InActive
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		logger.PduSessLog.Warnf("Data Path not found\n")
 		logger.PduSessLog.Warnln("Selection Parameter: ", upfSelectionParams.String())
 
@@ -153,7 +154,7 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		problemDetails := openapiError.Model().(models.ProblemDetails)
 		logger.PduSessLog.Errorln("setup sm policy association failed:", err, problemDetails)
 		smContext.SMContextState = smf_context.InActive
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 
 		if problemDetails.Cause == "USER_UNKNOWN" {
 			return makeErrorResponse(smContext, nasMessage.Cause5GSMRequestRejectedUnspecified,
@@ -196,7 +197,7 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 
 	if defaultPath == nil {
 		smContext.SMContextState = smf_context.InActive
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		logger.PduSessLog.Warnf("Data Path not found\n")
 		logger.PduSessLog.Warnln("Selection Parameter: ", upfSelectionParams.String())
 
@@ -320,7 +321,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			}
 
 			smContext.SMContextState = smf_context.PFCPModification
-			logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+			logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 
 			releaseTunnel(smContext)
 
@@ -335,7 +336,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			// Send Release Notify to AMF
 			logger.PduSessLog.Infoln("[SMF] Send Update SmContext Response")
 			smContext.SMContextState = smf_context.InActive
-			logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+			logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 			response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
 			problemDetails, err := consumer.SendSMContextStatusNotification(smContext.SmStatusNotifyUri)
 			if problemDetails != nil || err != nil {
@@ -369,7 +370,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			logger.PduSessLog.Infoln("SMContext state: ", smContext.SMContextState.String())
 		}
 		smContext.SMContextState = smf_context.ModificationPending
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "PDUSessionResourceSetupRequestTransfer"}
 		response.JsonData.UpCnxState = models.UpCnxState_ACTIVATING
 		response.JsonData.N2SmInfoType = models.N2SmInfoType_PDU_RES_SETUP_REQ
@@ -389,7 +390,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			logger.PduSessLog.Infoln("SMContext state: ", smContext.SMContextState.String())
 		}
 		smContext.SMContextState = smf_context.ModificationPending
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
 		smContext.UpCnxState = body.JsonData.UpCnxState
 		smContext.UeLocation = body.JsonData.UeLocation
@@ -415,7 +416,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 
 		sendPFCPModification = true
 		smContext.SMContextState = smf_context.PFCPModification
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 	}
 
 	switch smContextUpdateData.N2SmInfoType {
@@ -427,7 +428,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 				smContext.Supi, smContext.PDUSessionID, smContext.SMContextState.String())
 		}
 		smContext.SMContextState = smf_context.ModificationPending
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		pdrList = []*smf_context.PDR{}
 		farList = []*smf_context.FAR{}
 
@@ -463,7 +464,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		}
 		sendPFCPModification = true
 		smContext.SMContextState = smf_context.PFCPModification
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 	case models.N2SmInfoType_PDU_RES_SETUP_FAIL:
 		if err := smf_context.
 			HandlePDUSessionResourceSetupResponseTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
@@ -479,7 +480,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 					smContext.Supi, smContext.PDUSessionID, smContext.SMContextState.String())
 			}
 			smContext.SMContextState = smf_context.InActive
-			logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+			logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 			logger.PduSessLog.Infoln("[SMF] Send Update SmContext Response")
 			response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
 
@@ -506,7 +507,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			}
 			logger.PduSessLog.Infoln("[SMF] Send Update SmContext Response")
 			smContext.SMContextState = smf_context.InActivePending
-			logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+			logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		}
 	case models.N2SmInfoType_PATH_SWITCH_REQ:
 		logger.PduSessLog.Traceln("Handle Path Switch Request")
@@ -517,7 +518,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 				smContext.Supi, smContext.PDUSessionID, smContext.SMContextState.String())
 		}
 		smContext.SMContextState = smf_context.ModificationPending
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 
 		if err := smf_context.HandlePathSwitchRequestTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			logger.PduSessLog.Errorf("Handle PathSwitchRequestTransfer: %+v", err)
@@ -551,7 +552,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 
 		sendPFCPModification = true
 		smContext.SMContextState = smf_context.PFCPModification
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 	case models.N2SmInfoType_PATH_SWITCH_SETUP_FAIL:
 		if smContext.SMContextState != smf_context.Active {
 			// Wait till the state becomes Active again
@@ -560,7 +561,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 				smContext.Supi, smContext.PDUSessionID, smContext.SMContextState.String())
 		}
 		smContext.SMContextState = smf_context.ModificationPending
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		if err :=
 			smf_context.HandlePathSwitchRequestSetupFailedTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			logger.PduSessLog.Error()
@@ -573,7 +574,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 				smContext.Supi, smContext.PDUSessionID, smContext.SMContextState.String())
 		}
 		smContext.SMContextState = smf_context.ModificationPending
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "Handover"}
 	}
 
@@ -587,7 +588,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 				smContext.Supi, smContext.PDUSessionID, smContext.SMContextState.String())
 		}
 		smContext.SMContextState = smf_context.ModificationPending
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		smContext.HoState = models.HoState_PREPARING
 		if err := smf_context.HandleHandoverRequiredTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			logger.PduSessLog.Errorf("Handle HandoverRequiredTransfer failed: %+v", err)
@@ -613,7 +614,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 				smContext.Supi, smContext.PDUSessionID, smContext.SMContextState.String())
 		}
 		smContext.SMContextState = smf_context.ModificationPending
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		smContext.HoState = models.HoState_PREPARED
 		response.JsonData.HoState = models.HoState_PREPARED
 		if err :=
@@ -641,7 +642,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 				smContext.Supi, smContext.PDUSessionID, smContext.SMContextState.String())
 		}
 		smContext.SMContextState = smf_context.ModificationPending
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		smContext.HoState = models.HoState_COMPLETED
 		response.JsonData.HoState = models.HoState_COMPLETED
 	}
@@ -669,7 +670,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		logger.CtxLog.Infoln("[SMF] Cause_REL_DUE_TO_DUPLICATE_SESSION_ID")
 
 		smContext.SMContextState = smf_context.PFCPModification
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 
 		releaseTunnel(smContext)
 
@@ -698,7 +699,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		case smf_context.SessionUpdateSuccess:
 			logger.CtxLog.Traceln("In case SessionUpdateSuccess")
 			smContext.SMContextState = smf_context.Active
-			logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+			logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 			httpResponse = &http_wrapper.Response{
 				Status: http.StatusOK,
 				Body:   response,
@@ -706,7 +707,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		case smf_context.SessionUpdateFailed:
 			logger.CtxLog.Traceln("In case SessionUpdateFailed")
 			smContext.SMContextState = smf_context.Active
-			logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+			logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 			// It is just a template
 			httpResponse = &http_wrapper.Response{
 				Status: http.StatusForbidden,
@@ -720,7 +721,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		case smf_context.SessionReleaseSuccess:
 			logger.CtxLog.Traceln("In case SessionReleaseSuccess")
 			smContext.SMContextState = smf_context.InActivePending
-			logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+			logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 			httpResponse = &http_wrapper.Response{
 				Status: http.StatusOK,
 				Body:   response,
@@ -738,7 +739,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 				Status: int(problemDetail.Status),
 			}
 			smContext.SMContextState = smf_context.Active
-			logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+			logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 			errResponse := models.UpdateSmContextErrorResponse{
 				JsonData: &models.SmContextUpdateError{
 					Error: &problemDetail,
@@ -756,7 +757,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 	case smf_context.ModificationPending:
 		logger.CtxLog.Traceln("In case ModificationPending")
 		smContext.SMContextState = smf_context.Active
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		httpResponse = &http_wrapper.Response{
 			Status: http.StatusOK,
 			Body:   response,
@@ -806,7 +807,7 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 	defer smContext.SMLock.Unlock()
 
 	smContext.SMContextState = smf_context.PFCPModification
-	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+	logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 
 	releaseTunnel(smContext)
 
@@ -817,7 +818,7 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 	case smf_context.SessionReleaseSuccess:
 		logger.CtxLog.Traceln("In case SessionReleaseSuccess")
 		smContext.SMContextState = smf_context.InActivePending
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		httpResponse = &http_wrapper.Response{
 			Status: http.StatusNoContent,
 			Body:   nil,
@@ -835,7 +836,7 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 			Status: int(problemDetail.Status),
 		}
 		smContext.SMContextState = smf_context.Active
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		errResponse := models.UpdateSmContextErrorResponse{
 			JsonData: &models.SmContextUpdateError{
 				Error: &problemDetail,
@@ -861,7 +862,7 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 			Status: int(problemDetail.Status),
 		}
 		smContext.SMContextState = smf_context.Active
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		logger.CtxLog.Debugln("SMContextState Change State: "+ smContext.SMContextState.String() + ", SUPI: "+smContext.Supi+", PduSessionID: "+strconv.Itoa(int(smContext.PDUSessionID)))
 		errResponse := models.UpdateSmContextErrorResponse{
 			JsonData: &models.SmContextUpdateError{
 				Error: &problemDetail,
