@@ -3,6 +3,7 @@ package context
 import (
 	"github.com/free5gc/nas/nasConvert"
 	"github.com/free5gc/nas/nasMessage"
+	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/logger"
 )
 
@@ -13,6 +14,24 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 
 	// Retrieve PTI (Procedure transaction identity)
 	smContext.Pti = req.GetPTI()
+
+	// Retrieve MaxIntegrityProtectedDataRate of UE for UP Security
+	switch req.GetMaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink() {
+	case 0x00:
+		smContext.MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink =
+			models.MaxIntegrityProtectedDataRate__64_KBPS
+	case 0xff:
+		smContext.MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink =
+			models.MaxIntegrityProtectedDataRate_MAX_UE_RATE
+	}
+	switch req.GetMaximumDataRatePerUEForUserPlaneIntegrityProtectionForDownLink() {
+	case 0x00:
+		smContext.MaximumDataRatePerUEForUserPlaneIntegrityProtectionForDownLink =
+			models.MaxIntegrityProtectedDataRate__64_KBPS
+	case 0xff:
+		smContext.MaximumDataRatePerUEForUserPlaneIntegrityProtectionForDownLink =
+			models.MaxIntegrityProtectedDataRate_MAX_UE_RATE
+	}
 
 	// Handle PDUSessionType
 	if req.PDUSessionType != nil {
