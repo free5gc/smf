@@ -46,7 +46,12 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		return httpResponse
 	}
 
+	// Check duplicate SM Context
 	createData := request.JsonData
+	if check, duplicated_smContext := smf_context.CheckDuplicate(createData); check {
+		HandlePDUSessionSMContextLocalRelease(duplicated_smContext, createData)
+	}
+
 	smContext := smf_context.NewSMContext(createData.Supi, createData.PduSessionId)
 	smContext.SMContextState = smf_context.ActivePending
 	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
@@ -884,6 +889,50 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 	smf_context.RemoveSMContext(smContext.Ref)
 
 	return httpResponse
+}
+
+func HandlePDUSessionSMContextLocalRelease(smContext *smf_context.SMContext, createData *models.SmContextCreateData) {
+	smContext.SMLock.Lock()
+	defer smContext.SMLock.Unlock()
+
+	smContext.SMContextState = smf_context.PFCPModification
+	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+
+	releaseTunnel(smContext)
+
+	PFCPResponseStatus := <-smContext.SBIPFCPCommunicationChan
+	switch PFCPResponseStatus {
+	case smf_context.SessionReleaseSuccess:
+		logger.CtxLog.Traceln("In case SessionReleaseSuccess")
+		smContext.SMContextState = smf_context.InActivePending
+		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		if createData.SmContextStatusUri != smContext.SmStatusNotifyUri {
+			problemDetails, err := consumer.SendSMContextStatusNotification(smContext.SmStatusNotifyUri)
+			if problemDetails != nil || err != nil {
+				if problemDetails != nil {
+					logger.PduSessLog.Warnf("Send SMContext Status Notification Problem[%+v]", problemDetails)
+				}
+
+				if err != nil {
+					logger.PduSessLog.Warnf("Send SMContext Status Notification Error[%v]", err)
+				}
+			} else {
+				logger.PduSessLog.Traceln("Send SMContext Status Notification successfully")
+			}
+		}
+		smf_context.RemoveSMContext(smContext.Ref)
+
+	case smf_context.SessionReleaseFailed:
+		logger.CtxLog.Traceln("In case SessionReleaseFailed")
+		smContext.SMContextState = smf_context.Active
+		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+
+	default:
+		logger.CtxLog.Warnf("The state shouldn't be [%s]\n", PFCPResponseStatus)
+		logger.CtxLog.Traceln("In case Unknown")
+		smContext.SMContextState = smf_context.Active
+		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+	}
 }
 
 func releaseTunnel(smContext *smf_context.SMContext) {
