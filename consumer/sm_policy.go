@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"github.com/pkg/errors"
 
@@ -12,9 +13,9 @@ import (
 )
 
 // SendSMPolicyAssociationCreate create the session management association to the PCF
-func SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (*models.SmPolicyDecision, error) {
+func SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (string, *models.SmPolicyDecision, error) {
 	if smContext.SMPolicyClient == nil {
-		return nil, errors.Errorf("smContext not selected PCF")
+		return "", nil, errors.Errorf("smContext not selected PCF")
 	}
 
 	smPolicyData := models.SmPolicyContextData{}
@@ -41,13 +42,43 @@ func SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (*models.Sm
 	}
 	smPolicyData.SuppFeat = "F"
 
+	var smPolicyID string
 	var smPolicyDecision *models.SmPolicyDecision
-	if smPolicyDecisionFromPCF, _, err := smContext.SMPolicyClient.
+	if smPolicyDecisionFromPCF, httpRsp, err := smContext.SMPolicyClient.
 		DefaultApi.SmPoliciesPost(context.Background(), smPolicyData); err != nil {
-		return nil, err
+		return "", nil, err
 	} else {
 		smPolicyDecision = &smPolicyDecisionFromPCF
+
+		loc := httpRsp.Header.Get("Location")
+		if smPolicyID = extractSMPolicyIDFromLocation(loc); len(smPolicyID) == 0 {
+			return "", nil, fmt.Errorf("SMPolicy ID parse failed")
+		}
 	}
 
-	return smPolicyDecision, nil
+	return smPolicyID, smPolicyDecision, nil
+}
+
+var smPolicyRegexp = regexp.MustCompile(`http[s]?\://.*/npcf-smpolicycontrol/v\d+/sm-policies/(.*)`)
+
+func extractSMPolicyIDFromLocation(location string) string {
+	match := smPolicyRegexp.FindStringSubmatch(location)
+	if len(match) > 1 {
+		return match[1]
+	}
+	// not match submatch
+	return ""
+}
+
+func SendSMPolicyAssociationTermination(smContext *smf_context.SMContext) error {
+	if smContext.SMPolicyClient == nil {
+		return errors.Errorf("smContext not selected PCF")
+	}
+
+	if _, err := smContext.SMPolicyClient.DefaultApi.SmPoliciesSmPolicyIdDeletePost(
+		context.Background(), smContext.SMPolicyID, models.SmPolicyDeleteData{}); err != nil {
+		return fmt.Errorf("SM Policy termination failed: %v", err)
+	}
+
+	return nil
 }

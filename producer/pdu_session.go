@@ -157,7 +157,7 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 	}
 
 	var smPolicyDecision *models.SmPolicyDecision
-	if smPolicyDecisionRsp, err := consumer.SendSMPolicyAssociationCreate(smContext); err != nil {
+	if smPolicyID, smPolicyDecisionRsp, err := consumer.SendSMPolicyAssociationCreate(smContext); err != nil {
 		openapiError := err.(openapi.GenericOpenAPIError)
 		problemDetails := openapiError.Model().(models.ProblemDetails)
 		logger.PduSessLog.Errorln("setup sm policy association failed:", err, problemDetails)
@@ -172,6 +172,7 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		}
 	} else {
 		smPolicyDecision = smPolicyDecisionRsp
+		smContext.SMPolicyID = smPolicyID
 	}
 
 	// dataPath selection
@@ -311,6 +312,16 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 					smContext.Supi, smContext.PDUSessionID, smContext.PDUAddress.String())
 				smf_context.GetUserPlaneInformation().ReleaseUEIP(smContext.SelectedUPF, smContext.PDUAddress)
 			}
+
+			// remove SM Policy Association
+			if smContext.SMPolicyID != "" {
+				if err := consumer.SendSMPolicyAssociationTermination(smContext); err != nil {
+					logger.PduSessLog.Errorf("SM Policy Termination failed: %s", err)
+				} else {
+					smContext.SMPolicyID = ""
+				}
+			}
+
 			if buf, err := smf_context.BuildGSMPDUSessionReleaseCommand(smContext); err != nil {
 				logger.PduSessLog.Errorf("Build GSM PDUSessionReleaseCommand failed: %+v", err)
 			} else {
@@ -814,6 +825,15 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 	smContext.SMLock.Lock()
 	defer smContext.SMLock.Unlock()
 
+	// remove SM Policy Association
+	if smContext.SMPolicyID != "" {
+		if err := consumer.SendSMPolicyAssociationTermination(smContext); err != nil {
+			logger.PduSessLog.Errorf("SM Policy Termination failed: %s", err)
+		} else {
+			smContext.SMPolicyID = ""
+		}
+	}
+
 	smContext.SMContextState = smf_context.PFCPModification
 	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 
@@ -894,6 +914,15 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 func HandlePDUSessionSMContextLocalRelease(smContext *smf_context.SMContext, createData *models.SmContextCreateData) {
 	smContext.SMLock.Lock()
 	defer smContext.SMLock.Unlock()
+
+	// remove SM Policy Association
+	if smContext.SMPolicyID != "" {
+		if err := consumer.SendSMPolicyAssociationTermination(smContext); err != nil {
+			logger.PduSessLog.Errorf("SM Policy Termination failed: %s", err)
+		} else {
+			smContext.SMPolicyID = ""
+		}
+	}
 
 	smContext.SMContextState = smf_context.PFCPModification
 	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
