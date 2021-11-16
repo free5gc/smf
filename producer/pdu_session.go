@@ -46,6 +46,34 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		return httpResponse
 	}
 
+	oldSmContext := smf_context.GetSMContextByPSI(request.JsonData.Supi, request.JsonData.PduSessionId)
+	if oldSmContext != nil {
+		logger.CtxLog.Traceln("SMContext exits, Send PFCP session deletion request")
+		releaseTunnel(oldSmContext)
+
+		PFCPResponseStatus := <-oldSmContext.SBIPFCPCommunicationChan
+
+		switch PFCPResponseStatus {
+		case smf_context.SessionReleaseSuccess:
+			logger.CtxLog.Traceln("In case SessionReleaseSuccess")
+			oldSmContext.SMContextState = smf_context.InActivePending
+			logger.CtxLog.Traceln("SMContextState Change State: ", oldSmContext.SMContextState.String())
+
+		case smf_context.SessionReleaseFailed:
+			logger.CtxLog.Errorf("Failed to release the old PFCP session of PDUSessionID:%d of SUPI:%s", oldSmContext.Supi, oldSmContext.PDUSessionID)
+			logger.CtxLog.Traceln("In case SessionReleaseFailed")
+			oldSmContext.SMContextState = smf_context.Active
+			logger.CtxLog.Traceln("SMContextState Change State: ", oldSmContext.SMContextState.String())
+
+		default:
+			logger.CtxLog.Warnf("The state shouldn't be [%s]\n", PFCPResponseStatus)
+			logger.CtxLog.Traceln("In case Unkown")
+			oldSmContext.SMContextState = smf_context.Active
+			logger.CtxLog.Traceln("SMContextState Change State: ", oldSmContext.SMContextState.String())
+		}
+		smf_context.RemoveSMContext(oldSmContext.Ref)
+	}
+
 	createData := request.JsonData
 	smContext := smf_context.NewSMContext(createData.Supi, createData.PduSessionId)
 	smContext.SMContextState = smf_context.ActivePending
@@ -322,9 +350,6 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			} else {
 				response.BinaryDataN2SmInformation = buf
 			}
-
-			smContext.SMContextState = smf_context.PFCPModification
-			logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 
 			releaseTunnel(smContext)
 
@@ -672,9 +697,6 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 
 		logger.CtxLog.Infoln("[SMF] Cause_REL_DUE_TO_DUPLICATE_SESSION_ID")
 
-		smContext.SMContextState = smf_context.PFCPModification
-		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
-
 		releaseTunnel(smContext)
 
 		sendPFCPDelete = true
@@ -809,9 +831,6 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 	smContext.SMLock.Lock()
 	defer smContext.SMLock.Unlock()
 
-	smContext.SMContextState = smf_context.PFCPModification
-	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
-
 	releaseTunnel(smContext)
 
 	var httpResponse *http_wrapper.Response
@@ -904,6 +923,8 @@ func releaseTunnel(smContext *smf_context.SMContext) {
 			}
 		}
 	}
+	smContext.SMContextState = smf_context.PFCPModification
+	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 }
 
 func makeErrorResponse(smContext *smf_context.SMContext, nasErrorCause uint8,

@@ -22,9 +22,11 @@ import (
 )
 
 var (
-	smContextPool    sync.Map
-	canonicalRef     sync.Map
-	seidSMContextMap sync.Map
+	smContextPool        sync.Map
+	canonicalRef         sync.Map
+	seidSMContextMap     sync.Map
+	psiSMContextMap      = make(map[string]map[int32]*SMContext) //  map[supi]map[pduSessionID]*SMContext
+	psiSMContextMapMutex sync.Mutex
 )
 
 var smContextCount uint64
@@ -153,6 +155,7 @@ func NewSMContext(identifier string, pduSessID int32) (smContext *SMContext) {
 	smContext.SMContextState = InActive
 	smContext.Identifier = identifier
 	smContext.PDUSessionID = pduSessID
+	StoreSMContextByPSI(identifier, smContext.PDUSessionID, smContext)
 	smContext.PFCPContext = make(map[string]*PFCPSessionContext)
 	smContext.LocalSEID = GetSMContextCount()
 
@@ -193,6 +196,8 @@ func RemoveSMContext(ref string) {
 		seidSMContextMap.Delete(pfcpSessionContext.LocalSEID)
 	}
 
+	RemoveSMContextFromPsiMap(smContext)
+
 	smContextPool.Delete(ref)
 }
 
@@ -202,6 +207,50 @@ func GetSMContextBySEID(SEID uint64) (smContext *SMContext) {
 		smContext = value.(*SMContext)
 	}
 	return
+}
+
+func StoreSMContextByPSI(supi string, pduSessionID int32, smContext *SMContext) {
+	psiSMContextMapMutex.Lock()
+	defer psiSMContextMapMutex.Unlock()
+
+	pduSessionMap, ok := psiSMContextMap[supi]
+	if !ok {
+		pduSessionMap = make(map[int32]*SMContext)
+		psiSMContextMap[supi] = pduSessionMap
+	}
+	pduSessionMap[pduSessionID] = smContext
+	return
+}
+
+func GetSMContextByPSI(supi string, pduSessionID int32) (smContext *SMContext) {
+	psiSMContextMapMutex.Lock()
+	defer psiSMContextMapMutex.Unlock()
+
+	if pduSessionMap, ok := psiSMContextMap[supi]; ok {
+		if _, ok = pduSessionMap[pduSessionID]; ok {
+			smContext = pduSessionMap[pduSessionID]
+		}
+	}
+	return
+}
+
+func RemoveSMContextFromPsiMap(smContext *SMContext) {
+	psiSMContextMapMutex.Lock()
+	defer psiSMContextMapMutex.Unlock()
+
+	supi := smContext.Supi
+	psi := smContext.PDUSessionID
+
+	pduSessionMap, ok := psiSMContextMap[supi]
+	if !ok {
+		return
+	}
+	if _, ok := pduSessionMap[psi]; ok {
+		delete(pduSessionMap, psi)
+	}
+	if len(pduSessionMap) == 0 {
+		delete(psiSMContextMap, supi)
+	}
 }
 
 //*** add unit test ***//
