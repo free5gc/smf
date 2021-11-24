@@ -392,6 +392,15 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			logger.PduSessLog.Infoln("The SMContext State should be Active State")
 			logger.PduSessLog.Infoln("SMContext state: ", smContext.SMContextState.String())
 		}
+		// If the PDU session has been released, skip sending PFCP Session Modification Request
+		if smContext.SMContextState == smf_context.InActivePending {
+			logger.CtxLog.Infof("Skip sending PFCP Session Modification Request of PDUSessionID:%d of SUPI:%s", smContext.PDUSessionID, smContext.Supi)
+			response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
+			return &http_wrapper.Response{
+				Status: http.StatusOK,
+				Body:   response,
+			}
+		}
 		smContext.SMContextState = smf_context.ModificationPending
 		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 		response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
@@ -412,9 +421,8 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 				DLPDR.FAR.ApplyAction.Buff = true
 				DLPDR.FAR.ApplyAction.Nocp = true
 				smContext.PendingUPF[ANUPF.GetNodeIP()] = true
+				farList = append(farList, DLPDR.FAR)
 			}
-
-			farList = append(farList, DLPDR.FAR)
 		}
 
 		sendPFCPModification = true
