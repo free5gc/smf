@@ -25,7 +25,7 @@ import (
 
 // HTTPReleaseSmContext - Release SM Context
 func HTTPReleaseSmContext(c *gin.Context) {
-	logger.PduSessLog.Info("Recieve Release SM Context Request")
+	logger.PduSessLog.Info("Receive Release SM Context Request")
 	var request models.ReleaseSmContextRequest
 	request.JsonData = new(models.SmContextReleaseData)
 
@@ -59,7 +59,7 @@ func RetrieveSmContext(c *gin.Context) {
 
 // HTTPUpdateSmContext - Update SM Context
 func HTTPUpdateSmContext(c *gin.Context) {
-	logger.PduSessLog.Info("Recieve Update SM Context Request")
+	logger.PduSessLog.Info("Receive Update SM Context Request")
 	var request models.UpdateSmContextRequest
 	request.JsonData = new(models.SmContextUpdateData)
 
