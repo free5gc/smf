@@ -84,6 +84,8 @@ type SMContext struct {
 
 	DnnConfiguration models.DnnConfiguration
 
+	SMPolicyID string
+
 	// UP Security support TS 29.502 R16 6.1.6.2.39
 	UpSecurity                                                     *models.UpSecurity
 	MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink   models.MaxIntegrityProtectedDataRate
@@ -130,6 +132,15 @@ type SMContext struct {
 
 func canonicalName(identifier string, pduSessID int32) (canonical string) {
 	return fmt.Sprintf("%s-%d", identifier, pduSessID)
+}
+
+func CheckDuplicate(createData *models.SmContextCreateData) (bool, *SMContext) {
+	if value, ok := canonicalRef.Load(canonicalName(createData.Supi, createData.PduSessionId)); ok {
+		smContext := GetSMContext(value.(string))
+		logger.CtxLog.Warningf("Duplicated SM Context: [%s]", value.(string))
+		return true, smContext
+	}
+	return false, nil
 }
 
 func ResolveRef(identifier string, pduSessID int32) (ref string, err error) {

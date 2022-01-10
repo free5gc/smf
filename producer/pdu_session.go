@@ -46,7 +46,12 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		return httpResponse
 	}
 
+	// Check duplicate SM Context
 	createData := request.JsonData
+	if check, duplicated_smContext := smf_context.CheckDuplicate(createData); check {
+		HandlePDUSessionSMContextLocalRelease(duplicated_smContext, createData)
+	}
+
 	smContext := smf_context.NewSMContext(createData.Supi, createData.PduSessionId)
 	smContext.SMContextState = smf_context.ActivePending
 	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
@@ -152,7 +157,7 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 	}
 
 	var smPolicyDecision *models.SmPolicyDecision
-	if smPolicyDecisionRsp, err := consumer.SendSMPolicyAssociationCreate(smContext); err != nil {
+	if smPolicyID, smPolicyDecisionRsp, err := consumer.SendSMPolicyAssociationCreate(smContext); err != nil {
 		openapiError := err.(openapi.GenericOpenAPIError)
 		problemDetails := openapiError.Model().(models.ProblemDetails)
 		logger.PduSessLog.Errorln("setup sm policy association failed:", err, problemDetails)
@@ -167,6 +172,7 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 		}
 	} else {
 		smPolicyDecision = smPolicyDecisionRsp
+		smContext.SMPolicyID = smPolicyID
 	}
 
 	// dataPath selection
@@ -306,6 +312,16 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 					smContext.Supi, smContext.PDUSessionID, smContext.PDUAddress.String())
 				smf_context.GetUserPlaneInformation().ReleaseUEIP(smContext.SelectedUPF, smContext.PDUAddress)
 			}
+
+			// remove SM Policy Association
+			if smContext.SMPolicyID != "" {
+				if err := consumer.SendSMPolicyAssociationTermination(smContext); err != nil {
+					logger.PduSessLog.Errorf("SM Policy Termination failed: %s", err)
+				} else {
+					smContext.SMPolicyID = ""
+				}
+			}
+
 			if buf, err := smf_context.BuildGSMPDUSessionReleaseCommand(smContext); err != nil {
 				logger.PduSessLog.Errorf("Build GSM PDUSessionReleaseCommand failed: %+v", err)
 			} else {
@@ -809,6 +825,15 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 	smContext.SMLock.Lock()
 	defer smContext.SMLock.Unlock()
 
+	// remove SM Policy Association
+	if smContext.SMPolicyID != "" {
+		if err := consumer.SendSMPolicyAssociationTermination(smContext); err != nil {
+			logger.PduSessLog.Errorf("SM Policy Termination failed: %s", err)
+		} else {
+			smContext.SMPolicyID = ""
+		}
+	}
+
 	smContext.SMContextState = smf_context.PFCPModification
 	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 
@@ -884,6 +909,59 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 	smf_context.RemoveSMContext(smContext.Ref)
 
 	return httpResponse
+}
+
+func HandlePDUSessionSMContextLocalRelease(smContext *smf_context.SMContext, createData *models.SmContextCreateData) {
+	smContext.SMLock.Lock()
+	defer smContext.SMLock.Unlock()
+
+	// remove SM Policy Association
+	if smContext.SMPolicyID != "" {
+		if err := consumer.SendSMPolicyAssociationTermination(smContext); err != nil {
+			logger.PduSessLog.Errorf("SM Policy Termination failed: %s", err)
+		} else {
+			smContext.SMPolicyID = ""
+		}
+	}
+
+	smContext.SMContextState = smf_context.PFCPModification
+	logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+
+	releaseTunnel(smContext)
+
+	PFCPResponseStatus := <-smContext.SBIPFCPCommunicationChan
+	switch PFCPResponseStatus {
+	case smf_context.SessionReleaseSuccess:
+		logger.CtxLog.Traceln("In case SessionReleaseSuccess")
+		smContext.SMContextState = smf_context.InActivePending
+		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+		if createData.SmContextStatusUri != smContext.SmStatusNotifyUri {
+			problemDetails, err := consumer.SendSMContextStatusNotification(smContext.SmStatusNotifyUri)
+			if problemDetails != nil || err != nil {
+				if problemDetails != nil {
+					logger.PduSessLog.Warnf("Send SMContext Status Notification Problem[%+v]", problemDetails)
+				}
+
+				if err != nil {
+					logger.PduSessLog.Warnf("Send SMContext Status Notification Error[%v]", err)
+				}
+			} else {
+				logger.PduSessLog.Traceln("Send SMContext Status Notification successfully")
+			}
+		}
+		smf_context.RemoveSMContext(smContext.Ref)
+
+	case smf_context.SessionReleaseFailed:
+		logger.CtxLog.Traceln("In case SessionReleaseFailed")
+		smContext.SMContextState = smf_context.Active
+		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+
+	default:
+		logger.CtxLog.Warnf("The state shouldn't be [%s]\n", PFCPResponseStatus)
+		logger.CtxLog.Traceln("In case Unknown")
+		smContext.SMContextState = smf_context.Active
+		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
+	}
 }
 
 func releaseTunnel(smContext *smf_context.SMContext) {
