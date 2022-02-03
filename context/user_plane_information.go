@@ -444,14 +444,14 @@ func getPathBetween(cur *UPNode, dest *UPNode, visited map[*UPNode]bool,
 
 	selectedSNssai := selection.SNssai
 
-	for _, nodes := range cur.Links {
-		if !visited[nodes] {
-			if !nodes.UPF.isSupportSnssai(selectedSNssai) {
-				visited[nodes] = true
+	for _, node := range cur.Links {
+		if !visited[node] {
+			if !node.UPF.isSupportSnssai(selectedSNssai) {
+				visited[node] = true
 				continue
 			}
 
-			path_tail, path_exist := getPathBetween(nodes, dest, visited, selection)
+			path_tail, path_exist := getPathBetween(node, dest, visited, selection)
 
 			if path_exist {
 				path = make([]*UPNode, 0)
