@@ -163,7 +163,7 @@ func BuildGSMPDUSessionEstablishmentReject(smContext *SMContext, cause uint8) ([
 	return m.PlainNasEncode()
 }
 
-func BuildGSMPDUSessionReleaseCommand(smContext *SMContext) ([]byte, error) {
+func BuildGSMPDUSessionReleaseCommand(smContext *SMContext, cause uint8) ([]byte, error) {
 	m := nas.NewMessage()
 	m.GsmMessage = nas.NewGsmMessage()
 	m.GsmHeader.SetMessageType(nas.MsgTypePDUSessionReleaseCommand)
@@ -175,7 +175,7 @@ func BuildGSMPDUSessionReleaseCommand(smContext *SMContext) ([]byte, error) {
 	pDUSessionReleaseCommand.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
 	pDUSessionReleaseCommand.SetPDUSessionID(uint8(smContext.PDUSessionID))
 	pDUSessionReleaseCommand.SetPTI(smContext.Pti)
-	pDUSessionReleaseCommand.SetCauseValue(0x0)
+	pDUSessionReleaseCommand.SetCauseValue(cause)
 
 	return m.PlainNasEncode()
 }
