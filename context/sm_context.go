@@ -130,40 +130,28 @@ type SMContext struct {
 	SMLock sync.Mutex
 }
 
-func canonicalName(identifier string, pduSessID int32) (canonical string) {
-	return fmt.Sprintf("%s-%d", identifier, pduSessID)
+func canonicalName(id string, pduSessID int32) string {
+	return fmt.Sprintf("%s-%d", id, pduSessID)
 }
 
-func CheckDuplicate(createData *models.SmContextCreateData) (bool, *SMContext) {
-	if value, ok := canonicalRef.Load(canonicalName(createData.Supi, createData.PduSessionId)); ok {
-		smContext := GetSMContext(value.(string))
-		logger.CtxLog.Warningf("Duplicated SM Context: [%s]", value.(string))
-		return true, smContext
-	}
-	return false, nil
-}
-
-func ResolveRef(identifier string, pduSessID int32) (ref string, err error) {
-	if value, ok := canonicalRef.Load(canonicalName(identifier, pduSessID)); ok {
+func ResolveRef(id string, pduSessID int32) (ref string, err error) {
+	if value, ok := canonicalRef.Load(canonicalName(id, pduSessID)); ok {
 		ref = value.(string)
-		err = nil
+		return ref, nil
 	} else {
-		ref = ""
-		err = fmt.Errorf(
-			"UE '%s' - PDUSessionID '%d' not found in SMContext", identifier, pduSessID)
+		return "", fmt.Errorf("UE[%s] - PDUSessionID[%d] not found in SMContext", id, pduSessID)
 	}
-	return
 }
 
-func NewSMContext(identifier string, pduSessID int32) (smContext *SMContext) {
-	smContext = new(SMContext)
+func NewSMContext(id string, pduSessID int32) *SMContext {
+	smContext := new(SMContext)
 	// Create Ref and identifier
 	smContext.Ref = uuid.New().URN()
 	smContextPool.Store(smContext.Ref, smContext)
-	canonicalRef.Store(canonicalName(identifier, pduSessID), smContext.Ref)
+	canonicalRef.Store(canonicalName(id, pduSessID), smContext.Ref)
 
 	smContext.SMContextState = InActive
-	smContext.Identifier = identifier
+	smContext.Identifier = id
 	smContext.PDUSessionID = pduSessID
 	smContext.PFCPContext = make(map[string]*PFCPSessionContext)
 	smContext.LocalSEID = GetSMContextCount()
@@ -180,12 +168,25 @@ func NewSMContext(identifier string, pduSessID int32) (smContext *SMContext) {
 }
 
 //*** add unit test ***//
-func GetSMContext(ref string) (smContext *SMContext) {
+func GetSMContextByRef(ref string) *SMContext {
+	var smCtx *SMContext
 	if value, ok := smContextPool.Load(ref); ok {
-		smContext = value.(*SMContext)
+		smCtx = value.(*SMContext)
 	}
 
-	return
+	return smCtx
+}
+
+func GetSMContextById(id string, pduSessID int32) *SMContext {
+	var smCtx *SMContext
+	ref, err := ResolveRef(id, pduSessID)
+	if err != nil {
+		return nil
+	}
+	if value, ok := smContextPool.Load(ref); ok {
+		smCtx = value.(*SMContext)
+	}
+	return smCtx
 }
 
 //*** add unit test ***//
@@ -193,6 +194,8 @@ func RemoveSMContext(ref string) {
 	var smContext *SMContext
 	if value, ok := smContextPool.Load(ref); ok {
 		smContext = value.(*SMContext)
+	} else {
+		return
 	}
 
 	if smContext.SelectedUPF != nil {
@@ -205,15 +208,17 @@ func RemoveSMContext(ref string) {
 		seidSMContextMap.Delete(pfcpSessionContext.LocalSEID)
 	}
 
+	canonicalRef.Delete(canonicalName(smContext.Supi, smContext.PDUSessionID))
 	smContextPool.Delete(ref)
 }
 
 //*** add unit test ***//
-func GetSMContextBySEID(SEID uint64) (smContext *SMContext) {
+func GetSMContextBySEID(SEID uint64) *SMContext {
 	if value, ok := seidSMContextMap.Load(SEID); ok {
-		smContext = value.(*SMContext)
+		smContext := value.(*SMContext)
+		return smContext
 	}
-	return
+	return nil
 }
 
 //*** add unit test ***//
@@ -234,13 +239,15 @@ func (smContext *SMContext) SetCreateData(createData *models.SmContextCreateData
 	smContext.ServingNfId = createData.ServingNfId
 }
 
-func (smContext *SMContext) BuildCreatedData() (createdData *models.SmContextCreatedData) {
-	createdData = new(models.SmContextCreatedData)
-	createdData.SNssai = smContext.Snssai
-	return
+func (smContext *SMContext) BuildCreatedData() *models.SmContextCreatedData {
+	return &models.SmContextCreatedData{
+		SNssai: smContext.Snssai,
+	}
 }
 
-func (smContext *SMContext) PDUAddressToNAS() (addr [12]byte, addrLen uint8) {
+func (smContext *SMContext) PDUAddressToNAS() ([12]byte, uint8) {
+	var addr [12]byte
+	var addrLen uint8
 	copy(addr[:], smContext.PDUAddress)
 	switch smContext.SelectedPDUSessionType {
 	case nasMessage.PDUSessionTypeIPv4:
@@ -249,7 +256,7 @@ func (smContext *SMContext) PDUAddressToNAS() (addr [12]byte, addrLen uint8) {
 	case nasMessage.PDUSessionTypeIPv4IPv6:
 		addrLen = 12 + 1
 	}
-	return
+	return addr, addrLen
 }
 
 // PCFSelection will select PCF for this SM Context
@@ -300,14 +307,14 @@ func (smContext *SMContext) PCFSelection() error {
 	return nil
 }
 
-func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) (nodeID pfcpType.NodeID) {
+func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) pfcpType.NodeID {
 	for _, pfcpCtx := range smContext.PFCPContext {
 		if pfcpCtx.LocalSEID == seid {
-			nodeID = pfcpCtx.NodeID
+			return pfcpCtx.NodeID
 		}
 	}
 
-	return
+	return pfcpType.NodeID{}
 }
 
 func (smContext *SMContext) AllocateLocalSEIDForUPPath(path UPPath) {
