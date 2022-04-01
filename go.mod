@@ -6,9 +6,9 @@ require (
 	github.com/antihax/optional v1.0.0
 	github.com/antonfisher/nested-logrus-formatter v1.3.1
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
-	github.com/free5gc/aper v1.0.3
+	github.com/free5gc/aper v1.0.4
 	github.com/free5gc/nas v1.0.7
-	github.com/free5gc/ngap v1.0.5
+	github.com/free5gc/ngap v1.0.6
 	github.com/free5gc/openapi v1.0.4
 	github.com/free5gc/pfcp v1.0.3
 	github.com/free5gc/util v1.0.1
