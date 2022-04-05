@@ -108,12 +108,12 @@ func (smf *SMF) Initialize(c *cli.Context) error {
 		return err
 	}
 
-	smf.setLogLevel()
+	smf.SetLogLevel()
 
 	return nil
 }
 
-func (smf *SMF) setLogLevel() {
+func (smf *SMF) SetLogLevel() {
 	if factory.SmfConfig.Logger == nil {
 		logger.InitLog.Warnln("SMF config without log level setting!!!")
 		return
