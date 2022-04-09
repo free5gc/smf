@@ -449,7 +449,7 @@ func (i *InterfaceUpfInfoItem) validate() (bool, error) {
 	}
 
 	for _, endpoint := range i.Endpoints {
-		if result := govalidator.IsIPv4(endpoint); !result {
+		if result := govalidator.IsHost(endpoint); !result {
 			err := errors.New("Invalid endpoint:" + endpoint + ", should be IPv4.")
 			return false, err
 		}
