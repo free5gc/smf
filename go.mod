@@ -10,7 +10,7 @@ require (
 	github.com/free5gc/nas v1.0.7
 	github.com/free5gc/ngap v1.0.6
 	github.com/free5gc/openapi v1.0.4
-	github.com/free5gc/pfcp v1.0.3
+	github.com/free5gc/pfcp v1.0.4
 	github.com/free5gc/util v1.0.1
 	github.com/gin-gonic/gin v1.7.3
 	github.com/google/uuid v1.3.0
@@ -20,8 +20,4 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/urfave/cli v1.22.5
 	gopkg.in/yaml.v2 v2.4.0
-)
-
-replace (
-github.com/free5gc/pfcp => ../../../pfcp
 )

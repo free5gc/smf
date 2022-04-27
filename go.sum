@@ -66,6 +66,8 @@ github.com/free5gc/openapi v1.0.4 h1:bC6oqXy8Z+3e532xLMFmrTHvdyv4sNGDPezQSslw5gQ
 github.com/free5gc/openapi v1.0.4/go.mod h1:KRCnnp0GeK0Bl4gnrX79cQAidKXNENf8VRdG0y9R0Fc=
 github.com/free5gc/pfcp v1.0.3 h1:5Fikty8p/HxoowGN0fLYZq71xG5nwkh3Mvz2IICR5Cs=
 github.com/free5gc/pfcp v1.0.3/go.mod h1:6S74Z5fSH1ch7MFG3aaWakQMc1WFCND8oIRNl5/ZamU=
+github.com/free5gc/pfcp v1.0.4 h1:11ous/chOya/bG0bHAHHEUc7JUB2g6svABock8Ta2Zs=
+github.com/free5gc/pfcp v1.0.4/go.mod h1:6S74Z5fSH1ch7MFG3aaWakQMc1WFCND8oIRNl5/ZamU=
 github.com/free5gc/tlv v1.0.1 h1:DTMe/NG2T7JOJ7zAlbah/dfFw28s8HWlShUAEt1bV7g=
 github.com/free5gc/tlv v1.0.1/go.mod h1:iN0eGdk8BKu0EUruKXuB8kIV+br/QjzNyewguZlfOgA=
 github.com/free5gc/util v1.0.1 h1:A8bynjzZXkYMLOq9FN5J4Yg5mdjXhYoXc/FFFwSLPss=
