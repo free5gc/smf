@@ -109,7 +109,7 @@ func EstablishPSA2(smContext *context.SMContext) {
 	bpMGR.AddingPSAState = context.EstablishingNewPSA
 	// collect all responses
 	for i := 0; i < len(bpMGR.PendingUPF); i++ {
-		_ = <-resChan
+		<-resChan
 	}
 	logger.PduSessLog.Traceln("End of EstablishPSA2")
 }
@@ -190,7 +190,7 @@ func EstablishULCL(smContext *context.SMContext) {
 
 	// collect all responses
 	for i := 0; i < len(bpMGR.PendingUPF); i++ {
-		_ = <-resChan
+		<-resChan
 	}
 }
 
@@ -235,7 +235,7 @@ func UpdatePSA2DownLink(smContext *context.SMContext) {
 
 	// collect all responses
 	for i := 0; i < len(bpMGR.PendingUPF); i++ {
-		_ = <-resChan
+		<-resChan
 	}
 }
 
@@ -356,7 +356,7 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 		bpMGR.AddingPSAState = context.UpdatingRANAndIUPFUpLink
 		// collect all responses
 		for i := 0; i < len(bpMGR.PendingUPF); i++ {
-			_ = <-resChan
+			<-resChan
 		}
 	}
 	bpMGR.AddingPSAState = context.Finished
