@@ -592,8 +592,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		}
 		smContext.SMContextState = smf_context.ModificationPending
 		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
-		if err :=
-			smf_context.HandlePathSwitchRequestSetupFailedTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
+		if err := smf_context.HandlePathSwitchRequestSetupFailedTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			logger.PduSessLog.Error()
 		}
 	case models.N2SmInfoType_HANDOVER_REQUIRED:
@@ -647,8 +646,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 		smContext.HoState = models.HoState_PREPARED
 		response.JsonData.HoState = models.HoState_PREPARED
-		if err :=
-			smf_context.HandleHandoverRequestAcknowledgeTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
+		if err := smf_context.HandleHandoverRequestAcknowledgeTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			logger.PduSessLog.Errorf("Handle HandoverRequestAcknowledgeTransfer failed: %+v", err)
 		}
 
@@ -710,7 +708,6 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 
 		if sendPFCPModification {
 			pfcpResponseStatus = updateAnUpfPfcpSession(smContext, pdrList, farList, barList, qerList)
-			sendPFCPModification = false
 		}
 
 		switch pfcpResponseStatus {
@@ -772,7 +769,6 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 					errResponse.JsonData.N1SmMsg = &models.RefToBinaryData{ContentId: "PDUSessionEstablishmentReject"}
 				}
 			} else {
-
 				if buf, err := smf_context.BuildGSMPDUSessionReleaseReject(smContext); err != nil {
 					logger.PduSessLog.Errorf("build GSM PDUSessionReleaseReject failed: %+v", err)
 				} else {
@@ -983,7 +979,8 @@ func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionRes
 }
 
 func makeErrorResponse(smContext *smf_context.SMContext, nasErrorCause uint8,
-	sbiError *models.ProblemDetails) *httpwrapper.Response {
+	sbiError *models.ProblemDetails,
+) *httpwrapper.Response {
 	var httpResponse *httpwrapper.Response
 
 	if buf, err := smf_context.

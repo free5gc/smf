@@ -16,12 +16,10 @@ func AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
 
 	switch bpMGR.AddingPSAState {
 	case context.ActivatingDataPath:
-		finishActivating := false
-		for !finishActivating {
+		for {
 			// select PSA2
 			bpMGR.SelectPSA2(smContext)
 			if len(bpMGR.ActivatedPaths) == len(smContext.Tunnel.DataPathPool) {
-				finishActivating = true
 				break
 			}
 			smContext.AllocateLocalSEIDForDataPath(bpMGR.ActivatingPath)

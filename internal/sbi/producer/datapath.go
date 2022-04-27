@@ -26,43 +26,10 @@ type SendPfcpResult struct {
 	Err    error
 }
 
-// SendPFCPRule send one datapath to UPF
-func SendPFCPRule(smContext *smf_context.SMContext, dataPath *smf_context.DataPath) {
-	logger.PduSessLog.Infoln("Send PFCP Rule")
-	logger.PduSessLog.Infoln("DataPath: ", dataPath)
-	for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
-		pdrList := make([]*smf_context.PDR, 0, 2)
-		farList := make([]*smf_context.FAR, 0, 2)
-		qerList := make([]*smf_context.QER, 0, 2)
-
-		if curDataPathNode.UpLinkTunnel != nil && curDataPathNode.UpLinkTunnel.PDR != nil {
-			pdrList = append(pdrList, curDataPathNode.UpLinkTunnel.PDR)
-			farList = append(farList, curDataPathNode.UpLinkTunnel.PDR.FAR)
-			if curDataPathNode.DownLinkTunnel.PDR.QER != nil {
-				qerList = append(qerList, curDataPathNode.DownLinkTunnel.PDR.QER...)
-			}
-		}
-		if curDataPathNode.DownLinkTunnel != nil && curDataPathNode.DownLinkTunnel.PDR != nil {
-			pdrList = append(pdrList, curDataPathNode.DownLinkTunnel.PDR)
-			farList = append(farList, curDataPathNode.DownLinkTunnel.PDR.FAR)
-		}
-
-		sessionContext, exist := smContext.PFCPContext[curDataPathNode.GetNodeIP()]
-		if !exist || sessionContext.RemoteSEID == 0 {
-			pfcp_message.SendPfcpSessionEstablishmentRequest(
-				curDataPathNode.UPF, smContext, pdrList, farList, nil, qerList)
-		} else {
-			pfcp_message.SendPfcpSessionModificationRequest(
-				curDataPathNode.UPF, smContext, pdrList, farList, nil, qerList)
-		}
-	}
-}
-
 // ActivateUPFSessionAndNotifyUE send all datapaths to UPFs and send result to UE
 // It returns after all PFCP response have been returned or timed out,
 // and before sending N1N2MessageTransfer request if it is needed.
 func ActivateUPFSessionAndNotifyUE(smContext *smf_context.SMContext) []SendPfcpResult {
-
 	smContext.SMLock.Lock()
 	defer smContext.SMLock.Unlock()
 
@@ -222,7 +189,6 @@ func establishPfcpSession(smContext *smf_context.SMContext, state *PFCPState, re
 }
 
 func sendPDUSessionEstablishmentReject(smContext *smf_context.SMContext, nasErrorCause uint8) {
-
 	n1n2Request := models.N1N2MessageTransferRequest{}
 	if smNasBuf, err := smf_context.BuildGSMPDUSessionEstablishmentReject(
 		smContext, nasMessage.Cause5GSMNetworkFailure); err != nil {
@@ -281,8 +247,8 @@ func modifyExistingPfcpSession(smContext *smf_context.SMContext, state *PFCPStat
 
 func updateAnUpfPfcpSession(smContext *smf_context.SMContext,
 	pdrList []*smf_context.PDR, farList []*smf_context.FAR,
-	barList []*smf_context.BAR, qerList []*smf_context.QER) smf_context.PFCPSessionResponseStatus {
-
+	barList []*smf_context.BAR, qerList []*smf_context.QER,
+) smf_context.PFCPSessionResponseStatus {
 	logger.PduSessLog.Infoln("Sending PFCP Session Modification Request to AN UPF")
 
 	defaultPath := smContext.Tunnel.DataPathPool.GetDefaultPath()
@@ -383,16 +349,5 @@ func removeDataPath(smContext *smf_context.SMContext, datapath *smf_context.Data
 			curDPNode.UpLinkTunnel.PDR.State = smf_context.RULE_REMOVE
 			curDPNode.UpLinkTunnel.PDR.FAR.State = smf_context.RULE_REMOVE
 		}
-	}
-}
-
-// UpdateDataPathToUPF update the datapath of the UPF
-func UpdateDataPathToUPF(smContext *smf_context.SMContext, oldDataPath, updateDataPath *smf_context.DataPath) {
-	if oldDataPath == nil {
-		SendPFCPRule(smContext, updateDataPath)
-		return
-	} else {
-		removeDataPath(smContext, oldDataPath)
-		SendPFCPRule(smContext, updateDataPath)
 	}
 }

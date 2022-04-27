@@ -144,7 +144,8 @@ func SendPfcpSessionEstablishmentRequest(
 	upf *context.UPF,
 	ctx *context.SMContext,
 	pdrList []*context.PDR, farList []*context.FAR,
-	barList []*context.BAR, qerList []*context.QER) (resMsg *pfcpUdp.Message, err error) {
+	barList []*context.BAR, qerList []*context.QER,
+) (resMsg *pfcpUdp.Message, err error) {
 	nodeIDtoIP := upf.NodeID.ResolveNodeIdToIp()
 	if upf.UPFStatus != context.AssociatedSetUpSuccess {
 		return nil, fmt.Errorf("Not Associated with UPF[%s]", nodeIDtoIP.String())
@@ -187,7 +188,8 @@ func SendPfcpSessionEstablishmentRequest(
 
 	localSEID := ctx.PFCPContext[nodeIDtoIP.String()].LocalSEID
 	if resMsg.PfcpMessage.Header.SEID != localSEID {
-		return resMsg, fmt.Errorf("received unexpected SEID response message: %+v, exptcted: %d", resMsg.PfcpMessage.Header, localSEID)
+		return resMsg, fmt.Errorf("received unexpected SEID response message: %+v, exptcted: %d",
+			resMsg.PfcpMessage.Header, localSEID)
 	}
 
 	return resMsg, nil
@@ -220,7 +222,8 @@ func SendPfcpSessionEstablishmentResponse(addr *net.UDPAddr) {
 func SendPfcpSessionModificationRequest(upf *context.UPF,
 	ctx *context.SMContext,
 	pdrList []*context.PDR, farList []*context.FAR,
-	barList []*context.BAR, qerList []*context.QER) (resMsg *pfcpUdp.Message, err error) {
+	barList []*context.BAR, qerList []*context.QER,
+) (resMsg *pfcpUdp.Message, err error) {
 	nodeIDtoIP := upf.NodeID.ResolveNodeIdToIp()
 	if upf.UPFStatus != context.AssociatedSetUpSuccess {
 		return nil, fmt.Errorf("Not Associated with UPF[%s]", nodeIDtoIP.String())
@@ -263,7 +266,8 @@ func SendPfcpSessionModificationRequest(upf *context.UPF,
 
 	localSEID := ctx.PFCPContext[nodeIDtoIP.String()].LocalSEID
 	if resMsg.PfcpMessage.Header.SEID != localSEID {
-		return resMsg, fmt.Errorf("received unexpected SEID response message: %+v, exptcted: %d", resMsg.PfcpMessage.Header, localSEID)
+		return resMsg, fmt.Errorf("received unexpected SEID response message: %+v, exptcted: %d",
+			resMsg.PfcpMessage.Header, localSEID)
 	}
 
 	return resMsg, nil
@@ -335,7 +339,8 @@ func SendPfcpSessionDeletionRequest(upf *context.UPF, ctx *context.SMContext) (r
 
 	localSEID := ctx.PFCPContext[nodeIDtoIP.String()].LocalSEID
 	if resMsg.PfcpMessage.Header.SEID != localSEID {
-		return resMsg, fmt.Errorf("received unexpected SEID response message: %+v, exptcted: %d", resMsg.PfcpMessage.Header, localSEID)
+		return resMsg, fmt.Errorf("received unexpected SEID response message: %+v, exptcted: %d",
+			resMsg.PfcpMessage.Header, localSEID)
 	}
 
 	return resMsg, nil
