@@ -560,8 +560,12 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 func (dataPath *DataPath) DeactivateTunnelAndPDR(smContext *SMContext) {
 	firstDPNode := dataPath.FirstDPNode
 
-	// Deactivate Tunnels
+	var targetNodes []*DataPathNode
 	for curDataPathNode := firstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
+		targetNodes = append(targetNodes, curDataPathNode)
+	}
+	// Deactivate Tunnels
+	for _, curDataPathNode := range targetNodes {
 		curDataPathNode.DeactivateUpLinkTunnel(smContext)
 		curDataPathNode.DeactivateDownLinkTunnel(smContext)
 	}

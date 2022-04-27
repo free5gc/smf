@@ -9,7 +9,9 @@ import (
 type PFCPSessionResponseStatus int
 
 const (
-	SessionUpdateSuccess PFCPSessionResponseStatus = iota
+	SessionEstablishSuccess PFCPSessionResponseStatus = iota
+	SessionEstablishFailed
+	SessionUpdateSuccess
 	SessionUpdateFailed
 	SessionReleaseSuccess
 	SessionReleaseFailed

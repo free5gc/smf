@@ -108,7 +108,6 @@ type SMContext struct {
 	BPManager   *BPManager
 	// NodeID(string form) to PFCP Session Context
 	PFCPContext                         map[string]*PFCPSessionContext
-	SBIPFCPCommunicationChan            chan PFCPSessionResponseStatus
 	PendingUPF                          PendingUPF
 	PDUSessionRelease_DUE_TO_DUP_PDU_ID bool
 
@@ -160,7 +159,6 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 	smContext.PCCRules = make(map[string]*PCCRule)
 	smContext.SessionRules = make(map[string]*SessionRule)
 	smContext.TrafficControlPool = make(map[string]*TrafficControlData)
-	smContext.SBIPFCPCommunicationChan = make(chan PFCPSessionResponseStatus, 1)
 
 	smContext.ProtocolConfigurationOptions = &ProtocolConfigurationOptions{}
 
