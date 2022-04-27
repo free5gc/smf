@@ -592,7 +592,8 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		}
 		smContext.SMContextState = smf_context.ModificationPending
 		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
-		if err := smf_context.HandlePathSwitchRequestSetupFailedTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
+		if err := smf_context.HandlePathSwitchRequestSetupFailedTransfer(
+			body.BinaryDataN2SmInformation, smContext); err != nil {
 			logger.PduSessLog.Error()
 		}
 	case models.N2SmInfoType_HANDOVER_REQUIRED:
@@ -646,7 +647,8 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		logger.CtxLog.Traceln("SMContextState Change State: ", smContext.SMContextState.String())
 		smContext.HoState = models.HoState_PREPARED
 		response.JsonData.HoState = models.HoState_PREPARED
-		if err := smf_context.HandleHandoverRequestAcknowledgeTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
+		if err := smf_context.HandleHandoverRequestAcknowledgeTransfer(
+			body.BinaryDataN2SmInformation, smContext); err != nil {
 			logger.PduSessLog.Errorf("Handle HandoverRequestAcknowledgeTransfer failed: %+v", err)
 		}
 

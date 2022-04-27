@@ -108,9 +108,8 @@ func EstablishPSA2(smContext *context.SMContext) {
 
 	bpMGR.AddingPSAState = context.EstablishingNewPSA
 	// collect all responses
-	resList := make([]SendPfcpResult, 0, len(bpMGR.PendingUPF))
 	for i := 0; i < len(bpMGR.PendingUPF); i++ {
-		resList = append(resList, <-resChan)
+		_ = <-resChan
 	}
 	logger.PduSessLog.Traceln("End of EstablishPSA2")
 }
@@ -190,9 +189,8 @@ func EstablishULCL(smContext *context.SMContext) {
 	logger.PfcpLog.Info("[SMF] Establish ULCL msg has been send")
 
 	// collect all responses
-	resList := make([]SendPfcpResult, 0, len(bpMGR.PendingUPF))
 	for i := 0; i < len(bpMGR.PendingUPF); i++ {
-		resList = append(resList, <-resChan)
+		_ = <-resChan
 	}
 }
 
@@ -236,9 +234,8 @@ func UpdatePSA2DownLink(smContext *context.SMContext) {
 	bpMGR.AddingPSAState = context.UpdatingPSA2DownLink
 
 	// collect all responses
-	resList := make([]SendPfcpResult, 0, len(bpMGR.PendingUPF))
 	for i := 0; i < len(bpMGR.PendingUPF); i++ {
-		resList = append(resList, <-resChan)
+		_ = <-resChan
 	}
 }
 
@@ -358,9 +355,8 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 	if !bpMGR.PendingUPF.IsEmpty() {
 		bpMGR.AddingPSAState = context.UpdatingRANAndIUPFUpLink
 		// collect all responses
-		resList := make([]SendPfcpResult, 0, len(bpMGR.PendingUPF))
 		for i := 0; i < len(bpMGR.PendingUPF); i++ {
-			resList = append(resList, <-resChan)
+			_ = <-resChan
 		}
 	}
 	bpMGR.AddingPSAState = context.Finished

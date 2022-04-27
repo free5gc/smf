@@ -253,7 +253,8 @@ func updateAnUpfPfcpSession(smContext *smf_context.SMContext,
 
 	defaultPath := smContext.Tunnel.DataPathPool.GetDefaultPath()
 	ANUPF := defaultPath.FirstDPNode
-	rcvMsg, err := pfcp_message.SendPfcpSessionModificationRequest(ANUPF.UPF, smContext, pdrList, farList, barList, qerList)
+	rcvMsg, err := pfcp_message.SendPfcpSessionModificationRequest(
+		ANUPF.UPF, smContext, pdrList, farList, barList, qerList)
 	if err != nil {
 		logger.PduSessLog.Warnf("Sending PFCP Session Modification Request to AN UPF error: %+v", err)
 		return smf_context.SessionUpdateFailed
@@ -335,19 +336,6 @@ func deletePfcpSession(upf *smf_context.UPF, ctx *smf_context.SMContext, resCh c
 		resCh <- SendPfcpResult{
 			Status: smf_context.SessionReleaseFailed,
 			Err:    fmt.Errorf("cause[%d] if not request accepted", rsp.Cause.CauseValue),
-		}
-	}
-}
-
-func removeDataPath(smContext *smf_context.SMContext, datapath *smf_context.DataPath) {
-	for curDPNode := datapath.FirstDPNode; curDPNode != nil; curDPNode = curDPNode.Next() {
-		if curDPNode.DownLinkTunnel != nil && curDPNode.DownLinkTunnel.PDR != nil {
-			curDPNode.DownLinkTunnel.PDR.State = smf_context.RULE_REMOVE
-			curDPNode.DownLinkTunnel.PDR.FAR.State = smf_context.RULE_REMOVE
-		}
-		if curDPNode.UpLinkTunnel != nil && curDPNode.UpLinkTunnel.PDR != nil {
-			curDPNode.UpLinkTunnel.PDR.State = smf_context.RULE_REMOVE
-			curDPNode.UpLinkTunnel.PDR.FAR.State = smf_context.RULE_REMOVE
 		}
 	}
 }
