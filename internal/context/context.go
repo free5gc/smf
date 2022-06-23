@@ -74,8 +74,7 @@ func RetrieveDnnInformation(Snssai *models.Snssai, dnn string) *SnssaiSmfDnnInfo
 }
 
 func AllocateLocalSEID() uint64 {
-	atomic.AddUint64(&smfContext.LocalSEIDCount, 1)
-	return smfContext.LocalSEIDCount
+	return atomic.AddUint64(&smfContext.LocalSEIDCount, 1)
 }
 
 func InitSmfContext(config *factory.Config) {
