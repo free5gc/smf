@@ -38,8 +38,6 @@ func setupPfcpAssociation(upf *smf_context.UPF, upfStr string) error {
 
 		logger.AppLog.Infof("UPF(%s)[%s] setup association",
 			upf.NodeID.ResolveNodeIdToIp().String(), upf.UPIPInfo.NetworkInstance)
-	} else {
-		logger.AppLog.Errorln("pfcp association setup response has no UserPlane IP Resource Information")
 	}
 
 	return nil
