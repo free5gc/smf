@@ -156,7 +156,9 @@ func getAllPathByNodeName(src, dest string, links []factory.UPLink) (map[int][]s
 		currentPath = append(currentPath, src)
 		logger.InitLog.Traceln("current path:", currentPath)
 		if src == dest {
-			allPaths[count] = currentPath[1:]
+			cpy := make([]string, len(currentPath))
+			copy(cpy, currentPath)
+			allPaths[count] = cpy[1:]
 			count++
 			logger.InitLog.Traceln("all path:", allPaths)
 			visited[src] = false
