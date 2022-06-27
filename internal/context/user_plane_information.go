@@ -496,7 +496,7 @@ func (upi *UserPlaneInformation) selectAnchorUPF(source *UPNode, selection *UPFS
 				}
 			}
 		}
-		if !findNewNode {
+		if !findNewNode && node.Type == UPNODE_UPF {
 			upList = append(upList, node)
 		}
 		if len(queue) == 0 {
