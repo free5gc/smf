@@ -55,6 +55,7 @@ type ForwardingParameters struct {
 	NetworkInstance      *pfcpType.NetworkInstance
 	OuterHeaderCreation  *pfcpType.OuterHeaderCreation
 	ForwardingPolicyID   string
+	SendEndMarker        bool
 }
 
 // Buffering Action Rule 7.5.2.6-1

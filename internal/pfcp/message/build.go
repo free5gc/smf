@@ -119,16 +119,16 @@ func farToCreateFAR(far *context.FAR) *pfcp.CreateFAR {
 	}
 
 	if far.ForwardingParameters != nil {
-		createFAR.ForwardingParameters = new(pfcp.ForwardingParametersIEInFAR)
-		createFAR.ForwardingParameters.DestinationInterface = &far.ForwardingParameters.DestinationInterface
-		createFAR.ForwardingParameters.NetworkInstance = far.ForwardingParameters.NetworkInstance
-		createFAR.ForwardingParameters.OuterHeaderCreation = far.ForwardingParameters.OuterHeaderCreation
+		createFAR.ForwardingParameters = &pfcp.ForwardingParametersIEInFAR{
+			DestinationInterface: &far.ForwardingParameters.DestinationInterface,
+			NetworkInstance:      far.ForwardingParameters.NetworkInstance,
+			OuterHeaderCreation:  far.ForwardingParameters.OuterHeaderCreation,
+		}
 		if far.ForwardingParameters.ForwardingPolicyID != "" {
-			createFAR.ForwardingParameters.ForwardingPolicy = new(pfcpType.ForwardingPolicy)
-			createFAR.ForwardingParameters.ForwardingPolicy.ForwardingPolicyIdentifierLength =
-				uint8(len(far.ForwardingParameters.ForwardingPolicyID))
-			createFAR.ForwardingParameters.ForwardingPolicy.ForwardingPolicyIdentifier =
-				[]byte(far.ForwardingParameters.ForwardingPolicyID)
+			createFAR.ForwardingParameters.ForwardingPolicy = &pfcpType.ForwardingPolicy{
+				ForwardingPolicyIdentifierLength: uint8(len(far.ForwardingParameters.ForwardingPolicyID)),
+				ForwardingPolicyIdentifier:       []byte(far.ForwardingParameters.ForwardingPolicyID),
+			}
 		}
 	}
 
@@ -220,16 +220,19 @@ func farToUpdateFAR(far *context.FAR) *pfcp.UpdateFAR {
 	updateFAR.ApplyAction.Drop = far.ApplyAction.Drop
 
 	if far.ForwardingParameters != nil {
-		updateFAR.UpdateForwardingParameters = new(pfcp.UpdateForwardingParametersIEInFAR)
-		updateFAR.UpdateForwardingParameters.DestinationInterface = &far.ForwardingParameters.DestinationInterface
-		updateFAR.UpdateForwardingParameters.NetworkInstance = far.ForwardingParameters.NetworkInstance
-		updateFAR.UpdateForwardingParameters.OuterHeaderCreation = far.ForwardingParameters.OuterHeaderCreation
+		updateFAR.UpdateForwardingParameters = &pfcp.UpdateForwardingParametersIEInFAR{
+			DestinationInterface: &far.ForwardingParameters.DestinationInterface,
+			NetworkInstance:      far.ForwardingParameters.NetworkInstance,
+			OuterHeaderCreation:  far.ForwardingParameters.OuterHeaderCreation,
+			PFCPSMReqFlags: &pfcpType.PFCPSMReqFlags{
+				Sndem: far.ForwardingParameters.SendEndMarker,
+			},
+		}
 		if far.ForwardingParameters.ForwardingPolicyID != "" {
-			updateFAR.UpdateForwardingParameters.ForwardingPolicy = new(pfcpType.ForwardingPolicy)
-			updateFAR.UpdateForwardingParameters.ForwardingPolicy.ForwardingPolicyIdentifierLength =
-				uint8(len(far.ForwardingParameters.ForwardingPolicyID))
-			updateFAR.UpdateForwardingParameters.ForwardingPolicy.ForwardingPolicyIdentifier =
-				[]byte(far.ForwardingParameters.ForwardingPolicyID)
+			updateFAR.UpdateForwardingParameters.ForwardingPolicy = &pfcpType.ForwardingPolicy{
+				ForwardingPolicyIdentifierLength: uint8(len(far.ForwardingParameters.ForwardingPolicyID)),
+				ForwardingPolicyIdentifier:       []byte(far.ForwardingParameters.ForwardingPolicyID),
+			}
 		}
 	}
 
@@ -242,7 +245,8 @@ func BuildPfcpSessionEstablishmentRequest(
 	pdrList []*context.PDR,
 	farList []*context.FAR,
 	barList []*context.BAR,
-	qerList []*context.QER) (pfcp.PFCPSessionEstablishmentRequest, error) {
+	qerList []*context.QER,
+) (pfcp.PFCPSessionEstablishmentRequest, error) {
 	msg := pfcp.PFCPSessionEstablishmentRequest{}
 
 	msg.NodeID = &context.SMF_Self().CPNodeID
@@ -351,7 +355,8 @@ func BuildPfcpSessionModificationRequest(
 	pdrList []*context.PDR,
 	farList []*context.FAR,
 	barList []*context.BAR,
-	qerList []*context.QER) (pfcp.PFCPSessionModificationRequest, error) {
+	qerList []*context.QER,
+) (pfcp.PFCPSessionModificationRequest, error) {
 	msg := pfcp.PFCPSessionModificationRequest{}
 
 	msg.UpdatePDR = make([]*pfcp.UpdatePDR, 0, 2)

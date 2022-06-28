@@ -30,6 +30,30 @@ type UPTunnel struct {
 	}
 }
 
+func (t *UPTunnel) UpdateANInformation(ip net.IP, teid uint32) {
+	t.ANInformation.IPAddress = ip
+	t.ANInformation.TEID = teid
+
+	for _, dataPath := range t.DataPathPool {
+		if dataPath.Activated {
+			ANUPF := dataPath.FirstDPNode
+			DLPDR := ANUPF.DownLinkTunnel.PDR
+
+			if DLPDR.FAR.ForwardingParameters.OuterHeaderCreation != nil {
+				// Old AN tunnel exists
+				DLPDR.FAR.ForwardingParameters.SendEndMarker = true
+			}
+
+			DLPDR.FAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
+			dlOuterHeaderCreation := DLPDR.FAR.ForwardingParameters.OuterHeaderCreation
+			dlOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+			dlOuterHeaderCreation.Teid = t.ANInformation.TEID
+			dlOuterHeaderCreation.Ipv4Address = t.ANInformation.IPAddress.To4()
+			DLPDR.FAR.State = RULE_UPDATE
+		}
+	}
+}
+
 type UPFStatus int
 
 const (
