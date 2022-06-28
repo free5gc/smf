@@ -1,15 +1,12 @@
 package context
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 
 	"github.com/free5gc/aper"
 	"github.com/free5gc/ngap/ngapType"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
 )
 
@@ -29,25 +26,11 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) (er
 		return errors.New("resourceSetupResponseTransfer.QosFlowPerTNLInformation.UPTransportLayerInformation.Present")
 	}
 
-	gtpTunnel := QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
+	GTPTunnel := QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
 
-	teid := binary.BigEndian.Uint32(gtpTunnel.GTPTEID.Value)
-
-	ctx.Tunnel.ANInformation.IPAddress = gtpTunnel.TransportLayerAddress.Value.Bytes
-	ctx.Tunnel.ANInformation.TEID = teid
-
-	for _, dataPath := range ctx.Tunnel.DataPathPool {
-		if dataPath.Activated {
-			ANUPF := dataPath.FirstDPNode
-			DLPDR := ANUPF.DownLinkTunnel.PDR
-
-			DLPDR.FAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
-			dlOuterHeaderCreation := DLPDR.FAR.ForwardingParameters.OuterHeaderCreation
-			dlOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-			dlOuterHeaderCreation.Teid = teid
-			dlOuterHeaderCreation.Ipv4Address = ctx.Tunnel.ANInformation.IPAddress.To4()
-		}
-	}
+	ctx.Tunnel.UpdateANInformation(
+		GTPTunnel.TransportLayerAddress.Value.Bytes,
+		binary.BigEndian.Uint32(GTPTunnel.GTPTEID.Value))
 
 	ctx.UpCnxState = models.UpCnxState_ACTIVATED
 	return nil
@@ -99,26 +82,11 @@ func HandlePathSwitchRequestTransfer(b []byte, ctx *SMContext) error {
 		return errors.New("pathSwitchRequestTransfer.DLNGUUPTNLInformation.Present")
 	}
 
-	gtpTunnel := pathSwitchRequestTransfer.DLNGUUPTNLInformation.GTPTunnel
+	GTPTunnel := pathSwitchRequestTransfer.DLNGUUPTNLInformation.GTPTunnel
 
-	teid := binary.BigEndian.Uint32(gtpTunnel.GTPTEID.Value)
-
-	ctx.Tunnel.ANInformation.IPAddress = gtpTunnel.TransportLayerAddress.Value.Bytes
-	ctx.Tunnel.ANInformation.TEID = teid
-
-	for _, dataPath := range ctx.Tunnel.DataPathPool {
-		if dataPath.Activated {
-			ANUPF := dataPath.FirstDPNode
-			DLPDR := ANUPF.DownLinkTunnel.PDR
-
-			DLPDR.FAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
-			dlOuterHeaderCreation := DLPDR.FAR.ForwardingParameters.OuterHeaderCreation
-			dlOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-			dlOuterHeaderCreation.Teid = teid
-			dlOuterHeaderCreation.Ipv4Address = ctx.Tunnel.ANInformation.IPAddress.To4()
-			DLPDR.FAR.State = RULE_UPDATE
-		}
-	}
+	ctx.Tunnel.UpdateANInformation(
+		GTPTunnel.TransportLayerAddress.Value.Bytes,
+		binary.BigEndian.Uint32(GTPTunnel.GTPTEID.Value))
 
 	ctx.UpSecurityFromPathSwitchRequestSameAsLocalStored = true
 
@@ -189,28 +157,12 @@ func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) (err err
 	if err != nil {
 		return err
 	}
-	DLNGUUPTNLInformation := handoverRequestAcknowledgeTransfer.DLNGUUPTNLInformation
-	GTPTunnel := DLNGUUPTNLInformation.GTPTunnel
-	TEIDReader := bytes.NewBuffer(GTPTunnel.GTPTEID.Value)
 
-	teid, err := binary.ReadUvarint(TEIDReader)
-	if err != nil {
-		return fmt.Errorf("Parse TEID error %s", err.Error())
-	}
+	DLNGUUPGTPTunnel := handoverRequestAcknowledgeTransfer.DLNGUUPTNLInformation.GTPTunnel
 
-	for _, dataPath := range ctx.Tunnel.DataPathPool {
-		if dataPath.Activated {
-			ANUPF := dataPath.FirstDPNode
-			DLPDR := ANUPF.DownLinkTunnel.PDR
-
-			DLPDR.FAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
-			dlOuterHeaderCreation := DLPDR.FAR.ForwardingParameters.OuterHeaderCreation
-			dlOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-			dlOuterHeaderCreation.Teid = uint32(teid)
-			dlOuterHeaderCreation.Ipv4Address = GTPTunnel.TransportLayerAddress.Value.Bytes
-			DLPDR.FAR.State = RULE_UPDATE
-		}
-	}
+	ctx.Tunnel.UpdateANInformation(
+		DLNGUUPGTPTunnel.TransportLayerAddress.Value.Bytes,
+		binary.BigEndian.Uint32(DLNGUUPGTPTunnel.GTPTEID.Value))
 
 	return nil
 }
