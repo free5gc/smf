@@ -1,7 +1,9 @@
 package service
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/free5gc/pfcp"
 	"github.com/free5gc/pfcp/pfcpType"
@@ -9,6 +11,46 @@ import (
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/pfcp/message"
 )
+
+func toBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF) {
+	var upfStr string
+	if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
+		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.NodeID.ResolveNodeIdToIp().String())
+	} else {
+		upfStr = fmt.Sprintf("[%s]", upf.NodeID.ResolveNodeIdToIp().String())
+	}
+	ensureSetupPfcpAssociation(ctx, upf, upfStr)
+}
+
+func isDone(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
+func ensureSetupPfcpAssociation(ctx context.Context, upf *smf_context.UPF, upfStr string) {
+	var alertTime time.Time
+	for {
+		alertInterval := smf_context.SMF_Self().AssociationSetupFailedAlertInterval
+		err := setupPfcpAssociation(upf, upfStr)
+		if err == nil {
+			return
+		}
+		now := time.Now()
+		if alertTime.IsZero() || now.After(alertTime.Add(alertInterval)) {
+			logger.AppLog.Errorf("Failed to setup an association with UPF%s, error:%+v", upfStr, err)
+			alertTime = now
+		}
+
+		if isDone(ctx) {
+			logger.AppLog.Infof("Canceled association request to UPF%s", upfStr)
+			return
+		}
+	}
+}
 
 func setupPfcpAssociation(upf *smf_context.UPF, upfStr string) error {
 	logger.AppLog.Infof("Sending PFCP Association Request to UPF%s", upfStr)
