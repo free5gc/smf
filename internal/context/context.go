@@ -159,10 +159,10 @@ func InitSmfContext(config *factory.Config) {
 			smfContext.CPNodeID.IP = addr.IP
 		}
 
-		if pfcp.AssociationSetupFailedAlertInterval == 0 {
+		if pfcp.AlertInterval == 0 {
 			smfContext.AssociationSetupFailedAlertInterval = 5 * time.Minute
 		} else {
-			smfContext.AssociationSetupFailedAlertInterval = pfcp.AssociationSetupFailedAlertInterval
+			smfContext.AssociationSetupFailedAlertInterval = pfcp.AlertInterval
 		}
 	}
 
