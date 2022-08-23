@@ -214,6 +214,7 @@ func sendPDUSessionEstablishmentReject(smContext *smf_context.SMContext, nasErro
 	if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 		logger.PfcpLog.Warnf("%v", rspData.Cause)
 	}
+	RemoveSMContextFromAllNF(smContext, true)
 }
 
 func modifyExistingPfcpSession(smContext *smf_context.SMContext, state *PFCPState, resCh chan SendPfcpResult) {

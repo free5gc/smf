@@ -392,6 +392,40 @@ func SendPfcpSessionReportResponse(addr *net.UDPAddr, cause pfcpType.Cause, seqF
 	udp.SendPfcpResponse(message, addr)
 }
 
+func SendPfcpHeartbeatRequest(upf *context.UPF) (resMsg *pfcpUdp.Message, err error) {
+	pfcpMsg, err := BuildPfcpHeartbeatRequest()
+	if err != nil {
+		return nil, fmt.Errorf("BuildPFCPHeartbeatRequest failed: %w", err)
+	}
+
+	reqMsg := &pfcp.Message{
+		Header: pfcp.Header{
+			Version:        pfcp.PfcpVersion,
+			MP:             0,
+			S:              pfcp.SEID_NOT_PRESENT,
+			MessageType:    pfcp.PFCP_HEARTBEAT_REQUEST,
+			SequenceNumber: getSeqNumber(),
+		},
+		Body: pfcpMsg,
+	}
+
+	upfAddr := &net.UDPAddr{
+		IP:   upf.NodeID.ResolveNodeIdToIp(),
+		Port: pfcpUdp.PFCP_PORT,
+	}
+
+	resMsg, err = udp.SendPfcpRequest(reqMsg, upfAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	if resMsg.MessageType() != pfcp.PFCP_HEARTBEAT_RESPONSE {
+		return resMsg, fmt.Errorf("received unexpected response message")
+	}
+
+	return resMsg, nil
+}
+
 func SendHeartbeatResponse(addr *net.UDPAddr, seq uint32) {
 	pfcpMsg := pfcp.HeartbeatResponse{
 		RecoveryTimeStamp: &pfcpType.RecoveryTimeStamp{

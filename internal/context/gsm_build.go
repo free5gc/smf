@@ -161,7 +161,12 @@ func BuildGSMPDUSessionEstablishmentReject(smContext *SMContext, cause uint8) ([
 	return m.PlainNasEncode()
 }
 
-func BuildGSMPDUSessionReleaseCommand(smContext *SMContext, cause uint8) ([]byte, error) {
+// BuildGSMPDUSessionReleaseCommand makes a plain NAS message.
+//
+// If isTriggeredByUE is true, the PTI field of the constructed NAS message is
+// the value of smContext.Pti which is received from UE, otherwise it is 0.
+// ref. 6.3.3.2 Network-requested PDU session release procedure initiation in TS24.501.
+func BuildGSMPDUSessionReleaseCommand(smContext *SMContext, cause uint8, isTriggeredByUE bool) ([]byte, error) {
 	m := nas.NewMessage()
 	m.GsmMessage = nas.NewGsmMessage()
 	m.GsmHeader.SetMessageType(nas.MsgTypePDUSessionReleaseCommand)
@@ -172,7 +177,12 @@ func BuildGSMPDUSessionReleaseCommand(smContext *SMContext, cause uint8) ([]byte
 	pDUSessionReleaseCommand.SetMessageType(nas.MsgTypePDUSessionReleaseCommand)
 	pDUSessionReleaseCommand.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
 	pDUSessionReleaseCommand.SetPDUSessionID(uint8(smContext.PDUSessionID))
-	pDUSessionReleaseCommand.SetPTI(smContext.Pti)
+
+	if isTriggeredByUE {
+		pDUSessionReleaseCommand.SetPTI(smContext.Pti)
+	} else {
+		pDUSessionReleaseCommand.SetPTI(0x00)
+	}
 	pDUSessionReleaseCommand.SetCauseValue(cause)
 
 	return m.PlainNasEncode()
