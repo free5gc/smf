@@ -111,7 +111,17 @@ func farToCreateFAR(far *context.FAR) *pfcp.CreateFAR {
 	createFAR.FARID.FarIdValue = far.FARID
 
 	createFAR.ApplyAction = new(pfcpType.ApplyAction)
-	createFAR.ApplyAction.Forw = true
+	if far.ForwardingParameters != nil {
+		createFAR.ApplyAction.Forw = true
+	} else {
+		/*
+			29.244 v15.3 Table 7.5.2.3-1
+			Farwarding Parameters IE shall be present when the Apply-Action requests the packets to be forwarded.
+		*/
+		// FAR without Farwarding Parameters set Apply Action as Drop instead of Forward.
+		createFAR.ApplyAction.Forw = false
+		createFAR.ApplyAction.Drop = true
+	}
 
 	if far.BAR != nil {
 		createFAR.BARID = new(pfcpType.BARID)
