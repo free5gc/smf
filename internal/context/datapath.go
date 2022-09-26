@@ -528,11 +528,12 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 					}
 				}
 			} else {
+				ANUPF := dataPath.FirstDPNode
+				DLPDR := ANUPF.DownLinkTunnel.PDR
+				DLFAR := DLPDR.FAR
+				DLFAR.ForwardingParameters = new(ForwardingParameters)
+				DLFAR.ForwardingParameters.DestinationInterface.InterfaceValue = pfcpType.DestinationInterfaceAccess
 				if anIP := smContext.Tunnel.ANInformation.IPAddress; anIP != nil {
-					ANUPF := dataPath.FirstDPNode
-					DLPDR := ANUPF.DownLinkTunnel.PDR
-					DLFAR := DLPDR.FAR
-					DLFAR.ForwardingParameters = new(ForwardingParameters)
 					DLFAR.ForwardingParameters.DestinationInterface.InterfaceValue = pfcpType.DestinationInterfaceAccess
 					DLFAR.ForwardingParameters.NetworkInstance = &pfcpType.NetworkInstance{NetworkInstance: smContext.Dnn}
 					DLFAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
