@@ -759,36 +759,16 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		} else if state != smf_context.Active {
 			logger.PduSessLog.Warnf("SMContext[%s-%02d] should be Active, but actual %s",
 				smContext.Supi, smContext.PDUSessionID, smContext.SMContextState.String())
-			var httpResponse *httpwrapper.Response
-			if buf, err := smf_context.
-				BuildGSMPDUSessionEstablishmentReject(
-					smContext,
-					nasMessage.Cause5GSMRequestRejectedUnspecified); err != nil {
-				httpResponse = &httpwrapper.Response{
-					Header: nil,
-					Status: http.StatusForbidden,
-					Body: models.UpdateSmContextErrorResponse{
-						JsonData: &models.SmContextUpdateError{
-							Error: &Nsmf_PDUSession.SmContextStateMismatchActive,
-						},
+			return &httpwrapper.Response{
+				Header: nil,
+				Status: http.StatusForbidden,
+				Body: models.UpdateSmContextErrorResponse{
+					JsonData: &models.SmContextUpdateError{
+						Error: &Nsmf_PDUSession.SmContextStateMismatchActive,
 					},
-				}
-			} else {
-				httpResponse = &httpwrapper.Response{
-					Header: nil,
-					Status: http.StatusForbidden,
-					Body: models.UpdateSmContextErrorResponse{
-						JsonData: &models.SmContextUpdateError{
-							Error:   &Nsmf_PDUSession.SmContextStateMismatchActive,
-							N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
-						},
-						BinaryDataN1SmMessage: buf,
-					},
-				}
+				},
 			}
-			return httpResponse
 		}
-
 		smContext.PDUSessionRelease_DUE_TO_DUP_PDU_ID = true
 		logger.CtxLog.Infoln("[SMF] Cause_REL_DUE_TO_DUPLICATE_SESSION_ID")
 		pfcpResponseStatus = releaseSession(smContext)
@@ -842,7 +822,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			logger.CtxLog.Traceln("In case SessionReleaseFailed")
 			problemDetail := models.ProblemDetails{
 				Status: http.StatusInternalServerError,
-				Cause:  "SYSTEM_FAILULE",
+				Cause:  "SYSTEM_FAILURE",
 			}
 			httpResponse = &httpwrapper.Response{
 				Status: int(problemDetail.Status),
@@ -854,15 +834,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 					Error: &problemDetail,
 				},
 			}
-			if smContextUpdateData.Cause == models.Cause_REL_DUE_TO_DUPLICATE_SESSION_ID {
-				if buf, err := smf_context.BuildGSMPDUSessionEstablishmentReject(smContext,
-					nasMessage.Cause5GSMNetworkFailure); err != nil {
-					logger.PduSessLog.Errorf("build GSM PDUSessionEstablishmentReject failed: %+v", err)
-				} else {
-					errResponse.BinaryDataN1SmMessage = buf
-					errResponse.JsonData.N1SmMsg = &models.RefToBinaryData{ContentId: "PDUSessionEstablishmentReject"}
-				}
-			} else {
+			if smContextUpdateData.Cause != models.Cause_REL_DUE_TO_DUPLICATE_SESSION_ID {
 				if buf, err := smf_context.BuildGSMPDUSessionReleaseReject(smContext); err != nil {
 					logger.PduSessLog.Errorf("build GSM PDUSessionReleaseReject failed: %+v", err)
 				} else {
