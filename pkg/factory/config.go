@@ -210,8 +210,9 @@ func (t *Tls) validate() (bool, error) {
 }
 
 type PFCP struct {
-	Addr          string        `yaml:"addr,omitempty" valid:"host,required"`
-	Port          uint16        `yaml:"port,omitempty" valid:"port,optional"`
+	Addr string `yaml:"addr,omitempty" valid:"host,required"`
+	Port uint16 `yaml:"port,omitempty" valid:"port,optional"`
+	// interval at which PFCP Association Setup error messages are output.
 	AlertInterval time.Duration `yaml:"associationSetupFailedAlertInterval,omitempty" valid:"type(time.Duration),optional"`
 }
 
