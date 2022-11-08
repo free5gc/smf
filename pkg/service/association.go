@@ -33,8 +33,8 @@ func isDone(ctx context.Context) bool {
 
 func ensureSetupPfcpAssociation(ctx context.Context, upf *smf_context.UPF, upfStr string) {
 	var alertTime time.Time
+	alertInterval := smf_context.SMF_Self().AssociationSetupFailedAlertInterval
 	for {
-		alertInterval := smf_context.SMF_Self().AssociationSetupFailedAlertInterval
 		err := setupPfcpAssociation(upf, upfStr)
 		if err == nil {
 			return
