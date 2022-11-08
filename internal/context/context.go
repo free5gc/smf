@@ -1,10 +1,12 @@
 package context
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
 	"sync/atomic"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -43,13 +45,15 @@ type SMFContext struct {
 
 	SnssaiInfos []SnssaiSmfInfo
 
-	NrfUri                         string
-	NFManagementClient             *Nnrf_NFManagement.APIClient
-	NFDiscoveryClient              *Nnrf_NFDiscovery.APIClient
-	SubscriberDataManagementClient *Nudm_SubscriberDataManagement.APIClient
-	Locality                       string
+	NrfUri                              string
+	NFManagementClient                  *Nnrf_NFManagement.APIClient
+	NFDiscoveryClient                   *Nnrf_NFDiscovery.APIClient
+	SubscriberDataManagementClient      *Nudm_SubscriberDataManagement.APIClient
+	Locality                            string
+	AssociationSetupFailedAlertInterval time.Duration
 
 	UserPlaneInformation *UserPlaneInformation
+	PFCPCancelFunc       context.CancelFunc
 
 	// Now only "IPv4" supported
 	// TODO: support "IPv6", "IPv4v6", "Ethernet"
@@ -153,6 +157,12 @@ func InitSmfContext(config *factory.Config) {
 		} else {
 			smfContext.CPNodeID.NodeIdType = pfcpType.NodeIdTypeIpv6Address
 			smfContext.CPNodeID.IP = addr.IP
+		}
+
+		if pfcp.AlertInterval == 0 {
+			smfContext.AssociationSetupFailedAlertInterval = 5 * time.Minute
+		} else {
+			smfContext.AssociationSetupFailedAlertInterval = pfcp.AlertInterval
 		}
 	}
 

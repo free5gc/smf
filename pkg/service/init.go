@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -16,8 +17,7 @@ import (
 	ngapLogger "github.com/free5gc/ngap/logger"
 	"github.com/free5gc/openapi/models"
 	pfcpLogger "github.com/free5gc/pfcp/logger"
-	"github.com/free5gc/pfcp/pfcpType"
-	"github.com/free5gc/smf/internal/context"
+	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/pfcp"
 	"github.com/free5gc/smf/internal/pfcp/udp"
@@ -222,10 +222,10 @@ func (smf *SMF) Start() {
 		keyPath = sbi.Tls.Key
 	}
 
-	context.InitSmfContext(&factory.SmfConfig)
+	smf_context.InitSmfContext(&factory.SmfConfig)
 	// allocate id for each upf
-	context.AllocateUPFID()
-	context.InitSMFUERouting(&factory.UERoutingConfig)
+	smf_context.AllocateUPFID()
+	smf_context.InitSMFUERouting(&factory.UERoutingConfig)
 
 	logger.InitLog.Infoln("Server started")
 	router := logger_util.NewGinWithLogrus(logger.GinLog)
@@ -266,21 +266,15 @@ func (smf *SMF) Start() {
 	}
 	udp.Run(pfcp.Dispatch)
 
-	for _, upf := range context.SMF_Self().UserPlaneInformation.UPFs {
-		var upfStr string
-		if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
-			upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.NodeID.ResolveNodeIdToIp().String())
-		} else {
-			upfStr = fmt.Sprintf("[%s]", upf.NodeID.IP.String())
-		}
-		if err = setupPfcpAssociation(upf.UPF, upfStr); err != nil {
-			logger.AppLog.Errorf("Failed to setup an association with UPF%s, error:%+v", upfStr, err)
-		}
+	ctx, cancel := context.WithCancel(context.Background())
+	smf_context.SMF_Self().PFCPCancelFunc = cancel
+	for _, upNode := range smf_context.SMF_Self().UserPlaneInformation.UPFs {
+		go toBeAssociatedWithUPF(ctx, upNode.UPF)
 	}
 
 	time.Sleep(1000 * time.Millisecond)
 
-	HTTPAddr := fmt.Sprintf("%s:%d", context.SMF_Self().BindingIPv4, context.SMF_Self().SBIPort)
+	HTTPAddr := fmt.Sprintf("%s:%d", smf_context.SMF_Self().BindingIPv4, smf_context.SMF_Self().SBIPort)
 	server, err := httpwrapper.NewHttp2Server(HTTPAddr, smf.KeyLogPath, router)
 
 	if server == nil {
