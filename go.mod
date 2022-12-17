@@ -10,7 +10,7 @@ require (
 	github.com/free5gc/nas v1.0.7
 	github.com/free5gc/ngap v1.0.6
 	github.com/free5gc/openapi v1.0.5
-	github.com/free5gc/pfcp v1.0.5
+	github.com/free5gc/pfcp v1.0.6-0.20221213042804-fe871d6967c2
 	github.com/free5gc/util v1.0.3
 	github.com/gin-gonic/gin v1.7.3
 	github.com/google/uuid v1.3.0
