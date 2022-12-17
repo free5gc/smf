@@ -174,10 +174,15 @@ func establishPfcpSession(smContext *smf_context.SMContext, state *PFCPState, re
 			},
 		}
 
-		rspData, _, err := smContext.
+		rspData, res, err := smContext.
 			CommunicationClient.
 			N1N2MessageCollectionDocumentApi.
 			N1N2MessageTransfer(context.Background(), smContext.Supi, n1n2Request)
+		defer func() {
+			if resCloseErr := res.Body.Close(); resCloseErr != nil {
+				logger.ConsumerLog.Errorf("N1N2MessageTransfer response body cannot close: %+v", resCloseErr)
+			}
+		}()
 		smContext.SMContextState = smf_context.Active
 		if err != nil {
 			logger.PfcpLog.Warnf("Send N1N2Transfer failed")
@@ -203,10 +208,15 @@ func sendPDUSessionEstablishmentReject(smContext *smf_context.SMContext, nasErro
 			N1MessageContent: &models.RefToBinaryData{ContentId: "GSM_NAS"},
 		},
 	}
-	rspData, _, err := smContext.
+	rspData, res, err := smContext.
 		CommunicationClient.
 		N1N2MessageCollectionDocumentApi.
 		N1N2MessageTransfer(context.Background(), smContext.Supi, n1n2Request)
+	defer func() {
+		if resCloseErr := res.Body.Close(); resCloseErr != nil {
+			logger.ConsumerLog.Errorf("N1N2MessageTransfer response body cannot close: %+v", resCloseErr)
+		}
+	}()
 	smContext.SMContextState = smf_context.InActive
 	if err != nil {
 		logger.PfcpLog.Warnf("Send N1N2Transfer failed")

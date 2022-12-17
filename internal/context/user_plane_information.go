@@ -264,8 +264,10 @@ func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNN(selection *UPFSele
 	return nil
 }
 
-func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNNAndUPF(selection *UPFSelectionParams,
-	upf *UPNode) (path UPPath) {
+func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNNAndUPF(
+	selection *UPFSelectionParams,
+	upf *UPNode,
+) (path UPPath) {
 	nodeID := upf.NodeID.ResolveNodeIdToIp().String()
 
 	if upi.DefaultUserPlanePathToUPF[selection.String()] != nil {
@@ -431,8 +433,10 @@ func (upi *UserPlaneInformation) selectMatchUPF(selection *UPFSelectionParams) [
 	return upList
 }
 
-func getPathBetween(cur *UPNode, dest *UPNode, visited map[*UPNode]bool,
-	selection *UPFSelectionParams) (path []*UPNode, pathExist bool) {
+func getPathBetween(
+	cur *UPNode, dest *UPNode, visited map[*UPNode]bool,
+	selection *UPFSelectionParams,
+) (path []*UPNode, pathExist bool) {
 	visited[cur] = true
 
 	if reflect.DeepEqual(*cur, *dest) {

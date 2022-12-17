@@ -126,8 +126,8 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 	// Only over 3GPP access TS 23.501 5.10.3
 	if ctx.AnType == models.AccessType__3_GPP_ACCESS && ctx.UpSecurity != nil {
 		upSecurity := ctx.UpSecurity
-		maximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink :=
-			ctx.MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink
+		maximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink := ctx.
+			MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink
 
 		ie = ngapType.PDUSessionResourceSetupRequestTransferIEs{}
 		ie.Id.Value = ngapType.ProtocolIEIDSecurityIndication
@@ -137,25 +137,22 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 
 		switch upSecurity.UpIntegr {
 		case models.UpIntegrity_REQUIRED:
-			securityIndication.IntegrityProtectionIndication.Value =
-				ngapType.IntegrityProtectionIndicationPresentRequired
+			securityIndication.IntegrityProtectionIndication.Value = ngapType.IntegrityProtectionIndicationPresentRequired
 		case models.UpIntegrity_PREFERRED:
-			securityIndication.IntegrityProtectionIndication.Value =
-				ngapType.IntegrityProtectionIndicationPresentPreferred
+			securityIndication.IntegrityProtectionIndication.Value = ngapType.IntegrityProtectionIndicationPresentPreferred
 		case models.UpIntegrity_NOT_NEEDED:
-			securityIndication.IntegrityProtectionIndication.Value =
-				ngapType.IntegrityProtectionIndicationPresentNotNeeded
+			securityIndication.IntegrityProtectionIndication.Value = ngapType.IntegrityProtectionIndicationPresentNotNeeded
 		}
 		switch upSecurity.UpConfid {
 		case models.UpConfidentiality_REQUIRED:
-			securityIndication.ConfidentialityProtectionIndication.Value =
-				ngapType.ConfidentialityProtectionIndicationPresentRequired
+			securityIndication.ConfidentialityProtectionIndication.Value = ngapType.
+				ConfidentialityProtectionIndicationPresentRequired
 		case models.UpConfidentiality_PREFERRED:
-			securityIndication.ConfidentialityProtectionIndication.Value =
-				ngapType.ConfidentialityProtectionIndicationPresentPreferred
+			securityIndication.ConfidentialityProtectionIndication.Value = ngapType.
+				ConfidentialityProtectionIndicationPresentPreferred
 		case models.UpConfidentiality_NOT_NEEDED:
-			securityIndication.ConfidentialityProtectionIndication.Value =
-				ngapType.ConfidentialityProtectionIndicationPresentNotNeeded
+			securityIndication.ConfidentialityProtectionIndication.Value = ngapType.
+				ConfidentialityProtectionIndicationPresentNotNeeded
 		}
 
 		// Present only when Integrity Indication within the Security Indication is set to "required" or "preferred"
@@ -165,11 +162,11 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 			securityIndication.MaximumIntegrityProtectedDataRateUL = new(ngapType.MaximumIntegrityProtectedDataRate)
 			switch maximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink {
 			case models.MaxIntegrityProtectedDataRate_MAX_UE_RATE:
-				securityIndication.MaximumIntegrityProtectedDataRateUL.Value =
-					ngapType.MaximumIntegrityProtectedDataRatePresentMaximumUERate
+				securityIndication.MaximumIntegrityProtectedDataRateUL.Value = ngapType.
+					MaximumIntegrityProtectedDataRatePresentMaximumUERate
 			case models.MaxIntegrityProtectedDataRate__64_KBPS:
-				securityIndication.MaximumIntegrityProtectedDataRateUL.Value =
-					ngapType.MaximumIntegrityProtectedDataRatePresentBitrate64kbs
+				securityIndication.MaximumIntegrityProtectedDataRateUL.Value = ngapType.
+					MaximumIntegrityProtectedDataRatePresentBitrate64kbs
 			}
 		}
 
@@ -222,30 +219,30 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 		securityIndication := pathSwitchRequestAcknowledgeTransfer.SecurityIndication
 
 		upSecurity := ctx.UpSecurity
-		maximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink :=
-			ctx.MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink
+		maximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink := ctx.
+			MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink
 
 		switch upSecurity.UpIntegr {
 		case models.UpIntegrity_REQUIRED:
-			securityIndication.IntegrityProtectionIndication.Value =
-				ngapType.IntegrityProtectionIndicationPresentRequired
+			securityIndication.IntegrityProtectionIndication.Value = ngapType.
+				IntegrityProtectionIndicationPresentRequired
 		case models.UpIntegrity_PREFERRED:
-			securityIndication.IntegrityProtectionIndication.Value =
-				ngapType.IntegrityProtectionIndicationPresentPreferred
+			securityIndication.IntegrityProtectionIndication.Value = ngapType.
+				IntegrityProtectionIndicationPresentPreferred
 		case models.UpIntegrity_NOT_NEEDED:
-			securityIndication.IntegrityProtectionIndication.Value =
-				ngapType.IntegrityProtectionIndicationPresentNotNeeded
+			securityIndication.IntegrityProtectionIndication.Value = ngapType.
+				IntegrityProtectionIndicationPresentNotNeeded
 		}
 		switch upSecurity.UpConfid {
 		case models.UpConfidentiality_REQUIRED:
-			securityIndication.ConfidentialityProtectionIndication.Value =
-				ngapType.ConfidentialityProtectionIndicationPresentRequired
+			securityIndication.ConfidentialityProtectionIndication.Value = ngapType.
+				ConfidentialityProtectionIndicationPresentRequired
 		case models.UpConfidentiality_PREFERRED:
-			securityIndication.ConfidentialityProtectionIndication.Value =
-				ngapType.ConfidentialityProtectionIndicationPresentPreferred
+			securityIndication.ConfidentialityProtectionIndication.Value = ngapType.
+				ConfidentialityProtectionIndicationPresentPreferred
 		case models.UpConfidentiality_NOT_NEEDED:
-			securityIndication.ConfidentialityProtectionIndication.Value =
-				ngapType.ConfidentialityProtectionIndicationPresentNotNeeded
+			securityIndication.ConfidentialityProtectionIndication.Value = ngapType.
+				ConfidentialityProtectionIndicationPresentNotNeeded
 		}
 
 		// Present only when Integrity Indication within the Security Indication is set to "required" or "preferred"
@@ -255,11 +252,11 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 			securityIndication.MaximumIntegrityProtectedDataRateUL = new(ngapType.MaximumIntegrityProtectedDataRate)
 			switch maximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink {
 			case models.MaxIntegrityProtectedDataRate_MAX_UE_RATE:
-				securityIndication.MaximumIntegrityProtectedDataRateUL.Value =
-					ngapType.MaximumIntegrityProtectedDataRatePresentMaximumUERate
+				securityIndication.MaximumIntegrityProtectedDataRateUL.Value = ngapType.
+					MaximumIntegrityProtectedDataRatePresentMaximumUERate
 			case models.MaxIntegrityProtectedDataRate__64_KBPS:
-				securityIndication.MaximumIntegrityProtectedDataRateUL.Value =
-					ngapType.MaximumIntegrityProtectedDataRatePresentBitrate64kbs
+				securityIndication.MaximumIntegrityProtectedDataRateUL.Value = ngapType.
+					MaximumIntegrityProtectedDataRatePresentBitrate64kbs
 			}
 		}
 	}

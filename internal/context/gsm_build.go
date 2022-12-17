@@ -63,15 +63,15 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 
 	if smContext.PDUAddress != nil {
 		addr, addrLen := smContext.PDUAddressToNAS()
-		pDUSessionEstablishmentAccept.PDUAddress =
-			nasType.NewPDUAddress(nasMessage.PDUSessionEstablishmentAcceptPDUAddressType)
+		pDUSessionEstablishmentAccept.PDUAddress = nasType.NewPDUAddress(
+			nasMessage.PDUSessionEstablishmentAcceptPDUAddressType)
 		pDUSessionEstablishmentAccept.PDUAddress.SetLen(addrLen)
 		pDUSessionEstablishmentAccept.PDUAddress.SetPDUSessionTypeValue(smContext.SelectedPDUSessionType)
 		pDUSessionEstablishmentAccept.PDUAddress.SetPDUAddressInformation(addr)
 	}
 
-	pDUSessionEstablishmentAccept.AuthorizedQosFlowDescriptions =
-		nasType.NewAuthorizedQosFlowDescriptions(nasMessage.PDUSessionEstablishmentAcceptAuthorizedQosFlowDescriptionsType)
+	pDUSessionEstablishmentAccept.AuthorizedQosFlowDescriptions = nasType.NewAuthorizedQosFlowDescriptions(
+		nasMessage.PDUSessionEstablishmentAcceptAuthorizedQosFlowDescriptionsType)
 	pDUSessionEstablishmentAccept.AuthorizedQosFlowDescriptions.SetLen(6)
 	pDUSessionEstablishmentAccept.SetQoSFlowDescriptions([]uint8{uint8(authDefQos.Var5qi), 0x20, 0x41, 0x01, 0x01, 0x09})
 
@@ -95,8 +95,8 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 		smContext.ProtocolConfigurationOptions.DNSIPv6Request ||
 		smContext.ProtocolConfigurationOptions.PCSCFIPv4Request ||
 		smContext.ProtocolConfigurationOptions.IPv4LinkMTURequest {
-		pDUSessionEstablishmentAccept.ExtendedProtocolConfigurationOptions =
-			nasType.NewExtendedProtocolConfigurationOptions(
+		pDUSessionEstablishmentAccept.ExtendedProtocolConfigurationOptions = nasType.
+			NewExtendedProtocolConfigurationOptions(
 				nasMessage.PDUSessionEstablishmentAcceptExtendedProtocolConfigurationOptionsType,
 			)
 		protocolConfigurationOptions := nasConvert.NewProtocolConfigurationOptions()

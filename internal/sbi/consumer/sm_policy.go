@@ -10,6 +10,7 @@ import (
 	"github.com/free5gc/nas/nasConvert"
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
+	"github.com/free5gc/smf/internal/logger"
 )
 
 // SendSMPolicyAssociationCreate create the session management association to the PCF
@@ -48,6 +49,11 @@ func SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (string, *m
 		DefaultApi.SmPoliciesPost(context.Background(), smPolicyData); err != nil {
 		return "", nil, err
 	} else {
+		defer func() {
+			if rspCloseErr := httpRsp.Body.Close(); rspCloseErr != nil {
+				logger.ConsumerLog.Errorf("SmPoliciesPost response body cannot close: %+v", rspCloseErr)
+			}
+		}()
 		smPolicyDecision = &smPolicyDecisionFromPCF
 
 		loc := httpRsp.Header.Get("Location")
@@ -75,9 +81,16 @@ func SendSMPolicyAssociationTermination(smContext *smf_context.SMContext) error 
 		return errors.Errorf("smContext not selected PCF")
 	}
 
-	if _, err := smContext.SMPolicyClient.DefaultApi.SmPoliciesSmPolicyIdDeletePost(
+	if httpRsp, err := smContext.SMPolicyClient.DefaultApi.SmPoliciesSmPolicyIdDeletePost(
 		context.Background(), smContext.SMPolicyID, models.SmPolicyDeleteData{}); err != nil {
 		return fmt.Errorf("SM Policy termination failed: %v", err)
+	} else {
+		defer func() {
+			if rspCloseErr := httpRsp.Body.Close(); rspCloseErr != nil {
+				logger.ConsumerLog.Errorf("SmPoliciesSmPolicyIdDeletePost response body cannot close: %+v",
+					rspCloseErr)
+			}
+		}()
 	}
 
 	return nil
