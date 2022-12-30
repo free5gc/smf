@@ -214,6 +214,11 @@ type PFCP struct {
 	Port uint16 `yaml:"port,omitempty" valid:"port,optional"`
 	// interval at which PFCP Association Setup error messages are output.
 	AlertInterval time.Duration `yaml:"associationSetupFailedAlertInterval,omitempty" valid:"type(time.Duration),optional"`
+	Heartbeat     PfcpHeartbeat `yaml:"heartbeat,omitempty" valid:"optional"`
+}
+
+type PfcpHeartbeat struct {
+	Interval time.Duration `yaml:"interval,omitempty" valid:"type(time.Duration),optional"`
 }
 
 func (p *PFCP) validate() (bool, error) {

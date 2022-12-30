@@ -490,3 +490,13 @@ func BuildPfcpSessionReportResponse(cause pfcpType.Cause) (pfcp.PFCPSessionRepor
 
 	return msg, nil
 }
+
+func BuildPfcpHeartbeatRequest() (pfcp.HeartbeatRequest, error) {
+	msg := pfcp.HeartbeatRequest{}
+
+	msg.RecoveryTimeStamp = &pfcpType.RecoveryTimeStamp{
+		RecoveryTimeStamp: udp.ServerStartTime,
+	}
+
+	return msg, nil
+}

@@ -52,8 +52,9 @@ type SMFContext struct {
 	Locality                            string
 	AssociationSetupFailedAlertInterval time.Duration
 
-	UserPlaneInformation *UserPlaneInformation
-	PFCPCancelFunc       context.CancelFunc
+	UserPlaneInformation  *UserPlaneInformation
+	PFCPCancelFunc        context.CancelFunc
+	PfcpHeartbeatInterval time.Duration
 
 	// Now only "IPv4" supported
 	// TODO: support "IPv6", "IPv4v6", "Ethernet"
@@ -158,6 +159,8 @@ func InitSmfContext(config *factory.Config) {
 			smfContext.CPNodeID.NodeIdType = pfcpType.NodeIdTypeIpv6Address
 			smfContext.CPNodeID.IP = addr.IP
 		}
+
+		smfContext.PfcpHeartbeatInterval = pfcp.Heartbeat.Interval
 
 		if pfcp.AlertInterval == 0 {
 			smfContext.AssociationSetupFailedAlertInterval = 5 * time.Minute

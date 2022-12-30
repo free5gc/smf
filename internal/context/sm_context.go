@@ -195,7 +195,7 @@ func RemoveSMContext(ref string) {
 		return
 	}
 
-	if smContext.SelectedUPF != nil {
+	if smContext.SelectedUPF != nil && smContext.PDUAddress != nil {
 		logger.PduSessLog.Infof("UE[%s] PDUSessionID[%d] Release IP[%s]",
 			smContext.Supi, smContext.PDUSessionID, smContext.PDUAddress.String())
 		GetUserPlaneInformation().ReleaseUEIP(smContext.SelectedUPF, smContext.PDUAddress)

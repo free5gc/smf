@@ -554,6 +554,11 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionPa
 	for _, upf := range sortedUPFList {
 		logger.CtxLog.Debugf("check start UPF: %s",
 			upi.GetUPFNameByIp(upf.NodeID.ResolveNodeIdToIp().String()))
+		if upf.UPF.UPFStatus != AssociatedSetUpSuccess {
+			logger.CtxLog.Infof("PFCP Association not yet Established with: %s",
+				upi.GetUPFNameByIp(upf.NodeID.ResolveNodeIdToIp().String()))
+			continue
+		}
 		pools := getUEIPPool(upf, selection)
 		if len(pools) == 0 {
 			continue

@@ -95,6 +95,28 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 	smContext.SMLock.Lock()
 	defer smContext.SMLock.Unlock()
 
+	upfNodeID := smContext.GetNodeIDByLocalSEID(SEID)
+	NodeIDtoIP := upfNodeID.ResolveNodeIdToIp()
+	if NodeIDtoIP.IsUnspecified() {
+		logger.PduSessLog.Warnf("Invalid PFCP Session Report Request : no PFCP session found with SEID %d", SEID)
+		return
+	}
+	NodeIDtoIPStr := NodeIDtoIP.String()
+
+	upf := smf_context.RetrieveUPFNodeByNodeID(upfNodeID)
+	if upf == nil {
+		logger.PfcpLog.Errorf("can't find UPF[%s]", NodeIDtoIPStr)
+		return
+	}
+	if upf.UPFStatus != smf_context.AssociatedSetUpSuccess {
+		logger.PfcpLog.Warnf("PFCP Session Report Request : Not Associated with UPF[%s], Request Rejected",
+			NodeIDtoIPStr)
+		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
+		pfcp_message.SendPfcpSessionReportResponse(
+			msg.RemoteAddr, cause, seqFromUPF, smContext.PFCPContext[NodeIDtoIPStr].RemoteSEID)
+		return
+	}
+
 	if smContext.UpCnxState == models.UpCnxState_DEACTIVATED {
 		if req.ReportType.Dldr {
 			downlinkDataReport := req.DownlinkDataReport
@@ -152,6 +174,6 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 
 	// TS 23.502 4.2.3.3 2b. Send Data Notification Ack, SMF->UPF
 	cause.CauseValue = pfcpType.CauseRequestAccepted
-	// TODO fix: SEID should be the value sent by UPF but now the SEID value is from sm context
-	pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, SEID)
+	pfcp_message.SendPfcpSessionReportResponse(
+		msg.RemoteAddr, cause, seqFromUPF, smContext.PFCPContext[NodeIDtoIPStr].RemoteSEID)
 }

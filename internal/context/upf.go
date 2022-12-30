@@ -7,6 +7,7 @@ import (
 	"net"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -63,13 +64,14 @@ const (
 )
 
 type UPF struct {
-	uuid         uuid.UUID
-	NodeID       pfcpType.NodeID
-	UPIPInfo     pfcpType.UserPlaneIPResourceInformation
-	UPFStatus    UPFStatus
-	SNssaiInfos  []SnssaiUPFInfo
-	N3Interfaces []UPFInterfaceInfo
-	N9Interfaces []UPFInterfaceInfo
+	uuid              uuid.UUID
+	NodeID            pfcpType.NodeID
+	UPIPInfo          pfcpType.UserPlaneIPResourceInformation
+	UPFStatus         UPFStatus
+	RecoveryTimeStamp time.Time
+	SNssaiInfos       []SnssaiUPFInfo
+	N3Interfaces      []UPFInterfaceInfo
+	N9Interfaces      []UPFInterfaceInfo
 
 	pdrPool sync.Map
 	farPool sync.Map
@@ -551,4 +553,14 @@ func (upf *UPF) isSupportSnssai(snssai *SNssai) bool {
 		}
 	}
 	return false
+}
+
+func (upf *UPF) ProcEachSMContext(procFunc func(*SMContext)) {
+	smContextPool.Range(func(key, value interface{}) bool {
+		smContext := value.(*SMContext)
+		if smContext.SelectedUPF != nil && smContext.SelectedUPF.UPF == upf {
+			procFunc(smContext)
+		}
+		return true
+	})
 }
