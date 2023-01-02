@@ -53,6 +53,7 @@ type SMFContext struct {
 	AssociationSetupFailedAlertInterval time.Duration
 
 	UserPlaneInformation  *UserPlaneInformation
+	Ctx                   context.Context
 	PFCPCancelFunc        context.CancelFunc
 	PfcpHeartbeatInterval time.Duration
 

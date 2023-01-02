@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"sort"
 
+	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/context/pool"
 	"github.com/free5gc/smf/internal/logger"
@@ -175,6 +176,244 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 	}
 
 	return userplaneInformation
+}
+
+func (upi *UserPlaneInformation) UpNodesToConfiguration() *factory.UserPlaneInformation {
+	nodes := make(map[string]factory.UPNode)
+	for name, upNode := range upi.UPNodes {
+		u := new(factory.UPNode)
+		switch upNode.Type {
+		case UPNODE_UPF:
+			u.Type = "UPF"
+		case UPNODE_AN:
+			u.Type = "AN"
+			u.ANIP = upNode.ANIP.String()
+		default:
+			u.Type = "Unknown"
+		}
+		nodeIDtoIp := upNode.NodeID.ResolveNodeIdToIp()
+		if nodeIDtoIp != nil {
+			u.NodeID = nodeIDtoIp.String()
+		}
+		if upNode.UPF != nil {
+			if upNode.UPF.SNssaiInfos != nil {
+				FsNssaiInfoList := make([]factory.SnssaiUpfInfoItem, 0)
+				for _, sNssaiInfo := range upNode.UPF.SNssaiInfos {
+					FDnnUpfInfoList := make([]factory.DnnUpfInfoItem, 0)
+					for _, dnnInfo := range sNssaiInfo.DnnList {
+						FUEIPPools := make([]factory.UEIPPool, 0)
+						for _, pool := range dnnInfo.UeIPPools {
+							FUEIPPools = append(FUEIPPools, factory.UEIPPool{
+								Cidr: pool.ueSubNet.String(),
+							})
+						} // for pool
+						FDnnUpfInfoList = append(FDnnUpfInfoList, factory.DnnUpfInfoItem{
+							Dnn:   dnnInfo.Dnn,
+							Pools: FUEIPPools,
+						})
+					} // for dnnInfo
+					Fsnssai := factory.SnssaiUpfInfoItem{
+						SNssai: &models.Snssai{
+							Sst: sNssaiInfo.SNssai.Sst,
+							Sd:  sNssaiInfo.SNssai.Sd,
+						},
+						DnnUpfInfoList: FDnnUpfInfoList,
+					}
+					FsNssaiInfoList = append(FsNssaiInfoList, Fsnssai)
+				} // for sNssaiInfo
+				u.SNssaiInfos = FsNssaiInfoList
+			} // if UPF.SNssaiInfos
+			FNxList := make([]factory.InterfaceUpfInfoItem, 0)
+			for _, iface := range upNode.UPF.N3Interfaces {
+				endpoints := make([]string, 0)
+				// upf.go L90
+				if iface.EndpointFQDN != "" {
+					endpoints = append(endpoints, iface.EndpointFQDN)
+				}
+				for _, eIP := range iface.IPv4EndPointAddresses {
+					endpoints = append(endpoints, eIP.String())
+				}
+				FNxList = append(FNxList, factory.InterfaceUpfInfoItem{
+					InterfaceType:   models.UpInterfaceType_N3,
+					Endpoints:       endpoints,
+					NetworkInstance: iface.NetworkInstance,
+				})
+			} // for N3Interfaces
+
+			for _, iface := range upNode.UPF.N9Interfaces {
+				endpoints := make([]string, 0)
+				// upf.go L90
+				if iface.EndpointFQDN != "" {
+					endpoints = append(endpoints, iface.EndpointFQDN)
+				}
+				for _, eIP := range iface.IPv4EndPointAddresses {
+					endpoints = append(endpoints, eIP.String())
+				}
+				FNxList = append(FNxList, factory.InterfaceUpfInfoItem{
+					InterfaceType:   models.UpInterfaceType_N9,
+					Endpoints:       endpoints,
+					NetworkInstance: iface.NetworkInstance,
+				})
+			} // N9Interfaces
+			u.InterfaceUpfInfoList = FNxList
+		}
+		nodes[name] = *u
+	}
+
+	return &factory.UserPlaneInformation{
+		UPNodes: nodes,
+	}
+}
+
+func (upi *UserPlaneInformation) LinksToConfiguration() *factory.UserPlaneInformation {
+	links := make([]factory.UPLink, 0)
+	source, err := upi.selectUPPathSource()
+	if err != nil {
+		logger.InitLog.Errorf("AN Node not found\n")
+	}
+	visited := make(map[*UPNode]bool)
+	queue := make([]*UPNode, 0)
+	queue = append(queue, source)
+	for {
+		node := queue[0]
+		queue = queue[1:]
+		visited[node] = true
+		for _, link := range node.Links {
+			if !visited[link] {
+				queue = append(queue, link)
+				nodeIpStr := node.NodeID.ResolveNodeIdToIp().String()
+				ipStr := link.NodeID.ResolveNodeIdToIp().String()
+				linkA := upi.UPFIPToName[nodeIpStr]
+				linkB := upi.UPFIPToName[ipStr]
+				links = append(links, factory.UPLink{
+					A: linkA,
+					B: linkB,
+				})
+			}
+		}
+		if len(queue) == 0 {
+			break
+		}
+	}
+	return &factory.UserPlaneInformation{
+		Links: links,
+	}
+}
+
+func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.UserPlaneInformation) {
+	for name, node := range upTopology.UPNodes {
+		if _, ok := upi.UPNodes[name]; ok {
+			logger.InitLog.Warningf("Node [%s] already exists in SMF. Ignoring request.\n", name)
+			continue
+		}
+		upNode := new(UPNode)
+		upNode.Type = UPNodeType(node.Type)
+		switch upNode.Type {
+		case UPNODE_UPF:
+			// ParseIp() always return 16 bytes
+			// so we can't use the length of return ip to separate IPv4 and IPv6
+			// This is just a work around
+			var ip net.IP
+			if net.ParseIP(node.NodeID).To4() == nil {
+				ip = net.ParseIP(node.NodeID)
+			} else {
+				ip = net.ParseIP(node.NodeID).To4()
+			}
+
+			switch len(ip) {
+			case net.IPv4len:
+				upNode.NodeID = pfcpType.NodeID{
+					NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+					IP:         ip,
+				}
+			case net.IPv6len:
+				upNode.NodeID = pfcpType.NodeID{
+					NodeIdType: pfcpType.NodeIdTypeIpv6Address,
+					IP:         ip,
+				}
+			default:
+				upNode.NodeID = pfcpType.NodeID{
+					NodeIdType: pfcpType.NodeIdTypeFqdn,
+					FQDN:       node.NodeID,
+				}
+			}
+
+			upNode.UPF = NewUPF(&upNode.NodeID, node.InterfaceUpfInfoList)
+			snssaiInfos := make([]SnssaiUPFInfo, 0)
+			for _, snssaiInfoConfig := range node.SNssaiInfos {
+				snssaiInfo := SnssaiUPFInfo{
+					SNssai: SNssai{
+						Sst: snssaiInfoConfig.SNssai.Sst,
+						Sd:  snssaiInfoConfig.SNssai.Sd,
+					},
+					DnnList: make([]DnnUPFInfoItem, 0),
+				}
+
+				for _, dnnInfoConfig := range snssaiInfoConfig.DnnUpfInfoList {
+					ueIPPools := make([]*UeIPPool, 0)
+					for _, pool := range dnnInfoConfig.Pools {
+						ueIPPool := NewUEIPPool(&pool)
+						if ueIPPool == nil {
+							logger.InitLog.Fatalf("invalid pools value: %+v", pool)
+						} else {
+							ueIPPools = append(ueIPPools, ueIPPool)
+						}
+					}
+					snssaiInfo.DnnList = append(snssaiInfo.DnnList, DnnUPFInfoItem{
+						Dnn:             dnnInfoConfig.Dnn,
+						DnaiList:        dnnInfoConfig.DnaiList,
+						PduSessionTypes: dnnInfoConfig.PduSessionTypes,
+						UeIPPools:       ueIPPools,
+					})
+				}
+				snssaiInfos = append(snssaiInfos, snssaiInfo)
+			}
+			upNode.UPF.SNssaiInfos = snssaiInfos
+			upi.UPFs[name] = upNode
+		case UPNODE_AN:
+			upNode.ANIP = net.ParseIP(node.ANIP)
+			upi.AccessNetwork[name] = upNode
+		default:
+			logger.InitLog.Warningf("invalid UPNodeType: %s\n", upNode.Type)
+		}
+
+		upi.UPNodes[name] = upNode
+
+		ipStr := upNode.NodeID.ResolveNodeIdToIp().String()
+		upi.UPFIPToName[ipStr] = name
+
+		// AllocateUPFID
+		upfid := upNode.UPF.UUID()
+		upfip := upNode.NodeID.ResolveNodeIdToIp().String()
+		upi.UPFsID[name] = upfid
+		upi.UPFsIPtoID[upfip] = upfid
+	}
+
+	// overlap UE IP pool validation
+	allUEIPPools := []*UeIPPool{}
+	for _, upf := range upi.UPFs {
+		for _, snssaiInfo := range upf.UPF.SNssaiInfos {
+			for _, dnn := range snssaiInfo.DnnList {
+				allUEIPPools = append(allUEIPPools, dnn.UeIPPools...)
+			}
+		}
+	}
+	if isOverlap(allUEIPPools) {
+		logger.InitLog.Fatalf("overlap cidr value between UPFs")
+	}
+}
+
+func (upi *UserPlaneInformation) LinksFromConfiguration(upTopology *factory.UserPlaneInformation) {
+	for _, link := range upTopology.Links {
+		nodeA := upi.UPNodes[link.A]
+		nodeB := upi.UPNodes[link.B]
+		if nodeA == nil || nodeB == nil {
+			logger.InitLog.Warningf("UPLink [%s] <=> [%s] not establish\n", link.A, link.B)
+			continue
+		}
+		nodeA.Links = append(nodeA.Links, nodeB)
+		nodeB.Links = append(nodeB.Links, nodeA)
+	}
 }
 
 func NewUEIPPool(factoryPool *factory.UEIPPool) *UeIPPool {

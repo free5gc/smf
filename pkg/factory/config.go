@@ -390,8 +390,8 @@ func (r *RoutingConfig) Validate() (bool, error) {
 
 // UserPlaneInformation describe core network userplane information
 type UserPlaneInformation struct {
-	UPNodes map[string]UPNode `yaml:"upNodes" valid:"required"`
-	Links   []UPLink          `yaml:"links" valid:"required"`
+	UPNodes map[string]UPNode `json:"upNodes" yaml:"upNodes" valid:"required"`
+	Links   []UPLink          `json:"links" yaml:"links" valid:"optional"`
 }
 
 func (u *UserPlaneInformation) validate() (bool, error) {
@@ -413,13 +413,13 @@ func (u *UserPlaneInformation) validate() (bool, error) {
 
 // UPNode represent the user plane node
 type UPNode struct {
-	Type                 string                 `yaml:"type" valid:"upNodeType,required"`
-	NodeID               string                 `yaml:"nodeID" valid:"host,optional"`
-	Addr                 string                 `yaml:"addr" valid:"host,optional"`
-	ANIP                 string                 `yaml:"anIP" valid:"host,optional"`
-	Dnn                  string                 `yaml:"dnn" valid:"type(string),minstringlength(1),optional"`
-	SNssaiInfos          []SnssaiUpfInfoItem    `yaml:"sNssaiUpfInfos,omitempty" valid:"optional"`
-	InterfaceUpfInfoList []InterfaceUpfInfoItem `yaml:"interfaces,omitempty" valid:"optional"`
+	Type                 string                 `json:"type" yaml:"type" valid:"upNodeType,required"`
+	NodeID               string                 `json:"nodeID" yaml:"nodeID" valid:"host,optional"`
+	Addr                 string                 `json:"addr" yaml:"addr" valid:"host,optional"`
+	ANIP                 string                 `json:"anIP" yaml:"anIP" valid:"host,optional"`
+	Dnn                  string                 `json:"dnn" yaml:"dnn" valid:"type(string),minstringlength(1),optional"`
+	SNssaiInfos          []SnssaiUpfInfoItem    `json:"sNssaiUpfInfos" yaml:"sNssaiUpfInfos,omitempty" valid:"optional"`
+	InterfaceUpfInfoList []InterfaceUpfInfoItem `json:"interfaces" yaml:"interfaces,omitempty" valid:"optional"`
 }
 
 func (u *UPNode) validate() (bool, error) {
@@ -443,9 +443,9 @@ func (u *UPNode) validate() (bool, error) {
 }
 
 type InterfaceUpfInfoItem struct {
-	InterfaceType   models.UpInterfaceType `yaml:"interfaceType" valid:"required"`
-	Endpoints       []string               `yaml:"endpoints" valid:"required"`
-	NetworkInstance string                 `yaml:"networkInstance" valid:"type(string),minstringlength(1),required"`
+	InterfaceType   models.UpInterfaceType `json:"interfaceType" yaml:"interfaceType" valid:"required"`
+	Endpoints       []string               `json:"endpoints" yaml:"endpoints" valid:"required"`
+	NetworkInstance string                 `json:"networkInstance" yaml:"networkInstance" valid:"type(string),minstringlength(1),required"`
 }
 
 func (i *InterfaceUpfInfoItem) validate() (bool, error) {
@@ -467,8 +467,8 @@ func (i *InterfaceUpfInfoItem) validate() (bool, error) {
 }
 
 type SnssaiUpfInfoItem struct {
-	SNssai         *models.Snssai   `yaml:"sNssai" valid:"required"`
-	DnnUpfInfoList []DnnUpfInfoItem `yaml:"dnnUpfInfoList" valid:"required"`
+	SNssai         *models.Snssai   `json:"sNssai" yaml:"sNssai" valid:"required"`
+	DnnUpfInfoList []DnnUpfInfoItem `json:"dnnUpfInfoList" yaml:"dnnUpfInfoList" valid:"required"`
 }
 
 func (s *SnssaiUpfInfoItem) validate() (bool, error) {
@@ -496,10 +496,10 @@ func (s *SnssaiUpfInfoItem) validate() (bool, error) {
 }
 
 type DnnUpfInfoItem struct {
-	Dnn             string                  `yaml:"dnn" valid:"required"`
-	DnaiList        []string                `yaml:"dnaiList" valid:"optional"`
-	PduSessionTypes []models.PduSessionType `yaml:"pduSessionTypes" valid:"optional"`
-	Pools           []UEIPPool              `yaml:"pools" valid:"optional"`
+	Dnn             string                  `json:"dnn" yaml:"dnn" valid:"required"`
+	DnaiList        []string                `json:"dnaiList" yaml:"dnaiList" valid:"optional"`
+	PduSessionTypes []models.PduSessionType `json:"pduSessionTypes" yaml:"pduSessionTypes" valid:"optional"`
+	Pools           []UEIPPool              `json:"pools" yaml:"pools" valid:"optional"`
 }
 
 func (d *DnnUpfInfoItem) validate() (bool, error) {
@@ -519,8 +519,8 @@ func (d *DnnUpfInfoItem) validate() (bool, error) {
 }
 
 type UPLink struct {
-	A string `yaml:"A" valid:"required"`
-	B string `yaml:"B" valid:"required"`
+	A string `json:"A" yaml:"A" valid:"required"`
+	B string `json:"B" yaml:"B" valid:"required"`
 }
 
 func (u *UPLink) validate() (bool, error) {
