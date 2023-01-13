@@ -58,15 +58,23 @@ func isDone(ctx context.Context) bool {
 }
 
 func ensureSetupPfcpAssociation(ctx context.Context, upf *smf_context.UPF, upfStr string) {
+	alertTime := time.Now()
 	alertInterval := smf_context.SMF_Self().AssociationSetupFailedAlertInterval
+	retryInterval := smf_context.SMF_Self().AssociationSetupFailedRetryInterval
 	for {
 		err := setupPfcpAssociation(upf, upfStr)
 		if err == nil {
 			return
 		}
 		logger.AppLog.Errorf("Failed to setup an association with UPF%s, error:%+v", upfStr, err)
-		logger.AppLog.Errorf("Wait %+v until next attempt", alertInterval)
-		timer := time.After(alertInterval)
+		now := time.Now()
+		logger.AppLog.Debugf("now %+v, alertTime %+v", now, alertTime)
+		if now.After(alertTime.Add(alertInterval)) {
+			logger.AppLog.Errorf("ALERT for UPF%s", upfStr)
+			alertTime = now
+		}
+		logger.AppLog.Errorf("Wait %+v until next retry attempt", retryInterval)
+		timer := time.After(retryInterval)
 		select {
 		case <-ctx.Done():
 			logger.AppLog.Infof("Canceled association request to UPF%s", upfStr)
