@@ -51,6 +51,7 @@ type SMFContext struct {
 	SubscriberDataManagementClient      *Nudm_SubscriberDataManagement.APIClient
 	Locality                            string
 	AssociationSetupFailedAlertInterval time.Duration
+	AssociationSetupFailedRetryInterval time.Duration
 
 	UserPlaneInformation  *UserPlaneInformation
 	PFCPCancelFunc        context.CancelFunc
@@ -166,6 +167,11 @@ func InitSmfContext(config *factory.Config) {
 			smfContext.AssociationSetupFailedAlertInterval = 5 * time.Minute
 		} else {
 			smfContext.AssociationSetupFailedAlertInterval = pfcp.AlertInterval
+		}
+		if pfcp.RetryInterval == 0 {
+			smfContext.AssociationSetupFailedRetryInterval = 5 * time.Second
+		} else {
+			smfContext.AssociationSetupFailedRetryInterval = pfcp.RetryInterval
 		}
 	}
 
