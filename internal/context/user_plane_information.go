@@ -157,7 +157,11 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 		nodeA := nodePool[link.A]
 		nodeB := nodePool[link.B]
 		if nodeA == nil || nodeB == nil {
-			logger.InitLog.Warningf("UPLink [%s] <=> [%s] not establish\n", link.A, link.B)
+			logger.InitLog.Warningf("One of link edges does not exist. UPLink [%s] <=> [%s] not establish\n", link.A, link.B)
+			continue
+		}
+		if nodeInLink(nodeB, nodeA.Links) || nodeInLink(nodeA, nodeB.Links) {
+			logger.InitLog.Warningf("One of link edges already exist. UPLink [%s] <=> [%s] not establish\n", link.A, link.B)
 			continue
 		}
 		nodeA.Links = append(nodeA.Links, nodeB)
@@ -405,7 +409,11 @@ func (upi *UserPlaneInformation) LinksFromConfiguration(upTopology *factory.User
 		nodeA := upi.UPNodes[link.A]
 		nodeB := upi.UPNodes[link.B]
 		if nodeA == nil || nodeB == nil {
-			logger.InitLog.Warningf("UPLink [%s] <=> [%s] not establish\n", link.A, link.B)
+			logger.InitLog.Warningf("One of link edges does not exist. UPLink [%s] <=> [%s] not establish\n", link.A, link.B)
+			continue
+		}
+		if nodeInLink(nodeB, nodeA.Links) || nodeInLink(nodeA, nodeB.Links) {
+			logger.InitLog.Warningf("One of link edges already exist. UPLink [%s] <=> [%s] not establish\n", link.A, link.B)
 			continue
 		}
 		nodeA.Links = append(nodeA.Links, nodeB)
@@ -463,6 +471,15 @@ func isOverlap(pools []*UeIPPool) bool {
 			if pools[i].pool.IsJoint(pools[j].pool) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func nodeInLink(upNode *UPNode, links []*UPNode) bool {
+	for _, n := range links {
+		if n == upNode {
+			return true
 		}
 	}
 	return false
