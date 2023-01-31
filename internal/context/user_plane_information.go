@@ -178,7 +178,7 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 	return userplaneInformation
 }
 
-func (upi *UserPlaneInformation) UpNodesToConfiguration() *factory.UserPlaneInformation {
+func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]factory.UPNode {
 	nodes := make(map[string]factory.UPNode)
 	for name, upNode := range upi.UPNodes {
 		u := new(factory.UPNode)
@@ -260,44 +260,41 @@ func (upi *UserPlaneInformation) UpNodesToConfiguration() *factory.UserPlaneInfo
 		nodes[name] = *u
 	}
 
-	return &factory.UserPlaneInformation{
-		UPNodes: nodes,
-	}
+	return nodes
 }
 
-func (upi *UserPlaneInformation) LinksToConfiguration() *factory.UserPlaneInformation {
+func (upi *UserPlaneInformation) LinksToConfiguration() []factory.UPLink {
 	links := make([]factory.UPLink, 0)
 	source, err := upi.selectUPPathSource()
 	if err != nil {
 		logger.InitLog.Errorf("AN Node not found\n")
-	}
-	visited := make(map[*UPNode]bool)
-	queue := make([]*UPNode, 0)
-	queue = append(queue, source)
-	for {
-		node := queue[0]
-		queue = queue[1:]
-		visited[node] = true
-		for _, link := range node.Links {
-			if !visited[link] {
-				queue = append(queue, link)
-				nodeIpStr := node.NodeID.ResolveNodeIdToIp().String()
-				ipStr := link.NodeID.ResolveNodeIdToIp().String()
-				linkA := upi.UPFIPToName[nodeIpStr]
-				linkB := upi.UPFIPToName[ipStr]
-				links = append(links, factory.UPLink{
-					A: linkA,
-					B: linkB,
-				})
+	} else {
+		visited := make(map[*UPNode]bool)
+		queue := make([]*UPNode, 0)
+		queue = append(queue, source)
+		for {
+			node := queue[0]
+			queue = queue[1:]
+			visited[node] = true
+			for _, link := range node.Links {
+				if !visited[link] {
+					queue = append(queue, link)
+					nodeIpStr := node.NodeID.ResolveNodeIdToIp().String()
+					ipStr := link.NodeID.ResolveNodeIdToIp().String()
+					linkA := upi.UPFIPToName[nodeIpStr]
+					linkB := upi.UPFIPToName[ipStr]
+					links = append(links, factory.UPLink{
+						A: linkA,
+						B: linkB,
+					})
+				}
+			}
+			if len(queue) == 0 {
+				break
 			}
 		}
-		if len(queue) == 0 {
-			break
-		}
 	}
-	return &factory.UserPlaneInformation{
-		Links: links,
-	}
+	return links
 }
 
 func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.UserPlaneInformation) {
