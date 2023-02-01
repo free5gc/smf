@@ -1,4 +1,4 @@
-package service
+package association
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 	"github.com/free5gc/smf/internal/sbi/producer"
 )
 
-func toBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF) {
+func ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF) {
 	var upfStr string
 	if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
 		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.NodeID.ResolveNodeIdToIp().String())

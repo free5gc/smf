@@ -26,7 +26,9 @@ import (
 	"github.com/free5gc/smf/internal/sbi/eventexposure"
 	"github.com/free5gc/smf/internal/sbi/oam"
 	"github.com/free5gc/smf/internal/sbi/pdusession"
+	"github.com/free5gc/smf/internal/sbi/upi"
 	"github.com/free5gc/smf/internal/util"
+	"github.com/free5gc/smf/pkg/association"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/httpwrapper"
 	logger_util "github.com/free5gc/util/logger"
@@ -256,6 +258,7 @@ func (smf *SMF) Start() {
 
 	oam.AddService(router)
 	callback.AddService(router)
+	upi.AddService(router)
 	for _, serviceName := range factory.SmfConfig.Configuration.ServiceNameList {
 		switch models.ServiceName(serviceName) {
 		case models.ServiceName_NSMF_PDUSESSION:
@@ -267,9 +270,10 @@ func (smf *SMF) Start() {
 	udp.Run(pfcp.Dispatch)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	smf_context.SMF_Self().Ctx = ctx
 	smf_context.SMF_Self().PFCPCancelFunc = cancel
 	for _, upNode := range smf_context.SMF_Self().UserPlaneInformation.UPFs {
-		go toBeAssociatedWithUPF(ctx, upNode.UPF)
+		go association.ToBeAssociatedWithUPF(ctx, upNode.UPF)
 	}
 
 	time.Sleep(1000 * time.Millisecond)
