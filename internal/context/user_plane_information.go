@@ -160,7 +160,7 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 			logger.InitLog.Warningf("One of link edges does not exist. UPLink [%s] <=> [%s] not establish\n", link.A, link.B)
 			continue
 		}
-		if nodeInLink(nodeB, nodeA.Links) || nodeInLink(nodeA, nodeB.Links) {
+		if nodeInLink(nodeB, nodeA.Links) != -1 || nodeInLink(nodeA, nodeB.Links) != -1 {
 			logger.InitLog.Warningf("One of link edges already exist. UPLink [%s] <=> [%s] not establish\n", link.A, link.B)
 			continue
 		}
@@ -304,7 +304,7 @@ func (upi *UserPlaneInformation) LinksToConfiguration() []factory.UPLink {
 func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.UserPlaneInformation) {
 	for name, node := range upTopology.UPNodes {
 		if _, ok := upi.UPNodes[name]; ok {
-			logger.InitLog.Warningf("Node [%s] already exists in SMF. Ignoring request.\n", name)
+			logger.InitLog.Warningf("Node [%s] already exists in SMF.\n", name)
 			continue
 		}
 		upNode := new(UPNode)
@@ -412,13 +412,50 @@ func (upi *UserPlaneInformation) LinksFromConfiguration(upTopology *factory.User
 			logger.InitLog.Warningf("One of link edges does not exist. UPLink [%s] <=> [%s] not establish\n", link.A, link.B)
 			continue
 		}
-		if nodeInLink(nodeB, nodeA.Links) || nodeInLink(nodeA, nodeB.Links) {
+		if nodeInLink(nodeB, nodeA.Links) != -1 || nodeInLink(nodeA, nodeB.Links) != -1 {
 			logger.InitLog.Warningf("One of link edges already exist. UPLink [%s] <=> [%s] not establish\n", link.A, link.B)
 			continue
 		}
 		nodeA.Links = append(nodeA.Links, nodeB)
 		nodeB.Links = append(nodeB.Links, nodeA)
 	}
+}
+
+func (upi *UserPlaneInformation) UpNodeDelete(upfName string) (found bool) {
+	upNode, ok := upi.UPNodes[upfName]
+	found = false
+	if ok {
+		found = true
+		if upNode.Type == UPNODE_UPF {
+			logger.InitLog.Infof("UPF [%s] found. Remove its NodeID.\n", upfName)
+			RemoveUPFNodeByNodeID(upNode.UPF.NodeID)
+			if _, ok = upi.UPFs[upfName]; ok {
+				logger.InitLog.Infof("UPF [%s] found. Remove it from upi.UPFs.\n", upfName)
+				delete(upi.UPFs, upfName)
+			}
+			for selectionStr, destMap := range upi.DefaultUserPlanePathToUPF {
+				for destIp, path := range destMap {
+					if nodeInPath(upNode, path) != -1 {
+						logger.InitLog.Infof("Invalidate cache entry: DefaultUserPlanePathToUPF[%s][%s].\n", selectionStr, destIp)
+						delete(upi.DefaultUserPlanePathToUPF[selectionStr], destIp)
+					}
+				}
+			}
+		}
+		logger.InitLog.Infof("UPNode [%s] found. Remove it from upi.UPNodes.\n", upfName)
+		delete(upi.UPNodes, upfName)
+	} else {
+		return
+	}
+
+	// update links
+	for name, n := range upi.UPNodes {
+		if index := nodeInLink (upNode, n.Links); index != -1 {
+			logger.InitLog.Infof("UPLink [%s] <=> [%s] found. Removing it.\n", name, upfName)
+			n.Links = removeNodeFromLink(n.Links, index)
+		}
+	}
+	return
 }
 
 func NewUEIPPool(factoryPool *factory.UEIPPool) *UeIPPool {
@@ -476,13 +513,27 @@ func isOverlap(pools []*UeIPPool) bool {
 	return false
 }
 
-func nodeInLink(upNode *UPNode, links []*UPNode) bool {
-	for _, n := range links {
-		if n == upNode {
-			return true
+func nodeInPath(upNode *UPNode, path []*UPNode) int {
+	for i, u := range path {
+		if u == upNode {
+			return i
 		}
 	}
-	return false
+	return -1
+}
+
+func removeNodeFromLink(links []*UPNode, index int) []*UPNode {
+	links[index] = links[len(links)-1]
+	return links[:len(links)-1]
+}
+
+func nodeInLink(upNode *UPNode, links []*UPNode) int {
+	for i, n := range links {
+		if n == upNode {
+			return i
+		}
+	}
+	return -1
 }
 
 func (upi *UserPlaneInformation) GetUPFNameByIp(ip string) string {
@@ -525,8 +576,9 @@ func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNNAndUPF(
 
 	if upi.DefaultUserPlanePathToUPF[selection.String()] != nil {
 		path, pathExist := upi.DefaultUserPlanePathToUPF[selection.String()][nodeID]
-		logger.CtxLog.Traceln("In GetDefaultUserPlanePathByDNN")
+		logger.CtxLog.Traceln("In GetDefaultUserPlanePathByDNNAndUPF")
 		logger.CtxLog.Traceln("selection: ", selection.String())
+		logger.CtxLog.Traceln("pathExist: ", pathExist)
 		if pathExist {
 			return path
 		}

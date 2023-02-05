@@ -41,6 +41,8 @@ func AddService(engine *gin.Engine) *gin.RouterGroup {
 			group.GET(route.Pattern, route.HandlerFunc)
 		case "POST":
 			group.POST(route.Pattern, route.HandlerFunc)
+		case "DELETE":
+			group.DELETE(route.Pattern, route.HandlerFunc)
 		}
 	}
 	return group
@@ -69,5 +71,11 @@ var routes = Routes{
 		strings.ToUpper("Get"),
 		"/upNodesLinks",
 		GetUpNodesLinks,
+	},
+	{
+		"DeleteUpNodeLink",
+		strings.ToUpper("Delete"),
+		"/upNodesLinks/:upfRef",
+		DeleteUpNodeLink,
 	},
 }

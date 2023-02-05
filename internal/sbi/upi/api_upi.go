@@ -48,3 +48,24 @@ func PostUpNodesLinks(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "OK"})
 }
+
+func DeleteUpNodeLink(c *gin.Context) {
+	// current version does not allow node deletions when ulcl is enabled
+	if smf_context.SMF_Self().ULCLSupport {
+		c.JSON(http.StatusForbidden, gin.H{})
+	} else {
+		req := httpwrapper.NewRequest(c.Request, nil)
+		req.Params["upfRef"] = c.Params.ByName("upfRef")
+		upfRef := req.Params["upfRef"]
+		upi := smf_context.SMF_Self().UserPlaneInformation
+		if upNode, ok := upi.UPNodes[upfRef]; ok {
+			if upNode.Type == smf_context.UPNODE_UPF {
+				association.ReleaseAllResourcesOfUPF(upNode.UPF)
+			}
+			upi.UpNodeDelete(upfRef)
+			c.JSON(http.StatusOK, gin.H{"status": "OK"})
+		} else {
+			c.JSON(http.StatusNotFound, gin.H{})
+		}
+	}
+}
