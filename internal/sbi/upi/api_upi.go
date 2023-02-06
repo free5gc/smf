@@ -61,16 +61,16 @@ func DeleteUpNodeLink(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{})
 	} else {
 		req := httpwrapper.NewRequest(c.Request, nil)
-		req.Params["upfRef"] = c.Params.ByName("upfRef")
-		upfRef := req.Params["upfRef"]
+		req.Params["upNodeRef"] = c.Params.ByName("upNodeRef")
+		upNodeRef := req.Params["upNodeRef"]
 		upi := smf_context.SMF_Self().UserPlaneInformation
 		upi.Mu.Lock()
 		defer upi.Mu.Unlock()
-		if upNode, ok := upi.UPNodes[upfRef]; ok {
+		if upNode, ok := upi.UPNodes[upNodeRef]; ok {
 			if upNode.Type == smf_context.UPNODE_UPF {
 				go association.ReleaseAllResourcesOfUPF(upNode.UPF)
 			}
-			upi.UpNodeDelete(upfRef)
+			upi.UpNodeDelete(upNodeRef)
 			c.JSON(http.StatusOK, gin.H{"status": "OK"})
 		} else {
 			c.JSON(http.StatusNotFound, gin.H{})

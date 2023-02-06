@@ -373,6 +373,13 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 			}
 			upNode.UPF.SNssaiInfos = snssaiInfos
 			upi.UPFs[name] = upNode
+
+			// AllocateUPFID
+			upfid := upNode.UPF.UUID()
+			upfip := upNode.NodeID.ResolveNodeIdToIp().String()
+			upi.UPFsID[name] = upfid
+			upi.UPFsIPtoID[upfip] = upfid
+
 		case UPNODE_AN:
 			upNode.ANIP = net.ParseIP(node.ANIP)
 			upi.AccessNetwork[name] = upNode
@@ -384,12 +391,6 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 
 		ipStr := upNode.NodeID.ResolveNodeIdToIp().String()
 		upi.UPFIPToName[ipStr] = name
-
-		// AllocateUPFID
-		upfid := upNode.UPF.UUID()
-		upfip := upNode.NodeID.ResolveNodeIdToIp().String()
-		upi.UPFsID[name] = upfid
-		upi.UPFsIPtoID[upfip] = upfid
 	}
 
 	// overlap UE IP pool validation
@@ -423,18 +424,16 @@ func (upi *UserPlaneInformation) LinksFromConfiguration(upTopology *factory.User
 	}
 }
 
-func (upi *UserPlaneInformation) UpNodeDelete(upfName string) (found bool) {
-	upNode, ok := upi.UPNodes[upfName]
-	found = false
+func (upi *UserPlaneInformation) UpNodeDelete(upNodeName string) {
+	upNode, ok := upi.UPNodes[upNodeName]
 	if ok {
-		found = true
-		logger.InitLog.Infof("UPNode [%s] found. Deleting it.\n", upfName)
+		logger.InitLog.Infof("UPNode [%s] found. Deleting it.\n", upNodeName)
 		if upNode.Type == UPNODE_UPF {
-			logger.InitLog.Tracef("Delete UPF [%s] from its NodeID.\n", upfName)
+			logger.InitLog.Tracef("Delete UPF [%s] from its NodeID.\n", upNodeName)
 			RemoveUPFNodeByNodeID(upNode.UPF.NodeID)
-			if _, ok = upi.UPFs[upfName]; ok {
-				logger.InitLog.Tracef("Delete UPF [%s] from upi.UPFs.\n", upfName)
-				delete(upi.UPFs, upfName)
+			if _, ok = upi.UPFs[upNodeName]; ok {
+				logger.InitLog.Tracef("Delete UPF [%s] from upi.UPFs.\n", upNodeName)
+				delete(upi.UPFs, upNodeName)
 			}
 			for selectionStr, destMap := range upi.DefaultUserPlanePathToUPF {
 				for destIp, path := range destMap {
@@ -445,20 +444,21 @@ func (upi *UserPlaneInformation) UpNodeDelete(upfName string) (found bool) {
 				}
 			}
 		}
-		logger.InitLog.Tracef("Delete UPNode [%s] from upi.UPNodes.\n", upfName)
-		delete(upi.UPNodes, upfName)
-	} else {
-		return
-	}
+		if upNode.Type == UPNODE_AN {
+			logger.InitLog.Tracef("Delete AN [%s] from upi.AccessNetwork.\n", upNodeName)
+			delete(upi.AccessNetwork, upNodeName)
+		}
+		logger.InitLog.Tracef("Delete UPNode [%s] from upi.UPNodes.\n", upNodeName)
+		delete(upi.UPNodes, upNodeName)
 
-	// update links
-	for name, n := range upi.UPNodes {
-		if index := nodeInLink (upNode, n.Links); index != -1 {
-			logger.InitLog.Infof("Delete UPLink [%s] <=> [%s].\n", name, upfName)
-			n.Links = removeNodeFromLink(n.Links, index)
+		// update links
+		for name, n := range upi.UPNodes {
+			if index := nodeInLink (upNode, n.Links); index != -1 {
+				logger.InitLog.Infof("Delete UPLink [%s] <=> [%s].\n", name, upNodeName)
+				n.Links = removeNodeFromLink(n.Links, index)
+			}
 		}
 	}
-	return
 }
 
 func NewUEIPPool(factoryPool *factory.UEIPPool) *UeIPPool {

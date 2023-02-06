@@ -75,7 +75,7 @@ var routes = Routes{
 	{
 		"DeleteUpNodeLink",
 		strings.ToUpper("Delete"),
-		"/upNodesLinks/:upfRef",
+		"/upNodesLinks/:upNodeRef",
 		DeleteUpNodeLink,
 	},
 }
