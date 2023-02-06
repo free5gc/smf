@@ -428,11 +428,12 @@ func (upi *UserPlaneInformation) UpNodeDelete(upfName string) (found bool) {
 	found = false
 	if ok {
 		found = true
+		logger.InitLog.Infof("UPNode [%s] found. Deleting it.\n", upfName)
 		if upNode.Type == UPNODE_UPF {
-			logger.InitLog.Infof("UPF [%s] found. Remove its NodeID.\n", upfName)
+			logger.InitLog.Tracef("Delete UPF [%s] from its NodeID.\n", upfName)
 			RemoveUPFNodeByNodeID(upNode.UPF.NodeID)
 			if _, ok = upi.UPFs[upfName]; ok {
-				logger.InitLog.Infof("UPF [%s] found. Remove it from upi.UPFs.\n", upfName)
+				logger.InitLog.Tracef("Delete UPF [%s] from upi.UPFs.\n", upfName)
 				delete(upi.UPFs, upfName)
 			}
 			for selectionStr, destMap := range upi.DefaultUserPlanePathToUPF {
@@ -444,7 +445,7 @@ func (upi *UserPlaneInformation) UpNodeDelete(upfName string) (found bool) {
 				}
 			}
 		}
-		logger.InitLog.Infof("UPNode [%s] found. Remove it from upi.UPNodes.\n", upfName)
+		logger.InitLog.Tracef("Delete UPNode [%s] from upi.UPNodes.\n", upfName)
 		delete(upi.UPNodes, upfName)
 	} else {
 		return
@@ -453,7 +454,7 @@ func (upi *UserPlaneInformation) UpNodeDelete(upfName string) (found bool) {
 	// update links
 	for name, n := range upi.UPNodes {
 		if index := nodeInLink (upNode, n.Links); index != -1 {
-			logger.InitLog.Infof("UPLink [%s] <=> [%s] found. Removing it.\n", name, upfName)
+			logger.InitLog.Infof("Delete UPLink [%s] <=> [%s].\n", name, upfName)
 			n.Links = removeNodeFromLink(n.Links, index)
 		}
 	}
