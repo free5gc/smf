@@ -9,6 +9,7 @@ import (
 	"net"
 	"reflect"
 	"sort"
+	"sync"
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
@@ -19,6 +20,7 @@ import (
 
 // UserPlaneInformation store userplane topology
 type UserPlaneInformation struct {
+	Mu                        sync.RWMutex // protect UPF and topology structure
 	UPNodes                   map[string]*UPNode
 	UPFs                      map[string]*UPNode
 	AccessNetwork             map[string]*UPNode

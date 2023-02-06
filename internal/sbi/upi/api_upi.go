@@ -13,6 +13,9 @@ import (
 
 func GetUpNodesLinks(c *gin.Context) {
 	upi := smf_context.SMF_Self().UserPlaneInformation
+	upi.Mu.RLock()
+	defer upi.Mu.RUnlock()
+
 	nodes := upi.UpNodesToConfiguration()
 	links := upi.LinksToConfiguration()
 
@@ -31,6 +34,9 @@ func GetUpNodesLinks(c *gin.Context) {
 
 func PostUpNodesLinks(c *gin.Context) {
 	upi := smf_context.SMF_Self().UserPlaneInformation
+	upi.Mu.Lock()
+	defer upi.Mu.Unlock()
+
 	var json factory.UserPlaneInformation
 	if err := c.ShouldBindJSON(&json); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -58,9 +64,11 @@ func DeleteUpNodeLink(c *gin.Context) {
 		req.Params["upfRef"] = c.Params.ByName("upfRef")
 		upfRef := req.Params["upfRef"]
 		upi := smf_context.SMF_Self().UserPlaneInformation
+		upi.Mu.Lock()
+		defer upi.Mu.Unlock()
 		if upNode, ok := upi.UPNodes[upfRef]; ok {
 			if upNode.Type == smf_context.UPNODE_UPF {
-				association.ReleaseAllResourcesOfUPF(upNode.UPF)
+				go association.ReleaseAllResourcesOfUPF(upNode.UPF)
 			}
 			upi.UpNodeDelete(upfRef)
 			c.JSON(http.StatusOK, gin.H{"status": "OK"})
