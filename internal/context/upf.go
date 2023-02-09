@@ -1,6 +1,7 @@
 package context
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -69,6 +70,10 @@ type UPF struct {
 	UPIPInfo          pfcpType.UserPlaneIPResourceInformation
 	UPFStatus         UPFStatus
 	RecoveryTimeStamp time.Time
+
+	Ctx               context.Context
+	CancelFunc        context.CancelFunc
+
 	SNssaiInfos       []SnssaiUPFInfo
 	N3Interfaces      []UPFInterfaceInfo
 	N9Interfaces      []UPFInterfaceInfo

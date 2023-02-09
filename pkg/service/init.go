@@ -273,6 +273,7 @@ func (smf *SMF) Start() {
 	smf_context.SMF_Self().Ctx = ctx
 	smf_context.SMF_Self().PFCPCancelFunc = cancel
 	for _, upNode := range smf_context.SMF_Self().UserPlaneInformation.UPFs {
+		upNode.UPF.Ctx, upNode.UPF.CancelFunc = context.WithCancel(context.Background())
 		go association.ToBeAssociatedWithUPF(ctx, upNode.UPF)
 	}
 

@@ -1,6 +1,7 @@
 package upi
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -49,6 +50,7 @@ func PostUpNodesLinks(c *gin.Context) {
 	for _, upf := range upi.UPFs {
 		// only associate new ones
 		if upf.UPF.UPFStatus == smf_context.NotAssociated {
+			upf.UPF.Ctx, upf.UPF.CancelFunc = context.WithCancel(context.Background())
 			go association.ToBeAssociatedWithUPF(smf_context.SMF_Self().Ctx, upf.UPF)
 		}
 	}
@@ -71,6 +73,7 @@ func DeleteUpNodeLink(c *gin.Context) {
 				go association.ReleaseAllResourcesOfUPF(upNode.UPF)
 			}
 			upi.UpNodeDelete(upNodeRef)
+			upNode.UPF.CancelFunc()
 			c.JSON(http.StatusOK, gin.H{"status": "OK"})
 		} else {
 			c.JSON(http.StatusNotFound, gin.H{})

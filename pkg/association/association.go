@@ -27,7 +27,7 @@ func ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF) {
 
 	for {
 		ensureSetupPfcpAssociation(ctx, upf, upfStr)
-		if isDone(ctx) {
+		if isDone(ctx, upf) {
 			break
 		}
 
@@ -37,12 +37,12 @@ func ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF) {
 
 		keepHeartbeatTo(ctx, upf, upfStr)
 		// return when UPF heartbeat lost is detected or association is canceled
-		if isDone(ctx) {
+		if isDone(ctx, upf) {
 			break
 		}
 
 		releaseAllResourcesOfUPF(upf, upfStr)
-		if isDone(ctx) {
+		if isDone(ctx, upf) {
 			break
 		}
 	}
@@ -58,9 +58,11 @@ func ReleaseAllResourcesOfUPF(upf *smf_context.UPF) {
 	releaseAllResourcesOfUPF(upf, upfStr)
 }
 
-func isDone(ctx context.Context) bool {
+func isDone(ctx context.Context, upf *smf_context.UPF) bool {
 	select {
 	case <-ctx.Done():
+		return true
+	case <-upf.Ctx.Done():
 		return true
 	default:
 		return false
@@ -88,6 +90,9 @@ func ensureSetupPfcpAssociation(ctx context.Context, upf *smf_context.UPF, upfSt
 		select {
 		case <-ctx.Done():
 			logger.AppLog.Infof("Canceled association request to UPF%s", upfStr)
+			return
+		case <-upf.Ctx.Done():
+			logger.AppLog.Infof("Canceled association request to this UPF%s only", upfStr)
 			return
 		case <-timer:
 			continue
@@ -140,6 +145,9 @@ func keepHeartbeatTo(ctx context.Context, upf *smf_context.UPF, upfStr string) {
 		select {
 		case <-ctx.Done():
 			logger.AppLog.Infof("Canceled Heartbeat with UPF%s", upfStr)
+			return
+		case <-upf.Ctx.Done():
+			logger.AppLog.Infof("Canceled Heartbeat to this UPF%s only", upfStr)
 			return
 		case <-timer:
 			continue
