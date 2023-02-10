@@ -71,12 +71,12 @@ type UPF struct {
 	UPFStatus         UPFStatus
 	RecoveryTimeStamp time.Time
 
-	Ctx               context.Context
-	CancelFunc        context.CancelFunc
+	Ctx        context.Context
+	CancelFunc context.CancelFunc
 
-	SNssaiInfos       []SnssaiUPFInfo
-	N3Interfaces      []UPFInterfaceInfo
-	N9Interfaces      []UPFInterfaceInfo
+	SNssaiInfos  []SnssaiUPFInfo
+	N3Interfaces []UPFInterfaceInfo
+	N9Interfaces []UPFInterfaceInfo
 
 	pdrPool sync.Map
 	farPool sync.Map
@@ -131,7 +131,7 @@ func NewUPFInterfaceInfo(i *factory.InterfaceUpfInfoItem) *UPFInterfaceInfo {
 	return interfaceInfo
 }
 
-//*** add unit test ***//
+// *** add unit test ***//
 // IP returns the IP of the user plane IP information of the pduSessType
 func (i *UPFInterfaceInfo) IP(pduSessType uint8) (net.IP, error) {
 	if (pduSessType == nasMessage.PDUSessionTypeIPv4 ||
@@ -202,7 +202,7 @@ func NewUPTunnel() (tunnel *UPTunnel) {
 	return
 }
 
-//*** add unit test ***//
+// *** add unit test ***//
 func (upTunnel *UPTunnel) AddDataPath(dataPath *DataPath) {
 	pathID, err := upTunnel.PathIDGenerator.Allocate()
 	if err != nil {
@@ -213,7 +213,7 @@ func (upTunnel *UPTunnel) AddDataPath(dataPath *DataPath) {
 	upTunnel.DataPathPool[pathID] = dataPath
 }
 
-//*** add unit test ***//
+// *** add unit test ***//
 // NewUPF returns a new UPF context in SMF
 func NewUPF(nodeID *pfcpType.NodeID, ifaces []factory.InterfaceUpfInfoItem) (upf *UPF) {
 	upf = new(UPF)
@@ -248,7 +248,7 @@ func NewUPF(nodeID *pfcpType.NodeID, ifaces []factory.InterfaceUpfInfoItem) (upf
 	return upf
 }
 
-//*** add unit test ***//
+// *** add unit test ***//
 // GetInterface return the UPFInterfaceInfo that match input cond
 func (upf *UPF) GetInterface(interfaceType models.UpInterfaceType, dnn string) *UPFInterfaceInfo {
 	switch interfaceType {
@@ -291,7 +291,7 @@ func (upf *UPF) PFCPAddr() *net.UDPAddr {
 	}
 }
 
-//*** add unit test ***//
+// *** add unit test ***//
 func RetrieveUPFNodeByNodeID(nodeID pfcpType.NodeID) *UPF {
 	var targetUPF *UPF = nil
 	upfPool.Range(func(key, value interface{}) bool {
@@ -315,7 +315,7 @@ func RetrieveUPFNodeByNodeID(nodeID pfcpType.NodeID) *UPF {
 	return targetUPF
 }
 
-//*** add unit test ***//
+// *** add unit test ***//
 func RemoveUPFNodeByNodeID(nodeID pfcpType.NodeID) bool {
 	upfID := ""
 	upfPool.Range(func(key, value interface{}) bool {
@@ -503,7 +503,7 @@ func (upf *UPF) AddQER() (*QER, error) {
 	return qer, nil
 }
 
-//*** add unit test ***//
+// *** add unit test ***//
 func (upf *UPF) RemovePDR(pdr *PDR) (err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
 		err = fmt.Errorf("this upf not associate with smf")
@@ -515,7 +515,7 @@ func (upf *UPF) RemovePDR(pdr *PDR) (err error) {
 	return nil
 }
 
-//*** add unit test ***//
+// *** add unit test ***//
 func (upf *UPF) RemoveFAR(far *FAR) (err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
 		err = fmt.Errorf("this upf not associate with smf")
@@ -527,7 +527,7 @@ func (upf *UPF) RemoveFAR(far *FAR) (err error) {
 	return nil
 }
 
-//*** add unit test ***//
+// *** add unit test ***//
 func (upf *UPF) RemoveBAR(bar *BAR) (err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
 		err = fmt.Errorf("this upf not associate with smf")
@@ -539,7 +539,7 @@ func (upf *UPF) RemoveBAR(bar *BAR) (err error) {
 	return nil
 }
 
-//*** add unit test ***//
+// *** add unit test ***//
 func (upf *UPF) RemoveQER(qer *QER) (err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
 		err = fmt.Errorf("this upf not associate with smf")

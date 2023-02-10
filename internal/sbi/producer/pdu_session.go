@@ -62,7 +62,7 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 
 	upi := smf_context.GetUserPlaneInformation()
 	upi.Mu.RLock()
-	defer upi.Mu.RUnlock()	
+	defer upi.Mu.RUnlock()
 
 	// DNN Information from config
 	smContext.DNNInfo = smf_context.RetrieveDnnInformation(createData.SNssai, createData.Dnn)

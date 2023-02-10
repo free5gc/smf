@@ -453,7 +453,7 @@ func (upi *UserPlaneInformation) UpNodeDelete(upNodeName string) {
 
 		// update links
 		for name, n := range upi.UPNodes {
-			if index := nodeInLink (upNode, n.Links); index != -1 {
+			if index := nodeInLink(upNode, n.Links); index != -1 {
 				logger.InitLog.Infof("Delete UPLink [%s] <=> [%s].\n", name, upNodeName)
 				n.Links = removeNodeFromLink(n.Links, index)
 			}
