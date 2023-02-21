@@ -12,7 +12,7 @@ require (
 	github.com/free5gc/openapi v1.0.5
 	github.com/free5gc/pfcp v1.0.6-0.20221213042804-fe871d6967c2
 	github.com/free5gc/util v1.0.3
-	github.com/gin-gonic/gin v1.7.3
+	github.com/gin-gonic/gin v1.7.7
 	github.com/google/uuid v1.3.0
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/pkg/errors v0.9.1
