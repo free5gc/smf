@@ -27,7 +27,7 @@ func ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF) {
 
 	for {
 		ensureSetupPfcpAssociation(ctx, upf, upfStr)
-		if isDone(ctx) {
+		if isDone(ctx, upf) {
 			break
 		}
 
@@ -37,20 +37,32 @@ func ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF) {
 
 		keepHeartbeatTo(ctx, upf, upfStr)
 		// return when UPF heartbeat lost is detected or association is canceled
-		if isDone(ctx) {
+		if isDone(ctx, upf) {
 			break
 		}
 
 		releaseAllResourcesOfUPF(upf, upfStr)
-		if isDone(ctx) {
+		if isDone(ctx, upf) {
 			break
 		}
 	}
 }
 
-func isDone(ctx context.Context) bool {
+func ReleaseAllResourcesOfUPF(upf *smf_context.UPF) {
+	var upfStr string
+	if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
+		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.NodeID.ResolveNodeIdToIp().String())
+	} else {
+		upfStr = fmt.Sprintf("[%s]", upf.NodeID.ResolveNodeIdToIp().String())
+	}
+	releaseAllResourcesOfUPF(upf, upfStr)
+}
+
+func isDone(ctx context.Context, upf *smf_context.UPF) bool {
 	select {
 	case <-ctx.Done():
+		return true
+	case <-upf.Ctx.Done():
 		return true
 	default:
 		return false
@@ -78,6 +90,9 @@ func ensureSetupPfcpAssociation(ctx context.Context, upf *smf_context.UPF, upfSt
 		select {
 		case <-ctx.Done():
 			logger.AppLog.Infof("Canceled association request to UPF%s", upfStr)
+			return
+		case <-upf.Ctx.Done():
+			logger.AppLog.Infof("Canceled association request to this UPF%s only", upfStr)
 			return
 		case <-timer:
 			continue
@@ -131,6 +146,9 @@ func keepHeartbeatTo(ctx context.Context, upf *smf_context.UPF, upfStr string) {
 		case <-ctx.Done():
 			logger.AppLog.Infof("Canceled Heartbeat with UPF%s", upfStr)
 			return
+		case <-upf.Ctx.Done():
+			logger.AppLog.Infof("Canceled Heartbeat to this UPF%s only", upfStr)
+			return
 		case <-timer:
 			continue
 		}
@@ -171,7 +189,7 @@ func doPfcpHeartbeat(upf *smf_context.UPF, upfStr string) error {
 }
 
 func releaseAllResourcesOfUPF(upf *smf_context.UPF, upfStr string) {
-	logger.AppLog.Infof("Release all resources of UPF%s", upfStr)
+	logger.AppLog.Infof("Release all resources of UPF %s", upfStr)
 
 	upf.ProcEachSMContext(func(smContext *smf_context.SMContext) {
 		smContext.SMLock.Lock()
