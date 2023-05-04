@@ -53,7 +53,7 @@ func SendPfcpAssociationSetupRequest(upNodeID pfcpType.NodeID) (resMsg *pfcpUdp.
 	return resMsg, nil
 }
 
-func SendPfcpAssociationSetupResponse(upNodeID pfcpType.NodeID, cause pfcpType.Cause) {
+func SendPfcpAssociationSetupResponse(addr *net.UDPAddr, cause pfcpType.Cause) {
 	pfcpMsg, err := BuildPfcpAssociationSetupResponse(cause)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Association Setup Response failed: %v", err)
@@ -69,11 +69,6 @@ func SendPfcpAssociationSetupResponse(upNodeID pfcpType.NodeID, cause pfcpType.C
 			SequenceNumber: 1,
 		},
 		Body: pfcpMsg,
-	}
-
-	addr := &net.UDPAddr{
-		IP:   upNodeID.ResolveNodeIdToIp(),
-		Port: pfcpUdp.PFCP_PORT,
 	}
 
 	udp.SendPfcpResponse(message, addr)
@@ -114,7 +109,7 @@ func SendPfcpAssociationReleaseRequest(upNodeID pfcpType.NodeID) (resMsg *pfcpUd
 	return resMsg, nil
 }
 
-func SendPfcpAssociationReleaseResponse(upNodeID pfcpType.NodeID, cause pfcpType.Cause) {
+func SendPfcpAssociationReleaseResponse(addr *net.UDPAddr, cause pfcpType.Cause) {
 	pfcpMsg, err := BuildPfcpAssociationReleaseResponse(cause)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Association Release Response failed: %v", err)
@@ -132,26 +127,25 @@ func SendPfcpAssociationReleaseResponse(upNodeID pfcpType.NodeID, cause pfcpType
 		Body: pfcpMsg,
 	}
 
-	addr := &net.UDPAddr{
-		IP:   upNodeID.ResolveNodeIdToIp(),
-		Port: pfcpUdp.PFCP_PORT,
-	}
-
 	udp.SendPfcpResponse(message, addr)
 }
 
 func SendPfcpSessionEstablishmentRequest(
 	upf *context.UPF,
 	ctx *context.SMContext,
-	pdrList []*context.PDR, farList []*context.FAR,
-	barList []*context.BAR, qerList []*context.QER,
+	pdrList []*context.PDR,
+	farList []*context.FAR,
+	barList []*context.BAR,
+	qerList []*context.QER,
+	urrList []*context.URR,
 ) (resMsg *pfcpUdp.Message, err error) {
 	nodeIDtoIP := upf.NodeID.ResolveNodeIdToIp()
 	if upf.UPFStatus != context.AssociatedSetUpSuccess {
 		return nil, fmt.Errorf("Not Associated with UPF[%s]", nodeIDtoIP.String())
 	}
 
-	pfcpMsg, err := BuildPfcpSessionEstablishmentRequest(upf.NodeID, ctx, pdrList, farList, barList, qerList)
+	pfcpMsg, err := BuildPfcpSessionEstablishmentRequest(upf.NodeID, nodeIDtoIP.String(),
+		ctx, pdrList, farList, barList, qerList, urrList)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Establishment Request failed: %v", err)
 		return
@@ -219,17 +213,22 @@ func SendPfcpSessionEstablishmentResponse(addr *net.UDPAddr) {
 	udp.SendPfcpResponse(message, addr)
 }
 
-func SendPfcpSessionModificationRequest(upf *context.UPF,
+func SendPfcpSessionModificationRequest(
+	upf *context.UPF,
 	ctx *context.SMContext,
-	pdrList []*context.PDR, farList []*context.FAR,
-	barList []*context.BAR, qerList []*context.QER,
+	pdrList []*context.PDR,
+	farList []*context.FAR,
+	barList []*context.BAR,
+	qerList []*context.QER,
+	urrList []*context.URR,
 ) (resMsg *pfcpUdp.Message, err error) {
 	nodeIDtoIP := upf.NodeID.ResolveNodeIdToIp()
 	if upf.UPFStatus != context.AssociatedSetUpSuccess {
 		return nil, fmt.Errorf("Not Associated with UPF[%s]", nodeIDtoIP.String())
 	}
 
-	pfcpMsg, err := BuildPfcpSessionModificationRequest(upf.NodeID, ctx, pdrList, farList, barList, qerList)
+	pfcpMsg, err := BuildPfcpSessionModificationRequest(upf.NodeID, nodeIDtoIP.String(),
+		ctx, pdrList, farList, barList, qerList, urrList)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Modification Request failed: %v", err)
 		return

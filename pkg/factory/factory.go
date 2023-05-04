@@ -8,63 +8,66 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"github.com/asaskevich/govalidator"
 	"gopkg.in/yaml.v2"
 
 	"github.com/free5gc/smf/internal/logger"
 )
 
 var (
-	SmfConfig       Config
-	UERoutingConfig RoutingConfig
+	SmfConfig       *Config
+	UERoutingConfig *RoutingConfig
 )
 
 // TODO: Support configuration update from REST api
-func InitConfigFactory(f string) error {
-	if content, err := ioutil.ReadFile(f); err != nil {
-		return err
-	} else {
-		SmfConfig = Config{}
+func InitConfigFactory(f string, cfg *Config) error {
+	if f == "" {
+		// Use default config path
+		f = SmfDefaultConfigPath
+	}
 
-		if yamlErr := yaml.Unmarshal(content, &SmfConfig); yamlErr != nil {
-			return yamlErr
+	if content, err := ioutil.ReadFile(f); err != nil {
+		return fmt.Errorf("[Factory] %+v", err)
+	} else {
+		logger.CfgLog.Infof("Read config from [%s]", f)
+		if yamlErr := yaml.Unmarshal(content, cfg); yamlErr != nil {
+			return fmt.Errorf("[Factory] %+v", yamlErr)
 		}
 	}
 
 	return nil
 }
 
-func InitRoutingConfigFactory(f string) error {
+func InitRoutingConfigFactory(f string, cfg *Config) error {
+	if f == "" {
+		// Use default config path
+		f = SmfDefaultUERoutingPath
+	}
 	if content, err := ioutil.ReadFile(f); err != nil {
 		return err
 	} else {
-		UERoutingConfig = RoutingConfig{}
-
-		if yamlErr := yaml.Unmarshal(content, &UERoutingConfig); yamlErr != nil {
-			return yamlErr
+		logger.CfgLog.Infof("Read config from [%s]", f)
+		if yamlErr := yaml.Unmarshal(content, cfg); yamlErr != nil {
+			return fmt.Errorf("[Factory] %+v", yamlErr)
 		}
 	}
 
 	return nil
 }
 
-func CheckConfigVersion() error {
-	currentVersion := SmfConfig.GetVersion()
-
-	if currentVersion != SMF_EXPECTED_CONFIG_VERSION {
-		return fmt.Errorf("SMF config version is [%s], but expected is [%s].",
-			currentVersion, SMF_EXPECTED_CONFIG_VERSION)
+func ReadConfig(cfgPath string) (*Config, error) {
+	cfg := &Config{}
+	if err := InitConfigFactory(cfgPath, cfg); err != nil {
+		return nil, fmt.Errorf("ReadConfig [%s] Error: %+v", cfgPath, err)
+	}
+	if _, err := cfg.Validate(); err != nil {
+		validErrs := err.(govalidator.Errors).Errors()
+		for _, validErr := range validErrs {
+			logger.CfgLog.Errorf("%+v", validErr)
+		}
+		logger.CfgLog.Errorf("[-- PLEASE REFER TO SAMPLE CONFIG FILE COMMENTS --]")
+		return nil, fmt.Errorf("Config validate Error")
 	}
 
-	logger.CfgLog.Infof("SMF config version [%s]", currentVersion)
-
-	currentVersion = UERoutingConfig.GetVersion()
-
-	if currentVersion != UE_ROUTING_EXPECTED_CONFIG_VERSION {
-		return fmt.Errorf("UE-Routing config version is [%s], but expected is [%s].",
-			currentVersion, UE_ROUTING_EXPECTED_CONFIG_VERSION)
-	}
-
-	logger.CfgLog.Infof("UE-Routing config version [%s]", currentVersion)
-
-	return nil
+	return cfg, nil
 }

@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	smf_pfcp "github.com/free5gc/smf/internal/pfcp"
 	"github.com/free5gc/smf/internal/pfcp/message"
 	"github.com/free5gc/smf/internal/pfcp/udp"
@@ -29,4 +31,7 @@ func TestSendHeartbeatResponse(t *testing.T) {
 		Port: 7001,
 	}
 	message.SendHeartbeatResponse(addr, seq)
+
+	err := udp.Server.Close()
+	require.NoError(t, err)
 }

@@ -20,10 +20,12 @@ const testPfcpClientPort = 12345
 func TestRun(t *testing.T) {
 	// Set SMF Node ID
 
-	context.SMF_Self().CPNodeID = pfcpType.NodeID{
+	context.GetSelf().CPNodeID = pfcpType.NodeID{
 		NodeIdType: pfcpType.NodeIdTypeIpv4Address,
 		IP:         net.ParseIP("127.0.0.1").To4(),
 	}
+	context.GetSelf().ExternalAddr = "127.0.0.1"
+	context.GetSelf().ListenAddr = "127.0.0.1"
 
 	udp.Run(smf_pfcp.Dispatch)
 

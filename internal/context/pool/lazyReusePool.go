@@ -59,6 +59,34 @@ func (p *LazyReusePool) Allocate() (res int, ok bool) {
 	return res, true
 }
 
+func (p *LazyReusePool) Use(value int) bool {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	if p.head == nil {
+		return false
+	}
+	var prev *segment
+	for cur := p.head; cur != nil; cur = cur.next {
+		switch cur.relativePosisionOf(value) {
+		case withinThisSegment:
+			if cur.first == cur.last {
+				if prev == nil {
+					p.head = cur.next
+				} else {
+					prev.next = cur.next
+				}
+			} else {
+				cur.split(value)
+			}
+			p.remain--
+			return true
+		}
+		prev = cur
+	}
+	return false
+}
+
 func (p *LazyReusePool) Free(value int) bool {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
@@ -133,6 +161,54 @@ success:
 	return true
 }
 
+func (p *LazyReusePool) Reserve(first, last int) error {
+	if !p.Contains(first, last) {
+		return fmt.Errorf("reserve range should in [%d, %d]", p.first, p.last)
+	}
+
+	for cur, prev := p.head, (*segment)(nil); cur != nil; cur = cur.next {
+		switch {
+		case cur.first == first && cur.last > last:
+			cur.first = last + 1
+			p.remain -= last - first + 1
+		case cur.first < first && cur.last == last:
+			cur.last = first - 1
+			p.remain -= last - first + 1
+		case cur.first < first && cur.last > last:
+			cur.next = &segment{
+				first: last + 1,
+				last:  cur.last,
+			}
+
+			cur.last = first - 1
+			p.remain -= last - first + 1
+
+		// this segment in reserve range
+		case cur.first > first && cur.last < last:
+			p.remain -= cur.last - cur.first + 1
+			if prev != nil {
+				prev.next = cur.next
+			}
+		}
+
+		prev = cur
+	}
+
+	return nil
+}
+
+func (p *LazyReusePool) Contains(first, last int) bool {
+	return first <= last && p.first <= first && p.last >= last
+}
+
+func (p *LazyReusePool) Min() int {
+	return p.first
+}
+
+func (p *LazyReusePool) Max() int {
+	return p.last
+}
+
 func (p *LazyReusePool) Remain() int {
 	return p.remain
 }
@@ -158,6 +234,30 @@ func (s *segment) relativePosisionOf(value int) relativePos {
 	default:
 		return after
 	}
+}
+
+func (s *segment) split(use int) bool {
+	if use < s.first || use > s.last {
+		return false
+	}
+
+	switch use {
+	case s.first:
+		s.first += 1
+	case s.last:
+		s.last -= 1
+	default:
+		next := &segment{
+			first: use + 1,
+			last:  s.last,
+			next:  s.next,
+		}
+
+		s.next = next
+		s.last = use - 1
+	}
+
+	return true
 }
 
 func (s *segment) extendLast() *segment {

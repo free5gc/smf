@@ -30,7 +30,8 @@ func HandlePfcpAssociationSetupRequest(msg *pfcpUdp.Message) {
 		logger.PfcpLog.Errorln("pfcp association needs NodeID")
 		return
 	}
-	logger.PfcpLog.Infof("Handle PFCP Association Setup Request with NodeID[%s]", nodeID.ResolveNodeIdToIp().String())
+	logger.PfcpLog.Infof("Handle PFCP Association Setup Request with NodeID[%s]",
+		nodeID.ResolveNodeIdToIp().String())
 
 	upf := smf_context.RetrieveUPFNodeByNodeID(*nodeID)
 	if upf == nil {
@@ -44,7 +45,7 @@ func HandlePfcpAssociationSetupRequest(msg *pfcpUdp.Message) {
 	cause := pfcpType.Cause{
 		CauseValue: pfcpType.CauseRequestAccepted,
 	}
-	pfcp_message.SendPfcpAssociationSetupResponse(*nodeID, cause)
+	pfcp_message.SendPfcpAssociationSetupResponse(msg.RemoteAddr, cause)
 }
 
 func HandlePfcpAssociationUpdateRequest(msg *pfcpUdp.Message) {
@@ -64,7 +65,7 @@ func HandlePfcpAssociationReleaseRequest(msg *pfcpUdp.Message) {
 		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
 	}
 
-	pfcp_message.SendPfcpAssociationReleaseResponse(*pfcpMsg.NodeID, cause)
+	pfcp_message.SendPfcpAssociationReleaseResponse(msg.RemoteAddr, cause)
 }
 
 func HandlePfcpNodeReportRequest(msg *pfcpUdp.Message) {
@@ -75,20 +76,22 @@ func HandlePfcpSessionSetDeletionRequest(msg *pfcpUdp.Message) {
 	logger.PfcpLog.Warnf("PFCP Session Set Deletion Request handling is not implemented")
 }
 
-func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
-	req := msg.PfcpMessage.Body.(pfcp.PFCPSessionReportRequest)
+func HandlePfcpSessionSetDeletionResponse(msg *pfcpUdp.Message) {
+	logger.PfcpLog.Warnf("PFCP Session Set Deletion Response handling is not implemented")
+}
 
+func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
+	var cause pfcpType.Cause
+
+	req := msg.PfcpMessage.Body.(pfcp.PFCPSessionReportRequest)
 	SEID := msg.PfcpMessage.Header.SEID
 	smContext := smf_context.GetSMContextBySEID(SEID)
 	seqFromUPF := msg.PfcpMessage.Header.SequenceNumber
 
-	var cause pfcpType.Cause
-
 	if smContext == nil {
-		logger.PfcpLog.Warnf("PFCP Session Report Request Found SM Context NULL, Request Rejected")
-		cause.CauseValue = pfcpType.CauseRequestRejected
-		// TODO fix: SEID should be the value sent by UPF but now the SEID value is from sm context
-		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, SEID)
+		logger.PfcpLog.Errorf("PFCP Session SEID[%d] not found", SEID)
+		cause.CauseValue = pfcpType.CauseSessionContextNotFound
+		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
 		return
 	}
 
@@ -96,24 +99,36 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 	defer smContext.SMLock.Unlock()
 
 	upfNodeID := smContext.GetNodeIDByLocalSEID(SEID)
-	NodeIDtoIP := upfNodeID.ResolveNodeIdToIp()
-	if NodeIDtoIP.IsUnspecified() {
-		logger.PduSessLog.Warnf("Invalid PFCP Session Report Request : no PFCP session found with SEID %d", SEID)
+	upfNodeIDtoIP := upfNodeID.ResolveNodeIdToIp()
+	if upfNodeIDtoIP.IsUnspecified() {
+		logger.PduSessLog.Errorf("Invalid PFCP Session Report Request : no PFCP session found with SEID %d", SEID)
+		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
+		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
 		return
 	}
-	NodeIDtoIPStr := NodeIDtoIP.String()
+	upfNodeIDtoIPStr := upfNodeIDtoIP.String()
+
+	pfcpCtx := smContext.PFCPContext[upfNodeIDtoIPStr]
+	if pfcpCtx == nil {
+		logger.PfcpLog.Errorf("pfcpCtx [nodeId: %v, seid:%d] not found", upfNodeID, SEID)
+		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
+		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
+		return
+	}
+	remoteSEID := pfcpCtx.RemoteSEID
 
 	upf := smf_context.RetrieveUPFNodeByNodeID(upfNodeID)
 	if upf == nil {
-		logger.PfcpLog.Errorf("can't find UPF[%s]", NodeIDtoIPStr)
+		logger.PfcpLog.Errorf("can't find UPF[%s]", upfNodeIDtoIPStr)
+		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
+		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
 		return
 	}
 	if upf.UPFStatus != smf_context.AssociatedSetUpSuccess {
 		logger.PfcpLog.Warnf("PFCP Session Report Request : Not Associated with UPF[%s], Request Rejected",
-			NodeIDtoIPStr)
+			upfNodeIDtoIPStr)
 		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
-		pfcp_message.SendPfcpSessionReportResponse(
-			msg.RemoteAddr, cause, seqFromUPF, smContext.PFCPContext[NodeIDtoIPStr].RemoteSEID)
+		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
 		return
 	}
 
@@ -122,7 +137,8 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 			downlinkDataReport := req.DownlinkDataReport
 
 			if downlinkDataReport.DownlinkDataServiceInformation != nil {
-				logger.PfcpLog.Warnf("PFCP Session Report Request DownlinkDataServiceInformation handling is not implemented")
+				logger.PfcpLog.Warnf(
+					"PFCP Session Report Request DownlinkDataServiceInformation handling is not implemented")
 			}
 
 			n1n2Request := models.N1N2MessageTransferRequest{}
@@ -136,11 +152,12 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 
 			n1n2Request.JsonData = &models.N1N2MessageTransferReqData{
 				PduSessionId: smContext.PDUSessionID,
-				// Temporarily assign SMF itself, TODO: TS 23.502 4.2.3.3 5. Namf_Communication_N1N2TransferFailureNotification
+				// Temporarily assign SMF itself,
+				// TODO: TS 23.502 4.2.3.3 5. Namf_Communication_N1N2TransferFailureNotification
 				N1n2FailureTxfNotifURI: fmt.Sprintf("%s://%s:%d",
-					smf_context.SMF_Self().URIScheme,
-					smf_context.SMF_Self().RegisterIPv4,
-					smf_context.SMF_Self().SBIPort),
+					smf_context.GetSelf().URIScheme,
+					smf_context.GetSelf().RegisterIPv4,
+					smf_context.GetSelf().SBIPort),
 				N2InfoContainer: &models.N2InfoContainer{
 					N2InformationClass: models.N2InformationClass_SM,
 					SmInfo: &models.N2SmInformation{
@@ -151,7 +168,7 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 								ContentId: "N2SmInformation",
 							},
 						},
-						SNssai: smContext.Snssai,
+						SNssai: smContext.SNssai,
 					},
 				},
 			}
@@ -160,7 +177,7 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 				N1N2MessageCollectionDocumentApi.
 				N1N2MessageTransfer(context.Background(), smContext.Supi, n1n2Request)
 			if err != nil {
-				logger.PfcpLog.Warnf("Send N1N2Transfer failed")
+				logger.PfcpLog.Warnf("Send N1N2Transfer failed: %s", err)
 			}
 			if rspData.Cause == models.N1N2MessageTransferCause_ATTEMPTING_TO_REACH_UE {
 				logger.PfcpLog.Infof("Receive %v, AMF is able to page the UE", rspData.Cause)
@@ -172,8 +189,55 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 		}
 	}
 
+	if req.ReportType.Usar && req.UsageReport != nil {
+		HandleReports(req.UsageReport, nil, nil, smContext, upfNodeID)
+	}
+
 	// TS 23.502 4.2.3.3 2b. Send Data Notification Ack, SMF->UPF
 	cause.CauseValue = pfcpType.CauseRequestAccepted
-	pfcp_message.SendPfcpSessionReportResponse(
-		msg.RemoteAddr, cause, seqFromUPF, smContext.PFCPContext[NodeIDtoIPStr].RemoteSEID)
+	pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, remoteSEID)
+}
+
+func HandleReports(
+	UsageReportReport []*pfcp.UsageReportPFCPSessionReportRequest,
+	UsageReportModification []*pfcp.UsageReportPFCPSessionModificationResponse,
+	UsageReportDeletion []*pfcp.UsageReportPFCPSessionDeletionResponse,
+	smContext *smf_context.SMContext,
+	nodeId pfcpType.NodeID,
+) {
+	var usageReport smf_context.UsageReport
+
+	for _, report := range UsageReportReport {
+		usageReport.UrrId = report.URRID.UrrIdValue
+		usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
+		usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
+		usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
+		usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
+		usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
+		usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
+
+		smContext.UrrReports = append(smContext.UrrReports, usageReport)
+	}
+	for _, report := range UsageReportModification {
+		usageReport.UrrId = report.URRID.UrrIdValue
+		usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
+		usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
+		usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
+		usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
+		usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
+		usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
+
+		smContext.UrrReports = append(smContext.UrrReports, usageReport)
+	}
+	for _, report := range UsageReportDeletion {
+		usageReport.UrrId = report.URRID.UrrIdValue
+		usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
+		usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
+		usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
+		usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
+		usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
+		usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
+
+		smContext.UrrReports = append(smContext.UrrReports, usageReport)
+	}
 }

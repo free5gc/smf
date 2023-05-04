@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/free5gc/pfcp/pfcpType"
 )
@@ -16,6 +17,11 @@ const (
 	SessionReleaseSuccess
 	SessionReleaseFailed
 )
+
+type FSEID struct {
+	IP   net.IP
+	SEID uint64
+}
 
 type PFCPSessionContext struct {
 	PDRs       map[uint16]*PDR

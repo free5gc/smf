@@ -15,12 +15,11 @@ import (
 	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
-	"github.com/free5gc/pfcp/pfcpUdp"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
-func init() {
+func Init() {
 	smfContext.NfInstanceID = uuid.New().String()
 }
 
@@ -34,24 +33,27 @@ type SMFContext struct {
 	BindingIPv4  string
 	RegisterIPv4 string
 	SBIPort      int
+
+	// N4 interface-related
 	CPNodeID     pfcpType.NodeID
+	ExternalAddr string
+	ListenAddr   string
 
 	UDMProfile models.NfProfile
 
-	UPNodeIDs []pfcpType.NodeID
-	Key       string
-	PEM       string
-	KeyLog    string
+	Key    string
+	PEM    string
+	KeyLog string
 
-	SnssaiInfos []SnssaiSmfInfo
+	SnssaiInfos []*SnssaiSmfInfo
 
-	NrfUri                              string
-	NFManagementClient                  *Nnrf_NFManagement.APIClient
-	NFDiscoveryClient                   *Nnrf_NFDiscovery.APIClient
-	SubscriberDataManagementClient      *Nudm_SubscriberDataManagement.APIClient
-	Locality                            string
-	AssociationSetupFailedAlertInterval time.Duration
-	AssociationSetupFailedRetryInterval time.Duration
+	NrfUri                         string
+	NFManagementClient             *Nnrf_NFManagement.APIClient
+	NFDiscoveryClient              *Nnrf_NFDiscovery.APIClient
+	SubscriberDataManagementClient *Nudm_SubscriberDataManagement.APIClient
+	Locality                       string
+	AssocFailAlertInterval         time.Duration
+	AssocFailRetryInterval         time.Duration
 
 	UserPlaneInformation  *UserPlaneInformation
 	Ctx                   context.Context
@@ -70,9 +72,25 @@ type SMFContext struct {
 	LocalSEIDCount      uint64
 }
 
+func ResolveIP(host string) net.IP {
+	if addr, err := net.ResolveIPAddr("ip", host); err != nil {
+		return nil
+	} else {
+		return addr.IP
+	}
+}
+
+func (s *SMFContext) ExternalIP() net.IP {
+	return ResolveIP(s.ExternalAddr)
+}
+
+func (s *SMFContext) ListenIP() net.IP {
+	return ResolveIP(s.ListenAddr)
+}
+
 // RetrieveDnnInformation gets the corresponding dnn info from S-NSSAI and DNN
 func RetrieveDnnInformation(Snssai *models.Snssai, dnn string) *SnssaiSmfDnnInfo {
-	for _, snssaiInfo := range SMF_Self().SnssaiInfos {
+	for _, snssaiInfo := range GetSelf().SnssaiInfos {
 		if snssaiInfo.Snssai.Sst == Snssai.Sst && snssaiInfo.Snssai.Sd == Snssai.Sd {
 			return snssaiInfo.DnnInfos[dnn]
 		}
@@ -102,8 +120,8 @@ func InitSmfContext(config *factory.Config) {
 		return
 	} else {
 		smfContext.URIScheme = models.UriScheme(sbi.Scheme)
-		smfContext.RegisterIPv4 = factory.SMF_DEFAULT_IPV4 // default localhost
-		smfContext.SBIPort = factory.SMF_DEFAULT_PORT      // default port
+		smfContext.RegisterIPv4 = factory.SmfSbiDefaultIPv4 // default localhost
+		smfContext.SBIPort = factory.SmfSbiDefaultPort      // default port
 		if sbi.RegisterIPv4 != "" {
 			smfContext.RegisterIPv4 = sbi.RegisterIPv4
 		}
@@ -136,47 +154,44 @@ func InitSmfContext(config *factory.Config) {
 	}
 
 	if pfcp := configuration.PFCP; pfcp != nil {
-		if pfcp.Port == 0 {
-			pfcp.Port = pfcpUdp.PFCP_PORT
-		}
-		pfcpAddrEnv := os.Getenv(pfcp.Addr)
-		if pfcpAddrEnv != "" {
-			logger.CtxLog.Info("Parsing PFCP IPv4 address from ENV variable found.")
-			pfcp.Addr = pfcpAddrEnv
-		}
-		if pfcp.Addr == "" {
-			logger.CtxLog.Warn("Error parsing PFCP IPv4 address as string. Using the 0.0.0.0 address as default.")
-			pfcp.Addr = "0.0.0.0"
-		}
-		addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", pfcp.Addr, pfcp.Port))
-		if err != nil {
-			logger.CtxLog.Warnf("PFCP Parse Addr Fail: %v", err)
+		smfContext.ListenAddr = pfcp.ListenAddr
+		smfContext.ExternalAddr = pfcp.ExternalAddr
+
+		if ip := net.ParseIP(pfcp.NodeID); ip == nil {
+			smfContext.CPNodeID = pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeFqdn,
+				FQDN:       pfcp.NodeID,
+			}
+		} else {
+			ipv4 := ip.To4()
+			if ipv4 != nil {
+				smfContext.CPNodeID = pfcpType.NodeID{
+					NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+					IP:         ipv4,
+				}
+			} else {
+				smfContext.CPNodeID = pfcpType.NodeID{
+					NodeIdType: pfcpType.NodeIdTypeIpv6Address,
+					IP:         ip,
+				}
+			}
 		}
 
-		ipv4 := addr.IP.To4()
-		if ipv4 != nil {
-			smfContext.CPNodeID.NodeIdType = pfcpType.NodeIdTypeIpv4Address
-			smfContext.CPNodeID.IP = ipv4
-		} else {
-			smfContext.CPNodeID.NodeIdType = pfcpType.NodeIdTypeIpv6Address
-			smfContext.CPNodeID.IP = addr.IP
-		}
+		smfContext.PfcpHeartbeatInterval = pfcp.HeartbeatInterval
 
-		smfContext.PfcpHeartbeatInterval = pfcp.Heartbeat.Interval
-
-		if pfcp.AlertInterval == 0 {
-			smfContext.AssociationSetupFailedAlertInterval = 5 * time.Minute
+		if pfcp.AssocFailAlertInterval == 0 {
+			smfContext.AssocFailAlertInterval = 5 * time.Minute
 		} else {
-			smfContext.AssociationSetupFailedAlertInterval = pfcp.AlertInterval
+			smfContext.AssocFailAlertInterval = pfcp.AssocFailAlertInterval
 		}
-		if pfcp.RetryInterval == 0 {
-			smfContext.AssociationSetupFailedRetryInterval = 5 * time.Second
+		if pfcp.AssocFailRetryInterval == 0 {
+			smfContext.AssocFailRetryInterval = 5 * time.Second
 		} else {
-			smfContext.AssociationSetupFailedRetryInterval = pfcp.RetryInterval
+			smfContext.AssocFailRetryInterval = pfcp.AssocFailRetryInterval
 		}
 	}
 
-	smfContext.SnssaiInfos = make([]SnssaiSmfInfo, 0, len(configuration.SNssaiInfo))
+	smfContext.SnssaiInfos = make([]*SnssaiSmfInfo, 0, len(configuration.SNssaiInfo))
 
 	for _, snssaiInfoConfig := range configuration.SNssaiInfo {
 		snssaiInfo := SnssaiSmfInfo{}
@@ -198,16 +213,16 @@ func InitSmfContext(config *factory.Config) {
 			}
 			snssaiInfo.DnnInfos[dnnInfoConfig.Dnn] = &dnnInfo
 		}
-		smfContext.SnssaiInfos = append(smfContext.SnssaiInfos, snssaiInfo)
+		smfContext.SnssaiInfos = append(smfContext.SnssaiInfos, &snssaiInfo)
 	}
 
 	// Set client and set url
 	ManagementConfig := Nnrf_NFManagement.NewConfiguration()
-	ManagementConfig.SetBasePath(SMF_Self().NrfUri)
+	ManagementConfig.SetBasePath(GetSelf().NrfUri)
 	smfContext.NFManagementClient = Nnrf_NFManagement.NewAPIClient(ManagementConfig)
 
 	NFDiscovryConfig := Nnrf_NFDiscovery.NewConfiguration()
-	NFDiscovryConfig.SetBasePath(SMF_Self().NrfUri)
+	NFDiscovryConfig.SetBasePath(GetSelf().NrfUri)
 	smfContext.NFDiscoveryClient = Nnrf_NFDiscovery.NewAPIClient(NFDiscovryConfig)
 
 	smfContext.ULCLSupport = configuration.ULCL
@@ -257,7 +272,7 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 	}
 }
 
-func SMF_Self() *SMFContext {
+func GetSelf() *SMFContext {
 	return &smfContext
 }
 

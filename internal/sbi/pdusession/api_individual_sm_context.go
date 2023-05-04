@@ -46,14 +46,10 @@ func HTTPReleaseSmContext(c *gin.Context) {
 	req.Params["smContextRef"] = c.Params.ByName("smContextRef")
 
 	smContextRef := req.Params["smContextRef"]
-	HTTPResponse := producer.HandlePDUSessionSMContextRelease(
+	producer.HandlePDUSessionSMContextRelease(
 		smContextRef, req.Body.(models.ReleaseSmContextRequest))
 
-	if HTTPResponse.Status < 300 {
-		c.Status(http.StatusNoContent)
-	} else {
-		c.JSON(HTTPResponse.Status, HTTPResponse.Body)
-	}
+	c.Status(http.StatusNoContent)
 }
 
 // RetrieveSmContext - Retrieve SM Context

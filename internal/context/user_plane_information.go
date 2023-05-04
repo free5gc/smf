@@ -1,10 +1,7 @@
 package context
 
 import (
-	"encoding/binary"
 	"errors"
-	"fmt"
-	"math"
 	"math/rand"
 	"net"
 	"reflect"
@@ -13,7 +10,6 @@ import (
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
-	"github.com/free5gc/smf/internal/context/pool"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
 )
@@ -40,12 +36,31 @@ const (
 
 // UPNode represent the user plane node topology
 type UPNode struct {
+	Name   string
 	Type   UPNodeType
 	NodeID pfcpType.NodeID
 	ANIP   net.IP
 	Dnn    string
 	Links  []*UPNode
 	UPF    *UPF
+}
+
+func (u *UPNode) MatchedSelection(selection *UPFSelectionParams) bool {
+	for _, snssaiInfo := range u.UPF.SNssaiInfos {
+		currentSnssai := snssaiInfo.SNssai
+		if currentSnssai.Equal(selection.SNssai) {
+			for _, dnnInfo := range snssaiInfo.DnnList {
+				if dnnInfo.Dnn == selection.Dnn {
+					if selection.Dnai == "" {
+						return true
+					} else if dnnInfo.ContainsDNAI(selection.Dnai) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
 }
 
 // UPPath represent User Plane Sequence of this path
@@ -74,6 +89,7 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 
 	for name, node := range upTopology.UPNodes {
 		upNode := new(UPNode)
+		upNode.Name = name
 		upNode.Type = UPNodeType(node.Type)
 		switch upNode.Type {
 		case UPNODE_AN:
@@ -109,20 +125,22 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 			}
 
 			upNode.UPF = NewUPF(&upNode.NodeID, node.InterfaceUpfInfoList)
-			snssaiInfos := make([]SnssaiUPFInfo, 0)
+			upNode.UPF.Addr = node.Addr
+			snssaiInfos := make([]*SnssaiUPFInfo, 0)
 			for _, snssaiInfoConfig := range node.SNssaiInfos {
 				snssaiInfo := SnssaiUPFInfo{
-					SNssai: SNssai{
+					SNssai: &SNssai{
 						Sst: snssaiInfoConfig.SNssai.Sst,
 						Sd:  snssaiInfoConfig.SNssai.Sd,
 					},
-					DnnList: make([]DnnUPFInfoItem, 0),
+					DnnList: make([]*DnnUPFInfoItem, 0),
 				}
 
 				for _, dnnInfoConfig := range snssaiInfoConfig.DnnUpfInfoList {
 					ueIPPools := make([]*UeIPPool, 0)
+					staticUeIPPools := make([]*UeIPPool, 0)
 					for _, pool := range dnnInfoConfig.Pools {
-						ueIPPool := NewUEIPPool(&pool)
+						ueIPPool := NewUEIPPool(pool)
 						if ueIPPool == nil {
 							logger.InitLog.Fatalf("invalid pools value: %+v", pool)
 						} else {
@@ -130,14 +148,31 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 							allUEIPPools = append(allUEIPPools, ueIPPool)
 						}
 					}
-					snssaiInfo.DnnList = append(snssaiInfo.DnnList, DnnUPFInfoItem{
+					for _, pool := range dnnInfoConfig.StaticPools {
+						ueIPPool := NewUEIPPool(pool)
+						if ueIPPool == nil {
+							logger.InitLog.Fatalf("invalid pools value: %+v", pool)
+						} else {
+							staticUeIPPools = append(staticUeIPPools, ueIPPool)
+							for _, dynamicUePool := range ueIPPools {
+								if dynamicUePool.ueSubNet.Contains(ueIPPool.ueSubNet.IP) {
+									if err := dynamicUePool.exclude(ueIPPool); err != nil {
+										logger.InitLog.Fatalf("exclude static Pool[%s] failed: %v",
+											ueIPPool.ueSubNet, err)
+									}
+								}
+							}
+						}
+					}
+					snssaiInfo.DnnList = append(snssaiInfo.DnnList, &DnnUPFInfoItem{
 						Dnn:             dnnInfoConfig.Dnn,
 						DnaiList:        dnnInfoConfig.DnaiList,
 						PduSessionTypes: dnnInfoConfig.PduSessionTypes,
 						UeIPPools:       ueIPPools,
+						StaticIPPools:   staticUeIPPools,
 					})
 				}
-				snssaiInfos = append(snssaiInfos, snssaiInfo)
+				snssaiInfos = append(snssaiInfos, &snssaiInfo)
 			}
 			upNode.UPF.SNssaiInfos = snssaiInfos
 			upfPool[name] = upNode
@@ -184,8 +219,8 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 	return userplaneInformation
 }
 
-func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]factory.UPNode {
-	nodes := make(map[string]factory.UPNode)
+func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]*factory.UPNode {
+	nodes := make(map[string]*factory.UPNode)
 	for name, upNode := range upi.UPNodes {
 		u := new(factory.UPNode)
 		switch upNode.Type {
@@ -203,22 +238,29 @@ func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]factory.UPN
 		}
 		if upNode.UPF != nil {
 			if upNode.UPF.SNssaiInfos != nil {
-				FsNssaiInfoList := make([]factory.SnssaiUpfInfoItem, 0)
+				FsNssaiInfoList := make([]*factory.SnssaiUpfInfoItem, 0)
 				for _, sNssaiInfo := range upNode.UPF.SNssaiInfos {
-					FDnnUpfInfoList := make([]factory.DnnUpfInfoItem, 0)
+					FDnnUpfInfoList := make([]*factory.DnnUpfInfoItem, 0)
 					for _, dnnInfo := range sNssaiInfo.DnnList {
-						FUEIPPools := make([]factory.UEIPPool, 0)
+						FUEIPPools := make([]*factory.UEIPPool, 0)
+						FStaticUEIPPools := make([]*factory.UEIPPool, 0)
 						for _, pool := range dnnInfo.UeIPPools {
-							FUEIPPools = append(FUEIPPools, factory.UEIPPool{
+							FUEIPPools = append(FUEIPPools, &factory.UEIPPool{
 								Cidr: pool.ueSubNet.String(),
 							})
 						} // for pool
-						FDnnUpfInfoList = append(FDnnUpfInfoList, factory.DnnUpfInfoItem{
-							Dnn:   dnnInfo.Dnn,
-							Pools: FUEIPPools,
+						for _, pool := range dnnInfo.StaticIPPools {
+							FStaticUEIPPools = append(FStaticUEIPPools, &factory.UEIPPool{
+								Cidr: pool.ueSubNet.String(),
+							})
+						} // for static pool
+						FDnnUpfInfoList = append(FDnnUpfInfoList, &factory.DnnUpfInfoItem{
+							Dnn:         dnnInfo.Dnn,
+							Pools:       FUEIPPools,
+							StaticPools: FStaticUEIPPools,
 						})
 					} // for dnnInfo
-					Fsnssai := factory.SnssaiUpfInfoItem{
+					Fsnssai := &factory.SnssaiUpfInfoItem{
 						SNssai: &models.Snssai{
 							Sst: sNssaiInfo.SNssai.Sst,
 							Sd:  sNssaiInfo.SNssai.Sd,
@@ -229,7 +271,7 @@ func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]factory.UPN
 				} // for sNssaiInfo
 				u.SNssaiInfos = FsNssaiInfoList
 			} // if UPF.SNssaiInfos
-			FNxList := make([]factory.InterfaceUpfInfoItem, 0)
+			FNxList := make([]*factory.InterfaceUpfInfoItem, 0)
 			for _, iface := range upNode.UPF.N3Interfaces {
 				endpoints := make([]string, 0)
 				// upf.go L90
@@ -239,10 +281,10 @@ func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]factory.UPN
 				for _, eIP := range iface.IPv4EndPointAddresses {
 					endpoints = append(endpoints, eIP.String())
 				}
-				FNxList = append(FNxList, factory.InterfaceUpfInfoItem{
-					InterfaceType:   models.UpInterfaceType_N3,
-					Endpoints:       endpoints,
-					NetworkInstance: iface.NetworkInstance,
+				FNxList = append(FNxList, &factory.InterfaceUpfInfoItem{
+					InterfaceType:    models.UpInterfaceType_N3,
+					Endpoints:        endpoints,
+					NetworkInstances: iface.NetworkInstances,
 				})
 			} // for N3Interfaces
 
@@ -255,22 +297,22 @@ func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]factory.UPN
 				for _, eIP := range iface.IPv4EndPointAddresses {
 					endpoints = append(endpoints, eIP.String())
 				}
-				FNxList = append(FNxList, factory.InterfaceUpfInfoItem{
-					InterfaceType:   models.UpInterfaceType_N9,
-					Endpoints:       endpoints,
-					NetworkInstance: iface.NetworkInstance,
+				FNxList = append(FNxList, &factory.InterfaceUpfInfoItem{
+					InterfaceType:    models.UpInterfaceType_N9,
+					Endpoints:        endpoints,
+					NetworkInstances: iface.NetworkInstances,
 				})
 			} // N9Interfaces
 			u.InterfaceUpfInfoList = FNxList
 		}
-		nodes[name] = *u
+		nodes[name] = u
 	}
 
 	return nodes
 }
 
-func (upi *UserPlaneInformation) LinksToConfiguration() []factory.UPLink {
-	links := make([]factory.UPLink, 0)
+func (upi *UserPlaneInformation) LinksToConfiguration() []*factory.UPLink {
+	links := make([]*factory.UPLink, 0)
 	source, err := upi.selectUPPathSource()
 	if err != nil {
 		logger.InitLog.Errorf("AN Node not found\n")
@@ -289,7 +331,7 @@ func (upi *UserPlaneInformation) LinksToConfiguration() []factory.UPLink {
 					ipStr := link.NodeID.ResolveNodeIdToIp().String()
 					linkA := upi.UPFIPToName[nodeIpStr]
 					linkB := upi.UPFIPToName[ipStr]
-					links = append(links, factory.UPLink{
+					links = append(links, &factory.UPLink{
 						A: linkA,
 						B: linkB,
 					})
@@ -342,31 +384,49 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 			}
 
 			upNode.UPF = NewUPF(&upNode.NodeID, node.InterfaceUpfInfoList)
-			snssaiInfos := make([]SnssaiUPFInfo, 0)
+			snssaiInfos := make([]*SnssaiUPFInfo, 0)
 			for _, snssaiInfoConfig := range node.SNssaiInfos {
-				snssaiInfo := SnssaiUPFInfo{
-					SNssai: SNssai{
+				snssaiInfo := &SnssaiUPFInfo{
+					SNssai: &SNssai{
 						Sst: snssaiInfoConfig.SNssai.Sst,
 						Sd:  snssaiInfoConfig.SNssai.Sd,
 					},
-					DnnList: make([]DnnUPFInfoItem, 0),
+					DnnList: make([]*DnnUPFInfoItem, 0),
 				}
 
 				for _, dnnInfoConfig := range snssaiInfoConfig.DnnUpfInfoList {
 					ueIPPools := make([]*UeIPPool, 0)
+					staticUeIPPools := make([]*UeIPPool, 0)
 					for _, pool := range dnnInfoConfig.Pools {
-						ueIPPool := NewUEIPPool(&pool)
+						ueIPPool := NewUEIPPool(pool)
 						if ueIPPool == nil {
 							logger.InitLog.Fatalf("invalid pools value: %+v", pool)
 						} else {
 							ueIPPools = append(ueIPPools, ueIPPool)
 						}
 					}
-					snssaiInfo.DnnList = append(snssaiInfo.DnnList, DnnUPFInfoItem{
+					for _, pool := range dnnInfoConfig.StaticPools {
+						ueIPPool := NewUEIPPool(pool)
+						if ueIPPool == nil {
+							logger.InitLog.Fatalf("invalid pools value: %+v", pool)
+						} else {
+							staticUeIPPools = append(staticUeIPPools, ueIPPool)
+							for _, dynamicUePool := range ueIPPools {
+								if dynamicUePool.ueSubNet.Contains(ueIPPool.ueSubNet.IP) {
+									if err := dynamicUePool.exclude(ueIPPool); err != nil {
+										logger.InitLog.Fatalf("exclude static Pool[%s] failed: %v",
+											ueIPPool.ueSubNet, err)
+									}
+								}
+							}
+						}
+					}
+					snssaiInfo.DnnList = append(snssaiInfo.DnnList, &DnnUPFInfoItem{
 						Dnn:             dnnInfoConfig.Dnn,
 						DnaiList:        dnnInfoConfig.DnaiList,
 						PduSessionTypes: dnnInfoConfig.PduSessionTypes,
 						UeIPPools:       ueIPPools,
+						StaticIPPools:   staticUeIPPools,
 					})
 				}
 				snssaiInfos = append(snssaiInfos, snssaiInfo)
@@ -461,61 +521,6 @@ func (upi *UserPlaneInformation) UpNodeDelete(upNodeName string) {
 	}
 }
 
-func NewUEIPPool(factoryPool *factory.UEIPPool) *UeIPPool {
-	_, ipNet, err := net.ParseCIDR(factoryPool.Cidr)
-	if err != nil {
-		logger.InitLog.Errorln(err)
-		return nil
-	}
-
-	minAddr, maxAddr, err := calcAddrRange(ipNet)
-	if err != nil {
-		logger.InitLog.Errorln(err)
-		return nil
-	}
-
-	newPool, err := pool.NewLazyReusePool(int(minAddr), int(maxAddr))
-	if err != nil {
-		logger.InitLog.Errorln(err)
-		return nil
-	}
-
-	ueIPPool := &UeIPPool{
-		ueSubNet: ipNet,
-		pool:     newPool,
-	}
-	return ueIPPool
-}
-
-func calcAddrRange(ipNet *net.IPNet) (minAddr, maxAddr uint32, err error) {
-	maskVal := binary.BigEndian.Uint32(ipNet.Mask)
-	baseIPVal := binary.BigEndian.Uint32(ipNet.IP)
-	if maskVal == math.MaxUint32 {
-		return baseIPVal, baseIPVal, nil
-	}
-	minAddr = (baseIPVal & maskVal) + 1  // 0 is network address
-	maxAddr = (baseIPVal | ^maskVal) - 1 // all 1 is broadcast address
-	if minAddr > maxAddr {
-		return minAddr, maxAddr, errors.New("Mask is invalid.")
-	}
-	return minAddr, maxAddr, nil
-}
-
-func isOverlap(pools []*UeIPPool) bool {
-	if len(pools) < 2 {
-		// no need to check
-		return false
-	}
-	for i := 0; i < len(pools)-1; i++ {
-		for j := i + 1; j < len(pools); j++ {
-			if pools[i].pool.IsJoint(pools[j].pool) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func nodeInPath(upNode *UPNode, path []*UPNode) int {
 	for i, u := range path {
 		if u == upNode {
@@ -571,8 +576,7 @@ func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNN(selection *UPFSele
 	return nil
 }
 
-func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNNAndUPF(
-	selection *UPFSelectionParams,
+func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNNAndUPF(selection *UPFSelectionParams,
 	upf *UPNode,
 ) (path UPPath) {
 	nodeID := upf.NodeID.ResolveNodeIdToIp().String()
@@ -597,7 +601,7 @@ func (upi *UserPlaneInformation) ExistDefaultPath(dnn string) bool {
 	return exist
 }
 
-func GenerateDataPath(upPath UPPath, smContext *SMContext) *DataPath {
+func GenerateDataPath(upPath UPPath) *DataPath {
 	if len(upPath) < 1 {
 		logger.CtxLog.Errorf("Invalid data path")
 		return nil
@@ -605,35 +609,29 @@ func GenerateDataPath(upPath UPPath, smContext *SMContext) *DataPath {
 	lowerBound := 0
 	upperBound := len(upPath) - 1
 	var root *DataPathNode
-	var curDataPathNode *DataPathNode
+	var node *DataPathNode
 	var prevDataPathNode *DataPathNode
 
 	for idx, upNode := range upPath {
-		curDataPathNode = NewDataPathNode()
-		curDataPathNode.UPF = upNode.UPF
+		node = NewDataPathNode()
+		node.UPF = upNode.UPF
 
 		if idx == lowerBound {
-			root = curDataPathNode
+			root = node
 			root.AddPrev(nil)
 		}
 		if idx == upperBound {
-			curDataPathNode.AddNext(nil)
+			node.AddNext(nil)
 		}
 		if prevDataPathNode != nil {
-			prevDataPathNode.AddNext(curDataPathNode)
-			curDataPathNode.AddPrev(prevDataPathNode)
+			prevDataPathNode.AddNext(node)
+			node.AddPrev(prevDataPathNode)
 		}
-		prevDataPathNode = curDataPathNode
+		prevDataPathNode = node
 	}
 
-	dataPath := &DataPath{
-		Destination: Destination{
-			DestinationIP:   "",
-			DestinationPort: "",
-			Url:             "",
-		},
-		FirstDPNode: root,
-	}
+	dataPath := NewDataPath()
+	dataPath.FirstDPNode = root
 	return dataPath
 }
 
@@ -725,7 +723,7 @@ func (upi *UserPlaneInformation) selectMatchUPF(selection *UPFSelectionParams) [
 
 	for _, upNode := range upi.UPFs {
 		for _, snssaiInfo := range upNode.UPF.SNssaiInfos {
-			currentSnssai := &snssaiInfo.SNssai
+			currentSnssai := snssaiInfo.SNssai
 			targetSnssai := selection.SNssai
 
 			if currentSnssai.Equal(targetSnssai) {
@@ -741,8 +739,7 @@ func (upi *UserPlaneInformation) selectMatchUPF(selection *UPFSelectionParams) [
 	return upList
 }
 
-func getPathBetween(
-	cur *UPNode, dest *UPNode, visited map[*UPNode]bool,
+func getPathBetween(cur *UPNode, dest *UPNode, visited map[*UPNode]bool,
 	selection *UPFSelectionParams,
 ) (path []*UPNode, pathExist bool) {
 	visited[cur] = true
@@ -780,11 +777,16 @@ func getPathBetween(
 	return nil, false
 }
 
+// this function select PSA by SNSSAI, DNN and DNAI exlude IP
 func (upi *UserPlaneInformation) selectAnchorUPF(source *UPNode, selection *UPFSelectionParams) []*UPNode {
+	// UPFSelectionParams may have static IP, but we would not match static IP in "MatchedSelection" function
 	upList := make([]*UPNode, 0)
 	visited := make(map[*UPNode]bool)
 	queue := make([]*UPNode, 0)
-	targetSnssai := selection.SNssai
+	selectionForIUPF := &UPFSelectionParams{
+		Dnn:    selection.Dnn,
+		SNssai: selection.SNssai,
+	}
 
 	queue = append(queue, source)
 	for {
@@ -794,23 +796,20 @@ func (upi *UserPlaneInformation) selectAnchorUPF(source *UPNode, selection *UPFS
 		visited[node] = true
 		for _, link := range node.Links {
 			if !visited[link] {
-				for _, snssaiInfo := range link.UPF.SNssaiInfos {
-					currentSnssai := &snssaiInfo.SNssai
-					if currentSnssai.Equal(targetSnssai) {
-						for _, dnnInfo := range snssaiInfo.DnnList {
-							if dnnInfo.Dnn == selection.Dnn && dnnInfo.ContainsDNAI(selection.Dnai) {
-								queue = append(queue, link)
-								findNewNode = true
-								break
-							}
-						}
-					}
+				if link.MatchedSelection(selectionForIUPF) {
+					queue = append(queue, link)
+					findNewNode = true
+					break
 				}
 			}
 		}
-		if !findNewNode && node.Type == UPNODE_UPF {
-			upList = append(upList, node)
+		if !findNewNode {
+			// if new node is AN type not need to add upList
+			if node.Type == UPNODE_UPF && node.MatchedSelection(selection) {
+				upList = append(upList, node)
+			}
 		}
+
 		if len(queue) == 0 {
 			break
 		}
@@ -845,17 +844,18 @@ func (upi *UserPlaneInformation) selectUPPathSource() (*UPNode, error) {
 	return nil, errors.New("AN Node not found")
 }
 
-func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionParams) (*UPNode, net.IP) {
+// SelectUPFAndAllocUEIP will return anchor UPF, allocated UE IP and use/not use static IP
+func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionParams) (*UPNode, net.IP, bool) {
 	source, err := upi.selectUPPathSource()
 	if err != nil {
-		return nil, nil
+		return nil, nil, false
 	}
 	UPFList := upi.selectAnchorUPF(source, selection)
 	listLength := len(UPFList)
 	if listLength == 0 {
 		logger.CtxLog.Warnf("Can't find UPF with DNN[%s] S-NSSAI[sst: %d sd: %s] DNAI[%s]\n", selection.Dnn,
 			selection.SNssai.Sst, selection.SNssai.Sd, selection.Dnai)
-		return nil, nil
+		return nil, nil, false
 	}
 	UPFList = upi.sortUPFListByName(UPFList)
 	sortedUPFList := createUPFListForSelection(UPFList)
@@ -867,18 +867,18 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionPa
 				upi.GetUPFNameByIp(upf.NodeID.ResolveNodeIdToIp().String()))
 			continue
 		}
-		pools := getUEIPPool(upf, selection)
+		pools, useStaticIPPool := getUEIPPool(upf, selection)
 		if len(pools) == 0 {
 			continue
 		}
 		sortedPoolList := createPoolListForSelection(pools)
 		for _, pool := range sortedPoolList {
 			logger.CtxLog.Debugf("check start UEIPPool(%+v)", pool.ueSubNet)
-			addr := pool.allocate()
+			addr := pool.allocate(selection.PDUAddress)
 			if addr != nil {
 				logger.CtxLog.Infof("Selected UPF: %s",
 					upi.GetUPFNameByIp(upf.NodeID.ResolveNodeIdToIp().String()))
-				return upf, addr
+				return upf, addr, useStaticIPPool
 			}
 			// if all addresses in pool are used, search next pool
 			logger.CtxLog.Debug("check next pool")
@@ -889,7 +889,7 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionPa
 	// checked all UPFs
 	logger.CtxLog.Warnf("UE IP pool exhausted for DNN[%s] S-NSSAI[sst: %d sd: %s] DNAI[%s]\n", selection.Dnn,
 		selection.SNssai.Sst, selection.SNssai.Sd, selection.Dnai)
-	return nil, nil
+	return nil, nil, false
 }
 
 func createUPFListForSelection(inputList []*UPNode) (outputList []*UPNode) {
@@ -902,36 +902,50 @@ func createPoolListForSelection(inputList []*UeIPPool) (outputList []*UeIPPool) 
 	return append(inputList[offset:], inputList[:offset]...)
 }
 
-func getUEIPPool(upNode *UPNode, selection *UPFSelectionParams) []*UeIPPool {
+// getUEIPPool will return IP pools and use/not use static IP pool
+func getUEIPPool(upNode *UPNode, selection *UPFSelectionParams) ([]*UeIPPool, bool) {
 	for _, snssaiInfo := range upNode.UPF.SNssaiInfos {
-		currentSnssai := &snssaiInfo.SNssai
+		currentSnssai := snssaiInfo.SNssai
 		targetSnssai := selection.SNssai
 
 		if currentSnssai.Equal(targetSnssai) {
 			for _, dnnInfo := range snssaiInfo.DnnList {
-				if dnnInfo.Dnn == selection.Dnn && dnnInfo.ContainsDNAI(selection.Dnai) {
-					return dnnInfo.UeIPPools
+				if dnnInfo.Dnn == selection.Dnn {
+					if selection.Dnai != "" && !dnnInfo.ContainsDNAI(selection.Dnai) {
+						continue
+					}
+					if selection.PDUAddress != nil {
+						// return static ue ip pool
+						for _, ueIPPool := range dnnInfo.StaticIPPools {
+							if ueIPPool.ueSubNet.Contains(selection.PDUAddress) {
+								// return match IPPools
+								return []*UeIPPool{ueIPPool}, true
+							}
+						}
+
+						// return dynamic ue ip pool
+						for _, ueIPPool := range dnnInfo.UeIPPools {
+							if ueIPPool.ueSubNet.Contains(selection.PDUAddress) {
+								logger.CfgLog.Infof("cannot find selected IP in static pool[%v], use dynamic pool[%+v]",
+									dnnInfo.StaticIPPools, dnnInfo.UeIPPools)
+								return []*UeIPPool{ueIPPool}, false
+							}
+						}
+
+						return nil, false
+					}
+
+					// if no specify static PDU Address
+					return dnnInfo.UeIPPools, false
 				}
 			}
 		}
 	}
-	return nil
+	return nil, false
 }
 
-func (ueIPPool *UeIPPool) allocate() net.IP {
-	allocVal, res := ueIPPool.pool.Allocate()
-	if !res {
-		logger.CtxLog.Warnf("Pool is empty: %+v", ueIPPool.ueSubNet)
-		return nil
-	}
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, uint32(allocVal))
-	logger.CtxLog.Infof("Allocated UE IP address: %v", net.IPv4(buf[0], buf[1], buf[2], buf[3]))
-	return buf
-}
-
-func (upi *UserPlaneInformation) ReleaseUEIP(upf *UPNode, addr net.IP) {
-	pool := findPoolByAddr(upf, addr)
+func (upi *UserPlaneInformation) ReleaseUEIP(upf *UPNode, addr net.IP, static bool) {
+	pool := findPoolByAddr(upf, addr, static)
 	if pool == nil {
 		// nothing to do
 		logger.CtxLog.Warnf("Fail to release UE IP address: %v to UPF: %s",
@@ -941,45 +955,23 @@ func (upi *UserPlaneInformation) ReleaseUEIP(upf *UPNode, addr net.IP) {
 	pool.release(addr)
 }
 
-func findPoolByAddr(upf *UPNode, addr net.IP) *UeIPPool {
+func findPoolByAddr(upf *UPNode, addr net.IP, static bool) *UeIPPool {
 	for _, snssaiInfo := range upf.UPF.SNssaiInfos {
 		for _, dnnInfo := range snssaiInfo.DnnList {
-			for _, pool := range dnnInfo.UeIPPools {
-				if pool.ueSubNet.Contains(addr) {
-					return pool
+			if static {
+				for _, pool := range dnnInfo.StaticIPPools {
+					if pool.ueSubNet.Contains(addr) {
+						return pool
+					}
+				}
+			} else {
+				for _, pool := range dnnInfo.UeIPPools {
+					if pool.ueSubNet.Contains(addr) {
+						return pool
+					}
 				}
 			}
 		}
 	}
 	return nil
-}
-
-func (ueIPPool *UeIPPool) release(addr net.IP) {
-	addrVal := binary.BigEndian.Uint32(addr)
-	res := ueIPPool.pool.Free(int(addrVal))
-	if !res {
-		logger.CtxLog.Warnf("failed to release UE Address: %s", addr)
-	}
-	logger.CtxLog.Debug(ueIPPool.dump())
-}
-
-func (ueIPPool *UeIPPool) dump() string {
-	str := "["
-	elements := ueIPPool.pool.Dump()
-	for index, element := range elements {
-		var firstAddr net.IP
-		var lastAddr net.IP
-		buf := make([]byte, 4)
-		binary.BigEndian.PutUint32(buf, uint32(element[0]))
-		firstAddr = buf
-		buf = make([]byte, 4)
-		binary.BigEndian.PutUint32(buf, uint32(element[1]))
-		lastAddr = buf
-		if index > 0 {
-			str += ("->")
-		}
-		str += fmt.Sprintf("{%s - %s}", firstAddr.String(), lastAddr.String())
-	}
-	str += ("]")
-	return str
 }

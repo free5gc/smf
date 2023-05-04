@@ -3,12 +3,42 @@ package context
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 
 	"github.com/free5gc/aper"
 	"github.com/free5gc/ngap/ngapType"
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
 )
+
+func strNgapCause(cause *ngapType.Cause) string {
+	ret := ""
+	switch cause.Present {
+	case ngapType.CausePresentRadioNetwork:
+		ret = fmt.Sprintf("Cause by RadioNetwork[%d]",
+			cause.RadioNetwork.Value)
+	case ngapType.CausePresentTransport:
+		ret = fmt.Sprintf("Cause by Transport[%d]",
+			cause.Transport.Value)
+	case ngapType.CausePresentNas:
+		ret = fmt.Sprintf("Cause by NAS[%d]",
+			cause.Nas.Value)
+	case ngapType.CausePresentProtocol:
+		ret = fmt.Sprintf("Cause by Protocol[%d]",
+			cause.Protocol.Value)
+	case ngapType.CausePresentMisc:
+		ret = fmt.Sprintf("Cause by Protocol[%d]",
+			cause.Misc.Value)
+	case ngapType.CausePresentChoiceExtensions:
+		ret = fmt.Sprintf("Cause by Protocol[%v]",
+			cause.ChoiceExtensions)
+	default:
+		ret = "Cause [unspecific]"
+	}
+
+	return ret
+}
 
 func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) (err error) {
 	resourceSetupResponseTransfer := ngapType.PDUSessionResourceSetupResponseTransfer{}
@@ -33,6 +63,45 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) (er
 		binary.BigEndian.Uint32(GTPTunnel.GTPTEID.Value))
 
 	ctx.UpCnxState = models.UpCnxState_ACTIVATED
+	for _, qos := range ctx.AdditonalQosFlows {
+		qos.State = QoSFlowSet
+	}
+	return nil
+}
+
+func HandlePDUSessionResourceModifyResponseTransfer(b []byte, ctx *SMContext) error {
+	resourceModifyResponseTransfer := ngapType.PDUSessionResourceModifyResponseTransfer{}
+
+	err := aper.UnmarshalWithParams(b, &resourceModifyResponseTransfer, "valueExt")
+	if err != nil {
+		return err
+	}
+
+	if DLInfo := resourceModifyResponseTransfer.DLNGUUPTNLInformation; DLInfo != nil {
+		GTPTunnel := DLInfo.GTPTunnel
+
+		ctx.Tunnel.UpdateANInformation(
+			GTPTunnel.TransportLayerAddress.Value.Bytes,
+			binary.BigEndian.Uint32(GTPTunnel.GTPTEID.Value))
+	}
+
+	if qosInfoList := resourceModifyResponseTransfer.QosFlowAddOrModifyResponseList; qosInfoList != nil {
+		for _, item := range qosInfoList.List {
+			qfi := uint8(item.QosFlowIdentifier.Value)
+			ctx.AdditonalQosFlows[qfi].State = QoSFlowSet
+		}
+	}
+
+	if qosFailedInfoList := resourceModifyResponseTransfer.QosFlowFailedToAddOrModifyList; qosFailedInfoList != nil {
+		for _, item := range qosFailedInfoList.List {
+			qfi := uint8(item.QosFlowIdentifier.Value)
+			logger.PduSessLog.Warnf("PDU Session Resource Modify QFI[%d] %s",
+				qfi, strNgapCause(&item.Cause))
+
+			ctx.AdditonalQosFlows[qfi].State = QoSFlowUnset
+		}
+	}
+
 	return nil
 }
 
@@ -141,11 +210,18 @@ func HandleHandoverRequiredTransfer(b []byte, ctx *SMContext) (err error) {
 
 	err = aper.UnmarshalWithParams(b, &handoverRequiredTransfer, "valueExt")
 
+	directForwardingPath := handoverRequiredTransfer.DirectForwardingPathAvailability
+	if directForwardingPath != nil {
+		logger.PduSessLog.Infoln("Direct Forwarding Path Available")
+		ctx.DLForwardingType = DirectForwarding
+	} else {
+		logger.PduSessLog.Infoln("Direct Forwarding Path Unavailable")
+		ctx.DLForwardingType = IndirectForwarding
+	}
+
 	if err != nil {
 		return err
 	}
-
-	// TODO: Handle Handover Required Transfer
 	return nil
 }
 
@@ -163,6 +239,64 @@ func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) (err err
 	ctx.Tunnel.UpdateANInformation(
 		DLNGUUPGTPTunnel.TransportLayerAddress.Value.Bytes,
 		binary.BigEndian.Uint32(DLNGUUPGTPTunnel.GTPTEID.Value))
+
+	DLForwardingInfo := handoverRequestAcknowledgeTransfer.DLForwardingUPTNLInformation
+
+	if DLForwardingInfo == nil {
+		return errors.New("DL Forwarding Info not provision")
+	}
+
+	if ctx.DLForwardingType == IndirectForwarding {
+		DLForwardingGTPTunnel := DLForwardingInfo.GTPTunnel
+
+		ctx.IndirectForwardingTunnel = NewDataPath()
+		ctx.IndirectForwardingTunnel.FirstDPNode = NewDataPathNode()
+		ctx.IndirectForwardingTunnel.FirstDPNode.UPF = ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode.UPF
+		ctx.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel = &GTPTunnel{}
+
+		ANUPF := ctx.IndirectForwardingTunnel.FirstDPNode.UPF
+
+		var indirectFowardingPDR *PDR
+
+		if pdr, err := ANUPF.AddPDR(); err != nil {
+			return err
+		} else {
+			indirectFowardingPDR = pdr
+		}
+
+		originPDR := ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode.UpLinkTunnel.PDR
+
+		if teid, err := ANUPF.GenerateTEID(); err != nil {
+			return err
+		} else {
+			ctx.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel.TEID = teid
+			ctx.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel.PDR = indirectFowardingPDR
+			indirectFowardingPDR.PDI.LocalFTeid = &pfcpType.FTEID{
+				V4:          originPDR.PDI.LocalFTeid.V4,
+				Teid:        ctx.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel.TEID,
+				Ipv4Address: originPDR.PDI.LocalFTeid.Ipv4Address,
+			}
+			indirectFowardingPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{
+				OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4,
+			}
+
+			indirectFowardingPDR.FAR.ApplyAction = pfcpType.ApplyAction{
+				Forw: true,
+			}
+			indirectFowardingPDR.FAR.ForwardingParameters = &ForwardingParameters{
+				DestinationInterface: pfcpType.DestinationInterface{
+					InterfaceValue: pfcpType.DestinationInterfaceAccess,
+				},
+				OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
+					OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
+					Teid:                           binary.BigEndian.Uint32(DLForwardingGTPTunnel.GTPTEID.Value),
+					Ipv4Address:                    DLForwardingGTPTunnel.TransportLayerAddress.Value.Bytes,
+				},
+			}
+		}
+	} else if ctx.DLForwardingType == DirectForwarding {
+		ctx.DLDirectForwardingTunnel = DLForwardingInfo
+	}
 
 	return nil
 }

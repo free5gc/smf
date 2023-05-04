@@ -28,17 +28,17 @@ func SendNFRegistration() error {
 
 	// set nfProfile
 	profile := models.NfProfile{
-		NfInstanceId:  smf_context.SMF_Self().NfInstanceID,
+		NfInstanceId:  smf_context.GetSelf().NfInstanceID,
 		NfType:        models.NfType_SMF,
 		NfStatus:      models.NfStatus_REGISTERED,
-		Ipv4Addresses: []string{smf_context.SMF_Self().RegisterIPv4},
+		Ipv4Addresses: []string{smf_context.GetSelf().RegisterIPv4},
 		NfServices:    smfProfile.NFServices,
 		SmfInfo:       smfProfile.SMFInfo,
 		SNssais:       &sNssais,
 		PlmnList:      smfProfile.PLMNList,
 	}
-	if smf_context.SMF_Self().Locality != "" {
-		profile.Locality = smf_context.SMF_Self().Locality
+	if smf_context.GetSelf().Locality != "" {
+		profile.Locality = smf_context.GetSelf().Locality
 	}
 	var rep models.NfProfile
 	var res *http.Response
@@ -46,10 +46,10 @@ func SendNFRegistration() error {
 
 	// Check data (Use RESTful PUT)
 	for {
-		rep, res, err = smf_context.SMF_Self().
+		rep, res, err = smf_context.GetSelf().
 			NFManagementClient.
 			NFInstanceIDDocumentApi.
-			RegisterNFInstance(context.TODO(), smf_context.SMF_Self().NfInstanceID, profile)
+			RegisterNFInstance(context.TODO(), smf_context.GetSelf().NfInstanceID, profile)
 		if err != nil || res == nil {
 			logger.ConsumerLog.Infof("SMF register to NRF Error[%s]", err.Error())
 			time.Sleep(2 * time.Second)
@@ -69,7 +69,7 @@ func SendNFRegistration() error {
 			// NFRegister
 			resourceUri := res.Header.Get("Location")
 			// resouceNrfUri := resourceUri[strings.LastIndex(resourceUri, "/"):]
-			smf_context.SMF_Self().NfInstanceID = resourceUri[strings.LastIndex(resourceUri, "/")+1:]
+			smf_context.GetSelf().NfInstanceID = resourceUri[strings.LastIndex(resourceUri, "/")+1:]
 			break
 		} else {
 			logger.ConsumerLog.Infof("handler returned wrong status code %d", status)
@@ -97,10 +97,10 @@ func RetrySendNFRegistration(MaxRetry int) error {
 
 func SendNFDeregistration() error {
 	// Check data (Use RESTful DELETE)
-	res, localErr := smf_context.SMF_Self().
+	res, localErr := smf_context.GetSelf().
 		NFManagementClient.
 		NFInstanceIDDocumentApi.
-		DeregisterNFInstance(context.TODO(), smf_context.SMF_Self().NfInstanceID)
+		DeregisterNFInstance(context.TODO(), smf_context.GetSelf().NfInstanceID)
 	if localErr != nil {
 		logger.ConsumerLog.Warnln(localErr)
 		return localErr
@@ -123,23 +123,23 @@ func SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
 
 	// Check data
-	result, httpResp, localErr := smf_context.SMF_Self().
+	result, httpResp, localErr := smf_context.GetSelf().
 		NFDiscoveryClient.
 		NFInstancesStoreApi.
 		SearchNFInstances(context.TODO(), models.NfType_UDM, models.NfType_SMF, &localVarOptionals)
 
 	if localErr == nil {
-		smf_context.SMF_Self().UDMProfile = result.NfInstances[0]
+		smf_context.GetSelf().UDMProfile = result.NfInstances[0]
 
-		for _, service := range *smf_context.SMF_Self().UDMProfile.NfServices {
+		for _, service := range *smf_context.GetSelf().UDMProfile.NfServices {
 			if service.ServiceName == models.ServiceName_NUDM_SDM {
 				SDMConf := Nudm_SubscriberDataManagement.NewConfiguration()
 				SDMConf.SetBasePath(service.ApiPrefix)
-				smf_context.SMF_Self().SubscriberDataManagementClient = Nudm_SubscriberDataManagement.NewAPIClient(SDMConf)
+				smf_context.GetSelf().SubscriberDataManagementClient = Nudm_SubscriberDataManagement.NewAPIClient(SDMConf)
 			}
 		}
 
-		if smf_context.SMF_Self().SubscriberDataManagementClient == nil {
+		if smf_context.GetSelf().SubscriberDataManagementClient == nil {
 			logger.ConsumerLog.Warnln("sdm client failed")
 		}
 	} else if httpResp != nil {
@@ -168,7 +168,7 @@ func SendNFDiscoveryPCF() (problemDetails *models.ProblemDetails, err error) {
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
 
 	// Check data
-	result, httpResp, localErr := smf_context.SMF_Self().
+	result, httpResp, localErr := smf_context.GetSelf().
 		NFDiscoveryClient.
 		NFInstancesStoreApi.
 		SearchNFInstances(context.TODO(), targetNfType, requesterNfType, &localVarOptionals)
@@ -204,7 +204,7 @@ func SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.Proble
 	localVarOptionals.TargetNfInstanceId = optional.NewInterface(smContext.ServingNfId)
 
 	// Check data
-	result, httpResp, localErr := smf_context.SMF_Self().
+	result, httpResp, localErr := smf_context.GetSelf().
 		NFDiscoveryClient.
 		NFInstancesStoreApi.
 		SearchNFInstances(context.TODO(), targetNfType, requesterNfType, &localVarOptionals)
@@ -240,7 +240,7 @@ func SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.Proble
 func SendDeregisterNFInstance() (*models.ProblemDetails, error) {
 	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
-	smfSelf := smf_context.SMF_Self()
+	smfSelf := smf_context.GetSelf()
 	// Set client and set url
 
 	res, err := smfSelf.

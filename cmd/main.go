@@ -1,29 +1,28 @@
 package main
 
 import (
-	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime/debug"
 	"time"
 
-	"github.com/asaskevich/govalidator"
 	"github.com/urfave/cli"
 
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/free5gc/smf/internal/util"
+	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/smf/pkg/service"
+	logger_util "github.com/free5gc/util/logger"
 	"github.com/free5gc/util/version"
 )
 
-var SMF = &service.SMF{}
+var SMF *service.SmfApp
 
 func main() {
 	defer func() {
 		if p := recover(); p != nil {
 			// Print stack for panic to log. Fatalf() will let program exit.
-			logger.AppLog.Fatalf("panic: %v\n%s", p, string(debug.Stack()))
+			logger.MainLog.Fatalf("panic: %v\n%s", p, string(debug.Stack()))
 		}
 	}()
 
@@ -31,59 +30,73 @@ func main() {
 	app.Name = "smf"
 	app.Usage = "5G Session Management Function (SMF)"
 	app.Action = action
-	app.Flags = SMF.GetCliCmd()
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:  "config, c",
+			Usage: "Load configuration from `FILE`",
+		},
+		cli.StringFlag{
+			Name:  "uerouting, u",
+			Usage: "Load uerouting configuration from `FILE`",
+		},
+		cli.StringSliceFlag{
+			Name:  "log, l",
+			Usage: "Output NF log to `FILE`",
+		},
+	}
 	rand.Seed(time.Now().UnixNano())
 
 	if err := app.Run(os.Args); err != nil {
-		logger.AppLog.Errorf("SMF Run error: %v\n", err)
+		logger.MainLog.Errorf("SMF Run error: %v\n", err)
 	}
 }
 
-func action(c *cli.Context) error {
-	if err := initLogFile(c.String("log"), c.String("log5gc")); err != nil {
-		logger.AppLog.Errorf("%+v", err)
+func action(cliCtx *cli.Context) error {
+	tlsKeyLogPath, err := initLogFile(cliCtx.StringSlice("log"))
+	if err != nil {
 		return err
 	}
 
-	if err := SMF.Initialize(c); err != nil {
-		switch errType := err.(type) {
-		case govalidator.Errors:
-			validErrs := err.(govalidator.Errors).Errors()
-			for _, validErr := range validErrs {
-				logger.CfgLog.Errorf("%+v", validErr)
-			}
-		default:
-			logger.CfgLog.Errorf("%+v", errType)
-		}
-		logger.CfgLog.Errorf("[-- PLEASE REFER TO SAMPLE CONFIG FILE COMMENTS --]")
-		return fmt.Errorf("Failed to initialize !!")
+	logger.MainLog.Infoln("SMF version: ", version.GetVersion())
+
+	cfg, err := factory.ReadConfig(cliCtx.String("config"))
+	if err != nil {
+		return err
 	}
+	factory.SmfConfig = cfg
 
-	logger.AppLog.Infoln(c.App.Name)
-	logger.AppLog.Infoln("SMF version: ", version.GetVersion())
+	smf, err := service.NewApp(cfg)
+	if err != nil {
+		return err
+	}
+	SMF = smf
 
-	SMF.Start()
+	smf.Start(tlsKeyLogPath)
 
 	return nil
 }
 
-func initLogFile(logNfPath, log5gcPath string) error {
-	SMF.KeyLogPath = util.SmfDefaultKeyLogPath
+func initLogFile(logNfPath []string) (string, error) {
+	logTlsKeyPath := ""
 
-	if err := logger.LogFileHook(logNfPath, log5gcPath); err != nil {
-		return err
-	}
+	for _, path := range logNfPath {
+		if err := logger_util.LogFileHook(logger.Log, path); err != nil {
+			return "", err
+		}
 
-	if logNfPath != "" {
-		nfDir, _ := filepath.Split(logNfPath)
+		if logTlsKeyPath != "" {
+			continue
+		}
+
+		nfDir, _ := filepath.Split(path)
 		tmpDir := filepath.Join(nfDir, "key")
 		if err := os.MkdirAll(tmpDir, 0o775); err != nil {
 			logger.InitLog.Errorf("Make directory %s failed: %+v", tmpDir, err)
-			return err
+			return "", err
 		}
-		_, name := filepath.Split(util.SmfDefaultKeyLogPath)
-		SMF.KeyLogPath = filepath.Join(tmpDir, name)
+		_, name := filepath.Split(factory.SmfDefaultTLSKeyLogPath)
+		logTlsKeyPath = filepath.Join(tmpDir, name)
 	}
 
-	return nil
+	return logTlsKeyPath, nil
 }

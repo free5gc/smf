@@ -83,7 +83,8 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 
 	// QoS Flow Setup Request List
 	// use Default 5qi, arp
-	// TODO: Get QFI from PCF/UDM
+
+	authDefQos := sessRule.AuthDefQos
 	ie = ngapType.PDUSessionResourceSetupRequestTransferIEs{}
 	ie.Id.Value = ngapType.ProtocolIEIDQosFlowSetupRequestList
 	ie.Criticality.Value = ngapType.CriticalityPresentReject
@@ -93,20 +94,20 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 			List: []ngapType.QosFlowSetupRequestItem{
 				{
 					QosFlowIdentifier: ngapType.QosFlowIdentifier{
-						Value: DefaultNonGBR5QI,
+						Value: int64(sessRule.DefQosQFI),
 					},
 					QosFlowLevelQosParameters: ngapType.QosFlowLevelQosParameters{
 						QosCharacteristics: ngapType.QosCharacteristics{
 							Present: ngapType.QosCharacteristicsPresentNonDynamic5QI,
 							NonDynamic5QI: &ngapType.NonDynamic5QIDescriptor{
 								FiveQI: ngapType.FiveQI{
-									Value: DefaultNonGBR5QI,
+									Value: int64(authDefQos.Var5qi),
 								},
 							},
 						},
 						AllocationAndRetentionPriority: ngapType.AllocationAndRetentionPriority{
 							PriorityLevelARP: ngapType.PriorityLevelARP{
-								Value: 15,
+								Value: int64(authDefQos.Arp.PriorityLevel),
 							},
 							PreEmptionCapability: ngapType.PreEmptionCapability{
 								Value: ngapType.PreEmptionCapabilityPresentShallNotTriggerPreEmption,
@@ -120,6 +121,15 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 			},
 		},
 	}
+
+	for _, qosFlow := range ctx.AdditonalQosFlows {
+		if qosDesc, err := qosFlow.BuildNgapQosFlowSetupRequestItem(); err != nil {
+			return nil, fmt.Errorf("encode BuildNgapQosFlowSetupRequestItem failed: %s", err)
+		} else {
+			ie.Value.QosFlowSetupRequestList.List = append(ie.Value.QosFlowSetupRequestList.List, qosDesc)
+		}
+	}
+
 	resourceSetupRequestTransfer.ProtocolIEs.List = append(resourceSetupRequestTransfer.ProtocolIEs.List, ie)
 
 	// Security Indication to NG-RAN (optional) TS 38.413 9.3.1.27
@@ -137,11 +147,14 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 
 		switch upSecurity.UpIntegr {
 		case models.UpIntegrity_REQUIRED:
-			securityIndication.IntegrityProtectionIndication.Value = ngapType.IntegrityProtectionIndicationPresentRequired
+			securityIndication.IntegrityProtectionIndication.Value = ngapType.
+				IntegrityProtectionIndicationPresentRequired
 		case models.UpIntegrity_PREFERRED:
-			securityIndication.IntegrityProtectionIndication.Value = ngapType.IntegrityProtectionIndicationPresentPreferred
+			securityIndication.IntegrityProtectionIndication.Value = ngapType.
+				IntegrityProtectionIndicationPresentPreferred
 		case models.UpIntegrity_NOT_NEEDED:
-			securityIndication.IntegrityProtectionIndication.Value = ngapType.IntegrityProtectionIndicationPresentNotNeeded
+			securityIndication.IntegrityProtectionIndication.Value = ngapType.
+				IntegrityProtectionIndicationPresentNotNeeded
 		}
 		switch upSecurity.UpConfid {
 		case models.UpConfidentiality_REQUIRED:
@@ -154,11 +167,11 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 			securityIndication.ConfidentialityProtectionIndication.Value = ngapType.
 				ConfidentialityProtectionIndicationPresentNotNeeded
 		}
-
 		// Present only when Integrity Indication within the Security Indication is set to "required" or "preferred"
 		integrityProtectionInd := securityIndication.IntegrityProtectionIndication.Value
 		if integrityProtectionInd == ngapType.IntegrityProtectionIndicationPresentRequired ||
-			integrityProtectionInd == ngapType.IntegrityProtectionIndicationPresentPreferred {
+			integrityProtectionInd ==
+				ngapType.IntegrityProtectionIndicationPresentPreferred {
 			securityIndication.MaximumIntegrityProtectedDataRateUL = new(ngapType.MaximumIntegrityProtectedDataRate)
 			switch maximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink {
 			case models.MaxIntegrityProtectedDataRate_MAX_UE_RATE:
@@ -169,7 +182,6 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 					MaximumIntegrityProtectedDataRatePresentBitrate64kbs
 			}
 		}
-
 		ie.Value = ngapType.PDUSessionResourceSetupRequestTransferIEsValue{
 			Present:            ngapType.PDUSessionResourceSetupRequestTransferIEsPresentSecurityIndication,
 			SecurityIndication: securityIndication,
@@ -179,6 +191,35 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 
 	if buf, err := aper.MarshalWithParams(resourceSetupRequestTransfer, "valueExt"); err != nil {
 		return nil, fmt.Errorf("encode resourceSetupRequestTransfer failed: %s", err)
+	} else {
+		return buf, nil
+	}
+}
+
+func BuildPDUSessionResourceModifyRequestTransfer(ctx *SMContext) ([]byte, error) {
+	resourceModifyRequestTransfer := ngapType.PDUSessionResourceModifyRequestTransfer{}
+	ie := ngapType.PDUSessionResourceModifyRequestTransferIEs{}
+
+	ie.Id.Value = ngapType.ProtocolIEIDQosFlowAddOrModifyRequestList
+	ie.Criticality.Value = ngapType.CriticalityPresentReject
+	ie.Value.Present = ngapType.PDUSessionResourceModifyRequestTransferIEsPresentQosFlowAddOrModifyRequestList
+	ie.Value.QosFlowAddOrModifyRequestList = new(ngapType.QosFlowAddOrModifyRequestList)
+	qosFlowAddOrModifyRequestList := ie.Value.QosFlowAddOrModifyRequestList
+
+	for _, qos := range ctx.AdditonalQosFlows {
+		if qos.State == QoSFlowUnset || qos.State == QoSFlowToBeModify {
+			if qosDesc, err := qos.BuildNgapQosFlowAddOrModifyRequestItem(); err != nil {
+				return nil, fmt.Errorf("BuildNgapQosFlowSetupRequestItem failed: %s", err)
+			} else {
+				qosFlowAddOrModifyRequestList.List = append(qosFlowAddOrModifyRequestList.List, qosDesc)
+			}
+		}
+	}
+
+	resourceModifyRequestTransfer.ProtocolIEs.List = append(resourceModifyRequestTransfer.ProtocolIEs.List, ie)
+
+	if buf, err := aper.MarshalWithParams(resourceModifyRequestTransfer, "valueExt"); err != nil {
+		return nil, fmt.Errorf("encode resourceModifyRequestTransfer failed: %s", err)
 	} else {
 		return buf, nil
 	}
@@ -244,11 +285,13 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 			securityIndication.ConfidentialityProtectionIndication.Value = ngapType.
 				ConfidentialityProtectionIndicationPresentNotNeeded
 		}
-
-		// Present only when Integrity Indication within the Security Indication is set to "required" or "preferred"
-		integrityProtectionInd := securityIndication.IntegrityProtectionIndication.Value
+		// Present only when Integrity Indication within the
+		// Security Indication is set to "required" or "preferred"
+		integrityProtectionInd := securityIndication.
+			IntegrityProtectionIndication.Value
 		if integrityProtectionInd == ngapType.IntegrityProtectionIndicationPresentRequired ||
-			integrityProtectionInd == ngapType.IntegrityProtectionIndicationPresentPreferred {
+			integrityProtectionInd == ngapType.
+				IntegrityProtectionIndicationPresentPreferred {
 			securityIndication.MaximumIntegrityProtectedDataRateUL = new(ngapType.MaximumIntegrityProtectedDataRate)
 			switch maximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink {
 			case models.MaxIntegrityProtectedDataRate_MAX_UE_RATE:
@@ -260,7 +303,6 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 			}
 		}
 	}
-
 	if buf, err := aper.MarshalWithParams(pathSwitchRequestAcknowledgeTransfer, "valueExt"); err != nil {
 		return nil, err
 	} else {
@@ -316,25 +358,40 @@ func BuildPDUSessionResourceReleaseCommandTransfer(ctx *SMContext) (buf []byte, 
 }
 
 func BuildHandoverCommandTransfer(ctx *SMContext) ([]byte, error) {
-	ANUPF := ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
-	UpNode := ANUPF.UPF
-	teidOct := make([]byte, 4)
-	binary.BigEndian.PutUint32(teidOct, ANUPF.UpLinkTunnel.TEID)
 	handoverCommandTransfer := ngapType.HandoverCommandTransfer{}
 
-	handoverCommandTransfer.DLForwardingUPTNLInformation = new(ngapType.UPTransportLayerInformation)
-	handoverCommandTransfer.DLForwardingUPTNLInformation.Present = ngapType.UPTransportLayerInformationPresentGTPTunnel
-	handoverCommandTransfer.DLForwardingUPTNLInformation.GTPTunnel = new(ngapType.GTPTunnel)
+	if ctx.DLForwardingType == IndirectForwarding {
+		ANUPF := ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
+		UpNode := ANUPF.UPF
+		teidOct := make([]byte, 4)
+		binary.BigEndian.PutUint32(teidOct, ctx.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel.TEID)
 
-	if n3IP, err := UpNode.N3Interfaces[0].IP(ctx.SelectedPDUSessionType); err != nil {
-		return nil, err
-	} else {
-		gtpTunnel := handoverCommandTransfer.DLForwardingUPTNLInformation.GTPTunnel
-		gtpTunnel.GTPTEID.Value = teidOct
-		gtpTunnel.TransportLayerAddress.Value = aper.BitString{
-			Bytes:     n3IP,
-			BitLength: uint64(len(n3IP) * 8),
+		handoverCommandTransfer.DLForwardingUPTNLInformation = new(ngapType.UPTransportLayerInformation)
+		handoverCommandTransfer.DLForwardingUPTNLInformation.Present = ngapType.UPTransportLayerInformationPresentGTPTunnel
+		handoverCommandTransfer.DLForwardingUPTNLInformation.GTPTunnel = new(ngapType.GTPTunnel)
+
+		if n3IP, err := UpNode.N3Interfaces[0].IP(ctx.SelectedPDUSessionType); err != nil {
+			return nil, err
+		} else {
+			gtpTunnel := handoverCommandTransfer.DLForwardingUPTNLInformation.GTPTunnel
+			gtpTunnel.GTPTEID.Value = teidOct
+			gtpTunnel.TransportLayerAddress.Value = aper.BitString{
+				Bytes:     n3IP,
+				BitLength: uint64(len(n3IP) * 8),
+			}
 		}
+	} else if ctx.DLForwardingType == DirectForwarding {
+		handoverCommandTransfer.DLForwardingUPTNLInformation = ctx.DLDirectForwardingTunnel
+	}
+
+	handoverCommandTransfer.QosFlowToBeForwardedList = &ngapType.QosFlowToBeForwardedList{
+		List: []ngapType.QosFlowToBeForwardedItem{
+			{
+				QosFlowIdentifier: ngapType.QosFlowIdentifier{
+					Value: DefaultNonGBR5QI,
+				},
+			},
+		},
 	}
 
 	if buf, err := aper.MarshalWithParams(handoverCommandTransfer, "valueExt"); err != nil {

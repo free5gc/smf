@@ -1,62 +1,77 @@
-package context
+package producer
 
 import (
+	"fmt"
+
+	"github.com/free5gc/nas"
 	"github.com/free5gc/nas/nasConvert"
 	"github.com/free5gc/nas/nasMessage"
+	"github.com/free5gc/nas/nasType"
 	"github.com/free5gc/openapi/models"
+	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/sbi/consumer"
 )
 
-func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage.PDUSessionEstablishmentRequest) {
+type GSMError struct {
+	GSMCause uint8
+}
+
+var _ error = &GSMError{}
+
+func (e *GSMError) Error() string {
+	return fmt.Sprintf("gsm error cause[%d]", e.GSMCause)
+}
+
+func HandlePDUSessionEstablishmentRequest(
+	smCtx *smf_context.SMContext, req *nasMessage.PDUSessionEstablishmentRequest,
+) error {
 	// Retrieve PDUSessionID
-	smContext.PDUSessionID = int32(req.PDUSessionID.GetPDUSessionID())
+	smCtx.PDUSessionID = int32(req.PDUSessionID.GetPDUSessionID())
 	logger.GsmLog.Infoln("In HandlePDUSessionEstablishmentRequest")
 
 	// Retrieve PTI (Procedure transaction identity)
-	smContext.Pti = req.GetPTI()
+	smCtx.Pti = req.GetPTI()
 
 	// Retrieve MaxIntegrityProtectedDataRate of UE for UP Security
 	switch req.GetMaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink() {
 	case 0x00:
-		smContext.
-			MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink = models.
+		smCtx.MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink = models.
 			MaxIntegrityProtectedDataRate__64_KBPS
 	case 0xff:
-		smContext.
-			MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink = models.
+		smCtx.MaximumDataRatePerUEForUserPlaneIntegrityProtectionForUpLink = models.
 			MaxIntegrityProtectedDataRate_MAX_UE_RATE
 	}
 	switch req.GetMaximumDataRatePerUEForUserPlaneIntegrityProtectionForDownLink() {
 	case 0x00:
-		smContext.
-			MaximumDataRatePerUEForUserPlaneIntegrityProtectionForDownLink = models.
+		smCtx.MaximumDataRatePerUEForUserPlaneIntegrityProtectionForDownLink = models.
 			MaxIntegrityProtectedDataRate__64_KBPS
 	case 0xff:
-		smContext.
-			MaximumDataRatePerUEForUserPlaneIntegrityProtectionForDownLink = models.
+		smCtx.MaximumDataRatePerUEForUserPlaneIntegrityProtectionForDownLink = models.
 			MaxIntegrityProtectedDataRate_MAX_UE_RATE
 	}
-
 	// Handle PDUSessionType
 	if req.PDUSessionType != nil {
 		requestedPDUSessionType := req.PDUSessionType.GetPDUSessionTypeValue()
-		if err := smContext.isAllowedPDUSessionType(requestedPDUSessionType); err != nil {
+		if err := smCtx.IsAllowedPDUSessionType(requestedPDUSessionType); err != nil {
 			logger.CtxLog.Errorf("%s", err)
-			return
+			return &GSMError{
+				GSMCause: nasMessage.Cause5GSMPDUSessionTypeIPv4OnlyAllowed,
+			}
 		}
 	} else {
 		// Set to default supported PDU Session Type
-		switch SMF_Self().SupportedPDUSessionType {
+		switch smf_context.GetSelf().SupportedPDUSessionType {
 		case "IPv4":
-			smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4
+			smCtx.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4
 		case "IPv6":
-			smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv6
+			smCtx.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv6
 		case "IPv4v6":
-			smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4IPv6
+			smCtx.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4IPv6
 		case "Ethernet":
-			smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeEthernet
+			smCtx.SelectedPDUSessionType = nasMessage.PDUSessionTypeEthernet
 		default:
-			smContext.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4
+			smCtx.SelectedPDUSessionType = nasMessage.PDUSessionTypeIPv4
 		}
 	}
 
@@ -79,7 +94,7 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 			case nasMessage.IMCNSubsystemSignalingFlagUL:
 				logger.GsmLog.Infoln("Didn't Implement container type IMCNSubsystemSignalingFlagUL")
 			case nasMessage.DNSServerIPv6AddressRequestUL:
-				smContext.ProtocolConfigurationOptions.DNSIPv6Request = true
+				smCtx.ProtocolConfigurationOptions.DNSIPv6Request = true
 			case nasMessage.NotSupportedUL:
 				logger.GsmLog.Infoln("Didn't Implement container type NotSupportedUL")
 			case nasMessage.MSSupportOfNetworkRequestedBearerControlIndicatorUL:
@@ -95,15 +110,15 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 			case nasMessage.IPv4AddressAllocationViaDHCPv4UL:
 				logger.GsmLog.Infoln("Didn't Implement container type IPv4AddressAllocationViaDHCPv4UL")
 			case nasMessage.PCSCFIPv4AddressRequestUL:
-				smContext.ProtocolConfigurationOptions.PCSCFIPv4Request = true
+				smCtx.ProtocolConfigurationOptions.PCSCFIPv4Request = true
 			case nasMessage.DNSServerIPv4AddressRequestUL:
-				smContext.ProtocolConfigurationOptions.DNSIPv4Request = true
+				smCtx.ProtocolConfigurationOptions.DNSIPv4Request = true
 			case nasMessage.MSISDNRequestUL:
 				logger.GsmLog.Infoln("Didn't Implement container type MSISDNRequestUL")
 			case nasMessage.IFOMSupportRequestUL:
 				logger.GsmLog.Infoln("Didn't Implement container type IFOMSupportRequestUL")
 			case nasMessage.IPv4LinkMTURequestUL:
-				smContext.ProtocolConfigurationOptions.IPv4LinkMTURequest = true
+				smCtx.ProtocolConfigurationOptions.IPv4LinkMTURequest = true
 			case nasMessage.MSSupportOfLocalAddressInTFTIndicatorUL:
 				logger.GsmLog.Infoln("Didn't Implement container type MSSupportOfLocalAddressInTFTIndicatorUL")
 			case nasMessage.PCSCFReSelectionSupportUL:
@@ -151,11 +166,108 @@ func (smContext *SMContext) HandlePDUSessionEstablishmentRequest(req *nasMessage
 			}
 		}
 	}
+	return nil
 }
 
-func (smContext *SMContext) HandlePDUSessionReleaseRequest(req *nasMessage.PDUSessionReleaseRequest) {
+func HandlePDUSessionReleaseRequest(
+	smCtx *smf_context.SMContext, req *nasMessage.PDUSessionReleaseRequest,
+) {
 	logger.GsmLog.Infof("Handle Pdu Session Release Request")
 
 	// Retrieve PTI (Procedure transaction identity)
-	smContext.Pti = req.GetPTI()
+	smCtx.Pti = req.GetPTI()
+}
+
+func HandlePDUSessionModificationRequest(
+	smCtx *smf_context.SMContext, req *nasMessage.PDUSessionModificationRequest,
+) (*nas.Message, error) {
+	logger.GsmLog.Infof("Handle Pdu Session Modification Request")
+
+	// Retrieve PTI (Procedure transaction identity)
+	smCtx.Pti = req.GetPTI()
+
+	rsp := nas.NewMessage()
+	rsp.GsmMessage = nas.NewGsmMessage()
+	rsp.GsmHeader.SetMessageType(nas.MsgTypePDUSessionModificationCommand)
+	rsp.GsmHeader.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
+	rsp.PDUSessionModificationCommand = nasMessage.NewPDUSessionModificationCommand(0x00)
+	pDUSessionModificationCommand := rsp.PDUSessionModificationCommand
+	pDUSessionModificationCommand.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
+	pDUSessionModificationCommand.SetPDUSessionID(uint8(smCtx.PDUSessionID))
+	pDUSessionModificationCommand.SetPTI(smCtx.Pti)
+	pDUSessionModificationCommand.SetMessageType(nas.MsgTypePDUSessionModificationCommand)
+
+	reqQoSRules := nasType.QoSRules{}
+	reqQoSFlowDescs := nasType.QoSFlowDescs{}
+
+	if req.RequestedQosRules != nil {
+		qosRuleBytes := req.GetQoSRules()
+		if err := reqQoSRules.UnmarshalBinary(qosRuleBytes); err != nil {
+			smCtx.Log.Warning("QoS rule parse failed:", err)
+		}
+	}
+
+	if req.RequestedQosFlowDescriptions != nil {
+		qosFlowDescsBytes := req.GetQoSFlowDescriptions()
+		if err := reqQoSFlowDescs.UnmarshalBinary(qosFlowDescsBytes); err != nil {
+			smCtx.Log.Warning("QoS flow descriptions parse failed:", err)
+		}
+	}
+
+	smPolicyDecision, err := consumer.SendSMPolicyAssociationUpdateByUERequestModification(
+		smCtx, reqQoSRules, reqQoSFlowDescs)
+	if err != nil {
+		return nil, fmt.Errorf("sm policy update failed: %s", err)
+	}
+
+	// Update SessionRule from decision
+	if err := smCtx.ApplySessionRules(smPolicyDecision); err != nil {
+		return nil, fmt.Errorf("PDUSessionSMContextCreate err: %v", err)
+	}
+
+	if err := smCtx.ApplyPccRules(smPolicyDecision); err != nil {
+		smCtx.Log.Errorf("apply sm policy decision error: %+v", err)
+	}
+
+	authQoSRules := nasType.QoSRules{}
+	authQoSFlowDesc := reqQoSFlowDescs
+
+	for _, pcc := range smPolicyDecision.PccRules {
+		qosRef := pcc.RefQosData[0]
+		qosDesc := smPolicyDecision.QosDecs[qosRef]
+		qfi := uint8(qosDesc.Var5qi)
+		// get op code from request
+		opCode := reqQoSRules[0].Operation
+		// build nas Qos Rule
+		pccRule := smf_context.NewPCCRule(pcc)
+		pccRule.QFI = qfi
+		rule, err := pccRule.BuildNasQoSRule(smCtx, opCode)
+		if err != nil {
+			return nil, err
+		}
+
+		authQoSRules = append(authQoSRules, *rule)
+	}
+
+	if len(authQoSRules) > 0 {
+		if buf, err := authQoSRules.MarshalBinary(); err != nil {
+			return nil, err
+		} else {
+			pDUSessionModificationCommand.AuthorizedQosRules = nasType.NewAuthorizedQosRules(0x7A)
+			pDUSessionModificationCommand.AuthorizedQosRules.SetLen(uint16(len(buf)))
+			pDUSessionModificationCommand.AuthorizedQosRules.SetQosRule(buf)
+		}
+	}
+
+	if len(authQoSFlowDesc) > 0 {
+		if buf, err := authQoSFlowDesc.MarshalBinary(); err != nil {
+			return nil, err
+		} else {
+			pDUSessionModificationCommand.AuthorizedQosFlowDescriptions = nasType.NewAuthorizedQosFlowDescriptions(0x79)
+			pDUSessionModificationCommand.AuthorizedQosFlowDescriptions.SetLen(uint16(len(buf)))
+			pDUSessionModificationCommand.AuthorizedQosFlowDescriptions.SetQoSFlowDescriptions(buf)
+		}
+	}
+
+	return rsp, nil
 }

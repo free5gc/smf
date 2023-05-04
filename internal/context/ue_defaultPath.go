@@ -182,27 +182,26 @@ func createUPFListForSelectionULCL(inputList []string) (outputList []string) {
 	return append(inputList[offset:], inputList[:offset]...)
 }
 
-func (dfp *UEDefaultPaths) SelectUPFAndAllocUEIPForULCL(
-	upi *UserPlaneInformation,
+func (dfp *UEDefaultPaths) SelectUPFAndAllocUEIPForULCL(upi *UserPlaneInformation,
 	selection *UPFSelectionParams,
-) (string, net.IP) {
+) (string, net.IP, bool) {
 	sortedUPFList := createUPFListForSelectionULCL(dfp.AnchorUPFs)
 
 	for _, upfName := range sortedUPFList {
 		logger.CtxLog.Debugf("check start UPF: %s", upfName)
 		upf := upi.UPFs[upfName]
 
-		pools := getUEIPPool(upf, selection)
+		pools, useStaticIPPool := getUEIPPool(upf, selection)
 		if len(pools) == 0 {
 			continue
 		}
 		sortedPoolList := createPoolListForSelection(pools)
 		for _, pool := range sortedPoolList {
 			logger.CtxLog.Debugf("check start UEIPPool(%+v)", pool.ueSubNet)
-			addr := pool.allocate()
+			addr := pool.allocate(selection.PDUAddress)
 			if addr != nil {
 				logger.CtxLog.Infof("Selected UPF: %s", upfName)
-				return upfName, addr
+				return upfName, addr, useStaticIPPool
 			}
 			// if all addresses in pool are used, search next pool
 			logger.CtxLog.Debug("check next pool")
@@ -213,7 +212,7 @@ func (dfp *UEDefaultPaths) SelectUPFAndAllocUEIPForULCL(
 	// checked all UPFs
 	logger.CtxLog.Warnf("UE IP pool exhausted for DNN[%s] S-NSSAI[sst: %d sd: %s] DNAI[%s]\n", selection.Dnn,
 		selection.SNssai.Sst, selection.SNssai.Sd, selection.Dnai)
-	return "", nil
+	return "", nil, false
 }
 
 func (dfp *UEDefaultPaths) GetDefaultPath(upfName string) *DataPath {

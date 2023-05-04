@@ -1,11 +1,15 @@
 package pool
 
 import (
+	"fmt"
+	"os"
+	"runtime/debug"
 	"sort"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewLazyReusePool(t *testing.T) {
@@ -74,6 +78,19 @@ func TestLazyReusePool_SingleSegment(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, 1, p.Remain())
 	assert.Equal(t, 2, p.Total())
+
+	ok = p.Free(1)
+	assert.True(t, ok)
+	assert.Equal(t, 2, p.Remain())
+
+	ok = p.Use(2)
+	assert.True(t, ok)
+	assert.Equal(t, 1, p.Remain())
+
+	ok = p.Use(1)
+	assert.True(t, ok)
+	assert.Equal(t, 0, p.Remain())
+	assert.Equal(t, 2, p.Total())
 }
 
 func TestLazyReusePool_ManySegment(t *testing.T) {
@@ -92,10 +109,10 @@ func TestLazyReusePool_ManySegment(t *testing.T) {
 	assert.Equal(t, 1, p.Remain())
 
 	p.Free(3) // -> 100-100 -> 3-3
-	p.Free(6) // -> 100-100 -> 3-3 -> 6-6
-
 	assert.Equal(t, 3, p.head.next.first)
 	assert.Equal(t, 3, p.head.next.last)
+
+	p.Free(6) // -> 100-100 -> 3-3 -> 6-6
 	assert.Equal(t, 6, p.head.next.next.first)
 	assert.Equal(t, 6, p.head.next.next.last)
 	assert.Equal(t, 3, p.Remain())
@@ -173,6 +190,76 @@ func TestLazyReusePool_ManySegment(t *testing.T) {
 	assert.Equal(t, 100, p.head.next.last)
 	assert.Empty(t, p.head.next.next)
 	assert.Equal(t, 9, p.Remain())
+
+	ok = p.Use(100) // 3-10
+	assert.True(t, ok)
+	assert.Equal(t, 3, p.head.first)
+	assert.Equal(t, 10, p.head.last)
+	assert.Nil(t, p.head.next)
+	assert.Equal(t, 8, p.Remain())
+
+	ok = p.Use(3) // 4-10
+	assert.True(t, ok)
+	assert.Equal(t, 4, p.head.first)
+	assert.Equal(t, 10, p.head.last)
+	assert.Nil(t, p.head.next)
+	assert.Equal(t, 7, p.Remain())
+
+	ok = p.Use(7) // 4-6 -> 8-10
+	assert.True(t, ok)
+	assert.Equal(t, 4, p.head.first)
+	assert.Equal(t, 6, p.head.last)
+	assert.Equal(t, 8, p.head.next.first)
+	assert.Equal(t, 10, p.head.next.last)
+	assert.Equal(t, 6, p.Remain())
+
+	p.Free(7) // 4-10
+	assert.Equal(t, 4, p.head.first)
+	assert.Equal(t, 10, p.head.last)
+	assert.Nil(t, p.head.next)
+
+	p.Free(3) // 4-10 -> 3
+	assert.Equal(t, 4, p.head.first)
+	assert.Equal(t, 10, p.head.last)
+	assert.Equal(t, 3, p.head.next.first)
+	assert.Equal(t, 3, p.head.next.last)
+
+	p.Free(100) // 4-10 -> 3 -> 100
+	assert.Equal(t, 4, p.head.first)
+	assert.Equal(t, 10, p.head.last)
+	assert.Equal(t, 3, p.head.next.first)
+	assert.Equal(t, 3, p.head.next.last)
+	assert.Equal(t, 100, p.head.next.next.first)
+	assert.Equal(t, 100, p.head.next.next.last)
+}
+
+func TestLazyReusePool_ReserveSection(t *testing.T) {
+	p, err := NewLazyReusePool(1, 100)
+	require.NoError(t, err)
+	require.Equal(t, 100, p.Remain())
+
+	err = p.Reserve(30, 69)
+	require.NoError(t, err)
+	require.Equal(t, 60, p.Remain())
+
+	var allocated []int
+	for {
+		a, ok := p.Allocate()
+		if ok {
+			allocated = append(allocated, a)
+		} else {
+			break
+		}
+	}
+	var expected []int
+	for i := 1; i <= 29; i++ {
+		expected = append(expected, i)
+	}
+	for i := 70; i <= 100; i++ {
+		expected = append(expected, i)
+	}
+
+	require.Equal(t, expected, allocated)
 }
 
 func TestLazyReusePool_ManyGoroutine(t *testing.T) {
@@ -186,6 +273,14 @@ func TestLazyReusePool_ManyGoroutine(t *testing.T) {
 	for i := 0; i < numOfThreads; i++ {
 		// Allocate 2 times and Free 1 time
 		go func() {
+			defer func() {
+				if p := recover(); p != nil {
+					// Program will be exited.
+					fmt.Fprintf(os.Stderr, "panic: %v\n%s", p, string(debug.Stack()))
+					os.Exit(1)
+				}
+			}()
+
 			a1, ok := p.Allocate()
 			assert.True(t, ok)
 			ch <- a1
