@@ -2,6 +2,7 @@ package message
 
 import (
 	"net"
+	"time"
 
 	"github.com/free5gc/pfcp"
 	"github.com/free5gc/pfcp/pfcpType"
@@ -12,7 +13,7 @@ import (
 func BuildPfcpAssociationSetupRequest() (pfcp.PFCPAssociationSetupRequest, error) {
 	msg := pfcp.PFCPAssociationSetupRequest{}
 
-	msg.NodeID = &context.SMF_Self().CPNodeID
+	msg.NodeID = &context.GetSelf().CPNodeID
 
 	msg.RecoveryTimeStamp = &pfcpType.RecoveryTimeStamp{
 		RecoveryTimeStamp: udp.ServerStartTime,
@@ -28,7 +29,7 @@ func BuildPfcpAssociationSetupRequest() (pfcp.PFCPAssociationSetupRequest, error
 func BuildPfcpAssociationSetupResponse(cause pfcpType.Cause) (pfcp.PFCPAssociationSetupResponse, error) {
 	msg := pfcp.PFCPAssociationSetupResponse{}
 
-	msg.NodeID = &context.SMF_Self().CPNodeID
+	msg.NodeID = &context.GetSelf().CPNodeID
 
 	msg.Cause = &cause
 
@@ -46,7 +47,7 @@ func BuildPfcpAssociationSetupResponse(cause pfcpType.Cause) (pfcp.PFCPAssociati
 func BuildPfcpAssociationReleaseRequest() (pfcp.PFCPAssociationReleaseRequest, error) {
 	msg := pfcp.PFCPAssociationReleaseRequest{}
 
-	msg.NodeID = &context.SMF_Self().CPNodeID
+	msg.NodeID = &context.GetSelf().CPNodeID
 
 	return msg, nil
 }
@@ -54,7 +55,7 @@ func BuildPfcpAssociationReleaseRequest() (pfcp.PFCPAssociationReleaseRequest, e
 func BuildPfcpAssociationReleaseResponse(cause pfcpType.Cause) (pfcp.PFCPAssociationReleaseResponse, error) {
 	msg := pfcp.PFCPAssociationReleaseResponse{}
 
-	msg.NodeID = &context.SMF_Self().CPNodeID
+	msg.NodeID = &context.GetSelf().CPNodeID
 
 	msg.Cause = &cause
 
@@ -97,6 +98,14 @@ func pdrToCreatePDR(pdr *context.PDR) *pfcp.CreatePDR {
 		if qer != nil {
 			createPDR.QERID = append(createPDR.QERID, &pfcpType.QERID{
 				QERID: qer.QERID,
+			})
+		}
+	}
+
+	for _, urr := range pdr.URR {
+		if urr != nil {
+			createPDR.URRID = append(createPDR.URRID, &pfcpType.URRID{
+				UrrIdValue: urr.URRID,
 			})
 		}
 	}
@@ -170,6 +179,38 @@ func qerToCreateQER(qer *context.QER) *pfcp.CreateQER {
 	createQER.GuaranteedBitrate = qer.GBR
 
 	return createQER
+}
+
+func urrToCreateURR(urr *context.URR) *pfcp.CreateURR {
+	createURR := new(pfcp.CreateURR)
+
+	createURR.URRID = &pfcpType.URRID{
+		UrrIdValue: urr.URRID,
+	}
+	createURR.MeasurementMethod = &pfcpType.MeasurementMethod{}
+	switch urr.MeasureMethod {
+	case context.MesureMethodVol:
+		createURR.MeasurementMethod.Volum = true
+	case context.MesureMethodTime:
+		createURR.MeasurementMethod.Durat = true
+	}
+	createURR.ReportingTriggers = &urr.ReportingTrigger
+	if urr.MeasurementPeriod != 0 {
+		createURR.MeasurementPeriod = &pfcpType.MeasurementPeriod{
+			MeasurementPeriod: uint32(urr.MeasurementPeriod / time.Second),
+		}
+	}
+	if urr.VolumeThreshold != 0 {
+		createURR.VolumeThreshold = &pfcpType.VolumeThreshold{
+			Dlvol:          true,
+			Ulvol:          true,
+			DownlinkVolume: urr.VolumeThreshold,
+			UplinkVolume:   urr.VolumeThreshold,
+		}
+	}
+	createURR.MeasurementInformation = &urr.MeasurementInformation
+
+	return createURR
 }
 
 func pdrToUpdatePDR(pdr *context.PDR) *pfcp.UpdatePDR {
@@ -251,17 +292,19 @@ func farToUpdateFAR(far *context.FAR) *pfcp.UpdateFAR {
 
 func BuildPfcpSessionEstablishmentRequest(
 	upNodeID pfcpType.NodeID,
+	upN4Addr string,
 	smContext *context.SMContext,
 	pdrList []*context.PDR,
 	farList []*context.FAR,
 	barList []*context.BAR,
 	qerList []*context.QER,
+	urrList []*context.URR,
 ) (pfcp.PFCPSessionEstablishmentRequest, error) {
 	msg := pfcp.PFCPSessionEstablishmentRequest{}
 
-	msg.NodeID = &context.SMF_Self().CPNodeID
+	msg.NodeID = &context.GetSelf().CPNodeID
 
-	isv4 := context.SMF_Self().CPNodeID.NodeIdType == 0
+	isv4 := context.GetSelf().ExternalIP().To4() != nil
 	nodeIDtoIP := upNodeID.ResolveNodeIdToIp().String()
 
 	localSEID := smContext.PFCPContext[nodeIDtoIP].LocalSEID
@@ -270,7 +313,7 @@ func BuildPfcpSessionEstablishmentRequest(
 		V4:          isv4,
 		V6:          !isv4,
 		Seid:        localSEID,
-		Ipv4Address: context.SMF_Self().CPNodeID.ResolveNodeIdToIp(),
+		Ipv4Address: context.GetSelf().ExternalIP().To4(),
 	}
 
 	msg.CreatePDR = make([]*pfcp.CreatePDR, 0)
@@ -310,6 +353,17 @@ func BuildPfcpSessionEstablishmentRequest(
 		filteredQER.State = context.RULE_CREATE
 	}
 
+	urrMap := make(map[uint32]*context.URR)
+	for _, urr := range urrList {
+		urrMap[urr.URRID] = urr
+	}
+	for _, filteredURR := range urrMap {
+		if filteredURR.State == context.RULE_INITIAL {
+			msg.CreateURR = append(msg.CreateURR, urrToCreateURR(filteredURR))
+		}
+		filteredURR.State = context.RULE_CREATE
+	}
+
 	msg.PDNType = &pfcpType.PDNType{
 		PdnType: pfcpType.PDNTypeIpv4,
 	}
@@ -324,7 +378,7 @@ func BuildPfcpSessionEstablishmentRequest(
 func BuildPfcpSessionEstablishmentResponse() (pfcp.PFCPSessionEstablishmentResponse, error) {
 	msg := pfcp.PFCPSessionEstablishmentResponse{}
 
-	msg.NodeID = &context.SMF_Self().CPNodeID
+	msg.NodeID = &context.GetSelf().CPNodeID
 
 	msg.Cause = &pfcpType.Cause{
 		CauseValue: pfcpType.CauseRequestAccepted,
@@ -361,11 +415,13 @@ func BuildPfcpSessionEstablishmentResponse() (pfcp.PFCPSessionEstablishmentRespo
 // TODO: Replace dummy value in PFCP message
 func BuildPfcpSessionModificationRequest(
 	upNodeID pfcpType.NodeID,
+	upN4Addr string,
 	smContext *context.SMContext,
 	pdrList []*context.PDR,
 	farList []*context.FAR,
 	barList []*context.BAR,
 	qerList []*context.QER,
+	urrList []*context.URR,
 ) (pfcp.PFCPSessionModificationRequest, error) {
 	msg := pfcp.PFCPSessionModificationRequest{}
 
@@ -380,7 +436,7 @@ func BuildPfcpSessionModificationRequest(
 		V4:          true,
 		V6:          false,
 		Seid:        localSEID,
-		Ipv4Address: context.SMF_Self().CPNodeID.ResolveNodeIdToIp(),
+		Ipv4Address: context.GetSelf().ExternalIP().To4(),
 	}
 
 	for _, pdr := range pdrList {
@@ -428,6 +484,14 @@ func BuildPfcpSessionModificationRequest(
 			msg.CreateQER = append(msg.CreateQER, qerToCreateQER(qer))
 		}
 		qer.State = context.RULE_CREATE
+	}
+
+	for _, urr := range urrList {
+		switch urr.State {
+		case context.RULE_INITIAL:
+			msg.CreateURR = append(msg.CreateURR, urrToCreateURR(urr))
+		}
+		urr.State = context.RULE_CREATE
 	}
 
 	return msg, nil

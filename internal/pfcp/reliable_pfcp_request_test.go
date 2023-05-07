@@ -10,7 +10,7 @@ import (
 // var testWaitingTime int = 500
 
 func init() {
-	// smfContext := context.SMF_Self()
+	// smfContext := context.GetSelf()
 
 	// smfContext.CPNodeID.NodeIdType = 0
 	// smfContext.CPNodeID.NodeIdValue = net.ParseIP("127.0.0.2").To4()

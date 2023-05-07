@@ -1,6 +1,8 @@
 package context
 
 import (
+	"time"
+
 	"github.com/free5gc/pfcp/pfcpType"
 )
 
@@ -22,10 +24,57 @@ type PDR struct {
 	OuterHeaderRemoval *pfcpType.OuterHeaderRemoval
 
 	FAR *FAR
-	URR *URR
+	URR []*URR
 	QER []*QER
 
 	State RuleState
+}
+
+const (
+	MeasureInfoMNOP     = 0x10 // Measure Num of Pkts (MNOP)
+	MeasureInfoMBQE     = 0x1  // Measure Before Qos Enforce(MQBE)
+	MesureMethodVol     = "vol"
+	MesureMethodTime    = "time"
+	MeasurePeriodReport = 0x0100 // 0x10: PERIO
+)
+
+// Usage Report Rule
+type URR struct {
+	URRID                  uint32
+	MeasureMethod          string // vol or time
+	ReportingTrigger       pfcpType.ReportingTriggers
+	MeasurementPeriod      time.Duration
+	MeasurementInformation pfcpType.MeasurementInformation
+	VolumeThreshold        uint64
+	State                  RuleState
+}
+
+type UrrOpt func(urr *URR)
+
+func NewMeasureInformation(isMeasurePkt, isMeasureBeforeQos bool) UrrOpt {
+	return func(urr *URR) {
+		urr.MeasurementInformation.Mnop = isMeasurePkt
+		urr.MeasurementInformation.Mbqe = isMeasureBeforeQos
+	}
+}
+
+func NewMeasurementPeriod(time time.Duration) UrrOpt {
+	return func(urr *URR) {
+		urr.MeasurementPeriod = time
+	}
+}
+
+func NewVolumeThreshold(threshold uint64) UrrOpt {
+	return func(urr *URR) {
+		urr.VolumeThreshold = threshold
+	}
+}
+
+func MeasureInformation(isMeasurePkt, isMeasureBeforeQos bool) pfcpType.MeasurementInformation {
+	var measureInformation pfcpType.MeasurementInformation
+	measureInformation.Mnop = isMeasurePkt
+	measureInformation.Mbqe = isMeasureBeforeQos
+	return measureInformation
 }
 
 // Packet Detection. 7.5.2.2-2
@@ -80,6 +129,3 @@ type QER struct {
 
 	State RuleState
 }
-
-// Usage Report Rule
-type URR struct{}

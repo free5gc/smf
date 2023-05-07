@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/pkg/factory"
 	logger_util "github.com/free5gc/util/logger"
 )
 
@@ -32,7 +33,7 @@ func NewRouter() *gin.Engine {
 }
 
 func AddService(engine *gin.Engine) *gin.RouterGroup {
-	group := engine.Group("/nsmf-oam/v1")
+	group := engine.Group(factory.SmfOamUriPrefix)
 
 	for _, route := range routes {
 		switch route.Method {
