@@ -20,6 +20,7 @@ import (
 	"github.com/free5gc/ngap/ngapType"
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Namf_Communication"
+	"github.com/free5gc/openapi/Nchf_ConvergedCharging"
 	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
 	"github.com/free5gc/openapi/Npcf_SMPolicyControl"
 	"github.com/free5gc/openapi/models"
@@ -100,6 +101,7 @@ type EventExposureNotification struct {
 
 type UsageReport struct {
 	UrrId uint32
+	UpfId string
 
 	TotalVolume    uint64
 	UplinkVolume   uint64
@@ -154,9 +156,11 @@ type SMContext struct {
 	// Client
 	SMPolicyClient      *Npcf_SMPolicyControl.APIClient
 	CommunicationClient *Namf_Communication.APIClient
+	ChargingClient      *Nchf_ConvergedCharging.APIClient
 
 	AMFProfile         models.NfProfile
 	SelectedPCFProfile models.NfProfile
+	SelectedCHFProfile models.NfProfile
 	SmStatusNotifyUri  string
 
 	Tunnel      *UPTunnel
@@ -172,6 +176,7 @@ type SMContext struct {
 	PCCRules            map[string]*PCCRule
 	SessionRules        map[string]*SessionRule
 	TrafficControlDatas map[string]*TrafficControlData
+	ChargingData        map[string]*models.ChargingData
 	QosDatas            map[string]*models.QosData
 
 	UpPathChgEarlyNotification map[string]*EventExposureNotification // Key: Uri+NotifId
@@ -199,6 +204,18 @@ type SMContext struct {
 	UrrReportThreshold uint64
 	UrrReports         []UsageReport
 
+	// Charging Related
+	ChargingDataRef string
+	// Each PDU session has a unique charging id
+	ChargingID    int32
+	RequestedUnit int32
+	// key = urrid
+	// All urr can map to a rating group
+	// However, a rating group may map to more than one urr
+	// e.g. In UL CL case, the rating group for recoreding PDU Session volume may map to two URR
+	//		one is for PSA 1, the other is for PSA 2.
+	// Note: the premise is that urrid in a pdu session is unique, urr in same or different upf cannot have the same urrid
+	ChargingInfo map[uint32]*ChargingInfo
 	// NAS
 	Pti                     uint8
 	EstAcceptCause5gSMValue uint8
@@ -281,11 +298,15 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 	smContext.GenerateUrrId()
 	smContext.UrrUpfMap = make(map[string]*URR)
 
+	smContext.ChargingInfo = make(map[uint32]*ChargingInfo)
+	smContext.ChargingID = GenerateChargingID()
+
 	if factory.SmfConfig.Configuration != nil {
 		smContext.UrrReportTime = time.Duration(factory.SmfConfig.Configuration.UrrPeriod) * time.Second
 		smContext.UrrReportThreshold = factory.SmfConfig.Configuration.UrrThreshold
 		logger.CtxLog.Infof("UrrPeriod: %v", smContext.UrrReportTime)
 		logger.CtxLog.Infof("UrrThreshold: %d", smContext.UrrReportThreshold)
+		smContext.RequestedUnit = factory.SmfConfig.Configuration.RequestedUnit
 	}
 
 	return smContext
@@ -406,6 +427,52 @@ func (smContext *SMContext) PDUAddressToNAS() ([12]byte, uint8) {
 		addrLen = 12 + 1
 	}
 	return addr, addrLen
+}
+
+// CHFSelection will select CHF for this SM Context
+func (smContext *SMContext) CHFSelection() error {
+	// Send NFDiscovery for find CHF
+	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{
+		// Supi: optional.NewString(smContext.Supi),
+	}
+
+	rep, res, err := GetSelf().
+		NFDiscoveryClient.
+		NFInstancesStoreApi.
+		SearchNFInstances(context.TODO(), models.NfType_CHF, models.NfType_SMF, &localVarOptionals)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if rspCloseErr := res.Body.Close(); rspCloseErr != nil {
+			logger.PduSessLog.Errorf("SmfEventExposureNotification response body cannot close: %+v", rspCloseErr)
+		}
+	}()
+
+	if res != nil {
+		if status := res.StatusCode; status != http.StatusOK {
+			apiError := err.(openapi.GenericOpenAPIError)
+			problemDetails := apiError.Model().(models.ProblemDetails)
+
+			logger.CtxLog.Warningf("NFDiscovery SMF return status: %d\n", status)
+			logger.CtxLog.Warningf("Detail: %v\n", problemDetails.Title)
+		}
+	}
+
+	// Select CHF from available CHF
+
+	smContext.SelectedCHFProfile = rep.NfInstances[0]
+
+	// Create Converged Charging Client for this SM Context
+	for _, service := range *smContext.SelectedCHFProfile.NfServices {
+		if service.ServiceName == models.ServiceName_NCHF_CONVERGEDCHARGING {
+			ConvergedChargingConf := Nchf_ConvergedCharging.NewConfiguration()
+			ConvergedChargingConf.SetBasePath(service.ApiPrefix)
+			smContext.ChargingClient = Nchf_ConvergedCharging.NewAPIClient(ConvergedChargingConf)
+		}
+	}
+
+	return nil
 }
 
 // PCFSelection will select PCF for this SM Context
@@ -595,6 +662,7 @@ func (c *SMContext) SelectDefaultDataPath() error {
 
 func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	tcData *TrafficControlData, qosData *models.QosData,
+	chgData *models.ChargingData,
 ) error {
 	var targetRoute models.RouteToLocation
 	if tcData != nil && len(tcData.RouteToLocs) > 0 {
@@ -618,6 +686,13 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	c.Tunnel.AddDataPath(createdDataPath)
 	pccRule.Datapath = createdDataPath
 	pccRule.AddDataPathForwardingParameters(c, &targetRoute)
+
+	if chgLevel, err := pccRule.IdentifyChargingLevel(); err != nil {
+		c.Log.Warnf("fail to identify charging level[%+v] for pcc rule[%s]", err, pccRule.PccRuleId)
+	} else {
+		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData)
+	}
+
 	pccRule.Datapath.AddQoS(c, pccRule.QFI, qosData)
 	c.AddQosFlow(pccRule.QFI, qosData)
 	return nil

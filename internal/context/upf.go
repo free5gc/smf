@@ -109,6 +109,14 @@ type UPFInterfaceInfo struct {
 	EndpointFQDN          string
 }
 
+func GetUpfById(uuid string) *UPF {
+	upf, ok := upfPool.Load(uuid)
+	if ok {
+		return upf.(*UPF)
+	}
+	return nil
+}
+
 // NewUPFInterfaceInfo parse the InterfaceUpfInfoItem to generate UPFInterfaceInfo
 func NewUPFInterfaceInfo(i *factory.InterfaceUpfInfoItem) *UPFInterfaceInfo {
 	interfaceInfo := new(UPFInterfaceInfo)
@@ -542,8 +550,6 @@ func (upf *UPF) AddURR(urrId uint32, opts ...UrrOpt) (*URR, error) {
 	urr := new(URR)
 	urr.MeasureMethod = MesureMethodVol
 	urr.MeasurementInformation = MeasureInformation(true, false)
-	urr.ReportingTrigger.Perio = true
-	urr.ReportingTrigger.Volth = true
 
 	for _, opt := range opts {
 		opt(urr)

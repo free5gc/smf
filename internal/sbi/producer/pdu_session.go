@@ -181,6 +181,15 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 	}
 	smContext.SMPolicyID = smPolicyID
 
+	// PDU　session create is a charging event
+	logger.PduSessLog.Infof("CHF Selection for SMContext SUPI[%s] PDUSessionID[%d]\n",
+		smContext.Supi, smContext.PDUSessionID)
+	if err := smContext.CHFSelection(); err != nil {
+		logger.PduSessLog.Errorln("chf selection error:", err)
+	}
+
+	CreateChargingSession(smContext)
+
 	// Update SessionRule from decision
 	if err := smContext.ApplySessionRules(smPolicyDecision); err != nil {
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
@@ -426,6 +435,26 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		smContext.SetState(smf_context.ModificationPending)
 		response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
 		smContext.UpCnxState = body.JsonData.UpCnxState
+		// UE location change  is a charging event
+		// TODO: This is not tested yet
+		if smContext.UeLocation != body.JsonData.UeLocation {
+			var urrList []*smf_context.URR
+
+			// All rating group related to this Pdu session should send charging request
+			for _, dataPath := range tunnel.DataPathPool {
+				if dataPath.Activated {
+					for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
+						if curDataPathNode.IsANUPF() {
+							urrList = append(urrList, curDataPathNode.UpLinkTunnel.PDR.URR...)
+							QueryReport(smContext, curDataPathNode.UPF, urrList, models.TriggerType_USER_LOCATION_CHANGE)
+						}
+					}
+				}
+			}
+
+			ReportUsageAndUpdateQuota(smContext)
+		}
+
 		smContext.UeLocation = body.JsonData.UeLocation
 
 		// Set FAR and An, N3 Release Info
@@ -857,7 +886,6 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 		smContext.SetState(smf_context.PFCPModification)
 	}
 	pfcpResponseStatus := releaseSession(smContext)
-
 	var httpResponse *httpwrapper.Response
 
 	switch pfcpResponseStatus {
@@ -975,6 +1003,8 @@ func HandlePDUSessionSMContextLocalRelease(smContext *smf_context.SMContext, cre
 }
 
 func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionResponseStatus {
+	ReleaseChargingSession(smContext)
+
 	smContext.SetState(smf_context.PFCPModification)
 
 	for _, res := range ReleaseTunnel(smContext) {

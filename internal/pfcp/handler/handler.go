@@ -11,6 +11,7 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	pfcp_message "github.com/free5gc/smf/internal/pfcp/message"
+	"github.com/free5gc/smf/internal/sbi/producer"
 )
 
 func HandlePfcpHeartbeatRequest(msg *pfcpUdp.Message) {
@@ -190,54 +191,16 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 	}
 
 	if req.ReportType.Usar && req.UsageReport != nil {
-		HandleReports(req.UsageReport, nil, nil, smContext, upfNodeID)
+		smContext.HandleReports(req.UsageReport, nil, nil, upfNodeID, "")
+		// After recieving the Usage Report, it should send charging request to the CHF
+		// and update the URR with the quota or other charging information  according to
+		// the charging response
+		go func() {
+			producer.ReportUsageAndUpdateQuota(smContext)
+		}()
 	}
 
 	// TS 23.502 4.2.3.3 2b. Send Data Notification Ack, SMF->UPF
 	cause.CauseValue = pfcpType.CauseRequestAccepted
 	pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, remoteSEID)
-}
-
-func HandleReports(
-	UsageReportReport []*pfcp.UsageReportPFCPSessionReportRequest,
-	UsageReportModification []*pfcp.UsageReportPFCPSessionModificationResponse,
-	UsageReportDeletion []*pfcp.UsageReportPFCPSessionDeletionResponse,
-	smContext *smf_context.SMContext,
-	nodeId pfcpType.NodeID,
-) {
-	var usageReport smf_context.UsageReport
-
-	for _, report := range UsageReportReport {
-		usageReport.UrrId = report.URRID.UrrIdValue
-		usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
-		usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
-		usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
-		usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
-		usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
-		usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
-
-		smContext.UrrReports = append(smContext.UrrReports, usageReport)
-	}
-	for _, report := range UsageReportModification {
-		usageReport.UrrId = report.URRID.UrrIdValue
-		usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
-		usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
-		usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
-		usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
-		usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
-		usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
-
-		smContext.UrrReports = append(smContext.UrrReports, usageReport)
-	}
-	for _, report := range UsageReportDeletion {
-		usageReport.UrrId = report.URRID.UrrIdValue
-		usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
-		usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
-		usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
-		usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
-		usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
-		usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
-
-		smContext.UrrReports = append(smContext.UrrReports, usageReport)
-	}
 }
