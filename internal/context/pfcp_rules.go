@@ -11,6 +11,7 @@ const (
 	RULE_CREATE  RuleState = 1
 	RULE_UPDATE  RuleState = 2
 	RULE_REMOVE  RuleState = 3
+	RULE_QUERY   RuleState = 4
 )
 
 type RuleState uint8
@@ -44,8 +45,10 @@ type URR struct {
 	MeasureMethod          string // vol or time
 	ReportingTrigger       pfcpType.ReportingTriggers
 	MeasurementPeriod      time.Duration
+	QuotaValidityTime      time.Time
 	MeasurementInformation pfcpType.MeasurementInformation
 	VolumeThreshold        uint64
+	VolumeQuota            uint64
 	State                  RuleState
 }
 
@@ -60,13 +63,28 @@ func NewMeasureInformation(isMeasurePkt, isMeasureBeforeQos bool) UrrOpt {
 
 func NewMeasurementPeriod(time time.Duration) UrrOpt {
 	return func(urr *URR) {
+		urr.ReportingTrigger.Perio = true
 		urr.MeasurementPeriod = time
 	}
 }
 
 func NewVolumeThreshold(threshold uint64) UrrOpt {
 	return func(urr *URR) {
+		urr.ReportingTrigger.Volth = true
 		urr.VolumeThreshold = threshold
+	}
+}
+
+func NewVolumeQuota(quota uint64) UrrOpt {
+	return func(urr *URR) {
+		urr.ReportingTrigger.Volqu = true
+		urr.VolumeQuota = quota
+	}
+}
+
+func SetStartofSDFTrigger() UrrOpt {
+	return func(urr *URR) {
+		urr.ReportingTrigger.Start = true
 	}
 }
 

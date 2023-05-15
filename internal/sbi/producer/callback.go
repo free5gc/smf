@@ -2,6 +2,7 @@ package producer
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/free5gc/openapi/Nsmf_EventExposure"
@@ -11,6 +12,58 @@ import (
 	"github.com/free5gc/util/httpwrapper"
 )
 
+func HandleChargingNotification(chargingNotifyRequest models.ChargingNotifyRequest, smContextRef string) *httpwrapper.Response {
+	logger.ChargingLog.Info("Handle Charging Notification")
+
+	problemDetails := chargingNotificationProcedure(chargingNotifyRequest, smContextRef)
+	if problemDetails != nil {
+		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+	} else {
+		return httpwrapper.NewResponse(http.StatusNoContent, nil, nil)
+	}
+}
+
+// While recieve Charging Notification from CHF, SMF will send Charging Information to CHF and update UPF
+func chargingNotificationProcedure(req models.ChargingNotifyRequest, smContextRef string) *models.ProblemDetails {
+	if smContext := smf_context.GetSMContextByRef(smContextRef); smContext != nil {
+		go func() {
+			upfUrrMap := make(map[string][]*smf_context.URR)
+
+			for _, reauthorizeDetail := range req.ReauthorizationDetails {
+				rg := reauthorizeDetail.RatingGroup
+				logger.ChargingLog.Infof("Force update charging information for rating group %d", rg)
+
+				for _, urr := range smContext.UrrUpfMap {
+					chgInfo := smContext.ChargingInfo[urr.URRID]
+					if chgInfo.RatingGroup == rg ||
+						chgInfo.ChargingLevel == smf_context.PduSessionCharging {
+						logger.ChargingLog.Tracef("Query URR (%d) for Rating Group (%d)", urr.URRID, rg)
+
+						upfId := smContext.ChargingInfo[urr.URRID].UpfId
+						upfUrrMap[upfId] = append(upfUrrMap[upfId], urr)
+					}
+				}
+
+			}
+
+			for upfId, urrList := range upfUrrMap {
+				upf := smf_context.GetUpfById(upfId)
+				QueryReport(smContext, upf, urrList, models.TriggerType_FORCED_REAUTHORISATION)
+			}
+
+			ReportUsageAndUpdateQuota(smContext)
+		}()
+	} else {
+		problemDetails := &models.ProblemDetails{
+			Status: http.StatusNotFound,
+			Cause:  "CONTEXT_NOT_FOUND",
+			Detail: fmt.Sprintf("SM Context [%s] Not Found ", smContextRef),
+		}
+		return problemDetails
+	}
+
+	return nil
+}
 func HandleSMPolicyUpdateNotify(smContextRef string, request models.SmPolicyNotification) *httpwrapper.Response {
 	logger.PduSessLog.Infoln("In HandleSMPolicyUpdateNotify")
 	decision := request.SmPolicyDecision

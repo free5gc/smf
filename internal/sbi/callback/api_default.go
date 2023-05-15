@@ -11,6 +11,7 @@ package callback
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -59,4 +60,39 @@ func HTTPSmPolicyUpdateNotification(c *gin.Context) {
 
 func SmPolicyControlTerminationRequestNotification(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{})
+}
+
+func HTTPChargingNotification(c *gin.Context) {
+	var req models.ChargingNotifyRequest
+
+	requestBody, err := c.GetRawData()
+	if err != nil {
+		logger.PduSessLog.Errorln("GetRawData failed")
+	}
+
+	err = openapi.Deserialize(&req, requestBody, "application/json")
+	if err != nil {
+		logger.PduSessLog.Errorln("Deserialize request failed")
+	}
+
+	reqWrapper := httpwrapper.NewRequest(c.Request, req)
+	reqWrapper.Params["notifyUri"] = c.Params.ByName("notifyUri")
+	smContextRef := strings.Split(reqWrapper.Params["notifyUri"], "_")[1]
+
+	HTTPResponse := producer.HandleChargingNotification(reqWrapper.Body.(models.ChargingNotifyRequest), smContextRef)
+
+	for key, val := range HTTPResponse.Header {
+		c.Header(key, val[0])
+	}
+
+	resBody, err := openapi.Serialize(HTTPResponse.Body, "application/json")
+	if err != nil {
+		logger.PduSessLog.Errorln("Serialize failed")
+	}
+
+	_, err = c.Writer.Write(resBody)
+	if err != nil {
+		logger.PduSessLog.Errorln("Write failed")
+	}
+	c.Status(HTTPResponse.Status)
 }

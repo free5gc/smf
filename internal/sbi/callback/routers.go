@@ -70,4 +70,10 @@ var routes = Routes{
 		"/sm-policies/:smContextRef/terminate",
 		SmPolicyControlTerminationRequestNotification,
 	},
+	{
+		"ChargingNotification",
+		"POST",
+		"/:notifyUri",
+		HTTPChargingNotification,
+	},
 }
