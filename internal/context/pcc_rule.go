@@ -41,6 +41,14 @@ func (r *PCCRule) FlowDescription() string {
 	return ""
 }
 
+func (r *PCCRule) RefChgDataID() string {
+	if len(r.RefChgData) > 0 {
+		// now 1 pcc rule only maps to 1 Charging data
+		return r.RefChgData[0]
+	}
+	return ""
+}
+
 func (r *PCCRule) RefQosDataID() string {
 	if len(r.RefQosData) > 0 {
 		// now 1 pcc rule only maps to 1 QoS data
@@ -59,6 +67,20 @@ func (r *PCCRule) RefTcDataID() string {
 		return r.RefTcData[0]
 	}
 	return ""
+}
+
+func (r *PCCRule) IdentifyChargingLevel() (ChargingLevel, error) {
+	dlIPFilterRule, err := flowdesc.Decode(r.FlowDescription())
+	if err != nil {
+		return 0, err
+	}
+	// For pcc that are applicable for all datapath, it's charging level will be Pdu based
+	if dlIPFilterRule.Src == "any" && dlIPFilterRule.Dst == "assigned" {
+		return PduSessionCharging, nil
+	} else {
+		// For pcc that have applicable for all datapath fpr a datapath, it's charging level will be flow based
+		return FlowCharging, nil
+	}
 }
 
 func (r *PCCRule) UpdateDataPathFlowDescription(dlFlowDesc string) error {

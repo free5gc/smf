@@ -4,6 +4,7 @@ import (
 	"net"
 	"reflect"
 
+	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/pfcp/pfcpUdp"
 	"github.com/free5gc/smf/internal/context"
@@ -77,6 +78,19 @@ func EstablishPSA2(smContext *context.SMContext) {
 			qerList := upLinkPDR.QER
 			urrList := upLinkPDR.URR
 
+			chgUrrList := []*context.URR{}
+			for _, urr := range urrList {
+				if urr.ReportingTrigger.Start {
+					chgUrrList = append(chgUrrList, urr)
+				}
+			}
+
+			// According to  32.255 5.2.2.7, Addition of additional PDU Session Anchor is a charging event
+			UpdateChargingSession(smContext, chgUrrList, models.Trigger{
+				TriggerType:     models.TriggerType_ADDITION_OF_UPF,
+				TriggerCategory: models.TriggerCategory_IMMEDIATE_REPORT,
+			})
+
 			lastNode := node.Prev()
 
 			if lastNode != nil && !reflect.DeepEqual(lastNode.UPF.NodeID, ulcl.NodeID) {
@@ -100,7 +114,7 @@ func EstablishPSA2(smContext *context.SMContext) {
 			if !exist || sessionContext.RemoteSEID == 0 {
 				go establishPfcpSession(smContext, pfcpState, resChan)
 			} else {
-				go modifyExistingPfcpSession(smContext, pfcpState, resChan)
+				go modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
 			}
 		} else {
 			if reflect.DeepEqual(node.UPF.NodeID, ulcl.NodeID) {
@@ -170,7 +184,7 @@ func EstablishULCL(smContext *context.SMContext) {
 
 			curDPNodeIP := ulcl.NodeID.ResolveNodeIdToIp().String()
 			pendingUPFs = append(pendingUPFs, curDPNodeIP)
-			go modifyExistingPfcpSession(smContext, pfcpState, resChan)
+			go modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
 			break
 		}
 	}
@@ -215,7 +229,7 @@ func UpdatePSA2DownLink(smContext *context.SMContext) {
 
 				curDPNodeIP := node.UPF.NodeID.ResolveNodeIdToIp().String()
 				pendingUPFs = append(pendingUPFs, curDPNodeIP)
-				go modifyExistingPfcpSession(smContext, pfcpState, resChan)
+				go modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
 				logger.PfcpLog.Info("[SMF] Update PSA2 downlink msg has been send")
 				break
 			}
@@ -327,7 +341,7 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 
 			curDPNodeIP := curDPNode.UPF.NodeID.ResolveNodeIdToIp().String()
 			pendingUPFs = append(pendingUPFs, curDPNodeIP)
-			go modifyExistingPfcpSession(smContext, pfcpState, resChan)
+			go modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
 		}
 	}
 

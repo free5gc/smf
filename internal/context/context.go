@@ -3,6 +3,7 @@ package context
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"sync/atomic"
@@ -18,6 +19,7 @@ import (
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
+	"github.com/free5gc/util/idgenerator"
 )
 
 func Init() {
@@ -73,6 +75,16 @@ type SMFContext struct {
 	UEPreConfigPathPool map[string]*UEPreConfigPaths
 	UEDefaultPathPool   map[string]*UEDefaultPaths
 	LocalSEIDCount      uint64
+
+	// Each pdu session should have a unique charging id
+	ChargingIDGenerator *idgenerator.IDGenerator
+}
+
+func GenerateChargingID() int32 {
+	if id, err := smfContext.ChargingIDGenerator.Allocate(); err == nil {
+		return int32(id)
+	}
+	return 0
 }
 
 func ResolveIP(host string) net.IP {
@@ -234,6 +246,8 @@ func InitSmfContext(config *factory.Config) {
 	smfContext.SupportedPDUSessionType = "IPv4"
 
 	smfContext.UserPlaneInformation = NewUserPlaneInformation(&configuration.UserPlaneInformation)
+
+	smfContext.ChargingIDGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
 
 	SetupNFProfile(config)
 

@@ -90,6 +90,7 @@ type Configuration struct {
 	T3591                *TimerValue          `yaml:"t3591" valid:"required"`
 	T3592                *TimerValue          `yaml:"t3592" valid:"required"`
 	NwInstFqdnEncoding   bool                 `yaml:"nwInstFqdnEncoding" valid:"type(bool),optional"`
+	RequestedUnit        int32                `yaml:"requestedUnit,omitempty" valid:"optional"`
 }
 
 type Logger struct {
