@@ -215,6 +215,7 @@ type SMContext struct {
 	// e.g. In UL CL case, the rating group for recoreding PDU Session volume may map to two URR
 	//		one is for PSA 1, the other is for PSA 2.
 	// Note: the premise is that urrid in a pdu session is unique, urr in same or different upf cannot have the same urrid
+	// TODO: curerrently have not tested the case where multiple urr share the same rating group
 	ChargingInfo map[uint32]*ChargingInfo
 	// NAS
 	Pti                     uint8
@@ -681,6 +682,10 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	if createdDataPath == nil {
 		return fmt.Errorf("fail to create data path for pcc rule[%s]", pccRule.PccRuleId)
 	}
+	if tcData != nil {
+		createdDataPath.Flowstatus = tcData.FlowStatus
+	}
+
 	createdDataPath.GBRFlow = isGBRFlow(qosData)
 	createdDataPath.ActivateTunnelAndPDR(c, uint32(pccRule.Precedence))
 	c.Tunnel.AddDataPath(createdDataPath)
