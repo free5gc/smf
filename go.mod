@@ -66,3 +66,7 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/free5gc/openapi => /home/free5gc/openapi
+
+replace github.com/free5gc/pfcp => /home/free5gc/pfcp

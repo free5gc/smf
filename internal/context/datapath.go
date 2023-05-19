@@ -65,6 +65,7 @@ type DataPath struct {
 	GBRFlow           bool
 	Destination       Destination
 	HasBranchingPoint bool
+	Flowstatus        models.FlowStatus
 	// Data Path Double Link List
 	FirstDPNode *DataPathNode
 }
@@ -386,7 +387,9 @@ func (datapath *DataPath) addUrrToPath(smContext *SMContext) {
 	for curDataPathNode := datapath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
 		var MBQEUrrId uint32
 		var MAQEUrrId uint32
-
+		// If more than two data path will use the same UPF
+		// It may cause urr be created multiple times
+		// There may be some mechanism to make sure that existed URR should not be create again
 		if curDataPathNode.IsANUPF() {
 			if curDataPathNode.Next() == nil {
 				MBQEUrrId = smContext.UrrIdMap[N3N6_MBEQ_URR]
@@ -534,12 +537,24 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 			}
 
 			ULFAR := ULPDR.FAR
-			ULFAR.ApplyAction = pfcpType.ApplyAction{
-				Buff: false,
-				Drop: false,
-				Dupl: false,
-				Forw: true,
-				Nocp: false,
+			// If the flow is disable, the tunnel and the session rules will not be created
+			if dataPath.Flowstatus != models.FlowStatus_DISABLED &&
+				dataPath.Flowstatus != models.FlowStatus_ENABLED_DOWNLINK {
+				ULFAR.ApplyAction = pfcpType.ApplyAction{
+					Buff: false,
+					Drop: false,
+					Dupl: false,
+					Forw: true,
+					Nocp: false,
+				}
+			} else {
+				ULFAR.ApplyAction = pfcpType.ApplyAction{
+					Buff: false,
+					Drop: true,
+					Dupl: false,
+					Forw: false,
+					Nocp: false,
+				}
 			}
 			ULFAR.ForwardingParameters = &ForwardingParameters{
 				DestinationInterface: pfcpType.DestinationInterface{
@@ -637,15 +652,25 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 			if nextDLDest := curDataPathNode.Prev(); nextDLDest != nil {
 				logger.PduSessLog.Traceln("In DLPDR OuterHeaderCreation")
 				nextDLTunnel := nextDLDest.DownLinkTunnel
-
-				DLFAR.ApplyAction = pfcpType.ApplyAction{
-					Buff: false,
-					Drop: false,
-					Dupl: false,
-					Forw: true,
-					Nocp: false,
+				// If the flow is disable, the tunnel and the session rules will not be created
+				if dataPath.Flowstatus != models.FlowStatus_DISABLED &&
+					dataPath.Flowstatus != models.FlowStatus_ENABLED_UPLINK {
+					DLFAR.ApplyAction = pfcpType.ApplyAction{
+						Buff: false,
+						Drop: false,
+						Dupl: false,
+						Forw: true,
+						Nocp: false,
+					}
+				} else {
+					DLFAR.ApplyAction = pfcpType.ApplyAction{
+						Buff: false,
+						Drop: true,
+						Dupl: false,
+						Forw: false,
+						Nocp: false,
+					}
 				}
-
 				iface = nextDLDest.UPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
 
 				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
