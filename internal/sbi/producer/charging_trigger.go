@@ -185,15 +185,24 @@ func buildMultiUnitUsageFromUsageReport(smContext *smf_context.SMContext) []mode
 				TotalVolume:              int32(ur.TotalVolume),
 			}
 			if unitUsage, ok := ratingGroupUnitUsagesMap[rg]; !ok {
+				requestUnit := &models.RequestedUnit{}
+
+				// Only online charging should request unit
+				// offline charging is only for recording usage
+				switch chgInfo.ChargingMethod {
+				case models.QuotaManagementIndicator_ONLINE_CHARGING:
+					requestUnit = &models.RequestedUnit{
+						TotalVolume:    smContext.RequestedUnit,
+						DownlinkVolume: smContext.RequestedUnit,
+						UplinkVolume:   smContext.RequestedUnit,
+					}
+				}
+
 				ratingGroupUnitUsagesMap[rg] = models.MultipleUnitUsage{
 					RatingGroup:       rg,
 					UPFID:             ur.UpfId,
 					UsedUnitContainer: []models.UsedUnitContainer{uu},
-					RequestedUnit: &models.RequestedUnit{
-						TotalVolume:    smContext.RequestedUnit,
-						DownlinkVolume: smContext.RequestedUnit,
-						UplinkVolume:   smContext.RequestedUnit,
-					},
+					RequestedUnit:     requestUnit,
 				}
 			} else {
 				unitUsage.UsedUnitContainer = append(unitUsage.UsedUnitContainer, uu)
@@ -252,6 +261,11 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 						if t.TriggerCategory == models.TriggerCategory_IMMEDIATE_REPORT {
 							smContext.Log.Infof("Add Volume Limit Expiry Timer for Pdu session, it's rating group is [%d]", rg)
 
+							if chgInfo.VolumeLimitExpiryTimer != nil {
+								chgInfo.VolumeLimitExpiryTimer.Stop()
+								chgInfo.VolumeLimitExpiryTimer = nil
+							}
+
 							chgInfo.VolumeLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.VolumeLimit)*time.Second, 1, func(expireTimes int32) {
 								urrList := []*smf_context.URR{urr}
 								upf := smf_context.GetUpfById(ui.UPFID)
@@ -266,6 +280,11 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 					case smf_context.FlowCharging:
 						if t.TriggerCategory == models.TriggerCategory_DEFERRED_REPORT {
 							smContext.Log.Infof("Add Volume Limit Expiry Timer for rating group [%d] ", rg)
+
+							if chgInfo.VolumeLimitExpiryTimer != nil {
+								chgInfo.VolumeLimitExpiryTimer.Stop()
+								chgInfo.VolumeLimitExpiryTimer = nil
+							}
 
 							chgInfo.VolumeLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.VolumeLimit)*time.Second, 1, func(expireTimes int32) {
 								urrList := []*smf_context.URR{urr}
