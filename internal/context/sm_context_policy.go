@@ -102,6 +102,18 @@ func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) 
 			}
 		}
 	}
+
+	defaultPath := c.Tunnel.DataPathPool.GetDefaultPath()
+	for node := defaultPath.FirstDPNode; node != nil; node = node.Next() {
+		if node.IsAnchorUPF() {
+			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
+				node.UpLinkTunnel.PDR.URR = append(node.UpLinkTunnel.PDR.URR, pduLevelChargingUrrs...)
+			}
+			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
+				node.DownLinkTunnel.PDR.URR = append(node.DownLinkTunnel.PDR.URR, pduLevelChargingUrrs...)
+			}
+		}
+	}
 }
 
 func (c *SMContext) ApplyPccRules(
