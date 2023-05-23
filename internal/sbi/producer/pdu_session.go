@@ -807,6 +807,8 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			}
 
 		case smf_context.SessionReleaseSuccess:
+			ReleaseChargingSession(smContext)
+
 			smContext.Log.Traceln("In case SessionReleaseSuccess")
 			smContext.SetState(smf_context.InActivePending)
 			httpResponse = &httpwrapper.Response{
@@ -927,10 +929,13 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 		smContext.SetState(smf_context.PFCPModification)
 	}
 	pfcpResponseStatus := releaseSession(smContext)
+
 	var httpResponse *httpwrapper.Response
 
 	switch pfcpResponseStatus {
 	case smf_context.SessionReleaseSuccess:
+		ReleaseChargingSession(smContext)
+
 		smContext.Log.Traceln("In case SessionReleaseSuccess")
 		smContext.SetState(smf_context.InActive)
 		httpResponse = &httpwrapper.Response{
@@ -1027,6 +1032,8 @@ func HandlePDUSessionSMContextLocalRelease(smContext *smf_context.SMContext, cre
 
 	switch pfcpResponseStatus {
 	case smf_context.SessionReleaseSuccess:
+		ReleaseChargingSession(smContext)
+
 		logger.CtxLog.Traceln("In case SessionReleaseSuccess")
 		smContext.SetState(smf_context.InActivePending)
 		if createData.SmContextStatusUri != smContext.SmStatusNotifyUri {
@@ -1057,7 +1064,6 @@ func HandlePDUSessionSMContextLocalRelease(smContext *smf_context.SMContext, cre
 }
 
 func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionResponseStatus {
-	ReleaseChargingSession(smContext)
 
 	smContext.SetState(smf_context.PFCPModification)
 
