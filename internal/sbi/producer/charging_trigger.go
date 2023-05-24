@@ -155,6 +155,10 @@ func buildMultiUnitUsageFromUsageReport(smContext *smf_context.SMContext) []mode
 			var triggers []models.Trigger
 
 			chgInfo := smContext.ChargingInfo[ur.UrrId]
+			if chgInfo == nil {
+				logger.PduSessLog.Tracef("URR %d is not for charging", ur.UrrId)
+				continue
+			}
 
 			if chgInfo.ChargingLevel == smf_context.FlowCharging && ur.ReportTpye == models.TriggerType_VOLUME_LIMIT {
 				triggers = []models.Trigger{
