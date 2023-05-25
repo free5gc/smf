@@ -687,9 +687,6 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	if createdDataPath == nil {
 		return fmt.Errorf("fail to create data path for pcc rule[%s]", pccRule.PccRuleId)
 	}
-	if tcData != nil {
-		createdDataPath.Flowstatus = tcData.FlowStatus
-	}
 
 	createdDataPath.GBRFlow = isGBRFlow(qosData)
 	createdDataPath.ActivateTunnelAndPDR(c, uint32(pccRule.Precedence))
