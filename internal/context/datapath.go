@@ -65,7 +65,6 @@ type DataPath struct {
 	GBRFlow           bool
 	Destination       Destination
 	HasBranchingPoint bool
-	Flowstatus        models.FlowStatus
 	// Data Path Double Link List
 	FirstDPNode *DataPathNode
 }
@@ -538,24 +537,15 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 
 			ULFAR := ULPDR.FAR
 			// If the flow is disable, the tunnel and the session rules will not be created
-			if dataPath.Flowstatus != models.FlowStatus_DISABLED &&
-				dataPath.Flowstatus != models.FlowStatus_ENABLED_DOWNLINK {
-				ULFAR.ApplyAction = pfcpType.ApplyAction{
-					Buff: false,
-					Drop: false,
-					Dupl: false,
-					Forw: true,
-					Nocp: false,
-				}
-			} else {
-				ULFAR.ApplyAction = pfcpType.ApplyAction{
-					Buff: false,
-					Drop: true,
-					Dupl: false,
-					Forw: false,
-					Nocp: false,
-				}
+
+			ULFAR.ApplyAction = pfcpType.ApplyAction{
+				Buff: false,
+				Drop: false,
+				Dupl: false,
+				Forw: true,
+				Nocp: false,
 			}
+
 			ULFAR.ForwardingParameters = &ForwardingParameters{
 				DestinationInterface: pfcpType.DestinationInterface{
 					InterfaceValue: pfcpType.DestinationInterfaceCore,
@@ -653,24 +643,15 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				logger.PduSessLog.Traceln("In DLPDR OuterHeaderCreation")
 				nextDLTunnel := nextDLDest.DownLinkTunnel
 				// If the flow is disable, the tunnel and the session rules will not be created
-				if dataPath.Flowstatus != models.FlowStatus_DISABLED &&
-					dataPath.Flowstatus != models.FlowStatus_ENABLED_UPLINK {
-					DLFAR.ApplyAction = pfcpType.ApplyAction{
-						Buff: false,
-						Drop: false,
-						Dupl: false,
-						Forw: true,
-						Nocp: false,
-					}
-				} else {
-					DLFAR.ApplyAction = pfcpType.ApplyAction{
-						Buff: false,
-						Drop: true,
-						Dupl: false,
-						Forw: false,
-						Nocp: false,
-					}
+
+				DLFAR.ApplyAction = pfcpType.ApplyAction{
+					Buff: false,
+					Drop: false,
+					Dupl: false,
+					Forw: true,
+					Nocp: false,
 				}
+
 				iface = nextDLDest.UPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
 
 				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
