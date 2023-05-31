@@ -38,7 +38,7 @@ func InitConfigFactory(f string, cfg *Config) error {
 	return nil
 }
 
-func InitRoutingConfigFactory(f string, cfg *Config) error {
+func InitRoutingConfigFactory(f string, cfg *RoutingConfig) error {
 	if f == "" {
 		// Use default config path
 		f = SmfDefaultUERoutingPath
@@ -70,4 +70,21 @@ func ReadConfig(cfgPath string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func ReadUERoutingConfig(cfgPath string) (*RoutingConfig, error) {
+	ueRoutingCfg := &RoutingConfig{}
+	if err := InitRoutingConfigFactory(cfgPath, ueRoutingCfg); err != nil {
+		return nil, fmt.Errorf("ReadConfig [%s] Error: %+v", cfgPath, err)
+	}
+	if _, err := ueRoutingCfg.Validate(); err != nil {
+		validErrs := err.(govalidator.Errors).Errors()
+		for _, validErr := range validErrs {
+			logger.CfgLog.Errorf("%+v", validErr)
+		}
+		logger.CfgLog.Errorf("[-- PLEASE REFER TO SAMPLE CONFIG FILE COMMENTS --]")
+		return nil, fmt.Errorf("Config validate Error")
+	}
+
+	return ueRoutingCfg, nil
 }

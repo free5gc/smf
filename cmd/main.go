@@ -65,6 +65,12 @@ func action(cliCtx *cli.Context) error {
 	}
 	factory.SmfConfig = cfg
 
+	ueRoutingCfg, err := factory.ReadUERoutingConfig(cliCtx.String("uerouting"))
+	if err != nil {
+		return err
+	}
+	factory.UERoutingConfig = ueRoutingCfg
+
 	smf, err := service.NewApp(cfg)
 	if err != nil {
 		return err
