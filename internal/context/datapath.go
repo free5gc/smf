@@ -584,7 +584,6 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 			DLPDR.Precedence = precedence
 
 			// TODO: Should delete this after FR5GC-1029 is solved
-			// TODO: Should delete this after FR5GC-1029 is solved
 			if curDataPathNode.IsAnchorUPF() {
 				DLPDR.PDI = PDI{
 					SourceInterface: pfcpType.SourceInterface{
@@ -676,22 +675,6 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 					dlOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
 					dlOuterHeaderCreation.Teid = smContext.Tunnel.ANInformation.TEID
 					dlOuterHeaderCreation.Ipv4Address = smContext.Tunnel.ANInformation.IPAddress.To4()
-				}
-			}
-		}
-		if curDataPathNode.DownLinkTunnel != nil {
-			if curDataPathNode.DownLinkTunnel.SrcEndPoint == nil {
-				DNDLPDR := curDataPathNode.DownLinkTunnel.PDR
-				DNDLPDR.PDI = PDI{
-					SourceInterface: pfcpType.SourceInterface{InterfaceValue: pfcpType.SourceInterfaceCore},
-					NetworkInstance: &pfcpType.NetworkInstance{
-						NetworkInstance: smContext.Dnn,
-						FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
-					},
-					UEIPAddress: &pfcpType.UEIPAddress{
-						V4:          true,
-						Ipv4Address: smContext.PDUAddress.To4(),
-					},
 				}
 			}
 		}
