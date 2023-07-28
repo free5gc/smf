@@ -2,6 +2,7 @@ package context
 
 import (
 	"net"
+	"strings"
 
 	"github.com/free5gc/openapi/models"
 )
@@ -13,7 +14,7 @@ type SNssai struct {
 
 // Equal return true if two S-NSSAI is equal
 func (s *SNssai) Equal(target *SNssai) bool {
-	return s.Sst == target.Sst && s.Sd == target.Sd
+	return s.Sst == target.Sst && strings.EqualFold(s.Sd, target.Sd)
 }
 
 type SnssaiUPFInfo struct {
