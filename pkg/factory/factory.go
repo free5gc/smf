@@ -21,13 +21,13 @@ var (
 )
 
 func changeSdToLowercase(cfg *Config) {
-	//snssaiInfos
+	// snssaiInfos
 	SNssaiInfo := cfg.Configuration.SNssaiInfo
 	for i := range SNssaiInfo {
 		SNssaiInfo[i].SNssai.Sd = strings.ToLower(SNssaiInfo[i].SNssai.Sd)
 	}
 
-	//userplaneInformation
+	// userplaneInformation
 	UPNodes := cfg.Configuration.UserPlaneInformation.UPNodes
 	for i := range UPNodes {
 		if UPNodes[i].SNssaiInfos != nil {
