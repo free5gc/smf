@@ -7,7 +7,6 @@ package factory
 import (
 	"fmt"
 	"io/ioutil"
-	"strings"
 
 	"github.com/asaskevich/govalidator"
 	"gopkg.in/yaml.v2"
@@ -19,23 +18,6 @@ var (
 	SmfConfig       *Config
 	UERoutingConfig *RoutingConfig
 )
-
-func changeSdToLowercase(cfg *Config) {
-	// snssaiInfos
-	SNssaiInfo := cfg.Configuration.SNssaiInfo
-	for i := range SNssaiInfo {
-		SNssaiInfo[i].SNssai.Sd = strings.ToLower(SNssaiInfo[i].SNssai.Sd)
-	}
-
-	// userplaneInformation
-	UPNodes := cfg.Configuration.UserPlaneInformation.UPNodes
-	for i := range UPNodes {
-		SNssaiInfos := UPNodes[i].SNssaiInfos
-		for j := range SNssaiInfos {
-			SNssaiInfos[j].SNssai.Sd = strings.ToLower(SNssaiInfos[j].SNssai.Sd)
-		}
-	}
-}
 
 // TODO: Support configuration update from REST api
 func InitConfigFactory(f string, cfg *Config) error {
@@ -52,7 +34,6 @@ func InitConfigFactory(f string, cfg *Config) error {
 			return fmt.Errorf("[Factory] %+v", yamlErr)
 		}
 	}
-	changeSdToLowercase(cfg)
 
 	return nil
 }
