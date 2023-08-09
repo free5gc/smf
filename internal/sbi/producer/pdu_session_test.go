@@ -574,7 +574,7 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.paramStr, func(t *testing.T) {
-			httpResp := producer.HandlePDUSessionSMContextCreate(tc.request)
+			httpResp := producer.HandlePDUSessionSMContextCreate(nil, tc.request)
 
 			require.Equal(t, tc.expectedHTTPRsp.Status, httpResp.Status)
 			require.Equal(t, tc.expectedHTTPRsp.Body, httpResp.Body)

@@ -199,7 +199,12 @@ func waitAllPfcpRsp(
 	}
 }
 
-func EstHandler(smContext *smf_context.SMContext, success bool) {
+func EstHandler(isDone <-chan struct{},
+	smContext *smf_context.SMContext, success bool) {
+	// Waiting for Create SMContext Request completed
+	if isDone != nil {
+		<-isDone
+	}
 	if success {
 		sendPDUSessionEstablishmentAccept(smContext)
 	} else {
