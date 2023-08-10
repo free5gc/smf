@@ -24,7 +24,9 @@ import (
 	"github.com/free5gc/util/httpwrapper"
 )
 
-func HandlePDUSessionSMContextCreate(isDone <-chan struct{}, request models.PostSmContextsRequest) *httpwrapper.Response {
+func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
+	request models.PostSmContextsRequest,
+) *httpwrapper.Response {
 	// GSM State
 	// PDU Session Establishment Accept/Reject
 	var response models.PostSmContextsResponse

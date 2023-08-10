@@ -200,7 +200,8 @@ func waitAllPfcpRsp(
 }
 
 func EstHandler(isDone <-chan struct{},
-	smContext *smf_context.SMContext, success bool) {
+	smContext *smf_context.SMContext, success bool,
+) {
 	// Waiting for Create SMContext Request completed
 	if isDone != nil {
 		<-isDone
