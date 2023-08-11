@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -92,7 +91,7 @@ func (s *SMFContext) ListenIP() net.IP {
 // RetrieveDnnInformation gets the corresponding dnn info from S-NSSAI and DNN
 func RetrieveDnnInformation(Snssai *models.Snssai, dnn string) *SnssaiSmfDnnInfo {
 	for _, snssaiInfo := range GetSelf().SnssaiInfos {
-		if snssaiInfo.Snssai.Sst == Snssai.Sst && strings.EqualFold(snssaiInfo.Snssai.Sd, Snssai.Sd) {
+		if snssaiInfo.Snssai.EqualModelsSnssai(Snssai) {
 			return snssaiInfo.DnnInfos[dnn]
 		}
 	}

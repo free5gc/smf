@@ -17,6 +17,10 @@ func (s *SNssai) Equal(target *SNssai) bool {
 	return s.Sst == target.Sst && strings.EqualFold(s.Sd, target.Sd)
 }
 
+func (s *SNssai) EqualModelsSnssai(target *models.Snssai) bool {
+	return s.Sst == target.Sst && strings.EqualFold(s.Sd, target.Sd)
+}
+
 type SnssaiUPFInfo struct {
 	SNssai  *SNssai
 	DnnList []*DnnUPFInfoItem
