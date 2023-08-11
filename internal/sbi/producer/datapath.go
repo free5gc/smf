@@ -115,7 +115,7 @@ func QueryReport(smContext *smf_context.SMContext, upf *smf_context.UPF, urrs []
 	pfcpResult := <-resChan
 
 	if pfcpResult.Err != nil {
-		logger.PduSessLog.Error("Query URR Report by PFCP Session Mod Request fail: %+v", pfcpResult.Err)
+		logger.PduSessLog.Errorf("Query URR Report by PFCP Session Mod Request fail: %v", pfcpResult.Err)
 		return
 	}
 }
