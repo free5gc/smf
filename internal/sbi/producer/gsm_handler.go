@@ -232,15 +232,11 @@ func HandlePDUSessionModificationRequest(
 	authQoSRules := nasType.QoSRules{}
 	authQoSFlowDesc := reqQoSFlowDescs
 
-	for _, pcc := range smPolicyDecision.PccRules {
-		qosRef := pcc.RefQosData[0]
-		qosDesc := smPolicyDecision.QosDecs[qosRef]
-		qfi := uint8(qosDesc.Var5qi)
+	for id := range smPolicyDecision.PccRules {
 		// get op code from request
 		opCode := reqQoSRules[0].Operation
 		// build nas Qos Rule
-		pccRule := smf_context.NewPCCRule(pcc)
-		pccRule.QFI = qfi
+		pccRule := smCtx.PCCRules[id]
 		rule, err := pccRule.BuildNasQoSRule(smCtx, opCode)
 		if err != nil {
 			return nil, err
