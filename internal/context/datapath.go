@@ -713,14 +713,14 @@ func (p *DataPath) RemovePDR() {
 }
 
 func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) {
-	if qos == nil {
+	// QFI = 1 -> default QFI
+	if qos == nil && qfi != 1 {
 		return
 	}
 	for node := p.FirstDPNode; node != nil; node = node.Next() {
 		var qer *QER
 
 		currentUUID := node.UPF.GetUUID()
-		qfi := uint8(qos.Var5qi)
 		id := getQosIdKey(currentUUID, qfi)
 
 		if qerId, ok := smContext.QerUpfMap[id]; !ok {
