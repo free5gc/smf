@@ -735,14 +735,14 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 					ULGate: pfcpType.GateOpen,
 					DLGate: pfcpType.GateOpen,
 				}
-				newQER.MBR = &pfcpType.MBR{
-					ULMBR: util.BitRateTokbps(qos.MaxbrUl),
-					DLMBR: util.BitRateTokbps(qos.MaxbrDl),
-				}
 				if isGBRFlow(qos) {
 					newQER.GBR = &pfcpType.GBR{
 						ULGBR: util.BitRateTokbps(qos.GbrUl),
 						DLGBR: util.BitRateTokbps(qos.GbrDl),
+					}
+					newQER.MBR = &pfcpType.MBR{
+						ULMBR: util.BitRateTokbps(qos.MaxbrUl),
+						DLMBR: util.BitRateTokbps(qos.MaxbrDl),
 					}
 				}
 				qer = newQER
