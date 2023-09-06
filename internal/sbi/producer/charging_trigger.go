@@ -109,6 +109,10 @@ func ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) {
 
 			for upfId, urrList := range upfUrrMap {
 				upf := smf_context.GetUpfById(upfId)
+				if upf == nil {
+					logger.PduSessLog.Warnf("Cound not find upf %s", upfId)
+					continue
+				}
 				rcvMsg, err := pfcp_message.SendPfcpSessionModificationRequest(
 					upf, smContext, nil, nil, nil, nil, urrList)
 				if err != nil {
