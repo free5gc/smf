@@ -78,7 +78,7 @@ func SendPfcpAssociationReleaseRequest(upNodeID pfcpType.NodeID) (resMsg *pfcpUd
 	pfcpMsg, err := BuildPfcpAssociationReleaseRequest()
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Association Release Request failed: %v", err)
-		return
+		return nil, err
 	}
 
 	message := &pfcp.Message{
@@ -148,7 +148,7 @@ func SendPfcpSessionEstablishmentRequest(
 		ctx, pdrList, farList, barList, qerList, urrList)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Establishment Request failed: %v", err)
-		return
+		return nil, err
 	}
 
 	message := &pfcp.Message{
@@ -231,7 +231,7 @@ func SendPfcpSessionModificationRequest(
 		ctx, pdrList, farList, barList, qerList, urrList)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Modification Request failed: %v", err)
-		return
+		return nil, err
 	}
 
 	seqNum := getSeqNumber()
@@ -305,7 +305,7 @@ func SendPfcpSessionDeletionRequest(upf *context.UPF, ctx *context.SMContext) (r
 	pfcpMsg, err := BuildPfcpSessionDeletionRequest()
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Deletion Request failed: %v", err)
-		return
+		return nil, err
 	}
 	seqNum := getSeqNumber()
 	remoteSEID := ctx.PFCPContext[nodeIDtoIP.String()].RemoteSEID

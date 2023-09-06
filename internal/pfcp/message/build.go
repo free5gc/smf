@@ -202,7 +202,8 @@ func urrToCreateURR(urr *context.URR) *pfcp.CreateURR {
 	}
 	if !urr.QuotaValidityTime.IsZero() {
 		createURR.QuotaValidityTime = &pfcpType.QuotaValidityTime{
-			QuotaValidityTime: uint32(urr.QuotaValidityTime.Sub(time.Date(1900, time.January, 1, 0, 0, 0, 0, time.UTC)) / 1000000000),
+			QuotaValidityTime: uint32(urr.QuotaValidityTime.Sub(
+				time.Date(1900, time.January, 1, 0, 0, 0, 0, time.UTC)) / 1000000000),
 		}
 	}
 
@@ -336,7 +337,8 @@ func urrToUpdateURR(urr *context.URR) *pfcp.UpdateURR {
 	}
 	if urr.QuotaValidityTime.IsZero() {
 		updateURR.QuotaValidityTime = &pfcpType.QuotaValidityTime{
-			QuotaValidityTime: uint32(urr.QuotaValidityTime.Sub(time.Date(1900, time.January, 1, 0, 0, 0, 0, time.UTC)) / 1000000000),
+			QuotaValidityTime: uint32(urr.QuotaValidityTime.Sub(
+				time.Date(1900, time.January, 1, 0, 0, 0, 0, time.UTC)) / 1000000000),
 		}
 	}
 

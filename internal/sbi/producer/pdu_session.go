@@ -444,8 +444,6 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		// UE location change  is a charging event
 		// TODO: This is not tested yet
 		if smContext.UeLocation != body.JsonData.UeLocation {
-			var urrList []*smf_context.URR
-
 			// All rating group related to this Pdu session should send charging request
 			for _, dataPath := range tunnel.DataPathPool {
 				if dataPath.Activated {

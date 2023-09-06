@@ -97,7 +97,9 @@ func ActivateUPFSession(
 	close(resChan)
 }
 
-func QueryReport(smContext *smf_context.SMContext, upf *smf_context.UPF, urrs []*smf_context.URR, reportResaon models.TriggerType) {
+func QueryReport(smContext *smf_context.SMContext, upf *smf_context.UPF,
+	urrs []*smf_context.URR, reportResaon models.TriggerType,
+) {
 	smContext.SMLock.Lock()
 	defer smContext.SMLock.Unlock()
 

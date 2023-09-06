@@ -1,7 +1,6 @@
 package producer
 
 import (
-	"strings"
 	"time"
 
 	"github.com/free5gc/openapi/models"
@@ -29,9 +28,9 @@ func UpdateChargingSession(smContext *smf_context.SMContext, urrList []*smf_cont
 
 	for _, urr := range urrList {
 		if chgInfo := smContext.ChargingInfo[urr.URRID]; chgInfo != nil {
-
 			rg := chgInfo.RatingGroup
-			logger.PduSessLog.Tracef("Recieve Usage Report from URR[%d], correspopnding Rating Group[%d], ChargingMethod %v", urr.URRID, rg, chgInfo.ChargingMethod)
+			logger.PduSessLog.Tracef("Receive Usage Report from URR[%d], correspopnding Rating Group[%d], ChargingMethod %v",
+				urr.URRID, rg, chgInfo.ChargingMethod)
 			triggerTime := time.Now()
 
 			uu := models.UsedUnitContainer{
@@ -50,7 +49,8 @@ func UpdateChargingSession(smContext *smf_context.SMContext, urrList []*smf_cont
 		}
 	}
 
-	_, problemDetails, err := consumer.SendConvergedChargingRequest(smContext, smf_context.CHARGING_UPDATE, multipleUnitUsage)
+	_, problemDetails, err := consumer.SendConvergedChargingRequest(smContext,
+		smf_context.CHARGING_UPDATE, multipleUnitUsage)
 	if problemDetails != nil {
 		logger.ChargingLog.Errorf("Send Charging Data Request[Init] Failed Problem[%+v]", problemDetails)
 	} else if err != nil {
@@ -63,7 +63,8 @@ func UpdateChargingSession(smContext *smf_context.SMContext, urrList []*smf_cont
 func ReleaseChargingSession(smContext *smf_context.SMContext) {
 	multipleUnitUsage := buildMultiUnitUsageFromUsageReport(smContext)
 
-	_, problemDetails, err := consumer.SendConvergedChargingRequest(smContext, smf_context.CHARGING_RELEASE, multipleUnitUsage)
+	_, problemDetails, err := consumer.SendConvergedChargingRequest(smContext,
+		smf_context.CHARGING_RELEASE, multipleUnitUsage)
 	if problemDetails != nil {
 		logger.ChargingLog.Errorf("Send Charging Data Request[Termination] Failed Problem[%+v]", problemDetails)
 	} else if err != nil {
@@ -78,7 +79,8 @@ func ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) {
 	multipleUnitUsage := buildMultiUnitUsageFromUsageReport(smContext)
 
 	if len(multipleUnitUsage) != 0 {
-		rsp, problemDetails, err := consumer.SendConvergedChargingRequest(smContext, smf_context.CHARGING_UPDATE, multipleUnitUsage)
+		rsp, problemDetails, err := consumer.SendConvergedChargingRequest(smContext,
+			smf_context.CHARGING_UPDATE, multipleUnitUsage)
 
 		if problemDetails != nil {
 			logger.ChargingLog.Errorf("Send Charging Data Request[Update] Failed Problem[%+v]", problemDetails)
@@ -118,10 +120,10 @@ func ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) {
 				if err != nil {
 					logger.PduSessLog.Warnf("Sending PFCP Session Modification Request to AN UPF error: %+v", err)
 					pfcpResponseStatus = smf_context.SessionUpdateFailed
+				} else {
+					logger.PduSessLog.Infoln("Received PFCP Session Modification Response")
+					pfcpResponseStatus = smf_context.SessionUpdateSuccess
 				}
-
-				logger.PduSessLog.Infoln("Received PFCP Session Modification Response")
-				pfcpResponseStatus = smf_context.SessionUpdateSuccess
 
 				rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionModificationResponse)
 				if rsp.Cause == nil || rsp.Cause.CauseValue != pfcpType.CauseRequestAccepted {
@@ -142,11 +144,6 @@ func ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) {
 	} else {
 		logger.ChargingLog.Infof("No report need to be charged")
 	}
-}
-
-func getUpfIdFromKey(key string) string {
-	upfIdUrridStr := strings.Split(key, ":")
-	return upfIdUrridStr[0]
 }
 
 func buildMultiUnitUsageFromUsageReport(smContext *smf_context.SMContext) []models.MultipleUnitUsage {
@@ -181,7 +178,8 @@ func buildMultiUnitUsageFromUsageReport(smContext *smf_context.SMContext) []mode
 			}
 
 			rg := chgInfo.RatingGroup
-			logger.PduSessLog.Tracef("Recieve Usage Report from URR[%d], correspopnding Rating Group[%d], ChargingMethod %v", ur.UrrId, rg, chgInfo.ChargingMethod)
+			logger.PduSessLog.Tracef("Receive Usage Report from URR[%d], correspopnding Rating Group[%d], ChargingMethod %v",
+				ur.UrrId, rg, chgInfo.ChargingMethod)
 			triggerTime := time.Now()
 
 			uu := models.UsedUnitContainer{
@@ -258,12 +256,15 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 				switch t.TriggerType {
 				case models.TriggerType_VOLUME_LIMIT:
 					// According to 32.255, the for the trigger "Expirt of datavolume limit" have tow reporting level
-					// In the Pdu sesion level, the report should be "Immediate report", that is this report should send to CHF immediately
-					// In the Rating Group level, the report should be "Defferd report", that is this report should send to CHF when the in the next charging request triggereed
+					// In the Pdu sesion level, the report should be "Immediate report",
+					// that is this report should send to CHF immediately
+					// In the Rating Group level, the report should be "Defferd report", that is this report should send to CHF
+					// when the in the next charging request triggereed
 					// by charging trigger that belongs to the type of immediate report
 
-					// TODO: Currently CHF cannot identify the report level since it only knows the rating group, so the both charging level of "Expirt of datavolume limit"
-					// 		 will be included in the report, and the report type will be determined by the SMF
+					// TODO: Currently CHF cannot identify the report level since it only knows the rating group,
+					// so the both charging level of "Expirt of datavolume limit"
+					// will be included in the report, and the report type will be determined by the SMF
 					switch chgInfo.ChargingLevel {
 					case smf_context.PduSessionCharging:
 						if t.TriggerCategory == models.TriggerCategory_IMMEDIATE_REPORT {
@@ -274,18 +275,20 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 								chgInfo.VolumeLimitExpiryTimer = nil
 							}
 
-							chgInfo.VolumeLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.VolumeLimit)*time.Second, 1, func(expireTimes int32) {
-								urrList := []*smf_context.URR{urr}
-								upf := smf_context.GetUpfById(ui.UPFID)
-								if upf != nil {
-									QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
-									ReportUsageAndUpdateQuota(smContext)
-								}
-							}, func() {
-								smContext.Log.Tracef("Volume Limit Expiry for Pdu session, it's rating group is [%d]", rg)
-								chgInfo.VolumeLimitExpiryTimer.Stop()
-								chgInfo.VolumeLimitExpiryTimer = nil
-							})
+							chgInfo.VolumeLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.VolumeLimit)*time.Second, 1,
+								func(expireTimes int32) {
+									urrList := []*smf_context.URR{urr}
+									upf := smf_context.GetUpfById(ui.UPFID)
+									if upf != nil {
+										QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
+										ReportUsageAndUpdateQuota(smContext)
+									}
+								},
+								func() {
+									smContext.Log.Tracef("Volume Limit Expiry for Pdu session, it's rating group is [%d]", rg)
+									chgInfo.VolumeLimitExpiryTimer.Stop()
+									chgInfo.VolumeLimitExpiryTimer = nil
+								})
 						}
 					case smf_context.FlowCharging:
 						if t.TriggerCategory == models.TriggerCategory_DEFERRED_REPORT {
@@ -296,43 +299,48 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 								chgInfo.VolumeLimitExpiryTimer = nil
 							}
 
-							chgInfo.VolumeLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.VolumeLimit)*time.Second, 1, func(expireTimes int32) {
-								urrList := []*smf_context.URR{urr}
-								upf := smf_context.GetUpfById(ui.UPFID)
-								if upf != nil {
-									QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
-								}
-							}, func() {
-								smContext.Log.Tracef("Volume Limit Expiry for rating group [%d]", rg)
-								chgInfo.VolumeLimitExpiryTimer.Stop()
-								chgInfo.VolumeLimitExpiryTimer = nil
-							})
+							chgInfo.VolumeLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.VolumeLimit)*time.Second, 1,
+								func(expireTimes int32) {
+									urrList := []*smf_context.URR{urr}
+									upf := smf_context.GetUpfById(ui.UPFID)
+									if upf != nil {
+										QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
+									}
+								},
+								func() {
+									smContext.Log.Tracef("Volume Limit Expiry for rating group [%d]", rg)
+									chgInfo.VolumeLimitExpiryTimer.Stop()
+									chgInfo.VolumeLimitExpiryTimer = nil
+								})
 						}
 					}
 				case models.TriggerType_MAX_NUMBER_OF_CHANGES_IN_CHARGING_CONDITIONS:
 					switch chgInfo.ChargingLevel {
 					case smf_context.PduSessionCharging:
-						chgInfo.EventLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.EventLimit)*time.Second, 1, func(expireTimes int32) {
-							urrList := []*smf_context.URR{urr}
-							upf := smf_context.GetUpfById(ui.UPFID)
-							if upf != nil {
-								QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
-								ReportUsageAndUpdateQuota(smContext)
-							}
-						}, func() {
-							smContext.Log.Tracef("Event Limit Expiry Timer is triggered")
-							chgInfo.EventLimitExpiryTimer = nil
-						})
+						chgInfo.EventLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.EventLimit)*time.Second, 1,
+							func(expireTimes int32) {
+								urrList := []*smf_context.URR{urr}
+								upf := smf_context.GetUpfById(ui.UPFID)
+								if upf != nil {
+									QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
+									ReportUsageAndUpdateQuota(smContext)
+								}
+							},
+							func() {
+								smContext.Log.Tracef("Event Limit Expiry Timer is triggered")
+								chgInfo.EventLimitExpiryTimer = nil
+							})
 					default:
-						smContext.Log.Tracef("MAX_NUMBER_OF_CHANGES_IN_CHARGING_CONDITIONS should only be applied to PDU session level charging")
+						smContext.Log.Tracef("MAX_NUMBER_OF_CHANGES_IN_CHARGING_CONDITIONS" +
+							"should only be applied to PDU session level charging")
 					}
 				case models.TriggerType_QUOTA_THRESHOLD:
 					if ui.VolumeQuotaThreshold != 0 {
 						trigger.Volth = true
 						urr.VolumeThreshold = uint64(ui.VolumeQuotaThreshold)
 					}
-				// The difference between the  quota validity time and the volume limit is that the validity time is counted by the UPF,
-				// the volume limit is counted by the SMF
+				// The difference between the quota validity time and the volume limit is
+				// that the validity time is counted by the UPF, the volume limit is counted by the SMF
 				case models.TriggerType_VALIDITY_TIME:
 					if ui.ValidityTime != 0 {
 						urr.ReportingTrigger.Quvti = true
