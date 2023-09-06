@@ -277,8 +277,10 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 							chgInfo.VolumeLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.VolumeLimit)*time.Second, 1, func(expireTimes int32) {
 								urrList := []*smf_context.URR{urr}
 								upf := smf_context.GetUpfById(ui.UPFID)
-								QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
-								ReportUsageAndUpdateQuota(smContext)
+								if upf != nil {
+									QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
+									ReportUsageAndUpdateQuota(smContext)
+								}
 							}, func() {
 								smContext.Log.Tracef("Volume Limit Expiry for Pdu session, it's rating group is [%d]", rg)
 								chgInfo.VolumeLimitExpiryTimer.Stop()
@@ -297,7 +299,9 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 							chgInfo.VolumeLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.VolumeLimit)*time.Second, 1, func(expireTimes int32) {
 								urrList := []*smf_context.URR{urr}
 								upf := smf_context.GetUpfById(ui.UPFID)
-								QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
+								if upf != nil {
+									QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
+								}
 							}, func() {
 								smContext.Log.Tracef("Volume Limit Expiry for rating group [%d]", rg)
 								chgInfo.VolumeLimitExpiryTimer.Stop()
@@ -311,8 +315,10 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 						chgInfo.EventLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.EventLimit)*time.Second, 1, func(expireTimes int32) {
 							urrList := []*smf_context.URR{urr}
 							upf := smf_context.GetUpfById(ui.UPFID)
-							QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
-							ReportUsageAndUpdateQuota(smContext)
+							if upf != nil {
+								QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
+								ReportUsageAndUpdateQuota(smContext)
+							}
 						}, func() {
 							smContext.Log.Tracef("Event Limit Expiry Timer is triggered")
 							chgInfo.EventLimitExpiryTimer = nil

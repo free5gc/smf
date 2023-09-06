@@ -437,7 +437,7 @@ func (smContext *SMContext) CHFSelection() error {
 		// Supi: optional.NewString(smContext.Supi),
 	}
 
-	rep, res, err := GetSelf().
+	rsp, res, err := GetSelf().
 		NFDiscoveryClient.
 		NFInstancesStoreApi.
 		SearchNFInstances(context.TODO(), models.NfType_CHF, models.NfType_SMF, &localVarOptionals)
@@ -462,7 +462,7 @@ func (smContext *SMContext) CHFSelection() error {
 
 	// Select CHF from available CHF
 
-	smContext.SelectedCHFProfile = rep.NfInstances[0]
+	smContext.SelectedCHFProfile = rsp.NfInstances[0]
 
 	// Create Converged Charging Client for this SM Context
 	for _, service := range *smContext.SelectedCHFProfile.NfServices {
@@ -485,7 +485,7 @@ func (smContext *SMContext) PCFSelection() error {
 		localVarOptionals.PreferredLocality = optional.NewString(GetSelf().Locality)
 	}
 
-	rep, res, err := GetSelf().
+	rsp, res, err := GetSelf().
 		NFDiscoveryClient.
 		NFInstancesStoreApi.
 		SearchNFInstances(context.TODO(), models.NfType_PCF, models.NfType_SMF, &localVarOptionals)
@@ -510,7 +510,7 @@ func (smContext *SMContext) PCFSelection() error {
 
 	// Select PCF from available PCF
 
-	smContext.SelectedPCFProfile = rep.NfInstances[0]
+	smContext.SelectedPCFProfile = rsp.NfInstances[0]
 
 	// Create SMPolicyControl Client for this SM Context
 	for _, service := range *smContext.SelectedPCFProfile.NfServices {
