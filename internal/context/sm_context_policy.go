@@ -71,19 +71,14 @@ func (c *SMContext) RemoveQosFlow(qfi uint8) {
 // For urr that created for Pdu session level charging, it show be applied to all data path
 func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) {
 	var pduLevelChargingUrrs []*URR
-	var pccIdsForPduSession []string
 
 	for id, pcc := range pccRules {
 		if chargingLevel, err := pcc.IdentifyChargingLevel(); err != nil {
 			continue
 		} else if chargingLevel == PduSessionCharging {
-			pccIdsForPduSession = append(pccIdsForPduSession, id)
+			pduPcc := pccRules[id]
+			pduLevelChargingUrrs = pduPcc.Datapath.GetChargingUrr(c)
 		}
-	}
-
-	for _, pduPccid := range pccIdsForPduSession {
-		pduPcc := pccRules[pduPccid]
-		pduLevelChargingUrrs = pduPcc.Datapath.GetChargingUrr(c)
 	}
 
 	for _, flowPcc := range pccRules {

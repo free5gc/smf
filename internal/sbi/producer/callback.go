@@ -48,6 +48,10 @@ func chargingNotificationProcedure(req models.ChargingNotifyRequest, smContextRe
 
 			for upfId, urrList := range upfUrrMap {
 				upf := smf_context.GetUpfById(upfId)
+				if upf == nil {
+					logger.ChargingLog.Warnf("Cound not find upf %s", upfId)
+					continue
+				}
 				QueryReport(smContext, upf, urrList, models.TriggerType_FORCED_REAUTHORISATION)
 			}
 
