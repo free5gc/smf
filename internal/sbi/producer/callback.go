@@ -12,7 +12,9 @@ import (
 	"github.com/free5gc/util/httpwrapper"
 )
 
-func HandleChargingNotification(chargingNotifyRequest models.ChargingNotifyRequest, smContextRef string) *httpwrapper.Response {
+func HandleChargingNotification(chargingNotifyRequest models.ChargingNotifyRequest,
+	smContextRef string,
+) *httpwrapper.Response {
 	logger.ChargingLog.Info("Handle Charging Notification")
 
 	problemDetails := chargingNotificationProcedure(chargingNotifyRequest, smContextRef)
@@ -23,7 +25,7 @@ func HandleChargingNotification(chargingNotifyRequest models.ChargingNotifyReque
 	}
 }
 
-// While recieve Charging Notification from CHF, SMF will send Charging Information to CHF and update UPF
+// While receive Charging Notification from CHF, SMF will send Charging Information to CHF and update UPF
 func chargingNotificationProcedure(req models.ChargingNotifyRequest, smContextRef string) *models.ProblemDetails {
 	if smContext := smf_context.GetSMContextByRef(smContextRef); smContext != nil {
 		go func() {
@@ -43,7 +45,6 @@ func chargingNotificationProcedure(req models.ChargingNotifyRequest, smContextRe
 						upfUrrMap[upfId] = append(upfUrrMap[upfId], urr)
 					}
 				}
-
 			}
 
 			for upfId, urrList := range upfUrrMap {
@@ -68,6 +69,7 @@ func chargingNotificationProcedure(req models.ChargingNotifyRequest, smContextRe
 
 	return nil
 }
+
 func HandleSMPolicyUpdateNotify(smContextRef string, request models.SmPolicyNotification) *httpwrapper.Response {
 	logger.PduSessLog.Infoln("In HandleSMPolicyUpdateNotify")
 	decision := request.SmPolicyDecision

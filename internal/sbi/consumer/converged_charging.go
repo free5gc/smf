@@ -14,7 +14,9 @@ import (
 	"github.com/free5gc/smf/internal/logger"
 )
 
-func buildConvergedChargingRequest(smContext *smf_context.SMContext, multipleUnitUsage []models.MultipleUnitUsage) *models.ChargingDataRequest {
+func buildConvergedChargingRequest(smContext *smf_context.SMContext,
+	multipleUnitUsage []models.MultipleUnitUsage,
+) *models.ChargingDataRequest {
 	var triggers []models.Trigger
 
 	smfSelf := smf_context.GetSelf()
@@ -70,7 +72,9 @@ func buildConvergedChargingRequest(smContext *smf_context.SMContext, multipleUni
 	return req
 }
 
-func SendConvergedChargingRequest(smContext *smf_context.SMContext, requestType smf_context.RequestType, multipleUnitUsage []models.MultipleUnitUsage) (*models.ChargingDataResponse, *models.ProblemDetails, error) {
+func SendConvergedChargingRequest(smContext *smf_context.SMContext, requestType smf_context.RequestType,
+	multipleUnitUsage []models.MultipleUnitUsage,
+) (*models.ChargingDataResponse, *models.ProblemDetails, error) {
 	logger.ChargingLog.Info("Handle SendConvergedChargingRequest")
 
 	req := buildConvergedChargingRequest(smContext, multipleUnitUsage)
@@ -79,17 +83,25 @@ func SendConvergedChargingRequest(smContext *smf_context.SMContext, requestType 
 	var httpResponse *http.Response
 	var err error
 
-	//select the appropriate converged charging service based on trigger type
+	// select the appropriate converged charging service based on trigger type
 	switch requestType {
 	case smf_context.CHARGING_INIT:
 		rsp, httpResponse, err = smContext.ChargingClient.DefaultApi.ChargingdataPost(context.Background(), *req)
 		chargingDataRef := strings.Split(httpResponse.Header.Get("Location"), "/")
 		smContext.ChargingDataRef = chargingDataRef[len(chargingDataRef)-1]
 	case smf_context.CHARGING_UPDATE:
-		rsp, httpResponse, err = smContext.ChargingClient.DefaultApi.ChargingdataChargingDataRefUpdatePost(context.Background(), smContext.ChargingDataRef, *req)
+		rsp, httpResponse, err = smContext.ChargingClient.DefaultApi.ChargingdataChargingDataRefUpdatePost(
+			context.Background(), smContext.ChargingDataRef, *req)
 	case smf_context.CHARGING_RELEASE:
-		httpResponse, err = smContext.ChargingClient.DefaultApi.ChargingdataChargingDataRefReleasePost(context.Background(), smContext.ChargingDataRef, *req)
+		httpResponse, err = smContext.ChargingClient.DefaultApi.ChargingdataChargingDataRefReleasePost(context.Background(),
+			smContext.ChargingDataRef, *req)
 	}
+
+	defer func() {
+		if resCloseErr := httpResponse.Body.Close(); resCloseErr != nil {
+			logger.ChargingLog.Errorf("RegisterNFInstance response body cannot close: %+v", resCloseErr)
+		}
+	}()
 
 	if err == nil {
 		return &rsp, nil, nil
