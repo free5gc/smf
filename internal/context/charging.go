@@ -7,7 +7,8 @@ import (
 type ChargingLevel uint8
 
 // For a rating group that is pud session charging level, all volume in a pdu session will be charged
-// For a rating group that is flow charging level (or Rating group level (32.255)), only  volume in a flow will be charged
+// For a rating group that is flow charging level (or Rating group level (32.255)), 
+// only  volume in a flow will be charged
 const (
 	PduSessionCharging ChargingLevel = iota
 	FlowCharging

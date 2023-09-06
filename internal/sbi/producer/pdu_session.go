@@ -188,9 +188,9 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 		smContext.Supi, smContext.PDUSessionID)
 	if err := smContext.CHFSelection(); err != nil {
 		logger.PduSessLog.Errorln("chf selection error:", err)
+	} else {
+		CreateChargingSession(smContext)
 	}
-
-	CreateChargingSession(smContext)
 
 	// Update SessionRule from decision
 	if err = smContext.ApplySessionRules(smPolicyDecision); err != nil {
@@ -1064,7 +1064,6 @@ func HandlePDUSessionSMContextLocalRelease(smContext *smf_context.SMContext, cre
 }
 
 func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionResponseStatus {
-
 	smContext.SetState(smf_context.PFCPModification)
 
 	for _, res := range ReleaseTunnel(smContext) {
