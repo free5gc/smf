@@ -72,12 +72,14 @@ func (c *SMContext) RemoveQosFlow(qfi uint8) {
 func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) {
 	var pduLevelChargingUrrs []*URR
 
+	// First, select charging URRs from pcc rule, which charging level is PDU Session level
 	for id, pcc := range pccRules {
 		if chargingLevel, err := pcc.IdentifyChargingLevel(); err != nil {
 			continue
 		} else if chargingLevel == PduSessionCharging {
 			pduPcc := pccRules[id]
 			pduLevelChargingUrrs = pduPcc.Datapath.GetChargingUrr(c)
+			break
 		}
 	}
 
@@ -87,6 +89,7 @@ func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) 
 		} else if chgLevel == FlowCharging {
 			for node := flowPcc.Datapath.FirstDPNode; node != nil; node = node.Next() {
 				if node.IsAnchorUPF() {
+					// only the traffic on the PSA UPF will be charged
 					if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
 						node.UpLinkTunnel.PDR.URR = append(node.UpLinkTunnel.PDR.URR, pduLevelChargingUrrs...)
 					}
