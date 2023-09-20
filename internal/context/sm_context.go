@@ -202,6 +202,8 @@ type SMContext struct {
 	UrrUpfMap          map[string]*URR
 	UrrReportTime      time.Duration
 	UrrReportThreshold uint64
+	// Cache the usage reports, sent from UPF
+	// Those information will be included in CDR.
 	UrrReports         []UsageReport
 
 	// Charging Related

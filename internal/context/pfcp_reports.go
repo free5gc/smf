@@ -8,7 +8,7 @@ import (
 )
 
 func (smContext *SMContext) HandleReports(
-	UsageReportReport []*pfcp.UsageReportPFCPSessionReportRequest,
+	UsageReportRequest []*pfcp.UsageReportPFCPSessionReportRequest,
 	UsageReportModification []*pfcp.UsageReportPFCPSessionModificationResponse,
 	UsageReportDeletion []*pfcp.UsageReportPFCPSessionDeletionResponse,
 	nodeId pfcpType.NodeID, reportTpye models.TriggerType,
@@ -17,7 +17,7 @@ func (smContext *SMContext) HandleReports(
 	upf := RetrieveUPFNodeByNodeID(nodeId)
 	upfId := upf.UUID()
 
-	for _, report := range UsageReportReport {
+	for _, report := range UsageReportRequest {
 		usageReport.UrrId = report.URRID.UrrIdValue
 		usageReport.UpfId = upfId
 		usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume

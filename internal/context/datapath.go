@@ -728,11 +728,13 @@ func (p *DataPath) GetChargingUrr(smContext *SMContext) []*URR {
 
 	for node := p.FirstDPNode; node != nil; node = node.Next() {
 		// Charging rules only apply to anchor UPF
+		// Note: ULPDR and DLPDR share the same URR but have different FAR
+		// See AddChargingRules() for more details
 		if node.IsAnchorUPF() {
 			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
 				urrs = node.UpLinkTunnel.PDR.URR
 			} else if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-				urrs = node.UpLinkTunnel.PDR.URR
+				urrs = node.DownLinkTunnel.PDR.URR
 			}
 
 			for _, urr := range urrs {
@@ -776,7 +778,7 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 				if chgData.Online {
 					if newURR, err := node.UPF.AddURR(uint32(urrId),
 						NewMeasureInformation(false, false),
-						SetStartofSDFTrigger()); err != nil {
+						SetStartOfSDFTrigger()); err != nil {
 						logger.PduSessLog.Errorln("new URR failed")
 						return
 					} else {

@@ -26,38 +26,34 @@ func HandleChargingNotification(chargingNotifyRequest models.ChargingNotifyReque
 }
 
 // While receive Charging Notification from CHF, SMF will send Charging Information to CHF and update UPF
+// The Charging Notification will be sent when CHF found the changes of the quota file.
 func chargingNotificationProcedure(req models.ChargingNotifyRequest, smContextRef string) *models.ProblemDetails {
 	if smContext := smf_context.GetSMContextByRef(smContextRef); smContext != nil {
-		go func() {
-			upfUrrMap := make(map[string][]*smf_context.URR)
-
-			for _, reauthorizeDetail := range req.ReauthorizationDetails {
-				rg := reauthorizeDetail.RatingGroup
-				logger.ChargingLog.Infof("Force update charging information for rating group %d", rg)
-
-				for _, urr := range smContext.UrrUpfMap {
-					chgInfo := smContext.ChargingInfo[urr.URRID]
-					if chgInfo.RatingGroup == rg ||
-						chgInfo.ChargingLevel == smf_context.PduSessionCharging {
-						logger.ChargingLog.Tracef("Query URR (%d) for Rating Group (%d)", urr.URRID, rg)
-
-						upfId := smContext.ChargingInfo[urr.URRID].UpfId
-						upfUrrMap[upfId] = append(upfUrrMap[upfId], urr)
-					}
+		smContext.SMLock.Lock()
+		defer smContext.SMLock.Unlock()
+		upfUrrMap := make(map[string][]*smf_context.URR)
+		for _, reauthorizeDetail := range req.ReauthorizationDetails {
+			rg := reauthorizeDetail.RatingGroup
+			logger.ChargingLog.Infof("Force update charging information for rating group %d", rg)
+			for _, urr := range smContext.UrrUpfMap {
+				chgInfo := smContext.ChargingInfo[urr.URRID]
+				if chgInfo.RatingGroup == rg ||
+					chgInfo.ChargingLevel == smf_context.PduSessionCharging {
+					logger.ChargingLog.Tracef("Query URR (%d) for Rating Group (%d)", urr.URRID, rg)
+					upfId := smContext.ChargingInfo[urr.URRID].UpfId
+					upfUrrMap[upfId] = append(upfUrrMap[upfId], urr)
 				}
 			}
-
-			for upfId, urrList := range upfUrrMap {
-				upf := smf_context.GetUpfById(upfId)
-				if upf == nil {
-					logger.ChargingLog.Warnf("Cound not find upf %s", upfId)
-					continue
-				}
-				QueryReport(smContext, upf, urrList, models.TriggerType_FORCED_REAUTHORISATION)
+		}
+		for upfId, urrList := range upfUrrMap {
+			upf := smf_context.GetUpfById(upfId)
+			if upf == nil {
+				logger.ChargingLog.Warnf("Cound not find upf %s", upfId)
+				continue
 			}
-
-			ReportUsageAndUpdateQuota(smContext)
-		}()
+			QueryReport(smContext, upf, urrList, models.TriggerType_FORCED_REAUTHORISATION)
+		}
+		ReportUsageAndUpdateQuota(smContext)
 	} else {
 		problemDetails := &models.ProblemDetails{
 			Status: http.StatusNotFound,
