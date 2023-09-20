@@ -74,11 +74,13 @@ func (r *PCCRule) IdentifyChargingLevel() (ChargingLevel, error) {
 	if err != nil {
 		return 0, err
 	}
-	// For pcc that are applicable for all datapath, it's charging level will be Pdu based
+	// For the PCC rule that are applicable for all datapath,
+	// it's charging level will be PDU-based
 	if dlIPFilterRule.Src == "any" && dlIPFilterRule.Dst == "assigned" {
 		return PduSessionCharging, nil
 	} else {
-		// For pcc that have applicable for all datapath fpr a datapath, it's charging level will be flow based
+		// For the PCC rule that is applicable for all datapath for a datapath,
+		// it's charging level will be flow-based
 		return FlowCharging, nil
 	}
 }

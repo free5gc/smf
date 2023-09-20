@@ -204,7 +204,7 @@ type SMContext struct {
 	UrrReportThreshold uint64
 	// Cache the usage reports, sent from UPF
 	// Those information will be included in CDR.
-	UrrReports         []UsageReport
+	UrrReports []UsageReport
 
 	// Charging Related
 	ChargingDataRef string
