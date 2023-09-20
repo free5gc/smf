@@ -182,7 +182,7 @@ func (c *SMContext) ApplyPccRules(
 				finalQosDatas[tgtQosID] = tgtQosData
 			}
 		}
-		if err := checkUpPathChgEvent(c, srcTcData, tgtTcData); err != nil {
+		if err := checkUpPathChangeEvt(c, srcTcData, tgtTcData); err != nil {
 			c.Log.Warnf("Check UpPathChgEvent err: %v", err)
 		}
 		// Remove handled pcc rule
@@ -209,7 +209,7 @@ func (c *SMContext) ApplyPccRules(
 			if err := c.CreatePccRuleDataPath(pcc, tgtTcData, tgtQosData, tgtChgData); err != nil {
 				return err
 			}
-			if err := checkUpPathChgEvent(c, srcTcData, tgtTcData); err != nil {
+			if err := checkUpPathChangeEvt(c, srcTcData, tgtTcData); err != nil {
 				c.Log.Warnf("Check UpPathChgEvent err: %v", err)
 			}
 		}
@@ -343,7 +343,7 @@ func applyFlowInfoOrPFD(pcc *PCCRule) error {
 	return nil
 }
 
-func checkUpPathChgEvent(c *SMContext,
+func checkUpPathChangeEvt(c *SMContext,
 	srcTcData, tgtTcData *TrafficControlData,
 ) error {
 	var srcRoute, tgtRoute models.RouteToLocation

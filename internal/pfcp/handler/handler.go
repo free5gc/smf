@@ -193,11 +193,9 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 	if req.ReportType.Usar && req.UsageReport != nil {
 		smContext.HandleReports(req.UsageReport, nil, nil, upfNodeID, "")
 		// After receiving the Usage Report, it should send charging request to the CHF
-		// and update the URR with the quota or other charging information  according to
+		// and update the URR with the quota or other charging information according to
 		// the charging response
-		go func() {
-			producer.ReportUsageAndUpdateQuota(smContext)
-		}()
+		producer.ReportUsageAndUpdateQuota(smContext)
 	}
 
 	// TS 23.502 4.2.3.3 2b. Send Data Notification Ack, SMF->UPF

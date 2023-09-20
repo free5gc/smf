@@ -463,7 +463,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		smContext.SetState(smf_context.ModificationPending)
 		response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
 		smContext.UpCnxState = body.JsonData.UpCnxState
-		// UE location change  is a charging event
+		// UE location change is a charging event
 		// TODO: This is not tested yet
 		if smContext.UeLocation != body.JsonData.UeLocation {
 			// All rating group related to this Pdu session should send charging request

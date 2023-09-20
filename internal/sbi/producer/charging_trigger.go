@@ -277,6 +277,8 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 
 							chgInfo.VolumeLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.VolumeLimit)*time.Second, 1,
 								func(expireTimes int32) {
+									smContext.SMLock.Lock()
+									defer smContext.SMLock.Unlock()
 									urrList := []*smf_context.URR{urr}
 									upf := smf_context.GetUpfById(ui.UPFID)
 									if upf != nil {
@@ -301,6 +303,8 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 
 							chgInfo.VolumeLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.VolumeLimit)*time.Second, 1,
 								func(expireTimes int32) {
+									smContext.SMLock.Lock()
+									defer smContext.SMLock.Unlock()
 									urrList := []*smf_context.URR{urr}
 									upf := smf_context.GetUpfById(ui.UPFID)
 									if upf != nil {
@@ -319,6 +323,8 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 					case smf_context.PduSessionCharging:
 						chgInfo.EventLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.EventLimit)*time.Second, 1,
 							func(expireTimes int32) {
+								smContext.SMLock.Lock()
+								defer smContext.SMLock.Unlock()
 								urrList := []*smf_context.URR{urr}
 								upf := smf_context.GetUpfById(ui.UPFID)
 								if upf != nil {

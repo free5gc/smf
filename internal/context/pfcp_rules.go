@@ -82,7 +82,7 @@ func NewVolumeQuota(quota uint64) UrrOpt {
 	}
 }
 
-func SetStartofSDFTrigger() UrrOpt {
+func SetStartOfSDFTrigger() UrrOpt {
 	return func(urr *URR) {
 		urr.ReportingTrigger.Start = true
 	}

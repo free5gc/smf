@@ -100,9 +100,6 @@ func ActivateUPFSession(
 func QueryReport(smContext *smf_context.SMContext, upf *smf_context.UPF,
 	urrs []*smf_context.URR, reportResaon models.TriggerType,
 ) {
-	smContext.SMLock.Lock()
-	defer smContext.SMLock.Unlock()
-
 	for _, urr := range urrs {
 		urr.State = smf_context.RULE_QUERY
 	}
