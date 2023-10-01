@@ -24,7 +24,9 @@ import (
 	"github.com/free5gc/util/httpwrapper"
 )
 
-func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *httpwrapper.Response {
+func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
+	request models.PostSmContextsRequest,
+) *httpwrapper.Response {
 	// GSM State
 	// PDU Session Establishment Accept/Reject
 	var response models.PostSmContextsResponse
@@ -209,7 +211,11 @@ func HandlePDUSessionSMContextCreate(request models.PostSmContextsRequest) *http
 
 		smContext.SendUpPathChgNotification("EARLY", SendUpPathChgEventExposureNotification)
 
-		ActivateUPFSession(smContext, EstHandler)
+		handler := func(smContext *smf_context.SMContext, success bool) {
+			EstHandler(isDone, smContext, success)
+		}
+
+		ActivateUPFSession(smContext, handler)
 
 		smContext.SendUpPathChgNotification("LATE", SendUpPathChgEventExposureNotification)
 

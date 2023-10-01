@@ -128,8 +128,8 @@ func SendSMPolicyAssociationUpdateByUERequestModification(
 			paraGFBRUplink := parameter.(*nasType.QoSFlowGFBRUplink)
 			ueInitResReq.ReqQos.GbrUl = nasBitRateToString(paraGFBRUplink.Value, paraGFBRUplink.Unit)
 		case nasType.ParameterIdentifierGFBRDownlink:
-			paraGFBRUplink := parameter.(*nasType.QoSFlowGFBRUplink)
-			ueInitResReq.ReqQos.GbrUl = nasBitRateToString(paraGFBRUplink.Value, paraGFBRUplink.Unit)
+			paraGFBRDownlink := parameter.(*nasType.QoSFlowGFBRDownlink)
+			ueInitResReq.ReqQos.GbrDl = nasBitRateToString(paraGFBRDownlink.Value, paraGFBRDownlink.Unit)
 		}
 	}
 

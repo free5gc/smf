@@ -584,7 +584,6 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 			DLPDR.Precedence = precedence
 
 			// TODO: Should delete this after FR5GC-1029 is solved
-			// TODO: Should delete this after FR5GC-1029 is solved
 			if curDataPathNode.IsAnchorUPF() {
 				DLPDR.PDI = PDI{
 					SourceInterface: pfcpType.SourceInterface{
@@ -679,22 +678,6 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				}
 			}
 		}
-		if curDataPathNode.DownLinkTunnel != nil {
-			if curDataPathNode.DownLinkTunnel.SrcEndPoint == nil {
-				DNDLPDR := curDataPathNode.DownLinkTunnel.PDR
-				DNDLPDR.PDI = PDI{
-					SourceInterface: pfcpType.SourceInterface{InterfaceValue: pfcpType.SourceInterfaceCore},
-					NetworkInstance: &pfcpType.NetworkInstance{
-						NetworkInstance: smContext.Dnn,
-						FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
-					},
-					UEIPAddress: &pfcpType.UEIPAddress{
-						V4:          true,
-						Ipv4Address: smContext.PDUAddress.To4(),
-					},
-				}
-			}
-		}
 	}
 
 	dataPath.Activated = true
@@ -730,14 +713,14 @@ func (p *DataPath) RemovePDR() {
 }
 
 func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) {
-	if qos == nil {
+	// QFI = 1 -> default QFI
+	if qos == nil && qfi != 1 {
 		return
 	}
 	for node := p.FirstDPNode; node != nil; node = node.Next() {
 		var qer *QER
 
 		currentUUID := node.UPF.GetUUID()
-		qfi := uint8(qos.Var5qi)
 		id := getQosIdKey(currentUUID, qfi)
 
 		if qerId, ok := smContext.QerUpfMap[id]; !ok {
@@ -752,14 +735,14 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 					ULGate: pfcpType.GateOpen,
 					DLGate: pfcpType.GateOpen,
 				}
-				newQER.MBR = &pfcpType.MBR{
-					ULMBR: util.BitRateTokbps(qos.MaxbrUl),
-					DLMBR: util.BitRateTokbps(qos.MaxbrDl),
-				}
 				if isGBRFlow(qos) {
 					newQER.GBR = &pfcpType.GBR{
 						ULGBR: util.BitRateTokbps(qos.GbrUl),
 						DLGBR: util.BitRateTokbps(qos.GbrDl),
+					}
+					newQER.MBR = &pfcpType.MBR{
+						ULMBR: util.BitRateTokbps(qos.MaxbrUl),
+						DLMBR: util.BitRateTokbps(qos.MaxbrDl),
 					}
 				}
 				qer = newQER

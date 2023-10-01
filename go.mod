@@ -9,9 +9,9 @@ require (
 	github.com/free5gc/aper v1.0.4
 	github.com/free5gc/nas v1.1.0
 	github.com/free5gc/ngap v1.0.6
-	github.com/free5gc/openapi v1.0.6
+	github.com/free5gc/openapi v1.0.7-0.20230802173229-2b3ded4db293
 	github.com/free5gc/pfcp v1.0.6
-	github.com/free5gc/util v1.0.5-0.20230511064842-2e120956883b
+	github.com/free5gc/util v1.0.5-0.20230823103219-e511c4fd20ef
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.3.0
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
