@@ -219,7 +219,7 @@ func createNasPacketFilter(
 		}
 	}
 
-	if ipFilterRule.Dst != "any" {
+	if ipFilterRule.Dst != "any" && ipFilterRule.Dst != "assigned" {
 		_, ipNet, err := net.ParseCIDR(ipFilterRule.Dst)
 		if err != nil {
 			return nil, fmt.Errorf("parse IP fail: %s", err)
@@ -242,7 +242,7 @@ func createNasPacketFilter(
 		}
 	}
 
-	if ipFilterRule.Src != "any" {
+	if ipFilterRule.Src != "any" && ipFilterRule.Src != "assigned" {
 		_, ipNet, err := net.ParseCIDR(ipFilterRule.Src)
 		if err != nil {
 			return nil, fmt.Errorf("parse IP fail: %s", err)
