@@ -68,7 +68,7 @@ func (c *SMContext) RemoveQosFlow(qfi uint8) {
 	delete(c.AdditonalQosFlows, qfi)
 }
 
-// For urr that created for Pdu session level charging, it show be applied to all data path
+// For urr that created for Pdu session level charging, it shall be applied to all data path
 func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) {
 	var pduLevelChargingUrrs []*URR
 
