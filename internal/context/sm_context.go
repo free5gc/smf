@@ -311,7 +311,7 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 		smContext.UrrReportThreshold = factory.SmfConfig.Configuration.UrrThreshold
 		logger.CtxLog.Infof("UrrPeriod: %v", smContext.UrrReportTime)
 		logger.CtxLog.Infof("UrrThreshold: %d", smContext.UrrReportThreshold)
-		if factory.SmfConfig.Configuration.RequestedUnit {
+		if factory.SmfConfig.Configuration.RequestedUnit != 0 {
 			smContext.RequestedUnit = factory.SmfConfig.Configuration.RequestedUnit
 		} else {
 			smContext.RequestedUnit = 1000
