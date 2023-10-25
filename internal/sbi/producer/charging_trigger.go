@@ -255,7 +255,7 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 			for _, t := range ui.Triggers {
 				switch t.TriggerType {
 				case models.TriggerType_VOLUME_LIMIT:
-					// According to 32.255, the for the trigger "Expirt of datavolume limit" have tow reporting level
+					// According to 32.255, the for the trigger "Expirt of datavolume limit" have two reporting level
 					// In the Pdu sesion level, the report should be "Immediate report",
 					// that is this report should send to CHF immediately
 					// In the Rating Group level, the report should be "Defferd report", that is this report should send to CHF
