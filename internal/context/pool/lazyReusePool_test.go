@@ -262,6 +262,78 @@ func TestLazyReusePool_ReserveSection(t *testing.T) {
 	require.Equal(t, expected, allocated)
 }
 
+func TestLazyReusePool_ReserveSection2(t *testing.T) {
+	p, err := NewLazyReusePool(10, 100)
+	require.NoError(t, err)
+	assert.Equal(t, (100 - 10 + 1), p.Remain())
+	require.Equal(t, &segment{first: 10, last: 100}, p.head)
+
+	err = p.Reserve(0, 5)
+	assert.Error(t, err)
+
+	err = p.Reserve(10, 20)
+	require.NoError(t, err)
+	assert.Equal(t, (100 - 21 + 1), p.Remain())
+	assert.Equal(t, &segment{first: 21, last: 100}, p.head)
+
+	err = p.Reserve(90, 100)
+	require.NoError(t, err)
+	assert.Equal(t, (89 - 21 + 1), p.Remain())
+	assert.Equal(t, &segment{first: 21, last: 89}, p.head)
+
+	err = p.Reserve(40, 50)
+	require.NoError(t, err)
+	assert.Equal(t, (39 - 21 + 1 + 89 - 51 + 1), p.Remain())
+	assert.Equal(t, &segment{first: 21, last: 39, next: &segment{first: 51, last: 89}}, p.head)
+
+	err = p.Reserve(10, 20)
+	require.NoError(t, err)
+	assert.Equal(t, (39 - 21 + 1 + 89 - 51 + 1), p.Remain())
+	assert.Equal(t, &segment{first: 21, last: 39, next: &segment{first: 51, last: 89}}, p.head)
+
+	err = p.Reserve(40, 50)
+	require.NoError(t, err)
+	assert.Equal(t, (39 - 21 + 1 + 89 - 51 + 1), p.Remain())
+	assert.Equal(t, &segment{first: 21, last: 39, next: &segment{first: 51, last: 89}}, p.head)
+
+	err = p.Reserve(90, 100)
+	require.NoError(t, err)
+	assert.Equal(t, (39 - 21 + 1 + 89 - 51 + 1), p.Remain())
+	assert.Equal(t, &segment{first: 21, last: 39, next: &segment{first: 51, last: 89}}, p.head)
+
+	err = p.Reserve(36, 55)
+	require.NoError(t, err)
+	assert.Equal(t, (35 - 21 + 1 + 89 - 56 + 1), p.Remain())
+	assert.Equal(t, &segment{first: 21, last: 35, next: &segment{first: 56, last: 89}}, p.head)
+
+	err = p.Reserve(21, 35)
+	require.NoError(t, err)
+	assert.Equal(t, (89 - 56 + 1), p.Remain())
+	assert.Equal(t, &segment{first: 56, last: 89}, p.head)
+
+	err = p.Reserve(60, 65)
+	require.NoError(t, err)
+	err = p.Reserve(70, 75)
+	require.NoError(t, err)
+	assert.Equal(t, (59 - 56 + 1 + 69 - 66 + 1 + 89 - 76 + 1), p.Remain())
+	assert.Equal(t, &segment{first: 56, last: 59, next: &segment{first: 66, last: 69, next: &segment{first: 76, last: 89}}}, p.head)
+
+	err = p.Reserve(60, 75)
+	require.NoError(t, err)
+	assert.Equal(t, (59 - 56 + 1 + 89 - 76 + 1), p.Remain())
+	assert.Equal(t, &segment{first: 56, last: 59, next: &segment{first: 76, last: 89}}, p.head)
+
+	err = p.Reserve(70, 90)
+	require.NoError(t, err)
+	assert.Equal(t, (59 - 56 + 1), p.Remain())
+	assert.Equal(t, &segment{first: 56, last: 59}, p.head)
+
+	err = p.Reserve(50, 60)
+	require.NoError(t, err)
+	assert.Equal(t, 0, p.Remain())
+	assert.Nil(t, p.head)
+}
+
 func TestLazyReusePool_ManyGoroutine(t *testing.T) {
 	p, err := NewLazyReusePool(101, 1000)
 	assert.NoError(t, err)
