@@ -347,9 +347,12 @@ func TestLazyReusePool_ReserveSection2(t *testing.T) {
 	assert.Equal(t, &segment{first: 56, last: 89}, p.head)
 
 	// generate 3 segments
-	err = p.Reserve(60, 65)
-	require.NoError(t, err)
 	err = p.Reserve(70, 75)
+	require.NoError(t, err)
+	assert.Equal(t, (69 - 56 + 1 + 89 - 76 + 1), p.Remain())
+	assert.Equal(t, &segment{first: 56, last: 69, next: &segment{first: 76, last: 89}}, p.head)
+
+	err = p.Reserve(60, 65)
 	require.NoError(t, err)
 	assert.Equal(t, (59 - 56 + 1 + 69 - 66 + 1 + 89 - 76 + 1), p.Remain())
 	assert.Equal(t, &segment{first: 56, last: 59, next: &segment{first: 66, last: 69, next: &segment{first: 76, last: 89}}}, p.head)

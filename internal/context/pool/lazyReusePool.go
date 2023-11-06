@@ -178,6 +178,7 @@ func (p *LazyReusePool) Reserve(first, last int) error {
 			cur.next = &segment{
 				first: last + 1,
 				last:  cur.last,
+				next:  cur.next,
 			}
 
 			cur.last = first - 1
