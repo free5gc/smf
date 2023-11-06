@@ -165,11 +165,13 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 						}
 					}
 					for _, pool := range ueIPPools {
-						if err := pool.pool.Reserve(pool.pool.Min(), pool.pool.Min()); err != nil {
-							logger.InitLog.Errorf("Remove network address failed for %s: %s", pool.ueSubNet.String(), err)
-						}
-						if err := pool.pool.Reserve(pool.pool.Max(), pool.pool.Max()); err != nil {
-							logger.InitLog.Errorf("Remove network address failed for %s: %s", pool.ueSubNet.String(), err)
+						if pool.pool.Min() != pool.pool.Max() {
+							if err := pool.pool.Reserve(pool.pool.Min(), pool.pool.Min()); err != nil {
+								logger.InitLog.Errorf("Remove network address failed for %s: %s", pool.ueSubNet.String(), err)
+							}
+							if err := pool.pool.Reserve(pool.pool.Max(), pool.pool.Max()); err != nil {
+								logger.InitLog.Errorf("Remove network address failed for %s: %s", pool.ueSubNet.String(), err)
+							}
 						}
 						logger.InitLog.Debugf("%d-%s %s %s",
 							snssaiInfo.SNssai.Sst, snssaiInfo.SNssai.Sd,
