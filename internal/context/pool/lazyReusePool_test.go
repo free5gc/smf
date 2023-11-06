@@ -376,6 +376,29 @@ func TestLazyReusePool_ReserveSection2(t *testing.T) {
 	assert.Nil(t, p.head)
 }
 
+func TestLazyReusePool_ReserveSection3(t *testing.T) {
+	p, err := NewLazyReusePool(10, 99)
+	require.NoError(t, err)
+	assert.Equal(t, (99 - 10 + 1), p.Remain())
+	require.Equal(t, &segment{first: 10, last: 99}, p.head)
+
+	// generate 4 segments
+	err = p.Reserve(20, 29)
+	require.NoError(t, err)
+	err = p.Reserve(40, 49)
+	require.NoError(t, err)
+	err = p.Reserve(60, 69)
+	require.NoError(t, err)
+	require.Equal(t, (19 - 10 + 1 + 39 - 30 + 1 + 59 - 50 + 1 + 99 - 70 + 1), p.Remain())
+	require.Equal(t, &segment{first: 10, last: 19, next: &segment{first: 30, last: 39, next: &segment{first: 50, last: 59, next: &segment{first: 70, last: 99}}}}, p.head)
+
+	// remove two segments
+	err = p.Reserve(30, 59)
+	require.NoError(t, err)
+	require.Equal(t, (19 - 10 + 1 + 99 - 70 + 1), p.Remain())
+	require.Equal(t, &segment{first: 10, last: 19, next: &segment{first: 70, last: 99}}, p.head)
+}
+
 func TestLazyReusePool_ManyGoroutine(t *testing.T) {
 	p, err := NewLazyReusePool(101, 1000)
 	assert.NoError(t, err)

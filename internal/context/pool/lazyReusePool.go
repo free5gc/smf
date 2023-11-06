@@ -192,6 +192,8 @@ func (p *LazyReusePool) Reserve(first, last int) error {
 			} else {
 				p.head = cur.next
 			}
+			// do not update prev
+			continue
 		}
 
 		prev = cur
