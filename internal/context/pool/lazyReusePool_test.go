@@ -355,7 +355,10 @@ func TestLazyReusePool_ReserveSection2(t *testing.T) {
 	err = p.Reserve(60, 65)
 	require.NoError(t, err)
 	assert.Equal(t, (59 - 56 + 1 + 69 - 66 + 1 + 89 - 76 + 1), p.Remain())
-	assert.Equal(t, &segment{first: 56, last: 59, next: &segment{first: 66, last: 69, next: &segment{first: 76, last: 89}}}, p.head)
+	assert.Equal(t, &segment{first: 56, last: 59, next: &segment{
+		first: 66, last: 69,
+		next: &segment{first: 76, last: 89},
+	}}, p.head)
 
 	// remove center segment
 	err = p.Reserve(60, 75)
@@ -390,7 +393,10 @@ func TestLazyReusePool_ReserveSection3(t *testing.T) {
 	err = p.Reserve(60, 69)
 	require.NoError(t, err)
 	require.Equal(t, (19 - 10 + 1 + 39 - 30 + 1 + 59 - 50 + 1 + 99 - 70 + 1), p.Remain())
-	require.Equal(t, &segment{first: 10, last: 19, next: &segment{first: 30, last: 39, next: &segment{first: 50, last: 59, next: &segment{first: 70, last: 99}}}}, p.head)
+	require.Equal(t, &segment{first: 10, last: 19, next: &segment{
+		first: 30, last: 39,
+		next: &segment{first: 50, last: 59, next: &segment{first: 70, last: 99}},
+	}}, p.head)
 
 	// remove two segments
 	err = p.Reserve(30, 59)
