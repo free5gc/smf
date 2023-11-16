@@ -1,7 +1,6 @@
 package context
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"net"
@@ -14,6 +13,8 @@ import (
 	"github.com/antihax/optional"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+
+	// "github.com/free5gc/smf/internal/sbi/consumer"
 
 	"github.com/free5gc/nas/nasConvert"
 	"github.com/free5gc/nas/nasMessage"
@@ -410,6 +411,10 @@ func (smContext *SMContext) PDUAddressToNAS() ([12]byte, uint8) {
 
 // PCFSelection will select PCF for this SM Context
 func (smContext *SMContext) PCFSelection() error {
+	ctx, _, err := GetTokenCtx("nnrf-disc", "NRF")
+	if err != nil {
+		return err
+	}
 	// Send NFDiscovery for find PCF
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
 
@@ -420,7 +425,7 @@ func (smContext *SMContext) PCFSelection() error {
 	rep, res, err := GetSelf().
 		NFDiscoveryClient.
 		NFInstancesStoreApi.
-		SearchNFInstances(context.TODO(), models.NfType_PCF, models.NfType_SMF, &localVarOptionals)
+		SearchNFInstances(ctx, models.NfType_PCF, models.NfType_SMF, &localVarOptionals)
 	if err != nil {
 		return err
 	}
