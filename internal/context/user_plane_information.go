@@ -148,17 +148,17 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 							allUEIPPools = append(allUEIPPools, ueIPPool)
 						}
 					}
-					for _, pool := range dnnInfoConfig.StaticPools {
-						ueIPPool := NewUEIPPool(pool)
-						if ueIPPool == nil {
-							logger.InitLog.Fatalf("invalid pools value: %+v", pool)
+					for _, staticPool := range dnnInfoConfig.StaticPools {
+						staticUeIPPool := NewUEIPPool(staticPool)
+						if staticUeIPPool == nil {
+							logger.InitLog.Fatalf("invalid pools value: %+v", staticPool)
 						} else {
-							staticUeIPPools = append(staticUeIPPools, ueIPPool)
+							staticUeIPPools = append(staticUeIPPools, staticUeIPPool)
 							for _, dynamicUePool := range ueIPPools {
-								if dynamicUePool.ueSubNet.Contains(ueIPPool.ueSubNet.IP) {
-									if err := dynamicUePool.exclude(ueIPPool); err != nil {
+								if dynamicUePool.ueSubNet.Contains(staticUeIPPool.ueSubNet.IP) {
+									if err := dynamicUePool.exclude(staticUeIPPool); err != nil {
 										logger.InitLog.Fatalf("exclude static Pool[%s] failed: %v",
-											ueIPPool.ueSubNet, err)
+											staticUeIPPool.ueSubNet, err)
 									}
 								}
 							}
