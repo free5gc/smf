@@ -93,25 +93,10 @@ func (r *PCCRule) UpdateDataPathFlowDescription(dlFlowDesc string) error {
 	if dlFlowDesc == "" {
 		return fmt.Errorf("pcc[%s]: no flow description", r.PccRuleId)
 	}
-	ulFlowDesc := getUplinkFlowDescription(dlFlowDesc)
-	if ulFlowDesc == "" {
-		return fmt.Errorf("pcc[%s]: uplink flow description parsing error", r.PccRuleId)
-	}
-	r.Datapath.UpdateFlowDescription(ulFlowDesc, dlFlowDesc)
+
+	ulFlowDesc := dlFlowDesc
+	r.Datapath.UpdateFlowDescription(ulFlowDesc, dlFlowDesc) // UL, DL flow description should be same
 	return nil
-}
-
-func getUplinkFlowDescription(dlFlowDesc string) string {
-	ulIPFilterRule, err := flowdesc.Decode(dlFlowDesc)
-	if err != nil {
-		return ""
-	}
-
-	ulFlowDesc, err := flowdesc.Encode(ulIPFilterRule)
-	if err != nil {
-		return ""
-	}
-	return ulFlowDesc
 }
 
 func (r *PCCRule) AddDataPathForwardingParameters(c *SMContext,
@@ -218,7 +203,7 @@ func createNasPacketFilter(
 		}
 	}
 
-	if ipFilterRule.Dst != "any" && ipFilterRule.Dst != "assigned" {
+	if ipFilterRule.Dst != "assigned" {
 		_, ipNet, err := net.ParseCIDR(ipFilterRule.Dst)
 		if err != nil {
 			return nil, fmt.Errorf("parse IP fail: %s", err)
@@ -241,7 +226,7 @@ func createNasPacketFilter(
 		}
 	}
 
-	if ipFilterRule.Src != "any" && ipFilterRule.Src != "assigned" {
+	if ipFilterRule.Src != "any" {
 		_, ipNet, err := net.ParseCIDR(ipFilterRule.Src)
 		if err != nil {
 			return nil, fmt.Errorf("parse IP fail: %s", err)
