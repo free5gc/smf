@@ -107,7 +107,6 @@ func getUplinkFlowDescription(dlFlowDesc string) string {
 		return ""
 	}
 
-	ulIPFilterRule.SwapSrcAndDst()
 	ulFlowDesc, err := flowdesc.Encode(ulIPFilterRule)
 	if err != nil {
 		return ""
