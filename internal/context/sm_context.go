@@ -634,6 +634,7 @@ func (c *SMContext) AllocUeIP() error {
 	return nil
 }
 
+// This function create a data path to be default data path.
 func (c *SMContext) SelectDefaultDataPath() error {
 	if c.SelectionParam == nil || c.SelectedUPF == nil {
 		return fmt.Errorf("SelectDefaultDataPath err: SelectionParam or SelectedUPF is nil")
@@ -646,10 +647,10 @@ func (c *SMContext) SelectDefaultDataPath() error {
 		c.Tunnel.DataPathPool = uePreConfigPaths.DataPathPool
 		c.Tunnel.PathIDGenerator = uePreConfigPaths.PathIDGenerator
 		defaultPath = c.Tunnel.DataPathPool.GetDefaultPath()
-	} else {
-		// UE has no pre-config path.
+	} else if c.Tunnel.DataPathPool.GetDefaultPath() == nil {
+		// UE has no pre-config path and default path
 		// Use default route
-		c.Log.Infof("Has no pre-config route")
+		c.Log.Infof("Has no pre-config route. Has no default path")
 		defaultUPPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNNAndUPF(
 			c.SelectionParam, c.SelectedUPF)
 		defaultPath = GenerateDataPath(defaultUPPath)
@@ -657,13 +658,20 @@ func (c *SMContext) SelectDefaultDataPath() error {
 			defaultPath.IsDefaultPath = true
 			c.Tunnel.AddDataPath(defaultPath)
 		}
+	} else {
+		c.Log.Infof("Has no pre-config route. Has default path")
+		defaultPath = c.Tunnel.DataPathPool.GetDefaultPath()
 	}
 
 	if defaultPath == nil {
-		return fmt.Errorf("Data Path not found, Selection Parameter: %s",
+		return fmt.Errorf("data path not found, Selection Parameter: %s",
 			c.SelectionParam.String())
 	}
-	defaultPath.ActivateTunnelAndPDR(c, DefaultPrecedence)
+
+	if !defaultPath.Activated {
+		defaultPath.ActivateTunnelAndPDR(c, DefaultPrecedence)
+	}
+
 	return nil
 }
 
@@ -687,6 +695,13 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	createdDataPath := GenerateDataPath(createdUpPath)
 	if createdDataPath == nil {
 		return fmt.Errorf("fail to create data path for pcc rule[%s]", pccRule.PccRuleId)
+	}
+
+	// Try to use a default pcc rule as default data path
+	if c.Tunnel.DataPathPool.GetDefaultPath() == nil &&
+		pccRule.Precedence == 255 &&
+		pccRule.FlowInfos[0].FlowDescription == "permit out ip from any to assigned" {
+		createdDataPath.IsDefaultPath = true
 	}
 
 	createdDataPath.GBRFlow = isGBRFlow(qosData)

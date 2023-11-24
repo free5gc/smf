@@ -307,6 +307,14 @@ func (dataPathPool DataPathPool) GetDefaultPath() *DataPath {
 	return nil
 }
 
+func (dataPathPool DataPathPool) ResetDefaultPath() error {
+	for _, path := range dataPathPool {
+		path.IsDefaultPath = false
+	}
+
+	return nil
+}
+
 func (dataPath *DataPath) String() string {
 	firstDPNode := dataPath.FirstDPNode
 

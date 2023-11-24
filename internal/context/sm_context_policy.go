@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
@@ -102,6 +103,11 @@ func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) 
 	}
 
 	defaultPath := c.Tunnel.DataPathPool.GetDefaultPath()
+	if defaultPath == nil {
+		logger.CtxLog.Errorln("No default data path")
+		return
+	}
+
 	for node := defaultPath.FirstDPNode; node != nil; node = node.Next() {
 		if node.IsAnchorUPF() {
 			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
