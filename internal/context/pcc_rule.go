@@ -127,7 +127,6 @@ func (r *PCCRule) AddDataPathForwardingParameters(c *SMContext,
 		r.Datapath.AddForwardingParameters(routeProf.ForwardingPolicyID,
 			c.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode.GetUpLinkPDR().PDI.LocalFTeid.Teid)
 	}
-
 }
 
 func (r *PCCRule) BuildNasQoSRule(smCtx *SMContext,
