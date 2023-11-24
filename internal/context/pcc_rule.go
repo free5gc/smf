@@ -121,8 +121,13 @@ func (r *PCCRule) AddDataPathForwardingParameters(c *SMContext,
 			return
 		}
 	}
-	r.Datapath.AddForwardingParameters(routeProf.ForwardingPolicyID,
-		c.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode.GetUpLinkPDR().PDI.LocalFTeid.Teid)
+	if c.Tunnel.DataPathPool.GetDefaultPath() == nil {
+		logger.CtxLog.Infoln("No Default Data Path")
+	} else {
+		r.Datapath.AddForwardingParameters(routeProf.ForwardingPolicyID,
+			c.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode.GetUpLinkPDR().PDI.LocalFTeid.Teid)
+	}
+
 }
 
 func (r *PCCRule) BuildNasQoSRule(smCtx *SMContext,
