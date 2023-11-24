@@ -761,7 +761,7 @@ func getPathBetween(cur *UPNode, dest *UPNode, visited map[*UPNode]bool,
 		path = make([]*UPNode, 0)
 		path = append(path, cur)
 		pathExist = true
-		return
+		return path, pathExist
 	}
 
 	selectedSNssai := selection.SNssai
@@ -773,16 +773,14 @@ func getPathBetween(cur *UPNode, dest *UPNode, visited map[*UPNode]bool,
 				continue
 			}
 
-			path_tail, path_exist := getPathBetween(node, dest, visited, selection)
+			path_tail, pathExist := getPathBetween(node, dest, visited, selection)
 
-			if path_exist {
+			if pathExist {
 				path = make([]*UPNode, 0)
 				path = append(path, cur)
-
 				path = append(path, path_tail...)
-				pathExist = true
 
-				return
+				return path, pathExist
 			}
 		}
 	}
