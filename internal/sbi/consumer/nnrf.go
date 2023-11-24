@@ -184,7 +184,7 @@ func SendNFDiscoveryPCF() (problemDetails *models.ProblemDetails, err error) {
 		logger.ConsumerLog.Warnln("handler returned wrong status code ", httpResp.Status)
 		if httpResp.Status != localErr.Error() {
 			err = localErr
-			return
+			return problemDetails, err
 		}
 		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
 		problemDetails = &problem
