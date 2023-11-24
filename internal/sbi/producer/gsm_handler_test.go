@@ -30,7 +30,7 @@ func TestBuildNASPacketFilterFromPacketFilterInfo(t *testing.T) {
 			},
 			flowInfo: models.FlowInformation{
 				FlowDirection:   models.FlowDirectionRm_BIDIRECTIONAL,
-				FlowDescription: "permit out ip from any to any",
+				FlowDescription: "permit out ip from any to assigned",
 			},
 		},
 		{
