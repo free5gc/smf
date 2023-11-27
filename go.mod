@@ -11,8 +11,8 @@ require (
 	github.com/free5gc/ngap v1.0.6
 	github.com/free5gc/openapi v1.0.7-0.20231216094313-e15a4ff046f6
 	github.com/free5gc/pfcp v1.0.7-0.20230629010245-1c089bfc34f7
-	github.com/free5gc/util v1.0.5-0.20230511064842-2e120956883b
-	github.com/gin-gonic/gin v1.9.0
+	github.com/free5gc/util v1.0.5-0.20231012123940-85f4557167be
+	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.3.0
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/pkg/errors v0.9.1
