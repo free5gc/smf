@@ -95,6 +95,23 @@ func MeasureInformation(isMeasurePkt, isMeasureBeforeQos bool) pfcpType.Measurem
 	return measureInformation
 }
 
+func (pdr *PDR) AppendURRs(urrs []*URR) {
+	for _, urr := range urrs {
+		if !isUrrExist(pdr.URR, urr) {
+			pdr.URR = append(pdr.URR, urr)
+		}
+	}
+}
+
+func isUrrExist(URRs []*URR, urr *URR) bool { // check if urr is in URRs list
+	for _, URR := range URRs {
+		if urr.URRID == URR.URRID {
+			return true
+		}
+	}
+	return false
+}
+
 // Packet Detection. 7.5.2.2-2
 type PDI struct {
 	SourceInterface pfcpType.SourceInterface

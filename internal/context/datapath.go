@@ -377,10 +377,10 @@ func (node DataPathNode) addUrrToNode(smContext *SMContext, urrId uint32, isMeas
 
 	if urr != nil {
 		if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-			node.UpLinkTunnel.PDR.URR = append(node.UpLinkTunnel.PDR.URR, urr)
+			node.UpLinkTunnel.PDR.AppendURRs([]*URR{urr})
 		}
 		if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-			node.DownLinkTunnel.PDR.URR = append(node.DownLinkTunnel.PDR.URR, urr)
+			node.DownLinkTunnel.PDR.AppendURRs([]*URR{urr})
 		}
 	}
 }
@@ -409,6 +409,7 @@ func (datapath *DataPath) addUrrToPath(smContext *SMContext) {
 			MBQEUrrId = smContext.UrrIdMap[N9N6_MBEQ_URR]
 			MAQEUrrId = smContext.UrrIdMap[N9N6_MAEQ_URR]
 		}
+
 		curDataPathNode.addUrrToNode(smContext, MBQEUrrId, true, true)
 		curDataPathNode.addUrrToNode(smContext, MAQEUrrId, true, false)
 	}
@@ -817,10 +818,14 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 
 				smContext.ChargingInfo[urr.URRID] = chgInfo
 				if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-					node.UpLinkTunnel.PDR.URR = append(node.UpLinkTunnel.PDR.URR, urr)
+					if !isUrrExist(node.UpLinkTunnel.PDR.URR, urr) {
+						node.UpLinkTunnel.PDR.AppendURRs([]*URR{urr})
+					}
 				}
 				if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-					node.DownLinkTunnel.PDR.URR = append(node.DownLinkTunnel.PDR.URR, urr)
+					if !isUrrExist(node.DownLinkTunnel.PDR.URR, urr) {
+						node.DownLinkTunnel.PDR.AppendURRs([]*URR{urr})
+					}
 				}
 			}
 		}
