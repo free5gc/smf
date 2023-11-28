@@ -92,10 +92,10 @@ func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) 
 				if node.IsAnchorUPF() {
 					// only the traffic on the PSA UPF will be charged
 					if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-						node.UpLinkTunnel.PDR.URR = append(node.UpLinkTunnel.PDR.URR, pduLevelChargingUrrs...)
+						node.UpLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
 					}
 					if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-						node.DownLinkTunnel.PDR.URR = append(node.DownLinkTunnel.PDR.URR, pduLevelChargingUrrs...)
+						node.DownLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
 					}
 				}
 			}
@@ -111,10 +111,10 @@ func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) 
 	for node := defaultPath.FirstDPNode; node != nil; node = node.Next() {
 		if node.IsAnchorUPF() {
 			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-				node.UpLinkTunnel.PDR.URR = append(node.UpLinkTunnel.PDR.URR, pduLevelChargingUrrs...)
+				node.UpLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
 			}
 			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-				node.DownLinkTunnel.PDR.URR = append(node.DownLinkTunnel.PDR.URR, pduLevelChargingUrrs...)
+				node.DownLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
 			}
 		}
 	}
