@@ -346,6 +346,8 @@ func urrToUpdateURR(urr *context.URR) *pfcp.UpdateURR {
 		updateURR.VolumeThreshold = &pfcpType.VolumeThreshold{
 			Dlvol:          true,
 			Ulvol:          true,
+			Tovol:          true,
+			TotalVolume:    urr.VolumeThreshold,
 			DownlinkVolume: urr.VolumeThreshold,
 			UplinkVolume:   urr.VolumeThreshold,
 		}
