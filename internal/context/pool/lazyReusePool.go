@@ -168,27 +168,32 @@ func (p *LazyReusePool) Reserve(first, last int) error {
 
 	for cur, prev := p.head, (*segment)(nil); cur != nil; cur = cur.next {
 		switch {
-		case cur.first == first && cur.last > last:
+		case cur.first >= first && cur.first <= last && cur.last > last:
+			p.remain -= last - cur.first + 1
 			cur.first = last + 1
-			p.remain -= last - first + 1
-		case cur.first < first && cur.last == last:
+		case cur.first < first && cur.last >= first && cur.last <= last:
+			p.remain -= cur.last - first + 1
 			cur.last = first - 1
-			p.remain -= last - first + 1
 		case cur.first < first && cur.last > last:
 			cur.next = &segment{
 				first: last + 1,
 				last:  cur.last,
+				next:  cur.next,
 			}
 
 			cur.last = first - 1
 			p.remain -= last - first + 1
 
 		// this segment in reserve range
-		case cur.first > first && cur.last < last:
+		case cur.first >= first && cur.last <= last:
 			p.remain -= cur.last - cur.first + 1
 			if prev != nil {
 				prev.next = cur.next
+			} else {
+				p.head = cur.next
 			}
+			// do not update prev
+			continue
 		}
 
 		prev = cur

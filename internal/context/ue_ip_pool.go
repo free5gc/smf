@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"net"
 
 	"github.com/free5gc/smf/internal/context/pool"
@@ -72,10 +71,7 @@ RETURNIP:
 
 func (ueIPPool *UeIPPool) exclude(excludePool *UeIPPool) error {
 	excludeMin := excludePool.pool.Min()
-	excludeMax := excludePool.pool.Max() + 1
-	if !ueIPPool.ueSubNet.IP.Equal(excludePool.ueSubNet.IP) {
-		excludeMin -= 1
-	}
+	excludeMax := excludePool.pool.Max()
 	if err := ueIPPool.pool.Reserve(excludeMin, excludeMax); err != nil {
 		return fmt.Errorf("exclude uePool fail: %v", err)
 	}
@@ -136,11 +132,9 @@ func isOverlap(pools []*UeIPPool) bool {
 func calcAddrRange(ipNet *net.IPNet) (minAddr, maxAddr uint32, err error) {
 	maskVal := binary.BigEndian.Uint32(ipNet.Mask)
 	baseIPVal := binary.BigEndian.Uint32(ipNet.IP)
-	if maskVal == math.MaxUint32 {
-		return baseIPVal, baseIPVal, nil
-	}
-	minAddr = (baseIPVal & maskVal) + 1  // 0 is network address
-	maxAddr = (baseIPVal | ^maskVal) - 1 // all 1 is broadcast address
+	// move removing network and broadcast address later
+	minAddr = (baseIPVal & maskVal)
+	maxAddr = (baseIPVal | ^maskVal)
 	if minAddr > maxAddr {
 		return minAddr, maxAddr, errors.New("Mask is invalid.")
 	}

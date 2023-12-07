@@ -148,21 +148,34 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 							allUEIPPools = append(allUEIPPools, ueIPPool)
 						}
 					}
-					for _, pool := range dnnInfoConfig.StaticPools {
-						ueIPPool := NewUEIPPool(pool)
-						if ueIPPool == nil {
-							logger.InitLog.Fatalf("invalid pools value: %+v", pool)
+					for _, staticPool := range dnnInfoConfig.StaticPools {
+						staticUeIPPool := NewUEIPPool(staticPool)
+						if staticUeIPPool == nil {
+							logger.InitLog.Fatalf("invalid pools value: %+v", staticPool)
 						} else {
-							staticUeIPPools = append(staticUeIPPools, ueIPPool)
+							staticUeIPPools = append(staticUeIPPools, staticUeIPPool)
 							for _, dynamicUePool := range ueIPPools {
-								if dynamicUePool.ueSubNet.Contains(ueIPPool.ueSubNet.IP) {
-									if err := dynamicUePool.exclude(ueIPPool); err != nil {
+								if dynamicUePool.ueSubNet.Contains(staticUeIPPool.ueSubNet.IP) {
+									if err := dynamicUePool.exclude(staticUeIPPool); err != nil {
 										logger.InitLog.Fatalf("exclude static Pool[%s] failed: %v",
-											ueIPPool.ueSubNet, err)
+											staticUeIPPool.ueSubNet, err)
 									}
 								}
 							}
 						}
+					}
+					for _, pool := range ueIPPools {
+						if pool.pool.Min() != pool.pool.Max() {
+							if err := pool.pool.Reserve(pool.pool.Min(), pool.pool.Min()); err != nil {
+								logger.InitLog.Errorf("Remove network address failed for %s: %s", pool.ueSubNet.String(), err)
+							}
+							if err := pool.pool.Reserve(pool.pool.Max(), pool.pool.Max()); err != nil {
+								logger.InitLog.Errorf("Remove network address failed for %s: %s", pool.ueSubNet.String(), err)
+							}
+						}
+						logger.InitLog.Debugf("%d-%s %s %s",
+							snssaiInfo.SNssai.Sst, snssaiInfo.SNssai.Sd,
+							dnnInfoConfig.Dnn, pool.dump())
 					}
 					snssaiInfo.DnnList = append(snssaiInfo.DnnList, &DnnUPFInfoItem{
 						Dnn:             dnnInfoConfig.Dnn,
