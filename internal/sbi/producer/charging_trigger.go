@@ -240,7 +240,7 @@ func getUrrByRg(smContext *smf_context.SMContext, upfId string, rg int32) *smf_c
 	return nil
 }
 
-// Udate the urr by the charging information renewed by chf
+// Update the urr by the charging information renewed by chf
 func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformation []models.MultipleUnitInformation) {
 	for _, ui := range multipleUnitInformation {
 		trigger := pfcpType.ReportingTriggers{}
