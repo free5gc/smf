@@ -79,6 +79,8 @@ github.com/free5gc/pfcp v1.0.7-0.20230629010245-1c089bfc34f7 h1:oE9n4qhoaHkriyp7
 github.com/free5gc/pfcp v1.0.7-0.20230629010245-1c089bfc34f7/go.mod h1:WzpW7Zxhx5WONMumNKRWbPn7pl/iTYp2FqRLNiOWUjs=
 github.com/free5gc/tlv v1.0.2-0.20230131124215-8b6ebd69bf93 h1:QPSSI5zw4goiIfxem9doVyMqTO8iKLQ536pzpET5Y+Q=
 github.com/free5gc/tlv v1.0.2-0.20230131124215-8b6ebd69bf93/go.mod h1:KbbQJIgGaA2jIwnTJgJ/lE3JSDEp3898S6c4TEq0Vyg=
+github.com/free5gc/util v1.0.5-0.20231012123940-85f4557167be h1:SglM1KIL+bR50hPzbvxVwNW44+yHR2tq9nTpLra75UE=
+github.com/free5gc/util v1.0.5-0.20231012123940-85f4557167be/go.mod h1:d+79g84a3YHhzvjJ2IhurrBOavOA8xWIQ/GCywPXqQk=
 github.com/gabriel-vasile/mimetype v1.4.2 h1:w5qFW6JKBz9Y393Y4q372O9A7cUSequkh1Q7OhCmWKU=
 github.com/gabriel-vasile/mimetype v1.4.2/go.mod h1:zApsH/mKG4w07erKIaJPFiX0Tsq9BFQgN3qGY5GnNgA=
 github.com/gin-contrib/sse v0.1.0 h1:Y/yl/+YNO8GZSjAhjMsSuLt29uWRFHdHYUb5lYOV9qE=

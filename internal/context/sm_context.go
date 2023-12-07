@@ -46,17 +46,17 @@ const (
 type UrrType int
 
 const (
-	N3N6_MBEQ_URR UrrType = iota
-	N3N6_MAEQ_URR
-	N3N9_MBEQ_URR
-	N3N9_MAEQ_URR
-	N9N6_MBEQ_URR
-	N9N6_MAEQ_URR
+	N3N6_MBQE_URR UrrType = iota
+	N3N6_MAQE_URR
+	N3N9_MBQE_URR
+	N3N9_MAQE_URR
+	N9N6_MBQE_URR
+	N9N6_MAQE_URR
 	NOT_FOUND_URR
 )
 
 func (t UrrType) String() string {
-	urrTypeList := []string{"N3N6_MBEQ", "N3N6_MAEQ", "N3N9_MBEQ", "N3N9_MAEQ", "N9N6_MBEQ", "N9N6_MAEQ"}
+	urrTypeList := []string{"N3N6_MBQE", "N3N6_MAQE", "N3N9_MBQE", "N3N9_MAQE", "N9N6_MBQE", "N9N6_MAQE"}
 	return urrTypeList[t]
 }
 
@@ -375,27 +375,6 @@ func GetSMContextBySEID(SEID uint64) *SMContext {
 	}
 	return nil
 }
-
-// func (smContext *SMContext) GenerateUrrId() {
-// 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-// 		smContext.UrrIdMap[N3N6_MBEQ_URR] = uint32(id)
-// 	}
-// 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-// 		smContext.UrrIdMap[N3N6_MAEQ_URR] = uint32(id)
-// 	}
-// 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-// 		smContext.UrrIdMap[N9N6_MBEQ_URR] = uint32(id)
-// 	}
-// 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-// 		smContext.UrrIdMap[N9N6_MAEQ_URR] = uint32(id)
-// 	}
-// 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-// 		smContext.UrrIdMap[N3N9_MBEQ_URR] = uint32(id)
-// 	}
-// 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-// 		smContext.UrrIdMap[N3N9_MAEQ_URR] = uint32(id)
-// 	}
-// }
 
 func (smContext *SMContext) BuildCreatedData() *models.SmContextCreatedData {
 	return &models.SmContextCreatedData{
