@@ -45,15 +45,15 @@ const (
 
 type UrrType int
 
-const (
-	N3N6_MBQE_URR UrrType = iota
-	N3N6_MAQE_URR
-	N3N9_MBQE_URR
-	N3N9_MAQE_URR
-	N9N6_MBQE_URR
-	N9N6_MAQE_URR
-	NOT_FOUND_URR
-)
+// const (
+// 	N3N6_MBQE_URR UrrType = iota
+// 	N3N6_MAQE_URR
+// 	N3N9_MBQE_URR
+// 	N3N9_MAQE_URR
+// 	N9N6_MBQE_URR
+// 	N9N6_MAQE_URR
+// 	NOT_FOUND_URR
+// )
 
 func (t UrrType) String() string {
 	urrTypeList := []string{"N3N6_MBQE", "N3N6_MAQE", "N3N9_MBQE", "N3N9_MAQE", "N9N6_MBQE", "N9N6_MAQE"}
@@ -887,14 +887,14 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 	return nil
 }
 
-func (smContext *SMContext) GetUrrTypeById(urrId uint32) (UrrType, error) {
-	for urrType, id := range smContext.UrrIdMap {
-		if id == urrId {
-			return urrType, nil
-		}
-	}
-	return NOT_FOUND_URR, fmt.Errorf("Urr type not found ")
-}
+// func (smContext *SMContext) GetUrrTypeById(urrId uint32) (UrrType, error) {
+// 	for urrType, id := range smContext.UrrIdMap {
+// 		if id == urrId {
+// 			return urrType, nil
+// 		}
+// 	}
+// 	return NOT_FOUND_URR, fmt.Errorf("Urr type not found ")
+// }
 
 func (smContext *SMContext) StopT3591() {
 	if smContext.T3591 != nil {

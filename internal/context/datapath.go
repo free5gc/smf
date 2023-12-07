@@ -392,26 +392,25 @@ func (datapath *DataPath) addUrrToPath(smContext *SMContext) {
 	}
 
 	for curDataPathNode := datapath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
-		var MBQEUrrId uint32
-		var MAQEUrrId uint32
+		var MBQEUrrId int64
+		var MAQEUrrId int64
+		var err error
 		// If more than two data path will use the same UPF
 		// It may cause urr be created multiple times
 		// There may be some mechanism to make sure that existed URR should not be create again
 		if curDataPathNode.IsANUPF() {
-			if curDataPathNode.Next() == nil {
-				MBQEUrrId = smContext.UrrIdMap[N3N6_MBQE_URR]
-				MAQEUrrId = smContext.UrrIdMap[N3N6_MAQE_URR]
-			} else {
-				MBQEUrrId = smContext.UrrIdMap[N3N9_MBQE_URR]
-				MAQEUrrId = smContext.UrrIdMap[N3N9_MAQE_URR]
+			MBQEUrrId, err = curDataPathNode.UPF.urrIDGenerator.Allocate()
+			if err != nil {
+				logger.CtxLog.Warnf("MBQE URR ID allocate error: %v\n", err)
 			}
-		} else {
-			MBQEUrrId = smContext.UrrIdMap[N9N6_MBQE_URR]
-			MAQEUrrId = smContext.UrrIdMap[N9N6_MAQE_URR]
+			MAQEUrrId, err = curDataPathNode.UPF.urrIDGenerator.Allocate()
+			if err != nil {
+				logger.CtxLog.Warnf("MAQE URR ID allocate error: %v\n", err)
+			}
 		}
 
-		curDataPathNode.addUrrToNode(smContext, MBQEUrrId, true, true)
-		curDataPathNode.addUrrToNode(smContext, MAQEUrrId, true, false)
+		curDataPathNode.addUrrToNode(smContext, uint32(MBQEUrrId), true, true)
+		curDataPathNode.addUrrToNode(smContext, uint32(MAQEUrrId), true, false)
 	}
 }
 
@@ -772,34 +771,7 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 				UpfId:         node.UPF.UUID(),
 			}
 
-			if node.Prev() == nil {
-				if smContext.UrrIdMap[N3N6_MBQE_URR] == 0 {
-					if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
-						smContext.UrrIdMap[N3N6_MBQE_URR] = uint32(id)
-					}
-				}
-
-				if smContext.UrrIdMap[N3N6_MAQE_URR] == 0 {
-					if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
-						smContext.UrrIdMap[N3N6_MAQE_URR] = uint32(id)
-					}
-				}
-			} else {
-				if smContext.UrrIdMap[N9N6_MBQE_URR] == 0 {
-					if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
-						smContext.UrrIdMap[N9N6_MBQE_URR] = uint32(id)
-					}
-				}
-
-				if smContext.UrrIdMap[N9N6_MAQE_URR] == 0 {
-					if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
-						smContext.UrrIdMap[N9N6_MAQE_URR] = uint32(id)
-					}
-				}
-			}
-
 			urrId, err := node.UPF.urrIDGenerator.Allocate()
-			logger.CtxLog.Warnln("urrId:", urrId)
 			if err != nil {
 				logger.PduSessLog.Errorln("Generate URR Id failed")
 				return
@@ -853,18 +825,6 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 					if !isUrrExist(node.DownLinkTunnel.PDR.URR, urr) {
 						node.DownLinkTunnel.PDR.AppendURRs([]*URR{urr})
 					}
-				}
-			}
-		} else {
-			if smContext.UrrIdMap[N3N9_MBQE_URR] == 0 {
-				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
-					smContext.UrrIdMap[N3N9_MBQE_URR] = uint32(id)
-				}
-			}
-
-			if smContext.UrrIdMap[N3N9_MAQE_URR] == 0 {
-				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
-					smContext.UrrIdMap[N3N9_MAQE_URR] = uint32(id)
 				}
 			}
 		}
