@@ -772,7 +772,44 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 				UpfId:         node.UPF.UUID(),
 			}
 
-			urrId, err := smContext.UrrIDGenerator.Allocate()
+			if smContext.UrrIdMap[N3N6_MBEQ_URR] == 0 {
+				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
+					smContext.UrrIdMap[N3N6_MBEQ_URR] = uint32(id)
+				}
+			}
+
+			if smContext.UrrIdMap[N3N6_MAEQ_URR] == 0 {
+				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
+					smContext.UrrIdMap[N3N6_MAEQ_URR] = uint32(id)
+				}
+			}
+
+			if smContext.UrrIdMap[N9N6_MBEQ_URR] == 0 {
+				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
+					smContext.UrrIdMap[N9N6_MBEQ_URR] = uint32(id)
+				}
+			}
+
+			if smContext.UrrIdMap[N9N6_MAEQ_URR] == 0 {
+				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
+					smContext.UrrIdMap[N9N6_MAEQ_URR] = uint32(id)
+				}
+			}
+
+			if smContext.UrrIdMap[N3N9_MBEQ_URR] == 0 {
+				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
+					smContext.UrrIdMap[N3N9_MBEQ_URR] = uint32(id)
+				}
+			}
+
+			if smContext.UrrIdMap[N3N9_MAEQ_URR] == 0 {
+				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
+					smContext.UrrIdMap[N3N9_MAEQ_URR] = uint32(id)
+				}
+			}
+
+			urrId, err := node.UPF.urrIDGenerator.Allocate()
+			logger.CtxLog.Warnln("urrId:", urrId)
 			if err != nil {
 				logger.PduSessLog.Errorln("Generate URR Id failed")
 				return

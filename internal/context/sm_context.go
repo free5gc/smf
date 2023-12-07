@@ -3,7 +3,6 @@ package context
 import (
 	"context"
 	"fmt"
-	"math"
 	"net"
 	"net/http"
 	"strings"
@@ -197,7 +196,7 @@ type SMContext struct {
 	AdditonalQosFlows       map[uint8]*QoSFlow // Key: qfi
 
 	// URR
-	UrrIDGenerator     *idgenerator.IDGenerator
+	// UrrIDGenerator     *idgenerator.IDGenerator // should be deprecated
 	UrrIdMap           map[UrrType]uint32
 	UrrUpfMap          map[string]*URR
 	UrrReportTime      time.Duration
@@ -298,9 +297,9 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 	smContext.AMBRQerMap = make(map[uuid.UUID]uint32)
 	smContext.QerUpfMap = make(map[string]uint32)
 	smContext.AdditonalQosFlows = make(map[uint8]*QoSFlow)
-	smContext.UrrIDGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
+	// smContext.UrrIDGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
 	smContext.UrrIdMap = make(map[UrrType]uint32)
-	smContext.GenerateUrrId()
+	// smContext.GenerateUrrId()
 	smContext.UrrUpfMap = make(map[string]*URR)
 
 	smContext.ChargingInfo = make(map[uint32]*ChargingInfo)
@@ -377,26 +376,26 @@ func GetSMContextBySEID(SEID uint64) *SMContext {
 	return nil
 }
 
-func (smContext *SMContext) GenerateUrrId() {
-	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-		smContext.UrrIdMap[N3N6_MBEQ_URR] = uint32(id)
-	}
-	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-		smContext.UrrIdMap[N3N6_MAEQ_URR] = uint32(id)
-	}
-	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-		smContext.UrrIdMap[N9N6_MBEQ_URR] = uint32(id)
-	}
-	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-		smContext.UrrIdMap[N9N6_MAEQ_URR] = uint32(id)
-	}
-	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-		smContext.UrrIdMap[N3N9_MBEQ_URR] = uint32(id)
-	}
-	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-		smContext.UrrIdMap[N3N9_MAEQ_URR] = uint32(id)
-	}
-}
+// func (smContext *SMContext) GenerateUrrId() {
+// 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
+// 		smContext.UrrIdMap[N3N6_MBEQ_URR] = uint32(id)
+// 	}
+// 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
+// 		smContext.UrrIdMap[N3N6_MAEQ_URR] = uint32(id)
+// 	}
+// 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
+// 		smContext.UrrIdMap[N9N6_MBEQ_URR] = uint32(id)
+// 	}
+// 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
+// 		smContext.UrrIdMap[N9N6_MAEQ_URR] = uint32(id)
+// 	}
+// 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
+// 		smContext.UrrIdMap[N3N9_MBEQ_URR] = uint32(id)
+// 	}
+// 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
+// 		smContext.UrrIdMap[N3N9_MAEQ_URR] = uint32(id)
+// 	}
+// }
 
 func (smContext *SMContext) BuildCreatedData() *models.SmContextCreatedData {
 	return &models.SmContextCreatedData{
