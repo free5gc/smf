@@ -399,15 +399,15 @@ func (datapath *DataPath) addUrrToPath(smContext *SMContext) {
 		// There may be some mechanism to make sure that existed URR should not be create again
 		if curDataPathNode.IsANUPF() {
 			if curDataPathNode.Next() == nil {
-				MBQEUrrId = smContext.UrrIdMap[N3N6_MBEQ_URR]
-				MAQEUrrId = smContext.UrrIdMap[N3N6_MAEQ_URR]
+				MBQEUrrId = smContext.UrrIdMap[N3N6_MBQE_URR]
+				MAQEUrrId = smContext.UrrIdMap[N3N6_MAQE_URR]
 			} else {
-				MBQEUrrId = smContext.UrrIdMap[N3N9_MBEQ_URR]
-				MAQEUrrId = smContext.UrrIdMap[N3N9_MAEQ_URR]
+				MBQEUrrId = smContext.UrrIdMap[N3N9_MBQE_URR]
+				MAQEUrrId = smContext.UrrIdMap[N3N9_MAQE_URR]
 			}
 		} else {
-			MBQEUrrId = smContext.UrrIdMap[N9N6_MBEQ_URR]
-			MAQEUrrId = smContext.UrrIdMap[N9N6_MAEQ_URR]
+			MBQEUrrId = smContext.UrrIdMap[N9N6_MBQE_URR]
+			MAQEUrrId = smContext.UrrIdMap[N9N6_MAQE_URR]
 		}
 
 		curDataPathNode.addUrrToNode(smContext, MBQEUrrId, true, true)
@@ -772,39 +772,29 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 				UpfId:         node.UPF.UUID(),
 			}
 
-			if smContext.UrrIdMap[N3N6_MBEQ_URR] == 0 {
-				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
-					smContext.UrrIdMap[N3N6_MBEQ_URR] = uint32(id)
+			if node.Prev() == nil {
+				if smContext.UrrIdMap[N3N6_MBQE_URR] == 0 {
+					if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
+						smContext.UrrIdMap[N3N6_MBQE_URR] = uint32(id)
+					}
 				}
-			}
 
-			if smContext.UrrIdMap[N3N6_MAEQ_URR] == 0 {
-				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
-					smContext.UrrIdMap[N3N6_MAEQ_URR] = uint32(id)
+				if smContext.UrrIdMap[N3N6_MAQE_URR] == 0 {
+					if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
+						smContext.UrrIdMap[N3N6_MAQE_URR] = uint32(id)
+					}
 				}
-			}
-
-			if smContext.UrrIdMap[N9N6_MBEQ_URR] == 0 {
-				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
-					smContext.UrrIdMap[N9N6_MBEQ_URR] = uint32(id)
+			} else {
+				if smContext.UrrIdMap[N9N6_MBQE_URR] == 0 {
+					if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
+						smContext.UrrIdMap[N9N6_MBQE_URR] = uint32(id)
+					}
 				}
-			}
 
-			if smContext.UrrIdMap[N9N6_MAEQ_URR] == 0 {
-				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
-					smContext.UrrIdMap[N9N6_MAEQ_URR] = uint32(id)
-				}
-			}
-
-			if smContext.UrrIdMap[N3N9_MBEQ_URR] == 0 {
-				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
-					smContext.UrrIdMap[N3N9_MBEQ_URR] = uint32(id)
-				}
-			}
-
-			if smContext.UrrIdMap[N3N9_MAEQ_URR] == 0 {
-				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
-					smContext.UrrIdMap[N3N9_MAEQ_URR] = uint32(id)
+				if smContext.UrrIdMap[N9N6_MAQE_URR] == 0 {
+					if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
+						smContext.UrrIdMap[N9N6_MAQE_URR] = uint32(id)
+					}
 				}
 			}
 
@@ -863,6 +853,18 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 					if !isUrrExist(node.DownLinkTunnel.PDR.URR, urr) {
 						node.DownLinkTunnel.PDR.AppendURRs([]*URR{urr})
 					}
+				}
+			}
+		} else {
+			if smContext.UrrIdMap[N3N9_MBQE_URR] == 0 {
+				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
+					smContext.UrrIdMap[N3N9_MBQE_URR] = uint32(id)
+				}
+			}
+
+			if smContext.UrrIdMap[N3N9_MAQE_URR] == 0 {
+				if id, err := node.UPF.urrIDGenerator.Allocate(); err == nil {
+					smContext.UrrIdMap[N3N9_MAQE_URR] = uint32(id)
 				}
 			}
 		}
