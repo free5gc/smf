@@ -683,8 +683,7 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 
 	// Try to use a default pcc rule as default data path
 	if c.Tunnel.DataPathPool.GetDefaultPath() == nil &&
-		pccRule.Precedence == 255 &&
-		pccRule.FlowInfos[0].FlowDescription == "permit out ip from any to assigned" {
+		pccRule.Precedence == 255 {
 		createdDataPath.IsDefaultPath = true
 	}
 
