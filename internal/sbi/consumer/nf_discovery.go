@@ -4,13 +4,14 @@ import (
 	"net/http"
 
 	"github.com/antihax/optional"
+	"github.com/mohae/deepcopy"
+
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
 	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/mohae/deepcopy"
 )
 
 func SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
