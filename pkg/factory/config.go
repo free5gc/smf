@@ -78,6 +78,7 @@ type Configuration struct {
 	Sbi                  *Sbi                 `yaml:"sbi" valid:"required"`
 	PFCP                 *PFCP                `yaml:"pfcp" valid:"required"`
 	NrfUri               string               `yaml:"nrfUri" valid:"url,required"`
+	NrfCertPem           string               `yaml:"nrfCertPem,omitempty" valid:"optional"`
 	UserPlaneInformation UserPlaneInformation `yaml:"userplaneInformation" valid:"required"`
 	ServiceNameList      []string             `yaml:"serviceNameList" valid:"required"`
 	SNssaiInfo           []*SnssaiInfoItem    `yaml:"snssaiInfos" valid:"required"`

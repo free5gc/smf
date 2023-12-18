@@ -14,6 +14,7 @@ import (
 	"github.com/free5gc/openapi/Nnrf_NFManagement"
 	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/openapi/oauth"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
@@ -48,12 +49,14 @@ type SMFContext struct {
 	SnssaiInfos []*SnssaiSmfInfo
 
 	NrfUri                         string
+	NrfCertPem                     string
 	NFManagementClient             *Nnrf_NFManagement.APIClient
 	NFDiscoveryClient              *Nnrf_NFDiscovery.APIClient
 	SubscriberDataManagementClient *Nudm_SubscriberDataManagement.APIClient
 	Locality                       string
 	AssocFailAlertInterval         time.Duration
 	AssocFailRetryInterval         time.Duration
+	OAuth2Required                 bool
 
 	UserPlaneInformation  *UserPlaneInformation
 	Ctx                   context.Context
@@ -152,6 +155,7 @@ func InitSmfContext(config *factory.Config) {
 		logger.CtxLog.Warn("NRF Uri is empty! Using localhost as NRF IPv4 address.")
 		smfContext.NrfUri = fmt.Sprintf("%s://%s:%d", smfContext.URIScheme, "127.0.0.1", 29510)
 	}
+	smfContext.NrfCertPem = configuration.NrfCertPem
 
 	if pfcp := configuration.PFCP; pfcp != nil {
 		smfContext.ListenAddr = pfcp.ListenAddr
@@ -282,4 +286,14 @@ func GetUserPlaneInformation() *UserPlaneInformation {
 
 func GetUEDefaultPathPool(groupName string) *UEDefaultPaths {
 	return smfContext.UEDefaultPathPool[groupName]
+}
+
+func (c *SMFContext) GetTokenCtx(scope, targetNF string) (
+	context.Context, *models.ProblemDetails, error,
+) {
+	if !c.OAuth2Required {
+		return context.TODO(), nil, nil
+	}
+	return oauth.GetTokenCtx(models.NfType_SMF,
+		c.NfInstanceID, c.NrfUri, scope, targetNF)
 }
