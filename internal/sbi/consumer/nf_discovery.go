@@ -15,7 +15,7 @@ import (
 )
 
 func SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
-	ctx, pd, err := GetTokenCtx("nnrf-disc", "NRF")
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtx("nnrf-disc", "NRF")
 	if err != nil {
 		return pd, err
 	}
@@ -61,7 +61,7 @@ func SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 }
 
 func SendNFDiscoveryPCF() (problemDetails *models.ProblemDetails, err error) {
-	ctx, pd, err := GetTokenCtx("nnrf-disc", "NRF")
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtx("nnrf-disc", "NRF")
 	if err != nil {
 		return pd, err
 	}
@@ -101,7 +101,7 @@ func SendNFDiscoveryPCF() (problemDetails *models.ProblemDetails, err error) {
 }
 
 func SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.ProblemDetails, error) {
-	ctx, pd, err := GetTokenCtx("nnrf-disc", "NRF")
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtx("nnrf-disc", "NRF")
 	if err != nil {
 		return pd, err
 	}
