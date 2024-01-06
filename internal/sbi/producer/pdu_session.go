@@ -334,7 +334,6 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 				} else {
 					logger.PduSessLog.Traceln("UECM_DeRegistration successful")
 				}
-				smContext.UeCmRegistered = false
 			}
 
 			cause := nasMessage.Cause5GSMRegularDeactivation
@@ -893,7 +892,6 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 		} else {
 			logger.PduSessLog.Traceln("UECM_DeRegistration successful")
 		}
-		smContext.UeCmRegistered = false
 	}
 
 	if !smContext.CheckState(smf_context.InActive) {
@@ -993,7 +991,6 @@ func HandlePDUSessionSMContextLocalRelease(smContext *smf_context.SMContext, cre
 		} else {
 			logger.PduSessLog.Traceln("UECM_DeRegistration successful")
 		}
-		smContext.UeCmRegistered = false
 	}
 
 	smContext.SetState(smf_context.PFCPModification)

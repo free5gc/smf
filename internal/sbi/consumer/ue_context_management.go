@@ -15,7 +15,8 @@ import (
 func UeCmRegistration(smCtx *smf_context.SMContext) (
 	*models.ProblemDetails, error,
 ) {
-	uecmUri := util.SearchNFServiceUri(smf_context.GetSelf().UDMProfile, models.ServiceName_NUDM_UECM, models.NfServiceStatus_REGISTERED)
+	uecmUri := util.SearchNFServiceUri(smf_context.GetSelf().UDMProfile, models.ServiceName_NUDM_UECM,
+		models.NfServiceStatus_REGISTERED)
 	if uecmUri == "" {
 		return nil, errors.Errorf("SMF can not select an UDM by NRF: SearchNFServiceUri failed")
 	}
@@ -36,8 +37,9 @@ func UeCmRegistration(smCtx *smf_context.SMContext) (
 		PgwFqdn:                     "",
 	}
 
-	logger.PduSessLog.Infoln("UECM Registration SmfInstanceId:", registrationData.SmfInstanceId, " PduSessionId:", registrationData.PduSessionId,
-		" SNssai:", registrationData.SingleNssai, " Dnn:", registrationData.Dnn, " PlmnId:", registrationData.PlmnId)
+	logger.PduSessLog.Infoln("UECM Registration SmfInstanceId:", registrationData.SmfInstanceId,
+		" PduSessionId:", registrationData.PduSessionId, " SNssai:", registrationData.SingleNssai,
+		" Dnn:", registrationData.Dnn, " PlmnId:", registrationData.PlmnId)
 
 	_, httpResp, localErr := client.SMFRegistrationApi.SmfRegistrationsPduSessionId(context.Background(),
 		smCtx.Supi, smCtx.PduSessionId, registrationData)
@@ -65,7 +67,8 @@ func UeCmRegistration(smCtx *smf_context.SMContext) (
 }
 
 func UeCmDeregistration(smCtx *smf_context.SMContext) (*models.ProblemDetails, error) {
-	uecmUri := util.SearchNFServiceUri(smf_context.GetSelf().UDMProfile, models.ServiceName_NUDM_UECM, models.NfServiceStatus_REGISTERED)
+	uecmUri := util.SearchNFServiceUri(smf_context.GetSelf().UDMProfile, models.ServiceName_NUDM_UECM,
+		models.NfServiceStatus_REGISTERED)
 	if uecmUri == "" {
 		return nil, errors.Errorf("SMF can not select an UDM by NRF: SearchNFServiceUri failed")
 	}
@@ -85,6 +88,7 @@ func UeCmDeregistration(smCtx *smf_context.SMContext) (*models.ProblemDetails, e
 		}
 	}()
 	if localErr == nil {
+		smCtx.UeCmRegistered = false
 		return nil, nil
 	} else if httpResp != nil {
 		if httpResp.Status != localErr.Error() {
