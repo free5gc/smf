@@ -203,6 +203,16 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
 	}
 
+	// UECM registration
+	problemDetails, err := consumer.UeCmRegistration(smContext)
+	if problemDetails != nil {
+		smContext.Log.Errorf("UECM_Registration Error: %+v", problemDetails)
+	} else if err != nil {
+		smContext.Log.Errorf("UECM_Registration Error: %+v", err)
+	} else {
+		smContext.Log.Traceln("UECM Registration Successful")
+	}
+
 	// generate goroutine to handle PFCP and
 	// reply PDUSessionSMContextCreate rsp immediately
 	needUnlock = false
@@ -230,7 +240,6 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 		Status: http.StatusCreated,
 		Body:   response,
 	}
-	// TODO: UECM registration
 }
 
 func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmContextRequest) *httpwrapper.Response {
@@ -312,6 +321,20 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 				} else {
 					smContext.SMPolicyID = ""
 				}
+			}
+
+			if smContext.UeCmRegistered {
+				problemDetails, err := consumer.UeCmDeregistration(smContext)
+				if problemDetails != nil {
+					if problemDetails.Cause != "CONTEXT_NOT_FOUND" {
+						logger.PduSessLog.Errorf("UECM_DeRegistration Failed Problem[%+v]", problemDetails)
+					}
+				} else if err != nil {
+					logger.PduSessLog.Errorf("UECM_DeRegistration Error[%+v]", err)
+				} else {
+					logger.PduSessLog.Traceln("UECM_DeRegistration successful")
+				}
+				smContext.UeCmRegistered = false
 			}
 
 			cause := nasMessage.Cause5GSMRegularDeactivation
@@ -859,6 +882,20 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 		}
 	}
 
+	if smContext.UeCmRegistered {
+		problemDetails, err := consumer.UeCmDeregistration(smContext)
+		if problemDetails != nil {
+			if problemDetails.Cause != "CONTEXT_NOT_FOUND" {
+				logger.PduSessLog.Errorf("UECM_DeRegistration Failed Problem[%+v]", problemDetails)
+			}
+		} else if err != nil {
+			logger.PduSessLog.Errorf("UECM_DeRegistration Error[%+v]", err)
+		} else {
+			logger.PduSessLog.Traceln("UECM_DeRegistration successful")
+		}
+		smContext.UeCmRegistered = false
+	}
+
 	if !smContext.CheckState(smf_context.InActive) {
 		smContext.SetState(smf_context.PFCPModification)
 	}
@@ -943,6 +980,20 @@ func HandlePDUSessionSMContextLocalRelease(smContext *smf_context.SMContext, cre
 		} else {
 			smContext.SMPolicyID = ""
 		}
+	}
+
+	if smContext.UeCmRegistered {
+		problemDetails, err := consumer.UeCmDeregistration(smContext)
+		if problemDetails != nil {
+			if problemDetails.Cause != "CONTEXT_NOT_FOUND" {
+				logger.PduSessLog.Errorf("UECM_DeRegistration Failed Problem[%+v]", problemDetails)
+			}
+		} else if err != nil {
+			logger.PduSessLog.Errorf("UECM_DeRegistration Error[%+v]", err)
+		} else {
+			logger.PduSessLog.Traceln("UECM_DeRegistration successful")
+		}
+		smContext.UeCmRegistered = false
 	}
 
 	smContext.SetState(smf_context.PFCPModification)

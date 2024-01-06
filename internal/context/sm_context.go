@@ -208,6 +208,8 @@ type SMContext struct {
 	// State
 	state SMContextState
 
+	UeCmRegistered bool
+
 	// Loggers
 	Log *logrus.Entry
 
