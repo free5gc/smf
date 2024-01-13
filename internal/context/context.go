@@ -297,3 +297,14 @@ func (c *SMFContext) GetTokenCtx(scope, targetNF string) (
 	return oauth.GetTokenCtx(models.NfType_SMF,
 		c.NfInstanceID, c.NrfUri, scope, targetNF)
 }
+
+func (context *SMFContext) AuthorizationCheck(token, serviceName string) error {
+	if !context.OAuth2Required {
+		return nil
+	}
+	err := oauth.VerifyOAuth(token, serviceName, context.NrfCertPem)
+	if err != nil {
+		return err
+	}
+	return nil
+}

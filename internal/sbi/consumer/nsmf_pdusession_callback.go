@@ -1,12 +1,12 @@
 package consumer
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nsmf_PDUSession"
 	"github.com/free5gc/openapi/models"
+	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 )
 
@@ -19,10 +19,15 @@ func SendSMContextStatusNotification(uri string) (*models.ProblemDetails, error)
 		configuration := Nsmf_PDUSession.NewConfiguration()
 		client := Nsmf_PDUSession.NewAPIClient(configuration)
 
+		ctx, pd, err := smf_context.GetSelf().GetTokenCtx("nsmf-pdusession", "SMF")
+		if err != nil {
+			return pd, err
+		}
+
 		logger.CtxLog.Infoln("[SMF] Send SMContext Status Notification")
 		httpResp, localErr := client.
 			IndividualSMContextNotificationApi.
-			SMContextNotification(context.Background(), uri, request)
+			SMContextNotification(ctx, uri, request)
 
 		if localErr == nil {
 			if httpResp.StatusCode != http.StatusNoContent {

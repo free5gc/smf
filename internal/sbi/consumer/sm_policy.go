@@ -1,7 +1,6 @@
 package consumer
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"regexp"
@@ -48,10 +47,15 @@ func SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (string, *m
 	}
 	smPolicyData.SuppFeat = "F"
 
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx("npcf-smpolicycontrol", "PCF")
+	if err != nil {
+		return "", nil, err
+	}
+
 	var smPolicyID string
 	var smPolicyDecision *models.SmPolicyDecision
 	smPolicyDecisionFromPCF, httpRsp, err := smContext.SMPolicyClient.DefaultApi.
-		SmPoliciesPost(context.Background(), smPolicyData)
+		SmPoliciesPost(ctx, smPolicyData)
 	defer func() {
 		if httpRsp != nil {
 			if closeErr := httpRsp.Body.Close(); closeErr != nil {
@@ -143,9 +147,15 @@ func SendSMPolicyAssociationUpdateByUERequestModification(
 			updateSMPolicy.UeInitResReq.PackFiltInfo = append(updateSMPolicy.UeInitResReq.PackFiltInfo, *PackFiltInfo)
 		}
 	}
+
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx("npcf-smpolicycontrol", "PCF")
+	if err != nil {
+		return nil, err
+	}
+
 	var smPolicyDecision *models.SmPolicyDecision
 	smPolicyDecisionFromPCF, rsp, err := smContext.SMPolicyClient.
-		DefaultApi.SmPoliciesSmPolicyIdUpdatePost(context.TODO(), smContext.SMPolicyID, updateSMPolicy)
+		DefaultApi.SmPoliciesSmPolicyIdUpdatePost(ctx, smContext.SMPolicyID, updateSMPolicy)
 	defer func() {
 		if rsp != nil {
 			if closeErr := rsp.Body.Close(); closeErr != nil {
@@ -364,8 +374,13 @@ func SendSMPolicyAssociationTermination(smContext *smf_context.SMContext) error 
 		return errors.Errorf("smContext not selected PCF")
 	}
 
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx("npcf-smpolicycontrol", "PCF")
+	if err != nil {
+		return err
+	}
+
 	rsp, err := smContext.SMPolicyClient.DefaultApi.SmPoliciesSmPolicyIdDeletePost(
-		context.Background(), smContext.SMPolicyID, models.SmPolicyDeleteData{})
+		ctx, smContext.SMPolicyID, models.SmPolicyDeleteData{})
 	defer func() {
 		if rsp != nil {
 			if closeErr := rsp.Body.Close(); closeErr != nil {

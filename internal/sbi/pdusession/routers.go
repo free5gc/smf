@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
 	logger_util "github.com/free5gc/util/logger"
@@ -40,6 +41,11 @@ func NewRouter() *gin.Engine {
 	router := logger_util.NewGinWithLogrus(logger.GinLog)
 	AddService(router)
 	return router
+}
+
+func authorizationCheck(c *gin.Context) error {
+	token := c.Request.Header.Get("Authorization")
+	return smf_context.GetSelf().AuthorizationCheck(token, "nsmf-pdusession")
 }
 
 func AddService(engine *gin.Engine) *gin.RouterGroup {
