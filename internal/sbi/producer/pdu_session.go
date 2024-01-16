@@ -184,14 +184,14 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	smContext.SMPolicyID = smPolicyID
 
 	// Update SessionRule from decision
-	if err := smContext.ApplySessionRules(smPolicyDecision); err != nil {
+	if err = smContext.ApplySessionRules(smPolicyDecision); err != nil {
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
 		return makeEstRejectResAndReleaseSMContext(smContext,
 			nasMessage.Cause5GSMRequestRejectedUnspecified,
 			&Nsmf_PDUSession.SubscriptionDenied)
 	}
 
-	if err := smContext.SelectDefaultDataPath(); err != nil {
+	if err = smContext.SelectDefaultDataPath(); err != nil {
 		smContext.SetState(smf_context.InActive)
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
 		return makeEstRejectResAndReleaseSMContext(smContext,
@@ -199,7 +199,7 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 			&Nsmf_PDUSession.InsufficientResourceSliceDnn)
 	}
 
-	if err := smContext.ApplyPccRules(smPolicyDecision); err != nil {
+	if err = smContext.ApplyPccRules(smPolicyDecision); err != nil {
 		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
 	}
 
