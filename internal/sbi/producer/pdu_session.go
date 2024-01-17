@@ -184,14 +184,14 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	smContext.SMPolicyID = smPolicyID
 
 	// Update SessionRule from decision
-	if err := smContext.ApplySessionRules(smPolicyDecision); err != nil {
+	if err = smContext.ApplySessionRules(smPolicyDecision); err != nil {
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
 		return makeEstRejectResAndReleaseSMContext(smContext,
 			nasMessage.Cause5GSMRequestRejectedUnspecified,
 			&Nsmf_PDUSession.SubscriptionDenied)
 	}
 
-	if err := smContext.SelectDefaultDataPath(); err != nil {
+	if err = smContext.SelectDefaultDataPath(); err != nil {
 		smContext.SetState(smf_context.InActive)
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
 		return makeEstRejectResAndReleaseSMContext(smContext,
@@ -199,8 +199,18 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 			&Nsmf_PDUSession.InsufficientResourceSliceDnn)
 	}
 
-	if err := smContext.ApplyPccRules(smPolicyDecision); err != nil {
+	if err = smContext.ApplyPccRules(smPolicyDecision); err != nil {
 		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
+	}
+
+	// UECM registration
+	problemDetails, err := consumer.UeCmRegistration(smContext)
+	if problemDetails != nil {
+		smContext.Log.Errorf("UECM_Registration Error: %+v", problemDetails)
+	} else if err != nil {
+		smContext.Log.Errorf("UECM_Registration Error: %+v", err)
+	} else {
+		smContext.Log.Traceln("UECM Registration Successful")
 	}
 
 	// generate goroutine to handle PFCP and
@@ -230,7 +240,6 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 		Status: http.StatusCreated,
 		Body:   response,
 	}
-	// TODO: UECM registration
 }
 
 func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmContextRequest) *httpwrapper.Response {
@@ -311,6 +320,19 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 					smContext.Log.Errorf("SM Policy Termination failed: %s", err)
 				} else {
 					smContext.SMPolicyID = ""
+				}
+			}
+
+			if smContext.UeCmRegistered {
+				problemDetails, err := consumer.UeCmDeregistration(smContext)
+				if problemDetails != nil {
+					if problemDetails.Cause != "CONTEXT_NOT_FOUND" {
+						logger.PduSessLog.Errorf("UECM_DeRegistration Failed Problem[%+v]", problemDetails)
+					}
+				} else if err != nil {
+					logger.PduSessLog.Errorf("UECM_DeRegistration Error[%+v]", err)
+				} else {
+					logger.PduSessLog.Traceln("UECM_DeRegistration successful")
 				}
 			}
 
@@ -859,6 +881,19 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 		}
 	}
 
+	if smContext.UeCmRegistered {
+		problemDetails, err := consumer.UeCmDeregistration(smContext)
+		if problemDetails != nil {
+			if problemDetails.Cause != "CONTEXT_NOT_FOUND" {
+				logger.PduSessLog.Errorf("UECM_DeRegistration Failed Problem[%+v]", problemDetails)
+			}
+		} else if err != nil {
+			logger.PduSessLog.Errorf("UECM_DeRegistration Error[%+v]", err)
+		} else {
+			logger.PduSessLog.Traceln("UECM_DeRegistration successful")
+		}
+	}
+
 	if !smContext.CheckState(smf_context.InActive) {
 		smContext.SetState(smf_context.PFCPModification)
 	}
@@ -942,6 +977,19 @@ func HandlePDUSessionSMContextLocalRelease(smContext *smf_context.SMContext, cre
 			logger.PduSessLog.Errorf("SM Policy Termination failed: %s", err)
 		} else {
 			smContext.SMPolicyID = ""
+		}
+	}
+
+	if smContext.UeCmRegistered {
+		problemDetails, err := consumer.UeCmDeregistration(smContext)
+		if problemDetails != nil {
+			if problemDetails.Cause != "CONTEXT_NOT_FOUND" {
+				logger.PduSessLog.Errorf("UECM_DeRegistration Failed Problem[%+v]", problemDetails)
+			}
+		} else if err != nil {
+			logger.PduSessLog.Errorf("UECM_DeRegistration Error[%+v]", err)
+		} else {
+			logger.PduSessLog.Traceln("UECM_DeRegistration successful")
 		}
 	}
 
