@@ -47,7 +47,7 @@ func SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (string, *m
 	}
 	smPolicyData.SuppFeat = "F"
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx("npcf-smpolicycontrol", "PCF")
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx("npcf-smpolicycontrol", models.NfType_PCF)
 	if err != nil {
 		return "", nil, err
 	}
@@ -148,7 +148,7 @@ func SendSMPolicyAssociationUpdateByUERequestModification(
 		}
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx("npcf-smpolicycontrol", "PCF")
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx("npcf-smpolicycontrol", models.NfType_PCF)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +374,7 @@ func SendSMPolicyAssociationTermination(smContext *smf_context.SMContext) error 
 		return errors.Errorf("smContext not selected PCF")
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx("npcf-smpolicycontrol", "PCF")
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx("npcf-smpolicycontrol", models.NfType_PCF)
 	if err != nil {
 		return err
 	}

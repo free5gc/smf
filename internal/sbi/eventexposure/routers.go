@@ -17,7 +17,9 @@ import (
 
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/util/oauth"
 	"github.com/free5gc/smf/pkg/factory"
+	"github.com/free5gc/openapi/models"
 	logger_util "github.com/free5gc/util/logger"
 )
 
@@ -33,6 +35,8 @@ type Route struct {
 	HandlerFunc gin.HandlerFunc
 }
 
+const serviceName string = string(models.ServiceName_NSMF_EVENT_EXPOSURE)
+
 // Routes is the list of the generated Route.
 type Routes []Route
 
@@ -43,13 +47,13 @@ func NewRouter() *gin.Engine {
 	return router
 }
 
-func authorizationCheck(c *gin.Context) error {
-	token := c.Request.Header.Get("Authorization")
-	return smf_context.GetSelf().AuthorizationCheck(token, "nsmf-event-exposure")
-}
-
 func AddService(engine *gin.Engine) *gin.RouterGroup {
 	group := engine.Group(factory.SmfEventExposureResUriPrefix)
+
+	routerAuthorizationCheck := util_oauth.NewRouterAuthorizationCheck(serviceName)
+	group.Use(func(c *gin.Context) {
+		routerAuthorizationCheck.Check(c, smf_context.GetSelf())
+	})
 
 	for _, route := range routes {
 		switch route.Method {

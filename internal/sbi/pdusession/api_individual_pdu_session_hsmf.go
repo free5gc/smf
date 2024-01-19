@@ -17,20 +17,10 @@ import (
 
 // ReleasePduSession - Release
 func ReleasePduSession(c *gin.Context) {
-	auth_err := authorizationCheck(c)
-	if auth_err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": auth_err.Error()})
-		return
-	}
 	c.JSON(http.StatusOK, gin.H{})
 }
 
 // UpdatePduSession - Update (initiated by V-SMF)
 func UpdatePduSession(c *gin.Context) {
-	auth_err := authorizationCheck(c)
-	if auth_err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": auth_err.Error()})
-		return
-	}
 	c.JSON(http.StatusOK, gin.H{})
 }

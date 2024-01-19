@@ -17,40 +17,20 @@ import (
 
 // SubscriptionsPost -
 func SubscriptionsPost(c *gin.Context) {
-	auth_err := authorizationCheck(c)
-	if auth_err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": auth_err.Error()})
-		return
-	}
 	c.JSON(http.StatusOK, gin.H{})
 }
 
 // SubscriptionsSubIdDelete -
 func SubscriptionsSubIdDelete(c *gin.Context) {
-	auth_err := authorizationCheck(c)
-	if auth_err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": auth_err.Error()})
-		return
-	}
 	c.JSON(http.StatusOK, gin.H{})
 }
 
 // SubscriptionsSubIdGet -
 func SubscriptionsSubIdGet(c *gin.Context) {
-	auth_err := authorizationCheck(c)
-	if auth_err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": auth_err.Error()})
-		return
-	}
 	c.JSON(http.StatusOK, gin.H{})
 }
 
 // SubscriptionsSubIdPut -
 func SubscriptionsSubIdPut(c *gin.Context) {
-	auth_err := authorizationCheck(c)
-	if auth_err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": auth_err.Error()})
-		return
-	}
 	c.JSON(http.StatusOK, gin.H{})
 }
