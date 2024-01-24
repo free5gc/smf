@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/free5gc/openapi/models"
@@ -173,9 +172,15 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 				},
 			}
 
+			ctx, _, err := smf_context.GetSelf().GetTokenCtx("namf-comm", models.NfType_AMF)
+			if err != nil {
+				logger.PfcpLog.Warnf("Get NAMF_COMM context failed: %s", err)
+				return
+			}
+
 			rspData, _, err := smContext.CommunicationClient.
 				N1N2MessageCollectionDocumentApi.
-				N1N2MessageTransfer(context.Background(), smContext.Supi, n1n2Request)
+				N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request)
 			if err != nil {
 				logger.PfcpLog.Warnf("Send N1N2Transfer failed: %s", err)
 			}

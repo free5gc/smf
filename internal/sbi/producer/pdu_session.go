@@ -1,7 +1,6 @@
 package producer
 
 import (
-	"context"
 	"encoding/hex"
 	"errors"
 	"net"
@@ -101,9 +100,15 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 
 	SubscriberDataManagementClient := smf_context.GetSelf().SubscriberDataManagementClient
 
+	ctx, _, oauthErr := smf_context.GetSelf().GetTokenCtx("nudm-sdm", models.NfType_UDM)
+	if oauthErr != nil {
+		smContext.Log.Errorf("Get Token Context Error[%v]", oauthErr)
+		return nil
+	}
+
 	if sessSubData, rsp, err := SubscriberDataManagementClient.
 		SessionManagementSubscriptionDataRetrievalApi.
-		GetSmData(context.Background(), smContext.Supi, smDataParams); err != nil {
+		GetSmData(ctx, smContext.Supi, smDataParams); err != nil {
 		smContext.Log.Errorln("Get SessionManagementSubscriptionData error:", err)
 	} else {
 		defer func() {
@@ -1093,12 +1098,18 @@ func sendGSMPDUSessionReleaseCommand(smContext *smf_context.SMContext, nasPdu []
 	// Start T3592
 	t3592 := factory.SmfConfig.Configuration.T3592
 	if t3592.Enable {
+		ctx, _, err := smf_context.GetSelf().GetTokenCtx("namf-comm", models.NfType_AMF)
+		if err != nil {
+			smContext.Log.Warnf("Get namf-comm token failed: %+v", err)
+			return
+		}
+
 		smContext.T3592 = smf_context.NewTimer(t3592.ExpireTime, t3592.MaxRetryTimes, func(expireTimes int32) {
 			smContext.SMLock.Lock()
 			rspData, rsp, err := smContext.
 				CommunicationClient.
 				N1N2MessageCollectionDocumentApi.
-				N1N2MessageTransfer(context.Background(), smContext.Supi, n1n2Request)
+				N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request)
 			if err != nil {
 				smContext.Log.Warnf("Send N1N2Transfer for GSMPDUSessionReleaseCommand failed: %s", err)
 			}
@@ -1138,13 +1149,19 @@ func sendGSMPDUSessionModificationCommand(smContext *smf_context.SMContext, nasP
 	// Start T3591
 	t3591 := factory.SmfConfig.Configuration.T3591
 	if t3591.Enable {
+		ctx, _, err := smf_context.GetSelf().GetTokenCtx("namf-comm", models.NfType_AMF)
+		if err != nil {
+			smContext.Log.Warnf("Get namf-comm token failed: %+v", err)
+			return
+		}
+
 		smContext.T3591 = smf_context.NewTimer(t3591.ExpireTime, t3591.MaxRetryTimes, func(expireTimes int32) {
 			smContext.SMLock.Lock()
 			defer smContext.SMLock.Unlock()
 			rspData, rsp, err := smContext.
 				CommunicationClient.
 				N1N2MessageCollectionDocumentApi.
-				N1N2MessageTransfer(context.Background(), smContext.Supi, n1n2Request)
+				N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request)
 			if err != nil {
 				smContext.Log.Warnf("Send N1N2Transfer for GSMPDUSessionModificationCommand failed: %s", err)
 			}

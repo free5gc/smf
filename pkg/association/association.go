@@ -245,9 +245,14 @@ func requestAMFToReleasePDUResources(smContext *smf_context.SMContext) (sendNoti
 		}
 	}
 
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx("namf-comm", models.NfType_AMF)
+	if err != nil {
+		return false, false
+	}
+
 	rspData, res, err := smContext.CommunicationClient.
 		N1N2MessageCollectionDocumentApi.
-		N1N2MessageTransfer(context.Background(), smContext.Supi, n1n2Request)
+		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request)
 	if err != nil {
 		logger.MainLog.Warnf("Send N1N2Transfer failed: %+v", err)
 	}
