@@ -186,7 +186,7 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	// PDU　session create is a charging event
 	logger.PduSessLog.Infof("CHF Selection for SMContext SUPI[%s] PDUSessionID[%d]\n",
 		smContext.Supi, smContext.PDUSessionID)
-	if err := smContext.CHFSelection(); err != nil {
+	if err = smContext.CHFSelection(); err != nil {
 		logger.PduSessLog.Errorln("chf selection error:", err)
 	} else {
 		CreateChargingSession(smContext)
