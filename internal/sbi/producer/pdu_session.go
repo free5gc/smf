@@ -95,7 +95,7 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	}
 
 	establishmentRequest := m.PDUSessionEstablishmentRequest
-	if err := HandlePDUSessionEstablishmentRequest(smContext, establishmentRequest); err != nil {
+	if err = HandlePDUSessionEstablishmentRequest(smContext, establishmentRequest); err != nil {
 		smContext.Log.Errorf("PDU Session Establishment fail by %s", err)
 		gsmError := &GSMError{}
 		if errors.As(err, &gsmError) {
@@ -109,7 +109,7 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	}
 
 	// Discover and new Namf_Comm client for use later
-	if problemDetails, err := consumer.SendNFDiscoveryServingAMF(smContext); err != nil {
+	if problemDetails, err = consumer.SendNFDiscoveryServingAMF(smContext); err != nil {
 		smContext.Log.Warnf("Send NF Discovery Serving AMF Error[%v]", err)
 	} else if problemDetails != nil {
 		smContext.Log.Warnf("Send NF Discovery Serving AMF Problem[%+v]", problemDetails)
@@ -125,7 +125,7 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 		}
 	}
 
-	if err := smContext.AllocUeIP(); err != nil {
+	if err = smContext.AllocUeIP(); err != nil {
 		smContext.SetState(smf_context.InActive)
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
 		return makeEstRejectResAndReleaseSMContext(smContext,
@@ -133,7 +133,7 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 			&Nsmf_PDUSession.InsufficientResourceSliceDnn)
 	}
 
-	if err := smContext.PCFSelection(); err != nil {
+	if err = smContext.PCFSelection(); err != nil {
 		smContext.Log.Errorln("pcf selection error:", err)
 	}
 

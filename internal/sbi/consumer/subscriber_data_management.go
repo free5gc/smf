@@ -4,19 +4,21 @@ import (
 	"context"
 
 	"github.com/antihax/optional"
+	"github.com/pkg/errors"
+
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/util"
-	"github.com/pkg/errors"
 )
 
 func SDMGetSmData(smCtx *smf_context.SMContext,
-	smPlmnID *models.PlmnId) (problemDetails *models.ProblemDetails, err error) {
+	smPlmnID *models.PlmnId,
+) (problemDetails *models.ProblemDetails, err error) {
 	// Query UDM
-	if problemDetails, err := SendNFDiscoveryUDM(); err != nil {
+	if problemDetails, err = SendNFDiscoveryUDM(); err != nil {
 		smCtx.Log.Warnf("Send NF Discovery Serving UDM Error[%v]", err)
 	} else if problemDetails != nil {
 		smCtx.Log.Warnf("Send NF Discovery Serving UDM Problem[%+v]", problemDetails)
@@ -63,12 +65,12 @@ func SDMGetSmData(smCtx *smf_context.SMContext,
 		err = localErr
 	}
 
-	return
+	return problemDetails, err
 }
 
 func SDMSubscribe(smCtx *smf_context.SMContext, smPlmnID *models.PlmnId) (
-	problemDetails *models.ProblemDetails, err error) {
-
+	problemDetails *models.ProblemDetails, err error,
+) {
 	if !smf_context.GetSelf().Ues.UeExists(smCtx.Supi) {
 		sdmUri := util.SearchNFServiceUri(smf_context.GetSelf().UDMProfile, models.ServiceName_NUDM_SDM,
 			models.NfServiceStatus_REGISTERED)
@@ -117,7 +119,8 @@ func SDMSubscribe(smCtx *smf_context.SMContext, smPlmnID *models.PlmnId) (
 }
 
 func SDMUnSubscribe(smCtx *smf_context.SMContext) (problemDetails *models.ProblemDetails,
-	err error) {
+	err error,
+) {
 	if smf_context.GetSelf().Ues.IsLastPduSession(smCtx.Supi) {
 		sdmUri := util.SearchNFServiceUri(smf_context.GetSelf().UDMProfile, models.ServiceName_NUDM_SDM,
 			models.NfServiceStatus_REGISTERED)
@@ -158,5 +161,5 @@ func SDMUnSubscribe(smCtx *smf_context.SMContext) (problemDetails *models.Proble
 	} else {
 		smf_context.GetSelf().Ues.DecrementPduSessionCount(smCtx.Supi)
 	}
-	return
+	return problemDetails, err
 }
