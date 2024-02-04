@@ -6,14 +6,11 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/antihax/optional"
-
 	"github.com/free5gc/nas"
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Namf_Communication"
 	"github.com/free5gc/openapi/Nsmf_PDUSession"
-	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
 	smf_context "github.com/free5gc/smf/internal/context"
@@ -81,50 +78,20 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	smContext.Log.Debugf("S-NSSAI[sst: %d, sd: %s] DNN[%s]",
 		smContext.SNssai.Sst, smContext.SNssai.Sd, smContext.Dnn)
 
-	// Query UDM
-	if problemDetails, err := consumer.SendNFDiscoveryUDM(); err != nil {
-		smContext.Log.Warnf("Send NF Discovery Serving UDM Error[%v]", err)
-	} else if problemDetails != nil {
-		smContext.Log.Warnf("Send NF Discovery Serving UDM Problem[%+v]", problemDetails)
-	} else {
-		smContext.Log.Infoln("Send NF Discovery Serving UDM Successfully")
-	}
-
 	smPlmnID := createData.Guami.PlmnId
 
-	smDataParams := &Nudm_SubscriberDataManagement.GetSmDataParamOpts{
-		Dnn:         optional.NewString(createData.Dnn),
-		PlmnId:      optional.NewInterface(openapi.MarshToJsonString(smPlmnID)),
-		SingleNssai: optional.NewInterface(openapi.MarshToJsonString(smContext.SNssai)),
+	problemDetails, err := consumer.SDMGetSmData(smContext, smPlmnID)
+	if problemDetails != nil {
+		smContext.Log.Errorf("SDM_Get SmData Failed Problem[%+v]", problemDetails)
+	} else if err != nil {
+		smContext.Log.Errorf("SDM_Get SmData Error[%+v]", err)
 	}
 
-	SubscriberDataManagementClient := smf_context.GetSelf().SubscriberDataManagementClient
-
-	ctx, _, oauthErr := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_SDM, models.NfType_UDM)
-	if oauthErr != nil {
-		smContext.Log.Errorf("Get Token Context Error[%v]", oauthErr)
-		return nil
-	}
-
-	if sessSubData, rsp, err := SubscriberDataManagementClient.
-		SessionManagementSubscriptionDataRetrievalApi.
-		GetSmData(ctx, smContext.Supi, smDataParams); err != nil {
-		smContext.Log.Errorln("Get SessionManagementSubscriptionData error:", err)
-	} else {
-		defer func() {
-			if rspCloseErr := rsp.Body.Close(); rspCloseErr != nil {
-				smContext.Log.Errorf("GetSmData response body cannot close: %+v", rspCloseErr)
-			}
-		}()
-		if len(sessSubData) > 0 {
-			smContext.DnnConfiguration = sessSubData[0].DnnConfigurations[smContext.Dnn]
-			// UP Security info present in session management subscription data
-			if smContext.DnnConfiguration.UpSecurity != nil {
-				smContext.UpSecurity = smContext.DnnConfiguration.UpSecurity
-			}
-		} else {
-			smContext.Log.Errorln("SessionManagementSubscriptionData from UDM is nil")
-		}
+	problemDetails, err = consumer.SDMSubscribe(smContext, smPlmnID)
+	if problemDetails != nil {
+		smContext.Log.Errorf("SDM Subscription Failed Problem[%+v]", problemDetails)
+	} else if err != nil {
+		smContext.Log.Errorf("SDM Subscription Error[%+v]", err)
 	}
 
 	establishmentRequest := m.PDUSessionEstablishmentRequest
@@ -217,6 +184,20 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 		return makeEstRejectResAndReleaseSMContext(smContext,
 			nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN,
 			&Nsmf_PDUSession.InsufficientResourceSliceDnn)
+	}
+
+	if err = smContext.ApplyPccRules(smPolicyDecision); err != nil {
+		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
+	}
+
+	// UECM registration
+	problemDetails, err = consumer.UeCmRegistration(smContext)
+	if problemDetails != nil {
+		smContext.Log.Errorf("UECM_Registration Error: %+v", problemDetails)
+	} else if err != nil {
+		smContext.Log.Errorf("UECM_Registration Error: %+v", err)
+	} else {
+		smContext.Log.Traceln("UECM Registration Successful")
 	}
 
 	// generate goroutine to handle PFCP and
@@ -327,6 +308,13 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 				} else {
 					smContext.SMPolicyID = ""
 				}
+			}
+
+			problemDetails, err := consumer.SDMUnSubscribe(smContext)
+			if problemDetails != nil {
+				logger.PduSessLog.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
+			} else if err != nil {
+				logger.PduSessLog.Errorf("SDM UnSubscriptio Error[%+v]", err)
 			}
 
 			if smContext.UeCmRegistered {
@@ -907,6 +895,13 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 		}
 	}
 
+	problemDetails, err := consumer.SDMUnSubscribe(smContext)
+	if problemDetails != nil {
+		logger.PduSessLog.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
+	} else if err != nil {
+		logger.PduSessLog.Errorf("SDM UnSubscriptio Error[%+v]", err)
+	}
+
 	if smContext.UeCmRegistered {
 		problemDetails, err := consumer.UeCmDeregistration(smContext)
 		if problemDetails != nil {
@@ -1006,6 +1001,13 @@ func HandlePDUSessionSMContextLocalRelease(smContext *smf_context.SMContext, cre
 		} else {
 			smContext.SMPolicyID = ""
 		}
+	}
+
+	problemDetails, err := consumer.SDMUnSubscribe(smContext)
+	if problemDetails != nil {
+		logger.PduSessLog.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
+	} else if err != nil {
+		logger.PduSessLog.Errorf("SDM UnSubscriptio Error[%+v]", err)
 	}
 
 	if smContext.UeCmRegistered {
