@@ -238,7 +238,7 @@ func sendPDUSessionEstablishmentReject(
 		},
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx("namf-comm", models.NfType_AMF)
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
 	if err != nil {
 		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", err)
 		return
@@ -306,7 +306,7 @@ func sendPDUSessionEstablishmentAccept(
 		},
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx("namf-comm", models.NfType_AMF)
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
 	if err != nil {
 		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", err)
 		return

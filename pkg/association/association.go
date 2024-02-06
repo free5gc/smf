@@ -245,7 +245,7 @@ func requestAMFToReleasePDUResources(smContext *smf_context.SMContext) (sendNoti
 		}
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx("namf-comm", models.NfType_AMF)
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
 	if err != nil {
 		return false, false
 	}

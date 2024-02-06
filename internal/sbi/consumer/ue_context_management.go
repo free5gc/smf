@@ -40,7 +40,7 @@ func UeCmRegistration(smCtx *smf_context.SMContext) (
 		" PduSessionId:", registrationData.PduSessionId, " SNssai:", registrationData.SingleNssai,
 		" Dnn:", registrationData.Dnn, " PlmnId:", registrationData.PlmnId)
 
-	ctx, pd, err := smf_context.GetSelf().GetTokenCtx("nudm-uecm", models.NfType_UDM)
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_UECM, models.NfType_UDM)
 	if err != nil {
 		return pd, err
 	}
@@ -81,7 +81,7 @@ func UeCmDeregistration(smCtx *smf_context.SMContext) (*models.ProblemDetails, e
 	configuration.SetBasePath(uecmUri)
 	client := Nudm_UEContextManagement.NewAPIClient(configuration)
 
-	ctx, pd, err := smf_context.GetSelf().GetTokenCtx("nudm-uecm", models.NfType_UDM)
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_UECM, models.NfType_UDM)
 	if err != nil {
 		return pd, err
 	}

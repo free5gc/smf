@@ -100,7 +100,7 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 
 	SubscriberDataManagementClient := smf_context.GetSelf().SubscriberDataManagementClient
 
-	ctx, _, oauthErr := smf_context.GetSelf().GetTokenCtx("nudm-sdm", models.NfType_UDM)
+	ctx, _, oauthErr := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_SDM, models.NfType_UDM)
 	if oauthErr != nil {
 		smContext.Log.Errorf("Get Token Context Error[%v]", oauthErr)
 		return nil
@@ -1098,7 +1098,7 @@ func sendGSMPDUSessionReleaseCommand(smContext *smf_context.SMContext, nasPdu []
 	// Start T3592
 	t3592 := factory.SmfConfig.Configuration.T3592
 	if t3592.Enable {
-		ctx, _, err := smf_context.GetSelf().GetTokenCtx("namf-comm", models.NfType_AMF)
+		ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
 		if err != nil {
 			smContext.Log.Warnf("Get namf-comm token failed: %+v", err)
 			return
@@ -1149,7 +1149,7 @@ func sendGSMPDUSessionModificationCommand(smContext *smf_context.SMContext, nasP
 	// Start T3591
 	t3591 := factory.SmfConfig.Configuration.T3591
 	if t3591.Enable {
-		ctx, _, err := smf_context.GetSelf().GetTokenCtx("namf-comm", models.NfType_AMF)
+		ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
 		if err != nil {
 			smContext.Log.Warnf("Get namf-comm token failed: %+v", err)
 			return
