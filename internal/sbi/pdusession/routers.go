@@ -18,7 +18,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/free5gc/smf/internal/util/oauth"
+	util_oauth "github.com/free5gc/smf/internal/util/oauth"
 	"github.com/free5gc/smf/pkg/factory"
 	logger_util "github.com/free5gc/util/logger"
 )
@@ -35,8 +35,6 @@ type Route struct {
 	HandlerFunc gin.HandlerFunc
 }
 
-const serviceName string = string(models.ServiceName_NSMF_PDUSESSION)
-
 // Routes is the list of the generated Route.
 type Routes []Route
 
@@ -50,7 +48,7 @@ func NewRouter() *gin.Engine {
 func AddService(engine *gin.Engine) *gin.RouterGroup {
 	group := engine.Group(factory.SmfPdusessionResUriPrefix)
 
-	routerAuthorizationCheck := util_oauth.NewRouterAuthorizationCheck(serviceName)
+	routerAuthorizationCheck := util_oauth.NewRouterAuthorizationCheck(models.ServiceName_NSMF_PDUSESSION)
 	group.Use(func(c *gin.Context) {
 		routerAuthorizationCheck.Check(c, smf_context.GetSelf())
 	})
