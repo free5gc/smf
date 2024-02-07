@@ -106,7 +106,7 @@ func RetrySendNFRegistration(MaxRetry int) error {
 func SendNFDeregistration() error {
 	// Check data (Use RESTful DELETE)
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx("nnrf-nfm", "NRF")
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_NFM, models.NfType_NRF)
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func SendNFDeregistration() error {
 func SendDeregisterNFInstance() (*models.ProblemDetails, error) {
 	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
-	ctx, pd, err := smf_context.GetSelf().GetTokenCtx("nnrf-nfm", "NRF")
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_NFM, models.NfType_NRF)
 	if err != nil {
 		return pd, err
 	}
