@@ -6,12 +6,12 @@ require (
 	github.com/antihax/optional v1.0.0
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/davecgh/go-spew v1.1.1
-	github.com/free5gc/aper v1.0.4
-	github.com/free5gc/nas v1.1.0
-	github.com/free5gc/ngap v1.0.6
-	github.com/free5gc/openapi v1.0.7-0.20240117084712-52ad99299693
-	github.com/free5gc/pfcp v1.0.6
-	github.com/free5gc/util v1.0.5-0.20231001095115-433858e5be94
+	github.com/free5gc/aper v1.0.5
+	github.com/free5gc/nas v1.1.2
+	github.com/free5gc/ngap v1.0.7
+	github.com/free5gc/openapi v1.0.7
+	github.com/free5gc/pfcp v1.0.7
+	github.com/free5gc/util v1.0.5
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.3.0
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
@@ -29,7 +29,7 @@ require (
 	github.com/bytedance/sonic v1.9.1 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.0-20190314233015-f79a8a8ca69d // indirect
-	github.com/free5gc/tlv v1.0.2-0.20230131124215-8b6ebd69bf93 // indirect
+	github.com/free5gc/tlv v1.0.2 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
