@@ -1,8 +1,6 @@
 package consumer
 
 import (
-	"context"
-
 	"github.com/antihax/optional"
 	"github.com/pkg/errors"
 
@@ -34,9 +32,14 @@ func SDMGetSmData(smCtx *smf_context.SMContext,
 
 	SubscriberDataManagementClient := smf_context.GetSelf().SubscriberDataManagementClient
 
+	ctx, pd, oauthErr := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_SDM, models.NfType_UDM)
+	if oauthErr != nil {
+		return pd, oauthErr
+	}
+
 	sessSubData, rsp, localErr := SubscriberDataManagementClient.
 		SessionManagementSubscriptionDataRetrievalApi.
-		GetSmData(context.Background(), smCtx.Supi, smDataParams)
+		GetSmData(ctx, smCtx.Supi, smDataParams)
 	if localErr == nil {
 		defer func() {
 			if rspCloseErr := rsp.Body.Close(); rspCloseErr != nil {
@@ -56,7 +59,7 @@ func SDMGetSmData(smCtx *smf_context.SMContext,
 	} else if rsp != nil {
 		if rsp.Status != localErr.Error() {
 			err = localErr
-			return
+			return nil, err
 		}
 		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
 		problemDetails = &problem
@@ -87,8 +90,13 @@ func SDMSubscribe(smCtx *smf_context.SMContext, smPlmnID *models.PlmnId) (
 			PlmnId:       smPlmnID,
 		}
 
+		ctx, pd, oauthErr := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_SDM, models.NfType_UDM)
+		if oauthErr != nil {
+			return pd, oauthErr
+		}
+
 		resSubscription, httpResp, localErr := client.SubscriptionCreationApi.Subscribe(
-			context.Background(), smCtx.Supi, sdmSubscription)
+			ctx, smCtx.Supi, sdmSubscription)
 		defer func() {
 			if httpResp != nil {
 				if rspCloseErr := httpResp.Body.Close(); rspCloseErr != nil {
@@ -134,7 +142,12 @@ func SDMUnSubscribe(smCtx *smf_context.SMContext) (problemDetails *models.Proble
 
 		subscriptionId := smf_context.GetSelf().Ues.GetSubscriptionId(smCtx.Supi)
 
-		httpResp, localErr := client.SubscriptionDeletionApi.Unsubscribe(context.Background(), smCtx.Supi, subscriptionId)
+		ctx, pd, oauthErr := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_SDM, models.NfType_UDM)
+		if oauthErr != nil {
+			return pd, oauthErr
+		}
+
+		httpResp, localErr := client.SubscriptionDeletionApi.Unsubscribe(ctx, smCtx.Supi, subscriptionId)
 		defer func() {
 			if httpResp != nil {
 				if rspCloseErr := httpResp.Body.Close(); rspCloseErr != nil {
