@@ -1,7 +1,6 @@
 package producer
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/free5gc/nas/nasMessage"
@@ -261,10 +260,16 @@ func sendPDUSessionEstablishmentReject(
 		},
 	}
 
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+	if err != nil {
+		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", err)
+		return
+	}
+
 	rspData, rsp, err := smContext.
 		CommunicationClient.
 		N1N2MessageCollectionDocumentApi.
-		N1N2MessageTransfer(context.Background(), smContext.Supi, n1n2Request)
+		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request)
 	defer func() {
 		if rsp != nil {
 			if resCloseErr := rsp.Body.Close(); resCloseErr != nil {
@@ -323,10 +328,16 @@ func sendPDUSessionEstablishmentAccept(
 		},
 	}
 
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+	if err != nil {
+		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", err)
+		return
+	}
+
 	rspData, rsp, err := smContext.
 		CommunicationClient.
 		N1N2MessageCollectionDocumentApi.
-		N1N2MessageTransfer(context.Background(), smContext.Supi, n1n2Request)
+		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request)
 	defer func() {
 		if rsp != nil {
 			if resCloseErr := rsp.Body.Close(); resCloseErr != nil {

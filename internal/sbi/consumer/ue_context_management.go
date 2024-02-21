@@ -1,8 +1,6 @@
 package consumer
 
 import (
-	"context"
-
 	"github.com/pkg/errors"
 
 	"github.com/free5gc/openapi"
@@ -42,7 +40,12 @@ func UeCmRegistration(smCtx *smf_context.SMContext) (
 		" PduSessionId:", registrationData.PduSessionId, " SNssai:", registrationData.SingleNssai,
 		" Dnn:", registrationData.Dnn, " PlmnId:", registrationData.PlmnId)
 
-	_, httpResp, localErr := client.SMFRegistrationApi.SmfRegistrationsPduSessionId(context.Background(),
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_UECM, models.NfType_UDM)
+	if err != nil {
+		return pd, err
+	}
+
+	_, httpResp, localErr := client.SMFRegistrationApi.SmfRegistrationsPduSessionId(ctx,
 		smCtx.Supi, smCtx.PduSessionId, registrationData)
 	defer func() {
 		if httpResp != nil {
@@ -78,7 +81,12 @@ func UeCmDeregistration(smCtx *smf_context.SMContext) (*models.ProblemDetails, e
 	configuration.SetBasePath(uecmUri)
 	client := Nudm_UEContextManagement.NewAPIClient(configuration)
 
-	httpResp, localErr := client.SMFDeregistrationApi.Deregistration(context.Background(),
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_UECM, models.NfType_UDM)
+	if err != nil {
+		return pd, err
+	}
+
+	httpResp, localErr := client.SMFDeregistrationApi.Deregistration(ctx,
 		smCtx.Supi, smCtx.PduSessionId)
 	defer func() {
 		if httpResp != nil {

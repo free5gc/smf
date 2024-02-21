@@ -26,6 +26,12 @@ func Init() {
 	smfContext.NfInstanceID = uuid.New().String()
 }
 
+type NFContext interface {
+	AuthorizationCheck(token string, serviceName models.ServiceName) error
+}
+
+var _ NFContext = &SMFContext{}
+
 var smfContext SMFContext
 
 type SMFContext struct {
@@ -302,12 +308,19 @@ func GetUEDefaultPathPool(groupName string) *UEDefaultPaths {
 	return smfContext.UEDefaultPathPool[groupName]
 }
 
-func (c *SMFContext) GetTokenCtx(scope, targetNF string) (
+func (c *SMFContext) GetTokenCtx(serviceName models.ServiceName, targetNF models.NfType) (
 	context.Context, *models.ProblemDetails, error,
 ) {
 	if !c.OAuth2Required {
 		return context.TODO(), nil, nil
 	}
-	return oauth.GetTokenCtx(models.NfType_SMF,
-		c.NfInstanceID, c.NrfUri, scope, targetNF)
+	return oauth.GetTokenCtx(models.NfType_SMF, targetNF,
+		c.NfInstanceID, c.NrfUri, string(serviceName))
+}
+
+func (c *SMFContext) AuthorizationCheck(token string, serviceName models.ServiceName) error {
+	if !c.OAuth2Required {
+		return nil
+	}
+	return oauth.VerifyOAuth(token, string(serviceName), c.NrfCertPem)
 }

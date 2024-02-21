@@ -449,7 +449,7 @@ func (smContext *SMContext) CHFSelection() error {
 
 // PCFSelection will select PCF for this SM Context
 func (smContext *SMContext) PCFSelection() error {
-	ctx, _, err := GetSelf().GetTokenCtx("nnrf-disc", "NRF")
+	ctx, _, err := GetSelf().GetTokenCtx(models.ServiceName_NNRF_DISC, "NRF")
 	if err != nil {
 		return err
 	}
