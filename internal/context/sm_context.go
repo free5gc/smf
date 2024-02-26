@@ -1,7 +1,6 @@
 package context
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"net"
@@ -446,10 +445,15 @@ func (smContext *SMContext) CHFSelection() error {
 		// Supi: optional.NewString(smContext.Supi),
 	}
 
+	ctx, _, err := smfContext.GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
+	if err != nil {
+		return err
+	}
+
 	rsp, res, err := GetSelf().
 		NFDiscoveryClient.
 		NFInstancesStoreApi.
-		SearchNFInstances(context.TODO(), models.NfType_CHF, models.NfType_SMF, &localVarOptionals)
+		SearchNFInstances(ctx, models.NfType_CHF, models.NfType_SMF, &localVarOptionals)
 	if err != nil {
 		return err
 	}
