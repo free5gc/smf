@@ -216,8 +216,6 @@ type SMContext struct {
 	// However, a rating group may map to more than one urr
 	// e.g. In UL CL case, the rating group for recoreding PDU Session volume may map to two URR
 	//		one is for PSA 1, the other is for PSA 2.
-	// Note: the premise is that urrid in a pdu session is unique, urr in same or different upf cannot have the same urrid
-	// TODO: curerrently have not tested the case where multiple urr share the same rating group
 	ChargingInfo map[uint32]*ChargingInfo
 	// NAS
 	Pti                     uint8
@@ -912,15 +910,6 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 	}
 	return nil
 }
-
-// func (smContext *SMContext) GetUrrTypeById(urrId uint32) (UrrType, error) {
-// 	for urrType, id := range smContext.UrrIdMap {
-// 		if id == urrId {
-// 			return urrType, nil
-// 		}
-// 	}
-// 	return NOT_FOUND_URR, fmt.Errorf("Urr type not found ")
-// }
 
 func (smContext *SMContext) StopT3591() {
 	if smContext.T3591 != nil {

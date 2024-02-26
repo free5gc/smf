@@ -409,17 +409,6 @@ func (datapath *DataPath) addUrrToPath(smContext *SMContext) {
 			MAQEUrrId = smContext.UrrIdMap[N9N6_MAQE_URR]
 		}
 
-		// if curDataPathNode.IsANUPF() {
-		// 	MBQEUrrId, err = curDataPathNode.UPF.urrIDGenerator.Allocate()
-		// 	if err != nil {
-		// 		logger.CtxLog.Warnf("MBQE URR ID allocate error: %v\n", err)
-		// 	}
-		// 	MAQEUrrId, err = curDataPathNode.UPF.urrIDGenerator.Allocate()
-		// 	if err != nil {
-		// 		logger.CtxLog.Warnf("MAQE URR ID allocate error: %v\n", err)
-		// 	}
-		// }
-
 		curDataPathNode.addUrrToNode(smContext, MBQEUrrId, true, true)
 		curDataPathNode.addUrrToNode(smContext, MAQEUrrId, true, false)
 	}
