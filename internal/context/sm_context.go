@@ -19,6 +19,7 @@ import (
 	"github.com/free5gc/ngap/ngapType"
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Namf_Communication"
+	"github.com/free5gc/openapi/Nchf_ConvergedCharging"
 	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
 	"github.com/free5gc/openapi/Npcf_SMPolicyControl"
 	"github.com/free5gc/openapi/models"
@@ -44,18 +45,19 @@ const (
 
 type UrrType int
 
+// Reserved URR report for ID = 0 ~ 6
 const (
-	N3N6_MBEQ_URR UrrType = iota
-	N3N6_MAEQ_URR
-	N3N9_MBEQ_URR
-	N3N9_MAEQ_URR
-	N9N6_MBEQ_URR
-	N9N6_MAEQ_URR
+	N3N6_MBQE_URR UrrType = iota
+	N3N6_MAQE_URR
+	N3N9_MBQE_URR
+	N3N9_MAQE_URR
+	N9N6_MBQE_URR
+	N9N6_MAQE_URR
 	NOT_FOUND_URR
 )
 
 func (t UrrType) String() string {
-	urrTypeList := []string{"N3N6_MBEQ", "N3N6_MAEQ", "N3N9_MBEQ", "N3N9_MAEQ", "N9N6_MBEQ", "N9N6_MAEQ"}
+	urrTypeList := []string{"N3N6_MBQE", "N3N6_MAQE", "N3N9_MBQE", "N3N9_MAQE", "N9N6_MBQE", "N9N6_MAQE"}
 	return urrTypeList[t]
 }
 
@@ -99,6 +101,7 @@ type EventExposureNotification struct {
 
 type UsageReport struct {
 	UrrId uint32
+	UpfId string
 
 	TotalVolume    uint64
 	UplinkVolume   uint64
@@ -153,9 +156,11 @@ type SMContext struct {
 	// Client
 	SMPolicyClient      *Npcf_SMPolicyControl.APIClient
 	CommunicationClient *Namf_Communication.APIClient
+	ChargingClient      *Nchf_ConvergedCharging.APIClient
 
 	AMFProfile         models.NfProfile
 	SelectedPCFProfile models.NfProfile
+	SelectedCHFProfile models.NfProfile
 	SmStatusNotifyUri  string
 
 	Tunnel      *UPTunnel
@@ -171,6 +176,7 @@ type SMContext struct {
 	PCCRules            map[string]*PCCRule
 	SessionRules        map[string]*SessionRule
 	TrafficControlDatas map[string]*TrafficControlData
+	ChargingData        map[string]*models.ChargingData
 	QosDatas            map[string]*models.QosData
 
 	UpPathChgEarlyNotification map[string]*EventExposureNotification // Key: Uri+NotifId
@@ -196,8 +202,21 @@ type SMContext struct {
 	UrrUpfMap          map[string]*URR
 	UrrReportTime      time.Duration
 	UrrReportThreshold uint64
-	UrrReports         []UsageReport
+	// Cache the usage reports, sent from UPF
+	// Those information will be included in CDR.
+	UrrReports []UsageReport
 
+	// Charging Related
+	ChargingDataRef string
+	// Each PDU session has a unique charging id
+	ChargingID    int32
+	RequestedUnit int32
+	// key = urrid
+	// All urr can map to a rating group
+	// However, a rating group may map to more than one urr
+	// e.g. In UL CL case, the rating group for recoreding PDU Session volume may map to two URR
+	//		one is for PSA 1, the other is for PSA 2.
+	ChargingInfo map[uint32]*ChargingInfo
 	// NAS
 	Pti                     uint8
 	EstAcceptCause5gSMValue uint8
@@ -282,11 +301,19 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 	smContext.GenerateUrrId()
 	smContext.UrrUpfMap = make(map[string]*URR)
 
+	smContext.ChargingInfo = make(map[uint32]*ChargingInfo)
+	smContext.ChargingID = GenerateChargingID()
+
 	if factory.SmfConfig.Configuration != nil {
 		smContext.UrrReportTime = time.Duration(factory.SmfConfig.Configuration.UrrPeriod) * time.Second
 		smContext.UrrReportThreshold = factory.SmfConfig.Configuration.UrrThreshold
 		logger.CtxLog.Infof("UrrPeriod: %v", smContext.UrrReportTime)
 		logger.CtxLog.Infof("UrrThreshold: %d", smContext.UrrReportThreshold)
+		if factory.SmfConfig.Configuration.RequestedUnit != 0 {
+			smContext.RequestedUnit = factory.SmfConfig.Configuration.RequestedUnit
+		} else {
+			smContext.RequestedUnit = 1000
+		}
 	}
 
 	return smContext
@@ -350,22 +377,22 @@ func GetSMContextBySEID(SEID uint64) *SMContext {
 
 func (smContext *SMContext) GenerateUrrId() {
 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-		smContext.UrrIdMap[N3N6_MBEQ_URR] = uint32(id)
+		smContext.UrrIdMap[N3N6_MBQE_URR] = uint32(id)
 	}
 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-		smContext.UrrIdMap[N3N6_MAEQ_URR] = uint32(id)
+		smContext.UrrIdMap[N3N6_MAQE_URR] = uint32(id)
 	}
 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-		smContext.UrrIdMap[N9N6_MBEQ_URR] = uint32(id)
+		smContext.UrrIdMap[N9N6_MBQE_URR] = uint32(id)
 	}
 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-		smContext.UrrIdMap[N9N6_MAEQ_URR] = uint32(id)
+		smContext.UrrIdMap[N9N6_MAQE_URR] = uint32(id)
 	}
 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-		smContext.UrrIdMap[N3N9_MBEQ_URR] = uint32(id)
+		smContext.UrrIdMap[N3N9_MBQE_URR] = uint32(id)
 	}
 	if id, err := smContext.UrrIDGenerator.Allocate(); err == nil {
-		smContext.UrrIdMap[N3N9_MAEQ_URR] = uint32(id)
+		smContext.UrrIdMap[N3N9_MAQE_URR] = uint32(id)
 	}
 }
 
@@ -409,6 +436,57 @@ func (smContext *SMContext) PDUAddressToNAS() ([12]byte, uint8) {
 	return addr, addrLen
 }
 
+// CHFSelection will select CHF for this SM Context
+func (smContext *SMContext) CHFSelection() error {
+	// Send NFDiscovery for find CHF
+	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{
+		// Supi: optional.NewString(smContext.Supi),
+	}
+
+	ctx, _, err := smfContext.GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
+	if err != nil {
+		return err
+	}
+
+	rsp, res, err := GetSelf().
+		NFDiscoveryClient.
+		NFInstancesStoreApi.
+		SearchNFInstances(ctx, models.NfType_CHF, models.NfType_SMF, &localVarOptionals)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if rspCloseErr := res.Body.Close(); rspCloseErr != nil {
+			logger.PduSessLog.Errorf("SmfEventExposureNotification response body cannot close: %+v", rspCloseErr)
+		}
+	}()
+
+	if res != nil {
+		if status := res.StatusCode; status != http.StatusOK {
+			apiError := err.(openapi.GenericOpenAPIError)
+			problemDetails := apiError.Model().(models.ProblemDetails)
+
+			logger.CtxLog.Warningf("NFDiscovery SMF return status: %d\n", status)
+			logger.CtxLog.Warningf("Detail: %v\n", problemDetails.Title)
+		}
+	}
+
+	// Select CHF from available CHF
+
+	smContext.SelectedCHFProfile = rsp.NfInstances[0]
+
+	// Create Converged Charging Client for this SM Context
+	for _, service := range *smContext.SelectedCHFProfile.NfServices {
+		if service.ServiceName == models.ServiceName_NCHF_CONVERGEDCHARGING {
+			ConvergedChargingConf := Nchf_ConvergedCharging.NewConfiguration()
+			ConvergedChargingConf.SetBasePath(service.ApiPrefix)
+			smContext.ChargingClient = Nchf_ConvergedCharging.NewAPIClient(ConvergedChargingConf)
+		}
+	}
+
+	return nil
+}
+
 // PCFSelection will select PCF for this SM Context
 func (smContext *SMContext) PCFSelection() error {
 	ctx, _, err := GetSelf().GetTokenCtx(models.ServiceName_NNRF_DISC, "NRF")
@@ -422,7 +500,7 @@ func (smContext *SMContext) PCFSelection() error {
 		localVarOptionals.PreferredLocality = optional.NewString(GetSelf().Locality)
 	}
 
-	rep, res, err := GetSelf().
+	rsp, res, err := GetSelf().
 		NFDiscoveryClient.
 		NFInstancesStoreApi.
 		SearchNFInstances(ctx, models.NfType_PCF, models.NfType_SMF, &localVarOptionals)
@@ -447,7 +525,7 @@ func (smContext *SMContext) PCFSelection() error {
 
 	// Select PCF from available PCF
 
-	smContext.SelectedPCFProfile = rep.NfInstances[0]
+	smContext.SelectedPCFProfile = rsp.NfInstances[0]
 
 	// Create SMPolicyControl Client for this SM Context
 	for _, service := range *smContext.SelectedPCFProfile.NfServices {
@@ -565,6 +643,7 @@ func (c *SMContext) AllocUeIP() error {
 	return nil
 }
 
+// This function create a data path to be default data path.
 func (c *SMContext) SelectDefaultDataPath() error {
 	if c.SelectionParam == nil || c.SelectedUPF == nil {
 		return fmt.Errorf("SelectDefaultDataPath err: SelectionParam or SelectedUPF is nil")
@@ -577,10 +656,10 @@ func (c *SMContext) SelectDefaultDataPath() error {
 		c.Tunnel.DataPathPool = uePreConfigPaths.DataPathPool
 		c.Tunnel.PathIDGenerator = uePreConfigPaths.PathIDGenerator
 		defaultPath = c.Tunnel.DataPathPool.GetDefaultPath()
-	} else {
-		// UE has no pre-config path.
+	} else if c.Tunnel.DataPathPool.GetDefaultPath() == nil {
+		// UE has no pre-config path and default path
 		// Use default route
-		c.Log.Infof("Has no pre-config route")
+		c.Log.Infof("Has no pre-config route. Has no default path")
 		defaultUPPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNNAndUPF(
 			c.SelectionParam, c.SelectedUPF)
 		defaultPath = GenerateDataPath(defaultUPPath)
@@ -588,18 +667,26 @@ func (c *SMContext) SelectDefaultDataPath() error {
 			defaultPath.IsDefaultPath = true
 			c.Tunnel.AddDataPath(defaultPath)
 		}
+	} else {
+		c.Log.Infof("Has no pre-config route. Has default path")
+		defaultPath = c.Tunnel.DataPathPool.GetDefaultPath()
 	}
 
 	if defaultPath == nil {
-		return fmt.Errorf("Data Path not found, Selection Parameter: %s",
+		return fmt.Errorf("data path not found, Selection Parameter: %s",
 			c.SelectionParam.String())
 	}
-	defaultPath.ActivateTunnelAndPDR(c, DefaultPrecedence)
+
+	if !defaultPath.Activated {
+		defaultPath.ActivateTunnelAndPDR(c, DefaultPrecedence)
+	}
+
 	return nil
 }
 
 func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	tcData *TrafficControlData, qosData *models.QosData,
+	chgData *models.ChargingData,
 ) error {
 	var targetRoute models.RouteToLocation
 	if tcData != nil && len(tcData.RouteToLocs) > 0 {
@@ -618,11 +705,25 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	if createdDataPath == nil {
 		return fmt.Errorf("fail to create data path for pcc rule[%s]", pccRule.PccRuleId)
 	}
+
+	// Try to use a default pcc rule as default data path
+	if c.Tunnel.DataPathPool.GetDefaultPath() == nil &&
+		pccRule.Precedence == 255 {
+		createdDataPath.IsDefaultPath = true
+	}
+
 	createdDataPath.GBRFlow = isGBRFlow(qosData)
 	createdDataPath.ActivateTunnelAndPDR(c, uint32(pccRule.Precedence))
 	c.Tunnel.AddDataPath(createdDataPath)
 	pccRule.Datapath = createdDataPath
 	pccRule.AddDataPathForwardingParameters(c, &targetRoute)
+
+	if chgLevel, err := pccRule.IdentifyChargingLevel(); err != nil {
+		c.Log.Warnf("fail to identify charging level[%+v] for pcc rule[%s]", err, pccRule.PccRuleId)
+	} else {
+		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData)
+	}
+
 	pccRule.Datapath.AddQoS(c, pccRule.QFI, qosData)
 	c.AddQosFlow(pccRule.QFI, qosData)
 	return nil
@@ -808,15 +909,6 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 		return fmt.Errorf("Requested PDU Sesstion type[%d] is not supported", requestedPDUSessionType)
 	}
 	return nil
-}
-
-func (smContext *SMContext) GetUrrTypeById(urrId uint32) (UrrType, error) {
-	for urrType, id := range smContext.UrrIdMap {
-		if id == urrId {
-			return urrType, nil
-		}
-	}
-	return NOT_FOUND_URR, fmt.Errorf("Urr type not found ")
 }
 
 func (smContext *SMContext) StopT3591() {

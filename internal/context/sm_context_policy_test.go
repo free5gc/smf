@@ -98,11 +98,18 @@ var testConfig = factory.Config{
 		Description: "SMF procdeure test configuration",
 	},
 	Configuration: &factory.Configuration{
+		Sbi: &factory.Sbi{
+			Scheme:       "http",
+			RegisterIPv4: "127.0.0.1",
+			BindingIPv4:  "127.0.0.1",
+			Port:         8000,
+		},
 		UserPlaneInformation: userPlaneConfig,
 	},
 }
 
 func initConfig() {
+	InitSmfContext(&testConfig)
 	factory.SmfConfig = &testConfig
 }
 

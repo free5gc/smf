@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
@@ -68,6 +69,57 @@ func (c *SMContext) RemoveQosFlow(qfi uint8) {
 	delete(c.AdditonalQosFlows, qfi)
 }
 
+// For urr that created for Pdu session level charging, it shall be applied to all data path
+func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) {
+	var pduLevelChargingUrrs []*URR
+
+	// First, select charging URRs from pcc rule, which charging level is PDU Session level
+	for id, pcc := range pccRules {
+		if chargingLevel, err := pcc.IdentifyChargingLevel(); err != nil {
+			continue
+		} else if chargingLevel == PduSessionCharging {
+			pduPcc := pccRules[id]
+			pduLevelChargingUrrs = pduPcc.Datapath.GetChargingUrr(c)
+			break
+		}
+	}
+
+	for _, flowPcc := range pccRules {
+		if chgLevel, err := flowPcc.IdentifyChargingLevel(); err != nil {
+			continue
+		} else if chgLevel == FlowCharging {
+			for node := flowPcc.Datapath.FirstDPNode; node != nil; node = node.Next() {
+				if node.IsAnchorUPF() {
+					// only the traffic on the PSA UPF will be charged
+					if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
+						node.UpLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
+					}
+					if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
+						node.DownLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
+					}
+				}
+			}
+		}
+	}
+
+	defaultPath := c.Tunnel.DataPathPool.GetDefaultPath()
+	if defaultPath == nil {
+		logger.CtxLog.Errorln("No default data path")
+		return
+	}
+
+	for node := defaultPath.FirstDPNode; node != nil; node = node.Next() {
+		if node.IsAnchorUPF() {
+			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
+				node.UpLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
+			}
+			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
+				node.DownLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
+			}
+		}
+	}
+}
+
 func (c *SMContext) ApplyPccRules(
 	decision *models.SmPolicyDecision,
 ) error {
@@ -78,7 +130,7 @@ func (c *SMContext) ApplyPccRules(
 	finalPccRules := make(map[string]*PCCRule)
 	finalTcDatas := make(map[string]*TrafficControlData)
 	finalQosDatas := make(map[string]*models.QosData)
-
+	finalChgDatas := make(map[string]*models.ChargingData)
 	// Handle QoSData
 	for id, qos := range decision.QosDecs {
 		if qos == nil {
@@ -106,12 +158,15 @@ func (c *SMContext) ApplyPccRules(
 			tgtTcID := tgtPcc.RefTcDataID()
 			_, tgtTcData = c.getSrcTgtTcData(decision.TraffContDecs, tgtTcID)
 
+			tgtChgID := tgtPcc.RefChgDataID()
+			_, tgtChgData := c.getSrcTgtChgData(decision.ChgDecs, tgtChgID)
+
 			tgtQosID := tgtPcc.RefQosDataID()
 			_, tgtQosData := c.getSrcTgtQosData(decision.QosDecs, tgtQosID)
 			tgtPcc.SetQFI(c.AssignQFI(tgtQosID))
 
 			// Create Data path for targetPccRule
-			if err := c.CreatePccRuleDataPath(tgtPcc, tgtTcData, tgtQosData); err != nil {
+			if err := c.CreatePccRuleDataPath(tgtPcc, tgtTcData, tgtQosData, tgtChgData); err != nil {
 				return err
 			}
 			if srcPcc != nil {
@@ -133,7 +188,7 @@ func (c *SMContext) ApplyPccRules(
 				finalQosDatas[tgtQosID] = tgtQosData
 			}
 		}
-		if err := checkUpPathChgEvent(c, srcTcData, tgtTcData); err != nil {
+		if err := checkUpPathChangeEvt(c, srcTcData, tgtTcData); err != nil {
 			c.Log.Warnf("Check UpPathChgEvent err: %v", err)
 		}
 		// Remove handled pcc rule
@@ -145,18 +200,22 @@ func (c *SMContext) ApplyPccRules(
 		tcID := pcc.RefTcDataID()
 		srcTcData, tgtTcData := c.getSrcTgtTcData(decision.TraffContDecs, tcID)
 
+		chgID := pcc.RefChgDataID()
+		srcChgData, tgtChgData := c.getSrcTgtChgData(decision.ChgDecs, chgID)
+
 		qosID := pcc.RefQosDataID()
 		srcQosData, tgtQosData := c.getSrcTgtQosData(decision.QosDecs, qosID)
 
 		if !reflect.DeepEqual(srcTcData, tgtTcData) ||
-			!reflect.DeepEqual(srcQosData, tgtQosData) {
+			!reflect.DeepEqual(srcQosData, tgtQosData) ||
+			!reflect.DeepEqual(srcChgData, tgtChgData) {
 			// Remove old Data path
 			c.PreRemoveDataPath(pcc.Datapath)
 			// Create new Data path
-			if err := c.CreatePccRuleDataPath(pcc, tgtTcData, tgtQosData); err != nil {
+			if err := c.CreatePccRuleDataPath(pcc, tgtTcData, tgtQosData, tgtChgData); err != nil {
 				return err
 			}
-			if err := checkUpPathChgEvent(c, srcTcData, tgtTcData); err != nil {
+			if err := checkUpPathChangeEvt(c, srcTcData, tgtTcData); err != nil {
 				c.Log.Warnf("Check UpPathChgEvent err: %v", err)
 			}
 		}
@@ -167,11 +226,18 @@ func (c *SMContext) ApplyPccRules(
 		if qosID != "" {
 			finalQosDatas[qosID] = tgtQosData
 		}
+		if chgID != "" {
+			finalChgDatas[chgID] = tgtChgData
+		}
 	}
+	// For PCC rule that is for Pdu session level charging, add the created session rules to all other flow
+	// so that all volume in the Pdu session could be recorded and charged for the Pdu session
+	c.addPduLevelChargingRuleToFlow(finalPccRules)
 
 	c.PCCRules = finalPccRules
 	c.TrafficControlDatas = finalTcDatas
 	c.QosDatas = finalQosDatas
+	c.ChargingData = finalChgDatas
 	return nil
 }
 
@@ -190,6 +256,23 @@ func (c *SMContext) getSrcTgtTcData(
 		tgtTcData = srcTcData
 	}
 	return srcTcData, tgtTcData
+}
+
+func (c *SMContext) getSrcTgtChgData(
+	decisionChgDecs map[string]*models.ChargingData,
+	chgID string,
+) (*models.ChargingData, *models.ChargingData) {
+	if chgID == "" {
+		return nil, nil
+	}
+
+	srcChgData := c.ChargingData[chgID]
+	tgtChgData := decisionChgDecs[chgID]
+	if tgtChgData == nil {
+		// no TcData in decision, use source TcData as target TcData
+		tgtChgData = srcChgData
+	}
+	return srcChgData, tgtChgData
 }
 
 func (c *SMContext) getSrcTgtQosData(
@@ -266,7 +349,7 @@ func applyFlowInfoOrPFD(pcc *PCCRule) error {
 	return nil
 }
 
-func checkUpPathChgEvent(c *SMContext,
+func checkUpPathChangeEvt(c *SMContext,
 	srcTcData, tgtTcData *TrafficControlData,
 ) error {
 	var srcRoute, tgtRoute models.RouteToLocation

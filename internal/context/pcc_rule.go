@@ -41,6 +41,14 @@ func (r *PCCRule) FlowDescription() string {
 	return ""
 }
 
+func (r *PCCRule) RefChgDataID() string {
+	if len(r.RefChgData) > 0 {
+		// now 1 pcc rule only maps to 1 Charging data
+		return r.RefChgData[0]
+	}
+	return ""
+}
+
 func (r *PCCRule) RefQosDataID() string {
 	if len(r.RefQosData) > 0 {
 		// now 1 pcc rule only maps to 1 QoS data
@@ -61,6 +69,22 @@ func (r *PCCRule) RefTcDataID() string {
 	return ""
 }
 
+func (r *PCCRule) IdentifyChargingLevel() (ChargingLevel, error) {
+	dlIPFilterRule, err := flowdesc.Decode(r.FlowDescription())
+	if err != nil {
+		return 0, err
+	}
+	// For the PCC rule that are applicable for all datapath,
+	// it's charging level will be PDU-based
+	if dlIPFilterRule.Src == "any" && dlIPFilterRule.Dst == "assigned" {
+		return PduSessionCharging, nil
+	} else {
+		// For the PCC rule that is applicable for all datapath for a datapath,
+		// it's charging level will be flow-based
+		return FlowCharging, nil
+	}
+}
+
 func (r *PCCRule) UpdateDataPathFlowDescription(dlFlowDesc string) error {
 	if r.Datapath == nil {
 		return fmt.Errorf("pcc[%s]: no data path", r.PccRuleId)
@@ -69,26 +93,10 @@ func (r *PCCRule) UpdateDataPathFlowDescription(dlFlowDesc string) error {
 	if dlFlowDesc == "" {
 		return fmt.Errorf("pcc[%s]: no flow description", r.PccRuleId)
 	}
-	ulFlowDesc := getUplinkFlowDescription(dlFlowDesc)
-	if ulFlowDesc == "" {
-		return fmt.Errorf("pcc[%s]: uplink flow description parsing error", r.PccRuleId)
-	}
-	r.Datapath.UpdateFlowDescription(ulFlowDesc, dlFlowDesc)
+
+	ulFlowDesc := dlFlowDesc
+	r.Datapath.UpdateFlowDescription(ulFlowDesc, dlFlowDesc) // UL, DL flow description should be same
 	return nil
-}
-
-func getUplinkFlowDescription(dlFlowDesc string) string {
-	ulIPFilterRule, err := flowdesc.Decode(dlFlowDesc)
-	if err != nil {
-		return ""
-	}
-
-	ulIPFilterRule.SwapSrcAndDst()
-	ulFlowDesc, err := flowdesc.Encode(ulIPFilterRule)
-	if err != nil {
-		return ""
-	}
-	return ulFlowDesc
 }
 
 func (r *PCCRule) AddDataPathForwardingParameters(c *SMContext,
@@ -113,8 +121,12 @@ func (r *PCCRule) AddDataPathForwardingParameters(c *SMContext,
 			return
 		}
 	}
-	r.Datapath.AddForwardingParameters(routeProf.ForwardingPolicyID,
-		c.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode.GetUpLinkPDR().PDI.LocalFTeid.Teid)
+	if c.Tunnel.DataPathPool.GetDefaultPath() == nil {
+		logger.CtxLog.Infoln("No Default Data Path")
+	} else {
+		r.Datapath.AddForwardingParameters(routeProf.ForwardingPolicyID,
+			c.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode.GetUpLinkPDR().PDI.LocalFTeid.Teid)
+	}
 }
 
 func (r *PCCRule) BuildNasQoSRule(smCtx *SMContext,
@@ -195,7 +207,7 @@ func createNasPacketFilter(
 		}
 	}
 
-	if ipFilterRule.Dst != "any" {
+	if ipFilterRule.Dst != "assigned" {
 		_, ipNet, err := net.ParseCIDR(ipFilterRule.Dst)
 		if err != nil {
 			return nil, fmt.Errorf("parse IP fail: %s", err)

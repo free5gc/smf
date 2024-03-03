@@ -188,6 +188,15 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	}
 	smContext.SMPolicyID = smPolicyID
 
+	// PDU　session create is a charging event
+	logger.PduSessLog.Infof("CHF Selection for SMContext SUPI[%s] PDUSessionID[%d]\n",
+		smContext.Supi, smContext.PDUSessionID)
+	if err = smContext.CHFSelection(); err != nil {
+		logger.PduSessLog.Errorln("chf selection error:", err)
+	} else {
+		CreateChargingSession(smContext)
+	}
+
 	// Update SessionRule from decision
 	if err = smContext.ApplySessionRules(smPolicyDecision); err != nil {
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
@@ -196,26 +205,18 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 			&Nsmf_PDUSession.SubscriptionDenied)
 	}
 
-	if err = smContext.SelectDefaultDataPath(); err != nil {
+	// If PCF prepares default Pcc Rule, SMF do not need to create defaultDataPath.
+	if err := smContext.ApplyPccRules(smPolicyDecision); err != nil {
+		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
+	}
+
+	// SelectDefaultDataPath() will create a default data path if default data path is not found.
+	if err := smContext.SelectDefaultDataPath(); err != nil {
 		smContext.SetState(smf_context.InActive)
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
 		return makeEstRejectResAndReleaseSMContext(smContext,
 			nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN,
 			&Nsmf_PDUSession.InsufficientResourceSliceDnn)
-	}
-
-	if err = smContext.ApplyPccRules(smPolicyDecision); err != nil {
-		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
-	}
-
-	// UECM registration
-	problemDetails, err := consumer.UeCmRegistration(smContext)
-	if problemDetails != nil {
-		smContext.Log.Errorf("UECM_Registration Error: %+v", problemDetails)
-	} else if err != nil {
-		smContext.Log.Errorf("UECM_Registration Error: %+v", err)
-	} else {
-		smContext.Log.Traceln("UECM Registration Successful")
 	}
 
 	// generate goroutine to handle PFCP and
@@ -459,6 +460,24 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		smContext.SetState(smf_context.ModificationPending)
 		response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
 		smContext.UpCnxState = body.JsonData.UpCnxState
+		// UE location change is a charging event
+		// TODO: This is not tested yet
+		if smContext.UeLocation != body.JsonData.UeLocation {
+			// All rating group related to this Pdu session should send charging request
+			for _, dataPath := range tunnel.DataPathPool {
+				if dataPath.Activated {
+					for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
+						if curDataPathNode.IsANUPF() {
+							urrList = append(urrList, curDataPathNode.UpLinkTunnel.PDR.URR...)
+							QueryReport(smContext, curDataPathNode.UPF, urrList, models.TriggerType_USER_LOCATION_CHANGE)
+						}
+					}
+				}
+			}
+
+			ReportUsageAndUpdateQuota(smContext)
+		}
+
 		smContext.UeLocation = body.JsonData.UeLocation
 
 		// Set FAR and An, N3 Release Info
@@ -783,6 +802,8 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			}
 
 		case smf_context.SessionReleaseSuccess:
+			ReleaseChargingSession(smContext)
+
 			smContext.Log.Traceln("In case SessionReleaseSuccess")
 			smContext.SetState(smf_context.InActivePending)
 			httpResponse = &httpwrapper.Response{
@@ -908,6 +929,8 @@ func HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSm
 
 	switch pfcpResponseStatus {
 	case smf_context.SessionReleaseSuccess:
+		ReleaseChargingSession(smContext)
+
 		smContext.Log.Traceln("In case SessionReleaseSuccess")
 		smContext.SetState(smf_context.InActive)
 		httpResponse = &httpwrapper.Response{
@@ -1004,6 +1027,8 @@ func HandlePDUSessionSMContextLocalRelease(smContext *smf_context.SMContext, cre
 
 	switch pfcpResponseStatus {
 	case smf_context.SessionReleaseSuccess:
+		ReleaseChargingSession(smContext)
+
 		logger.CtxLog.Traceln("In case SessionReleaseSuccess")
 		smContext.SetState(smf_context.InActivePending)
 		if createData.SmContextStatusUri != smContext.SmStatusNotifyUri {
