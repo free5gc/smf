@@ -10,7 +10,6 @@ import (
 	"github.com/free5gc/pfcp/pfcpUdp"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/free5gc/smf/internal/pfcp/handler"
 	pfcp_message "github.com/free5gc/smf/internal/pfcp/message"
 )
 
@@ -89,12 +88,34 @@ func ActivateUPFSession(
 		if !exist || sessionContext.RemoteSEID == 0 {
 			go establishPfcpSession(smContext, pfcp, resChan)
 		} else {
-			go modifyExistingPfcpSession(smContext, pfcp, resChan)
+			go modifyExistingPfcpSession(smContext, pfcp, resChan, "")
 		}
 	}
 
 	waitAllPfcpRsp(smContext, len(pfcpPool), resChan, notifyUeHander)
 	close(resChan)
+}
+
+func QueryReport(smContext *smf_context.SMContext, upf *smf_context.UPF,
+	urrs []*smf_context.URR, reportResaon models.TriggerType,
+) {
+	for _, urr := range urrs {
+		urr.State = smf_context.RULE_QUERY
+	}
+
+	pfcpState := &PFCPState{
+		upf:     upf,
+		urrList: urrs,
+	}
+
+	resChan := make(chan SendPfcpResult)
+	go modifyExistingPfcpSession(smContext, pfcpState, resChan, reportResaon)
+	pfcpResult := <-resChan
+
+	if pfcpResult.Err != nil {
+		logger.PduSessLog.Errorf("Query URR Report by PFCP Session Mod Request fail: %v", pfcpResult.Err)
+		return
+	}
 }
 
 func establishPfcpSession(smContext *smf_context.SMContext,
@@ -140,6 +161,7 @@ func modifyExistingPfcpSession(
 	smContext *smf_context.SMContext,
 	state *PFCPState,
 	resCh chan<- SendPfcpResult,
+	reportResaon models.TriggerType,
 ) {
 	logger.PduSessLog.Infoln("Sending PFCP Session Modification Request")
 
@@ -165,7 +187,7 @@ func modifyExistingPfcpSession(
 		if rsp.UsageReport != nil {
 			SEID := rcvMsg.PfcpMessage.Header.SEID
 			upfNodeID := smContext.GetNodeIDByLocalSEID(SEID)
-			handler.HandleReports(nil, rsp.UsageReport, nil, smContext, upfNodeID)
+			smContext.HandleReports(nil, rsp.UsageReport, nil, upfNodeID, reportResaon)
 		}
 	} else {
 		resCh <- SendPfcpResult{
@@ -425,7 +447,7 @@ func deletePfcpSession(upf *smf_context.UPF, ctx *smf_context.SMContext, resCh c
 		if rsp.UsageReport != nil {
 			SEID := rcvMsg.PfcpMessage.Header.SEID
 			upfNodeID := ctx.GetNodeIDByLocalSEID(SEID)
-			handler.HandleReports(nil, nil, rsp.UsageReport, ctx, upfNodeID)
+			ctx.HandleReports(nil, nil, rsp.UsageReport, upfNodeID, "")
 		}
 	} else {
 		logger.PduSessLog.Warn("Received PFCP Session Deletion Not Accepted Response")

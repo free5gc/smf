@@ -23,6 +23,7 @@ var (
 	GsmLog      *logrus.Entry
 	PfcpLog     *logrus.Entry
 	PduSessLog  *logrus.Entry
+	ChargingLog *logrus.Entry
 	UtilLog     *logrus.Entry
 )
 
@@ -43,5 +44,6 @@ func init() {
 	GsmLog = NfLog.WithField(logger_util.FieldCategory, "GSM")
 	PfcpLog = NfLog.WithField(logger_util.FieldCategory, "PFCP")
 	PduSessLog = NfLog.WithField(logger_util.FieldCategory, "PduSess")
+	ChargingLog = NfLog.WithField(logger_util.FieldCategory, "Charging")
 	UtilLog = NfLog.WithField(logger_util.FieldCategory, "Util")
 }

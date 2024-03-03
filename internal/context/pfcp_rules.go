@@ -11,6 +11,7 @@ const (
 	RULE_CREATE  RuleState = 1
 	RULE_UPDATE  RuleState = 2
 	RULE_REMOVE  RuleState = 3
+	RULE_QUERY   RuleState = 4
 )
 
 type RuleState uint8
@@ -44,8 +45,10 @@ type URR struct {
 	MeasureMethod          string // vol or time
 	ReportingTrigger       pfcpType.ReportingTriggers
 	MeasurementPeriod      time.Duration
+	QuotaValidityTime      time.Time
 	MeasurementInformation pfcpType.MeasurementInformation
 	VolumeThreshold        uint64
+	VolumeQuota            uint64
 	State                  RuleState
 }
 
@@ -60,13 +63,28 @@ func NewMeasureInformation(isMeasurePkt, isMeasureBeforeQos bool) UrrOpt {
 
 func NewMeasurementPeriod(time time.Duration) UrrOpt {
 	return func(urr *URR) {
+		urr.ReportingTrigger.Perio = true
 		urr.MeasurementPeriod = time
 	}
 }
 
 func NewVolumeThreshold(threshold uint64) UrrOpt {
 	return func(urr *URR) {
+		urr.ReportingTrigger.Volth = true
 		urr.VolumeThreshold = threshold
+	}
+}
+
+func NewVolumeQuota(quota uint64) UrrOpt {
+	return func(urr *URR) {
+		urr.ReportingTrigger.Volqu = true
+		urr.VolumeQuota = quota
+	}
+}
+
+func SetStartOfSDFTrigger() UrrOpt {
+	return func(urr *URR) {
+		urr.ReportingTrigger.Start = true
 	}
 }
 
@@ -75,6 +93,23 @@ func MeasureInformation(isMeasurePkt, isMeasureBeforeQos bool) pfcpType.Measurem
 	measureInformation.Mnop = isMeasurePkt
 	measureInformation.Mbqe = isMeasureBeforeQos
 	return measureInformation
+}
+
+func (pdr *PDR) AppendURRs(urrs []*URR) {
+	for _, urr := range urrs {
+		if !isUrrExist(pdr.URR, urr) {
+			pdr.URR = append(pdr.URR, urr)
+		}
+	}
+}
+
+func isUrrExist(URRs []*URR, urr *URR) bool { // check if urr is in URRs list
+	for _, URR := range URRs {
+		if urr.URRID == URR.URRID {
+			return true
+		}
+	}
+	return false
 }
 
 // Packet Detection. 7.5.2.2-2

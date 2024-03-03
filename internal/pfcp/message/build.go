@@ -200,6 +200,13 @@ func urrToCreateURR(urr *context.URR) *pfcp.CreateURR {
 			MeasurementPeriod: uint32(urr.MeasurementPeriod / time.Second),
 		}
 	}
+	if !urr.QuotaValidityTime.IsZero() {
+		createURR.QuotaValidityTime = &pfcpType.QuotaValidityTime{
+			QuotaValidityTime: uint32(urr.QuotaValidityTime.Sub(
+				time.Date(1900, time.January, 1, 0, 0, 0, 0, time.UTC)) / 1000000000),
+		}
+	}
+
 	if urr.VolumeThreshold != 0 {
 		createURR.VolumeThreshold = &pfcpType.VolumeThreshold{
 			Dlvol:          true,
@@ -208,6 +215,17 @@ func urrToCreateURR(urr *context.URR) *pfcp.CreateURR {
 			UplinkVolume:   urr.VolumeThreshold,
 		}
 	}
+	if urr.VolumeQuota != 0 {
+		createURR.VolumeQuota = &pfcpType.VolumeQuota{
+			Tovol:          true,
+			Dlvol:          true,
+			Ulvol:          true,
+			TotalVolume:    urr.VolumeQuota,
+			DownlinkVolume: urr.VolumeQuota,
+			UplinkVolume:   urr.VolumeQuota,
+		}
+	}
+
 	createURR.MeasurementInformation = &urr.MeasurementInformation
 
 	return createURR
@@ -249,6 +267,14 @@ func pdrToUpdatePDR(pdr *context.PDR) *pfcp.UpdatePDR {
 		FarIdValue: pdr.FAR.FARID,
 	}
 
+	for _, urr := range pdr.URR {
+		if urr != nil {
+			updatePDR.URRID = append(updatePDR.URRID, &pfcpType.URRID{
+				UrrIdValue: urr.URRID,
+			})
+		}
+	}
+
 	return updatePDR
 }
 
@@ -288,6 +314,57 @@ func farToUpdateFAR(far *context.FAR) *pfcp.UpdateFAR {
 	}
 
 	return updateFAR
+}
+
+func urrToUpdateURR(urr *context.URR) *pfcp.UpdateURR {
+	updateURR := new(pfcp.UpdateURR)
+
+	updateURR.URRID = &pfcpType.URRID{
+		UrrIdValue: urr.URRID,
+	}
+	updateURR.MeasurementMethod = &pfcpType.MeasurementMethod{}
+	switch urr.MeasureMethod {
+	case context.MesureMethodVol:
+		updateURR.MeasurementMethod.Volum = true
+	case context.MesureMethodTime:
+		updateURR.MeasurementMethod.Durat = true
+	}
+	updateURR.ReportingTriggers = &urr.ReportingTrigger
+	if urr.MeasurementPeriod != 0 {
+		updateURR.MeasurementPeriod = &pfcpType.MeasurementPeriod{
+			MeasurementPeriod: uint32(urr.MeasurementPeriod / time.Second),
+		}
+	}
+	if urr.QuotaValidityTime.IsZero() {
+		updateURR.QuotaValidityTime = &pfcpType.QuotaValidityTime{
+			QuotaValidityTime: uint32(urr.QuotaValidityTime.Sub(
+				time.Date(1900, time.January, 1, 0, 0, 0, 0, time.UTC)) / 1000000000),
+		}
+	}
+
+	if urr.VolumeThreshold != 0 {
+		updateURR.VolumeThreshold = &pfcpType.VolumeThreshold{
+			Dlvol:          true,
+			Ulvol:          true,
+			Tovol:          true,
+			TotalVolume:    urr.VolumeThreshold,
+			DownlinkVolume: urr.VolumeThreshold,
+			UplinkVolume:   urr.VolumeThreshold,
+		}
+	}
+	if urr.VolumeQuota != 0 {
+		updateURR.VolumeQuota = &pfcpType.VolumeQuota{
+			Tovol:          true,
+			Dlvol:          true,
+			Ulvol:          true,
+			TotalVolume:    urr.VolumeQuota,
+			DownlinkVolume: urr.VolumeQuota,
+			UplinkVolume:   urr.VolumeQuota,
+		}
+	}
+	updateURR.MeasurementInformation = &urr.MeasurementInformation
+
+	return updateURR
 }
 
 func BuildPfcpSessionEstablishmentRequest(
@@ -427,6 +504,7 @@ func BuildPfcpSessionModificationRequest(
 
 	msg.UpdatePDR = make([]*pfcp.UpdatePDR, 0, 2)
 	msg.UpdateFAR = make([]*pfcp.UpdateFAR, 0, 2)
+	msg.UpdateURR = make([]*pfcp.UpdateURR, 0, 12)
 
 	nodeIDtoIP := upNodeID.ResolveNodeIdToIp().String()
 
@@ -490,6 +568,20 @@ func BuildPfcpSessionModificationRequest(
 		switch urr.State {
 		case context.RULE_INITIAL:
 			msg.CreateURR = append(msg.CreateURR, urrToCreateURR(urr))
+		case context.RULE_UPDATE:
+			msg.UpdateURR = append(msg.UpdateURR, urrToUpdateURR(urr))
+		case context.RULE_REMOVE:
+			msg.RemoveURR = append(msg.RemoveURR, &pfcp.RemoveURR{
+				URRID: &pfcpType.URRID{
+					UrrIdValue: urr.URRID,
+				},
+			})
+		case context.RULE_QUERY:
+			msg.QueryURR = append(msg.QueryURR, &pfcp.QueryURR{
+				URRID: &pfcpType.URRID{
+					UrrIdValue: urr.URRID,
+				},
+			})
 		}
 		urr.State = context.RULE_CREATE
 	}
