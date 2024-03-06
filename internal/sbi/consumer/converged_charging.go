@@ -1,7 +1,6 @@
 package consumer
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -83,17 +82,22 @@ func SendConvergedChargingRequest(smContext *smf_context.SMContext, requestType 
 	var httpResponse *http.Response
 	var err error
 
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NCHF_CONVERGEDCHARGING, models.NfType_CHF)
+	if err != nil {
+		return nil, pd, err
+	}
+
 	// select the appropriate converged charging service based on trigger type
 	switch requestType {
 	case smf_context.CHARGING_INIT:
-		rsp, httpResponse, err = smContext.ChargingClient.DefaultApi.ChargingdataPost(context.Background(), *req)
+		rsp, httpResponse, err = smContext.ChargingClient.DefaultApi.ChargingdataPost(ctx, *req)
 		chargingDataRef := strings.Split(httpResponse.Header.Get("Location"), "/")
 		smContext.ChargingDataRef = chargingDataRef[len(chargingDataRef)-1]
 	case smf_context.CHARGING_UPDATE:
 		rsp, httpResponse, err = smContext.ChargingClient.DefaultApi.ChargingdataChargingDataRefUpdatePost(
-			context.Background(), smContext.ChargingDataRef, *req)
+			ctx, smContext.ChargingDataRef, *req)
 	case smf_context.CHARGING_RELEASE:
-		httpResponse, err = smContext.ChargingClient.DefaultApi.ChargingdataChargingDataRefReleasePost(context.Background(),
+		httpResponse, err = smContext.ChargingClient.DefaultApi.ChargingdataChargingDataRefReleasePost(ctx,
 			smContext.ChargingDataRef, *req)
 	}
 
