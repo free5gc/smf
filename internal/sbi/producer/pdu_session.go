@@ -173,12 +173,12 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	}
 
 	// If PCF prepares default Pcc Rule, SMF do not need to create defaultDataPath.
-	if err := smContext.ApplyPccRules(smPolicyDecision); err != nil {
+	if err = smContext.ApplyPccRules(smPolicyDecision); err != nil {
 		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
 	}
 
 	// SelectDefaultDataPath() will create a default data path if default data path is not found.
-	if err := smContext.SelectDefaultDataPath(); err != nil {
+	if err = smContext.SelectDefaultDataPath(); err != nil {
 		smContext.SetState(smf_context.InActive)
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
 		return makeEstRejectResAndReleaseSMContext(smContext,
