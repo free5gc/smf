@@ -262,7 +262,7 @@ func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) (err err
 
 		originPDR := ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode.UpLinkTunnel.PDR
 
-		if teid, err := ANUPF.GenerateTEID(); err != nil {
+		if teid, err := GenerateTEID(); err != nil {
 			return err
 		} else {
 			ctx.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel.TEID = teid

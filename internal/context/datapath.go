@@ -144,12 +144,7 @@ func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) error {
 		return err
 	}
 
-	if teid, err := destUPF.GenerateTEID(); err != nil {
-		logger.CtxLog.Errorf("Generate uplink TEID fail: %s", err)
-		return err
-	} else {
-		node.UpLinkTunnel.TEID = teid
-	}
+	node.UpLinkTunnel.TEID = smContext.LocalULTeid
 
 	return nil
 }
@@ -171,12 +166,7 @@ func (node *DataPathNode) ActivateDownLinkTunnel(smContext *SMContext) error {
 		return err
 	}
 
-	if teid, err := destUPF.GenerateTEID(); err != nil {
-		logger.CtxLog.Errorf("Generate downlink TEID fail: %s", err)
-		return err
-	} else {
-		node.DownLinkTunnel.TEID = teid
-	}
+	node.DownLinkTunnel.TEID = smContext.LocalDLTeid
 
 	return nil
 }
@@ -214,9 +204,6 @@ func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 			}
 		}
 	}
-
-	teid := node.UpLinkTunnel.TEID
-	node.UPF.teidGenerator.FreeID(int64(teid))
 }
 
 func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
@@ -252,9 +239,6 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 			}
 		}
 	}
-
-	teid := node.DownLinkTunnel.TEID
-	node.UPF.teidGenerator.FreeID(int64(teid))
 }
 
 func (node *DataPathNode) GetUPFID() (id string, err error) {
@@ -771,7 +755,6 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 				UpfId:         node.UPF.UUID(),
 			}
 
-			// urrId, err := node.UPF.urrIDGenerator.Allocate()
 			urrId, err := smContext.UrrIDGenerator.Allocate()
 			if err != nil {
 				logger.PduSessLog.Errorln("Generate URR Id failed")
