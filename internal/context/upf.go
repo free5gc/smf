@@ -90,7 +90,6 @@ type UPF struct {
 	barIDGenerator *idgenerator.IDGenerator
 	urrIDGenerator *idgenerator.IDGenerator
 	qerIDGenerator *idgenerator.IDGenerator
-	teidGenerator  *idgenerator.IDGenerator
 }
 
 // UPFSelectionParams ... parameters for upf selection
@@ -252,7 +251,6 @@ func NewUPF(nodeID *pfcpType.NodeID, ifaces []*factory.InterfaceUpfInfoItem) (up
 	upf.barIDGenerator = idgenerator.NewGenerator(1, math.MaxUint8)
 	upf.qerIDGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
 	upf.urrIDGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
-	upf.teidGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
 
 	upf.N3Interfaces = make([]*UPFInterfaceInfo, 0)
 	upf.N9Interfaces = make([]*UPFInterfaceInfo, 0)
@@ -293,22 +291,6 @@ func (upf *UPF) GetInterface(interfaceType models.UpInterfaceType, dnn string) *
 		}
 	}
 	return nil
-}
-
-func (upf *UPF) GenerateTEID() (uint32, error) {
-	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("this upf not associate with smf")
-		return 0, err
-	}
-
-	var id uint32
-	if tmpID, err := upf.teidGenerator.Allocate(); err != nil {
-		return 0, err
-	} else {
-		id = uint32(tmpID)
-	}
-
-	return id, nil
 }
 
 func (upf *UPF) PFCPAddr() *net.UDPAddr {

@@ -114,6 +114,8 @@ type UsageReport struct {
 	ReportTpye models.TriggerType
 }
 
+var TeidGenerator *idgenerator.IDGenerator
+
 type SMContext struct {
 	*models.SmContextCreateData
 
@@ -127,6 +129,9 @@ type SMContext struct {
 	Pei          string
 	Identifier   string
 	PDUSessionID int32
+
+	LocalULTeid uint32
+	LocalDLTeid uint32
 
 	UpCnxState models.UpCnxState
 
@@ -242,6 +247,21 @@ type SMContext struct {
 	SMLock sync.Mutex
 }
 
+func GenerateTEID() (uint32, error) {
+	var id uint32
+	if tmpID, err := TeidGenerator.Allocate(); err != nil {
+		return 0, err
+	} else {
+		id = uint32(tmpID)
+	}
+
+	return id, nil
+}
+
+func ReleaseTEID(teid uint32) {
+	TeidGenerator.FreeID(int64(teid))
+}
+
 func canonicalName(id string, pduSessID int32) string {
 	return fmt.Sprintf("%s-%d", id, pduSessID)
 }
@@ -316,6 +336,17 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 		}
 	}
 
+	var err error
+	smContext.LocalDLTeid, err = GenerateTEID()
+	if err != nil {
+		return nil
+	}
+
+	smContext.LocalULTeid, err = GenerateTEID()
+	if err != nil {
+		return nil
+	}
+
 	return smContext
 }
 
@@ -360,6 +391,9 @@ func RemoveSMContext(ref string) {
 	for _, pfcpSessionContext := range smContext.PFCPContext {
 		seidSMContextMap.Delete(pfcpSessionContext.LocalSEID)
 	}
+
+	ReleaseTEID(smContext.LocalULTeid)
+	ReleaseTEID(smContext.LocalDLTeid)
 
 	smContextPool.Delete(ref)
 	canonicalRef.Delete(canonicalName(smContext.Supi, smContext.PDUSessionID))

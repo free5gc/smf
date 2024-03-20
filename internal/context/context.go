@@ -258,6 +258,8 @@ func InitSmfContext(config *factory.Config) {
 	SetupNFProfile(config)
 
 	smfContext.Locality = configuration.Locality
+
+	TeidGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
 }
 
 func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
