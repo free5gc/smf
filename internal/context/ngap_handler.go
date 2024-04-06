@@ -44,6 +44,7 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) (er
 	resourceSetupResponseTransfer := ngapType.PDUSessionResourceSetupResponseTransfer{}
 
 	err = aper.UnmarshalWithParams(b, &resourceSetupResponseTransfer, "valueExt")
+
 	if err != nil {
 		return err
 	}
@@ -108,6 +109,7 @@ func HandlePDUSessionResourceSetupUnsuccessfulTransfer(b []byte, ctx *SMContext)
 	resourceSetupUnsuccessfulTransfer := ngapType.PDUSessionResourceSetupUnsuccessfulTransfer{}
 
 	err = aper.UnmarshalWithParams(b, &resourceSetupUnsuccessfulTransfer, "valueExt")
+
 	if err != nil {
 		return err
 	}
@@ -194,6 +196,7 @@ func HandlePathSwitchRequestSetupFailedTransfer(b []byte, ctx *SMContext) (err e
 	pathSwitchRequestSetupFailedTransfer := ngapType.PathSwitchRequestSetupFailedTransfer{}
 
 	err = aper.UnmarshalWithParams(b, &pathSwitchRequestSetupFailedTransfer, "valueExt")
+
 	if err != nil {
 		return err
 	}
@@ -226,6 +229,7 @@ func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) (err err
 	handoverRequestAcknowledgeTransfer := ngapType.HandoverRequestAcknowledgeTransfer{}
 
 	err = aper.UnmarshalWithParams(b, &handoverRequestAcknowledgeTransfer, "valueExt")
+
 	if err != nil {
 		return err
 	}

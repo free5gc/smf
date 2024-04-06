@@ -186,10 +186,6 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 			&Nsmf_PDUSession.InsufficientResourceSliceDnn)
 	}
 
-	if err = smContext.ApplyPccRules(smPolicyDecision); err != nil {
-		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
-	}
-
 	// UECM registration
 	problemDetails, err = consumer.UeCmRegistration(smContext)
 	if problemDetails != nil {
