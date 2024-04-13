@@ -6,7 +6,7 @@ package factory
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/asaskevich/govalidator"
 	"gopkg.in/yaml.v2"
@@ -26,7 +26,7 @@ func InitConfigFactory(f string, cfg *Config) error {
 		f = SmfDefaultConfigPath
 	}
 
-	if content, err := ioutil.ReadFile(f); err != nil {
+	if content, err := os.ReadFile(f); err != nil {
 		return fmt.Errorf("[Factory] %+v", err)
 	} else {
 		logger.CfgLog.Infof("Read config from [%s]", f)
@@ -43,7 +43,7 @@ func InitRoutingConfigFactory(f string, cfg *RoutingConfig) error {
 		// Use default config path
 		f = SmfDefaultUERoutingPath
 	}
-	if content, err := ioutil.ReadFile(f); err != nil {
+	if content, err := os.ReadFile(f); err != nil {
 		return err
 	} else {
 		logger.CfgLog.Infof("Read config from [%s]", f)

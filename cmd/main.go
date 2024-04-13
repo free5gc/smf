@@ -44,7 +44,7 @@ func main() {
 			Usage: "Output NF log to `FILE`",
 		},
 	}
-	rand.Seed(time.Now().UnixNano())
+	rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	if err := app.Run(os.Args); err != nil {
 		logger.MainLog.Errorf("SMF Run error: %v\n", err)
