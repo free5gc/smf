@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"net/http"
+	"sync"
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nsmf_PDUSession"
@@ -10,14 +11,44 @@ import (
 	"github.com/free5gc/smf/internal/logger"
 )
 
-func SendSMContextStatusNotification(uri string) (*models.ProblemDetails, error) {
+type nsmfService struct {
+	consumer *Consumer
+
+	PDUSessionMu sync.RWMutex
+
+	PDUSessionClients map[string]*Nsmf_PDUSession.APIClient
+}
+
+func (s *nsmfService) getPDUSessionClient(uri string) *Nsmf_PDUSession.APIClient {
+	if uri == "" {
+		return nil
+	}
+	s.PDUSessionMu.RLock()
+	client, ok := s.PDUSessionClients[uri]
+	if ok {
+		defer s.PDUSessionMu.RUnlock()
+		return client
+	}
+
+	configuration := Nsmf_PDUSession.NewConfiguration()
+	configuration.SetBasePath(uri)
+	client = Nsmf_PDUSession.NewAPIClient(configuration)
+
+	s.PDUSessionMu.RUnlock()
+	s.PDUSessionMu.Lock()
+	defer s.PDUSessionMu.Unlock()
+	s.PDUSessionClients[uri] = client
+	return client
+}
+
+func (s *nsmfService) SendSMContextStatusNotification(uri string) (*models.ProblemDetails, error) {
 	if uri != "" {
 		request := models.SmContextStatusNotification{}
 		request.StatusInfo = &models.StatusInfo{
 			ResourceStatus: models.ResourceStatus_RELEASED,
 		}
-		configuration := Nsmf_PDUSession.NewConfiguration()
-		client := Nsmf_PDUSession.NewAPIClient(configuration)
+
+		client := s.getPDUSessionClient(uri)
 
 		logger.CtxLog.Infoln("[SMF] Send SMContext Status Notification")
 		httpResp, localErr := client.

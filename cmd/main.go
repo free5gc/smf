@@ -1,10 +1,15 @@
 package main
 
 import (
+	// "context"
 	"math/rand"
 	"os"
+
+	// "os/signal"
 	"path/filepath"
 	"runtime/debug"
+
+	// "syscall"
 	"time"
 
 	"github.com/urfave/cli"
@@ -59,8 +64,18 @@ func action(cliCtx *cli.Context) error {
 
 	logger.MainLog.Infoln("SMF version: ", version.GetVersion())
 
+	// ctx, cancel := context.WithCancel(context.Background())
+	// sigCh := make(chan os.Signal, 1)
+	// signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
+	// go func() {
+	// 	<-sigCh  // Wait for interrupt signal to gracefully shutdown
+	// 	cancel() // Notify each goroutine and wait them stopped
+	// }()
+
 	cfg, err := factory.ReadConfig(cliCtx.String("config"))
 	if err != nil {
+		// sigCh <- nil
 		return err
 	}
 	factory.SmfConfig = cfg
@@ -72,12 +87,14 @@ func action(cliCtx *cli.Context) error {
 	factory.UERoutingConfig = ueRoutingCfg
 
 	smf, err := service.NewApp(cfg)
+	// smf, err := service.NewApp(ctx, cfg, tlsKeyLogPath)
 	if err != nil {
 		return err
 	}
 	SMF = smf
 
 	smf.Start(tlsKeyLogPath)
+	// SMF.WaitRoutineStopped()
 
 	return nil
 }

@@ -4,21 +4,53 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/free5gc/nas/nasConvert"
 	"github.com/free5gc/openapi"
+	"github.com/free5gc/openapi/Nchf_ConvergedCharging"
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 )
 
-func buildConvergedChargingRequest(smContext *smf_context.SMContext,
+type nchfService struct {
+	consumer *Consumer
+
+	ConvergedChargingMu sync.RWMutex
+
+	ConvergedChargingClients map[string]*Nchf_ConvergedCharging.APIClient
+}
+
+func (s *nchfService) getConvergedChargingClient(uri string) *Nchf_ConvergedCharging.APIClient {
+	if uri == "" {
+		return nil
+	}
+	s.ConvergedChargingMu.RLock()
+	client, ok := s.ConvergedChargingClients[uri]
+	if ok {
+		defer s.ConvergedChargingMu.RUnlock()
+		return client
+	}
+
+	configuration := Nchf_ConvergedCharging.NewConfiguration()
+	configuration.SetBasePath(uri)
+	client = Nchf_ConvergedCharging.NewAPIClient(configuration)
+
+	s.ConvergedChargingMu.RUnlock()
+	s.ConvergedChargingMu.Lock()
+	defer s.ConvergedChargingMu.Unlock()
+	s.ConvergedChargingClients[uri] = client
+	return client
+}
+
+func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMContext,
 	multipleUnitUsage []models.MultipleUnitUsage,
 ) *models.ChargingDataRequest {
 	var triggers []models.Trigger
 
-	smfSelf := smf_context.GetSelf()
+	smfContext := s.consumer.smf.Context()
 	date := time.Now()
 
 	for _, unitUsage := range multipleUnitUsage {
@@ -32,9 +64,9 @@ func buildConvergedChargingRequest(smContext *smf_context.SMContext,
 		SubscriberIdentifier: smContext.Supi,
 		NfConsumerIdentification: &models.NfIdentification{
 			NodeFunctionality: models.NodeFunctionality_SMF,
-			NFName:            smfSelf.Name,
+			NFName:            smfContext.Name,
 			// not sure if NFIPv4Address is RegisterIPv4 or BindingIPv4
-			NFIPv4Address: smfSelf.RegisterIPv4,
+			NFIPv4Address: smfContext.RegisterIPv4,
 		},
 		InvocationTimeStamp: &date,
 		Triggers:            triggers,
@@ -60,9 +92,9 @@ func buildConvergedChargingRequest(smContext *smf_context.SMContext,
 			},
 		},
 		NotifyUri: fmt.Sprintf("%s://%s:%d/nsmf-callback/notify_%s",
-			smf_context.GetSelf().URIScheme,
-			smf_context.GetSelf().RegisterIPv4,
-			smf_context.GetSelf().SBIPort,
+			smfContext.URIScheme,
+			smfContext.RegisterIPv4,
+			smfContext.SBIPort,
 			smContext.Ref,
 		),
 		MultipleUnitUsage: multipleUnitUsage,
@@ -71,12 +103,12 @@ func buildConvergedChargingRequest(smContext *smf_context.SMContext,
 	return req
 }
 
-func SendConvergedChargingRequest(smContext *smf_context.SMContext, requestType smf_context.RequestType,
+func (s *nchfService) SendConvergedChargingRequest(smContext *smf_context.SMContext, requestType smf_context.RequestType,
 	multipleUnitUsage []models.MultipleUnitUsage,
 ) (*models.ChargingDataResponse, *models.ProblemDetails, error) {
 	logger.ChargingLog.Info("Handle SendConvergedChargingRequest")
 
-	req := buildConvergedChargingRequest(smContext, multipleUnitUsage)
+	req := s.buildConvergedChargingRequest(smContext, multipleUnitUsage)
 
 	var rsp models.ChargingDataResponse
 	var httpResponse *http.Response
