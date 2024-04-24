@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
+	"sync"
 	"syscall"
 	"time"
 
@@ -22,6 +23,9 @@ import (
 	"github.com/free5gc/smf/internal/sbi/eventexposure"
 	"github.com/free5gc/smf/internal/sbi/oam"
 	"github.com/free5gc/smf/internal/sbi/pdusession"
+
+	// "github.com/free5gc/smf/internal/sbi"
+	// "github.com/free5gc/smf/internal/sbi/processor"
 	"github.com/free5gc/smf/internal/sbi/upi"
 	"github.com/free5gc/smf/pkg/association"
 	"github.com/free5gc/smf/pkg/factory"
@@ -32,6 +36,13 @@ import (
 type SmfApp struct {
 	cfg    *factory.Config
 	smfCtx *smf_context.SMFContext
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	// sbiServer *sbi.Server
+	consumer  *consumer.Consumer
+	// processor *processor.Processor
+	wg        sync.WaitGroup
 }
 
 func NewApp(cfg *factory.Config) (*SmfApp, error) {
@@ -104,9 +115,9 @@ func (a *SmfApp) Start(tlsKeyLogPath string) {
 	logger.InitLog.Infoln("Server started")
 	router := logger_util.NewGinWithLogrus(logger.GinLog)
 
-	err := consumer.SendNFRegistration()
+	err := a.consumer.RegisterNFInstance()
 	if err != nil {
-		retry_err := consumer.RetrySendNFRegistration(10)
+		retry_err := a.consumer.RetrySendNFRegistration(10)
 		if retry_err != nil {
 			logger.InitLog.Errorln(retry_err)
 			return
@@ -178,7 +189,7 @@ func (a *SmfApp) Start(tlsKeyLogPath string) {
 func (a *SmfApp) Terminate() {
 	logger.InitLog.Infof("Terminating SMF...")
 	// deregister with NRF
-	problemDetails, err := consumer.SendDeregisterNFInstance()
+	problemDetails, err := a.consumer.SendDeregisterNFInstance()
 	if problemDetails != nil {
 		logger.InitLog.Errorf("Deregister NF instance Failed Problem[%+v]", problemDetails)
 	} else if err != nil {

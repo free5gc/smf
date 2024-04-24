@@ -6,19 +6,51 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 
 	"github.com/free5gc/nas/nasConvert"
 	"github.com/free5gc/nas/nasType"
+	"github.com/free5gc/openapi/Npcf_SMPolicyControl"
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/util/flowdesc"
 )
 
+type npcfService struct {
+	consumer *Consumer
+
+	SMPolicyControlMu sync.RWMutex
+
+	SMPolicyControlClients map[string]*Npcf_SMPolicyControl.APIClient
+}
+
+func (s *npcfService) getSMPolicyControlClient(uri string) *Npcf_SMPolicyControl.APIClient {
+	if uri == "" {
+		return nil
+	}
+	s.SMPolicyControlMu.RLock()
+	client, ok := s.SMPolicyControlClients[uri]
+	if ok {
+		defer s.SMPolicyControlMu.RUnlock()
+		return client
+	}
+
+	configuration := Npcf_SMPolicyControl.NewConfiguration()
+	configuration.SetBasePath(uri)
+	client = Npcf_SMPolicyControl.NewAPIClient(configuration)
+
+	s.SMPolicyControlMu.RUnlock()
+	s.SMPolicyControlMu.Lock()
+	defer s.SMPolicyControlMu.Unlock()
+	s.SMPolicyControlClients[uri] = client
+	return client
+}
+
 // SendSMPolicyAssociationCreate create the session management association to the PCF
-func SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (string, *models.SmPolicyDecision, error) {
+func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (string, *models.SmPolicyDecision, error) {
 	if smContext.SMPolicyClient == nil {
 		return "", nil, errors.Errorf("smContext not selected PCF")
 	}
@@ -69,7 +101,7 @@ func SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (string, *m
 
 	smPolicyDecision = &smPolicyDecisionFromPCF
 	loc := httpRsp.Header.Get("Location")
-	if smPolicyID = extractSMPolicyIDFromLocation(loc); len(smPolicyID) == 0 {
+	if smPolicyID = s.extractSMPolicyIDFromLocation(loc); len(smPolicyID) == 0 {
 		return "", nil, fmt.Errorf("SMPolicy ID parse failed")
 	}
 	return smPolicyID, smPolicyDecision, nil
@@ -77,7 +109,7 @@ func SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (string, *m
 
 var smPolicyRegexp = regexp.MustCompile(`http[s]?\://.*/npcf-smpolicycontrol/v\d+/sm-policies/(.*)`)
 
-func extractSMPolicyIDFromLocation(location string) string {
+func (s *npcfService) extractSMPolicyIDFromLocation(location string) string {
 	match := smPolicyRegexp.FindStringSubmatch(location)
 	if len(match) > 1 {
 		return match[1]
@@ -86,7 +118,7 @@ func extractSMPolicyIDFromLocation(location string) string {
 	return ""
 }
 
-func SendSMPolicyAssociationUpdateByUERequestModification(
+func (s *npcfService) SendSMPolicyAssociationUpdateByUERequestModification(
 	smContext *smf_context.SMContext,
 	qosRules nasType.QoSRules, qosFlowDescs nasType.QoSFlowDescs,
 ) (*models.SmPolicyDecision, error) {
@@ -130,17 +162,17 @@ func SendSMPolicyAssociationUpdateByUERequestModification(
 			ueInitResReq.ReqQos.Var5qi = int32(para5Qi.FiveQI)
 		case nasType.ParameterIdentifierGFBRUplink:
 			paraGFBRUplink := parameter.(*nasType.QoSFlowGFBRUplink)
-			ueInitResReq.ReqQos.GbrUl = nasBitRateToString(paraGFBRUplink.Value, paraGFBRUplink.Unit)
+			ueInitResReq.ReqQos.GbrUl = s.nasBitRateToString(paraGFBRUplink.Value, paraGFBRUplink.Unit)
 		case nasType.ParameterIdentifierGFBRDownlink:
 			paraGFBRDownlink := parameter.(*nasType.QoSFlowGFBRDownlink)
-			ueInitResReq.ReqQos.GbrDl = nasBitRateToString(paraGFBRDownlink.Value, paraGFBRDownlink.Unit)
+			ueInitResReq.ReqQos.GbrDl = s.nasBitRateToString(paraGFBRDownlink.Value, paraGFBRDownlink.Unit)
 		}
 	}
 
 	updateSMPolicy.UeInitResReq = ueInitResReq
 
 	for _, pf := range rule.PacketFilterList {
-		if PackFiltInfo, err := buildPktFilterInfo(pf); err != nil {
+		if PackFiltInfo, err := s.buildPktFilterInfo(pf); err != nil {
 			smContext.Log.Warning("Build PackFiltInfo failed", err)
 			continue
 		} else {
@@ -170,7 +202,7 @@ func SendSMPolicyAssociationUpdateByUERequestModification(
 	return smPolicyDecision, nil
 }
 
-func nasBitRateToString(value uint16, unit nasType.QoSFlowBitRateUnit) string {
+func (s *npcfService) nasBitRateToString(value uint16, unit nasType.QoSFlowBitRateUnit) string {
 	var base int
 	var unitStr string
 	switch unit {
@@ -257,7 +289,7 @@ func nasBitRateToString(value uint16, unit nasType.QoSFlowBitRateUnit) string {
 	return fmt.Sprintf("%d %s", base*int(value), unitStr)
 }
 
-func StringToNasBitRate(str string) (uint16, nasType.QoSFlowBitRateUnit, error) {
+func (s *npcfService) StringToNasBitRate(str string) (uint16, nasType.QoSFlowBitRateUnit, error) {
 	strSegment := strings.Split(str, " ")
 
 	var unit nasType.QoSFlowBitRateUnit
@@ -283,7 +315,7 @@ func StringToNasBitRate(str string) (uint16, nasType.QoSFlowBitRateUnit, error) 
 	}
 }
 
-func buildPktFilterInfo(pf nasType.PacketFilter) (*models.PacketFilterInfo, error) {
+func (s *npcfService) buildPktFilterInfo(pf nasType.PacketFilter) (*models.PacketFilterInfo, error) {
 	pfInfo := &models.PacketFilterInfo{}
 
 	switch pf.Direction {
@@ -369,7 +401,7 @@ func buildPktFilterInfo(pf nasType.PacketFilter) (*models.PacketFilterInfo, erro
 	return pfInfo, nil
 }
 
-func SendSMPolicyAssociationTermination(smContext *smf_context.SMContext) error {
+func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.SMContext) error {
 	if smContext.SMPolicyClient == nil {
 		return errors.Errorf("smContext not selected PCF")
 	}

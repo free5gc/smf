@@ -49,6 +49,7 @@ type SMFContext struct {
 	ListenAddr   string
 
 	UDMProfile models.NfProfile
+	NfProfile NFProfile
 
 	Key    string
 	PEM    string
@@ -255,7 +256,7 @@ func InitSmfContext(config *factory.Config) {
 
 	smfContext.ChargingIDGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
 
-	SetupNFProfile(config)
+	smfContext.SetupNFProfile(config)
 
 	smfContext.Locality = configuration.Locality
 
