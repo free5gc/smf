@@ -2,58 +2,78 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"runtime/debug"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/pfcp"
 	"github.com/free5gc/smf/internal/pfcp/udp"
-	"github.com/free5gc/smf/internal/sbi/callback"
+	"github.com/free5gc/smf/internal/sbi"
 	"github.com/free5gc/smf/internal/sbi/consumer"
-	"github.com/free5gc/smf/internal/sbi/eventexposure"
-	"github.com/free5gc/smf/internal/sbi/oam"
-	"github.com/free5gc/smf/internal/sbi/pdusession"
-
-	// "github.com/free5gc/smf/internal/sbi"
-	// "github.com/free5gc/smf/internal/sbi/processor"
-	"github.com/free5gc/smf/internal/sbi/upi"
 	"github.com/free5gc/smf/pkg/association"
 	"github.com/free5gc/smf/pkg/factory"
-	"github.com/free5gc/util/httpwrapper"
-	logger_util "github.com/free5gc/util/logger"
 )
 
+var _ App = &SmfApp{}
+
+type App interface {
+	Config() *factory.Config
+	Context() *smf_context.SMFContext
+}
+
+var SMF App
+
 type SmfApp struct {
+	App
+
 	cfg    *factory.Config
 	smfCtx *smf_context.SMFContext
 	ctx    context.Context
-	cancel context.CancelFunc
 
-	// sbiServer *sbi.Server
-	consumer  *consumer.Consumer
-	// processor *processor.Processor
+	sbiServer *sbi.Server
 	wg        sync.WaitGroup
 }
 
-func NewApp(cfg *factory.Config) (*SmfApp, error) {
-	smf := &SmfApp{cfg: cfg}
+func NewApp(cfg *factory.Config, tlsKeyLogPath string) (*SmfApp, error) {
+	smf := &SmfApp{
+		cfg: cfg,
+		wg:  sync.WaitGroup{},
+	}
 	smf.SetLogEnable(cfg.GetLogEnable())
 	smf.SetLogLevel(cfg.GetLogLevel())
 	smf.SetReportCaller(cfg.GetLogReportCaller())
 
+	// TODO: Initialize sbi server
+	sbiServer, err := sbi.NewServer(smf, tlsKeyLogPath)
+	if err != nil {
+		return nil, err
+	}
+	smf.sbiServer = sbiServer
+
 	smf_context.Init()
 	smf.smfCtx = smf_context.GetSelf()
+
+	SMF = smf
+
 	return smf, nil
+}
+
+func (a *SmfApp) Config() *factory.Config {
+	return a.cfg
+}
+
+func (a *SmfApp) Context() *smf_context.SMFContext {
+	return a.smfCtx
+}
+
+func (a *SmfApp) CancelContext() context.Context {
+	return a.ctx
 }
 
 func (a *SmfApp) SetLogEnable(enable bool) {
@@ -99,57 +119,11 @@ func (a *SmfApp) SetReportCaller(reportCaller bool) {
 }
 
 func (a *SmfApp) Start(tlsKeyLogPath string) {
-	pemPath := factory.SmfDefaultCertPemPath
-	keyPath := factory.SmfDefaultPrivateKeyPath
-	sbi := factory.SmfConfig.Configuration.Sbi
-	if sbi.Tls != nil {
-		pemPath = sbi.Tls.Pem
-		keyPath = sbi.Tls.Key
-	}
-
-	smf_context.InitSmfContext(factory.SmfConfig)
-	// allocate id for each upf
-	smf_context.AllocateUPFID()
-	smf_context.InitSMFUERouting(factory.UERoutingConfig)
-
 	logger.InitLog.Infoln("Server started")
-	router := logger_util.NewGinWithLogrus(logger.GinLog)
 
-	err := a.consumer.RegisterNFInstance()
-	if err != nil {
-		retry_err := a.consumer.RetrySendNFRegistration(10)
-		if retry_err != nil {
-			logger.InitLog.Errorln(retry_err)
-			return
-		}
-	}
+	a.sbiServer.Run(context.Background(), &a.wg)
+	go a.listenShutDownEvent()
 
-	signalChannel := make(chan os.Signal, 1)
-	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		defer func() {
-			if p := recover(); p != nil {
-				// Print stack for panic to log. Fatalf() will let program exit.
-				logger.InitLog.Fatalf("panic: %v\n%s", p, string(debug.Stack()))
-			}
-		}()
-
-		<-signalChannel
-		a.Terminate()
-		os.Exit(0)
-	}()
-
-	oam.AddService(router)
-	callback.AddService(router)
-	upi.AddService(router)
-	for _, serviceName := range factory.SmfConfig.Configuration.ServiceNameList {
-		switch models.ServiceName(serviceName) {
-		case models.ServiceName_NSMF_PDUSESSION:
-			pdusession.AddService(router)
-		case models.ServiceName_NSMF_EVENT_EXPOSURE:
-			eventexposure.AddService(router)
-		}
-	}
 	udp.Run(pfcp.Dispatch)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -161,40 +135,33 @@ func (a *SmfApp) Start(tlsKeyLogPath string) {
 	}
 
 	time.Sleep(1000 * time.Millisecond)
+}
 
-	HTTPAddr := fmt.Sprintf("%s:%d", smf_context.GetSelf().BindingIPv4, smf_context.GetSelf().SBIPort)
-	server, err := httpwrapper.NewHttp2Server(HTTPAddr, tlsKeyLogPath, router)
+func (a *SmfApp) listenShutDownEvent() {
+	defer func() {
+		if p := recover(); p != nil {
+			// Print stack for panic to log. Fatalf() will let program exit.
+			logger.MainLog.Fatalf("panic: %v\n%s", p, string(debug.Stack()))
+		}
+		a.wg.Done()
+	}()
 
-	if server == nil {
-		logger.InitLog.Error("Initialize HTTP server failed:", err)
-		return
-	}
-
-	if err != nil {
-		logger.InitLog.Warnln("Initialize HTTP server:", err)
-	}
-
-	serverScheme := factory.SmfConfig.Configuration.Sbi.Scheme
-	if serverScheme == "http" {
-		err = server.ListenAndServe()
-	} else if serverScheme == "https" {
-		err = server.ListenAndServeTLS(pemPath, keyPath)
-	}
-
-	if err != nil {
-		logger.InitLog.Fatalln("HTTP server setup failed:", err)
-	}
+	<-a.ctx.Done()
+	a.Terminate()
+	a.sbiServer.Stop()
+	a.wg.Wait()
 }
 
 func (a *SmfApp) Terminate() {
-	logger.InitLog.Infof("Terminating SMF...")
+	logger.MainLog.Infof("Terminating SMF...")
 	// deregister with NRF
 	problemDetails, err := a.consumer.SendDeregisterNFInstance()
 	if problemDetails != nil {
-		logger.InitLog.Errorf("Deregister NF instance Failed Problem[%+v]", problemDetails)
+		logger.MainLog.Errorf("Deregister NF instance Failed Problem[%+v]", problemDetails)
 	} else if err != nil {
-		logger.InitLog.Errorf("Deregister NF instance Error[%+v]", err)
+		logger.MainLog.Errorf("Deregister NF instance Error[%+v]", err)
 	} else {
-		logger.InitLog.Infof("Deregister from NRF successfully")
+		logger.MainLog.Infof("Deregister from NRF successfully")
 	}
+	logger.MainLog.Infof("SMF SBI Server terminated")
 }
