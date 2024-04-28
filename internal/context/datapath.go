@@ -588,7 +588,7 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 			if curDataPathNode.IsAnchorUPF() {
 				DLPDR.PDI = PDI{
 					SourceInterface: pfcpType.SourceInterface{
-						InterfaceValue: pfcpType.SourceInterfaceCore,
+						InterfaceValue: pfcpType.SourceInterfaceSgiLanN6Lan,
 					},
 					NetworkInstance: &pfcpType.NetworkInstance{
 						NetworkInstance: smContext.Dnn,
