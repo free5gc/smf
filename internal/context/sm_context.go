@@ -11,9 +11,6 @@ import (
 	"time"
 
 	"github.com/antihax/optional"
-	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
-
 	"github.com/free5gc/nas/nasConvert"
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/ngap/ngapType"
@@ -26,7 +23,11 @@ import (
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
+
+	// appService "github.com/free5gc/smf/pkg/service"
 	"github.com/free5gc/util/idgenerator"
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -512,6 +513,7 @@ func (smContext *SMContext) CHFSelection() error {
 	// Create Converged Charging Client for this SM Context
 	for _, service := range *smContext.SelectedCHFProfile.NfServices {
 		if service.ServiceName == models.ServiceName_NCHF_CONVERGEDCHARGING {
+			// smContext.ChargingClient = appService.GetApp().Consumer().GetConvergedChargingClient(service.ApiPrefix)
 			ConvergedChargingConf := Nchf_ConvergedCharging.NewConfiguration()
 			ConvergedChargingConf.SetBasePath(service.ApiPrefix)
 			smContext.ChargingClient = Nchf_ConvergedCharging.NewAPIClient(ConvergedChargingConf)
