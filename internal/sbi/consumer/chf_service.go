@@ -23,7 +23,7 @@ type nchfService struct {
 	ConvergedChargingClients map[string]*Nchf_ConvergedCharging.APIClient
 }
 
-func (s *nchfService) getConvergedChargingClient(uri string) *Nchf_ConvergedCharging.APIClient {
+func (s *nchfService) GetConvergedChargingClient(uri string) *Nchf_ConvergedCharging.APIClient {
 	if uri == "" {
 		return nil
 	}

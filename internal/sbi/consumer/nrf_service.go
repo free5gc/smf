@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/antihax/optional"
+	"github.com/mohae/deepcopy"
+	"github.com/pkg/errors"
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
@@ -16,7 +18,6 @@ import (
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/pkg/errors"
 )
 
 type nnrfService struct {
@@ -307,4 +308,114 @@ func (s *nnrfService) NFDiscoveryAMF(smContext *smf_context.SMContext, ctx conte
 	result, httpResp, localErr = client.NFInstancesStoreApi.
 		SearchNFInstances(ctx, models.NfType_AMF, models.NfType_SMF, &localVarOptionals)
 	return result, httpResp, localErr
+}
+
+func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
+	if err != nil {
+		return pd, err
+	}
+
+	smfContext := s.consumer.smf.Context()
+
+	// Check data
+	result, httpResp, localErr := s.NFDiscoveryUDM(ctx)
+
+	if localErr == nil {
+		smfContext.UDMProfile = result.NfInstances[0]
+
+		for _, service := range *smfContext.UDMProfile.NfServices {
+			if service.ServiceName == models.ServiceName_NUDM_SDM {
+				smfContext.SubscriberDataManagementClient = 
+					s.consumer.nudmService.getSubscribeDataManagementClient(service.ApiPrefix)
+			}
+		}
+
+		if smfContext.SubscriberDataManagementClient == nil {
+			logger.ConsumerLog.Warnln("sdm client failed")
+		}
+	} else if httpResp != nil {
+		defer func() {
+			if resCloseErr := httpResp.Body.Close(); resCloseErr != nil {
+				logger.ConsumerLog.Errorf("SearchNFInstances response body cannot close: %+v", resCloseErr)
+			}
+		}()
+		logger.ConsumerLog.Warnln("handler returned wrong status code ", httpResp.Status)
+		if httpResp.Status != localErr.Error() {
+			return nil, localErr
+		}
+		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
+		return &problem, nil
+	} else {
+		return nil, openapi.ReportError("server no response")
+	}
+	return nil, nil
+}
+
+func (s *nnrfService) SendNFDiscoveryPCF() (problemDetails *models.ProblemDetails, err error) {
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
+	if err != nil {
+		return pd, err
+	}
+
+	// Check data
+	result, httpResp, localErr := s.NFDiscoveryPCF(ctx)
+
+	if localErr == nil {
+		logger.ConsumerLog.Traceln(result.NfInstances)
+	} else if httpResp != nil {
+		defer func() {
+			if resCloseErr := httpResp.Body.Close(); resCloseErr != nil {
+				logger.ConsumerLog.Errorf("SearchNFInstances response body cannot close: %+v", resCloseErr)
+			}
+		}()
+		logger.ConsumerLog.Warnln("handler returned wrong status code ", httpResp.Status)
+		if httpResp.Status != localErr.Error() {
+			err = localErr
+			return problemDetails, err
+		}
+		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
+		problemDetails = &problem
+	} else {
+		err = openapi.ReportError("server no response")
+	}
+
+	return problemDetails, err
+}
+
+func (s *nnrfService) SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.ProblemDetails, error) {
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
+	if err != nil {
+		return pd, err
+	}
+
+	// Check data
+	result, httpResp, localErr := s.NFDiscoveryAMF(smContext, ctx)
+
+	if localErr == nil {
+		if result.NfInstances == nil {
+			if status := httpResp.StatusCode; status != http.StatusOK {
+				logger.ConsumerLog.Warnln("handler returned wrong status code", status)
+			}
+			logger.ConsumerLog.Warnln("NfInstances is nil")
+			return nil, openapi.ReportError("NfInstances is nil")
+		}
+		logger.ConsumerLog.Info("SendNFDiscoveryServingAMF ok")
+		smContext.AMFProfile = deepcopy.Copy(result.NfInstances[0]).(models.NfProfile)
+	} else if httpResp != nil {
+		defer func() {
+			if resCloseErr := httpResp; resCloseErr != nil {
+				logger.ConsumerLog.Errorf("SearchNFInstances response body cannot close: %+v", resCloseErr)
+			}
+		}()
+		if httpResp.Status != localErr.Error() {
+			return nil, localErr
+		}
+		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
+		return &problem, nil
+	} else {
+		return nil, openapi.ReportError("server no response")
+	}
+
+	return nil, nil
 }
