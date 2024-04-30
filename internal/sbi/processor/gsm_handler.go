@@ -1,4 +1,4 @@
-package producer
+package processor
 
 import (
 	"fmt"
@@ -10,7 +10,6 @@ import (
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/free5gc/smf/internal/sbi/consumer"
 )
 
 type GSMError struct {
@@ -178,7 +177,7 @@ func HandlePDUSessionReleaseRequest(
 	smCtx.Pti = req.GetPTI()
 }
 
-func HandlePDUSessionModificationRequest(
+func (p *Processor) HandlePDUSessionModificationRequest(
 	smCtx *smf_context.SMContext, req *nasMessage.PDUSessionModificationRequest,
 ) (*nas.Message, error) {
 	logger.GsmLog.Infof("Handle Pdu Session Modification Request")
@@ -214,7 +213,7 @@ func HandlePDUSessionModificationRequest(
 		}
 	}
 
-	smPolicyDecision, err := consumer.SendSMPolicyAssociationUpdateByUERequestModification(
+	smPolicyDecision, err := p.Consumer().SendSMPolicyAssociationUpdateByUERequestModification(
 		smCtx, reqQoSRules, reqQoSFlowDescs)
 	if err != nil {
 		return nil, fmt.Errorf("sm policy update failed: %s", err)

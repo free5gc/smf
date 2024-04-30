@@ -10,7 +10,6 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/free5gc/smf/internal/sbi/producer"
 	"github.com/free5gc/util/httpwrapper"
 )
 
@@ -94,7 +93,7 @@ func (s *Server) HTTPReleaseSmContext(c *gin.Context) {
 	req.Params["smContextRef"] = c.Params.ByName("smContextRef")
 
 	smContextRef := req.Params["smContextRef"]
-	producer.HandlePDUSessionSMContextRelease(
+	s.processor.HandlePDUSessionSMContextRelease(
 		smContextRef, req.Body.(models.ReleaseSmContextRequest))
 
 	c.Status(http.StatusNoContent)
@@ -128,7 +127,7 @@ func (s *Server) HTTPUpdateSmContext(c *gin.Context) {
 	req.Params["smContextRef"] = c.Params.ByName("smContextRef")
 
 	smContextRef := req.Params["smContextRef"]
-	HTTPResponse := producer.HandlePDUSessionSMContextUpdate(
+	HTTPResponse := s.processor.HandlePDUSessionSMContextUpdate(
 		smContextRef, req.Body.(models.UpdateSmContextRequest))
 
 	if HTTPResponse.Status < 300 {
@@ -173,7 +172,7 @@ func (s *Server) HTTPPostSmContexts(c *gin.Context) {
 
 	req := httpwrapper.NewRequest(c.Request, request)
 	isDone := c.Done()
-	HTTPResponse := producer.HandlePDUSessionSMContextCreate(isDone,
+	HTTPResponse := s.processor.HandlePDUSessionSMContextCreate(isDone,
 		req.Body.(models.PostSmContextsRequest))
 	// Http Response to AMF
 	for key, val := range HTTPResponse.Header {

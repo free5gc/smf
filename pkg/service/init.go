@@ -16,28 +16,32 @@ import (
 	"github.com/free5gc/smf/internal/pfcp/udp"
 	"github.com/free5gc/smf/internal/sbi"
 	"github.com/free5gc/smf/internal/sbi/consumer"
+	"github.com/free5gc/smf/internal/sbi/processor"
+	"github.com/free5gc/smf/pkg/app"
 	"github.com/free5gc/smf/pkg/association"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
-var _ App = &SmfApp{}
-
-type App interface {
-	Config() *factory.Config
-	Context() *smf_context.SMFContext
-}
-
-var SMF App
+var SMF *SmfApp
 
 type SmfApp struct {
-	App
-
 	cfg    *factory.Config
 	smfCtx *smf_context.SMFContext
 	ctx    context.Context
 
 	sbiServer *sbi.Server
+	consumer  *consumer.Consumer
+	processor *processor.Processor
 	wg        sync.WaitGroup
+
+	pfcpStart     func(*SmfApp)
+	pfcpTerminate func(*SmfApp)
+}
+
+var _ app.App = &SmfApp{}
+
+func GetApp() *SmfApp {
+	return SMF
 }
 
 func NewApp(cfg *factory.Config, tlsKeyLogPath string) (*SmfApp, error) {
@@ -74,6 +78,14 @@ func (a *SmfApp) Context() *smf_context.SMFContext {
 
 func (a *SmfApp) CancelContext() context.Context {
 	return a.ctx
+}
+
+func (a *SmfApp) Consumer() *consumer.Consumer {
+	return a.consumer
+}
+
+func (a *SmfApp) Processor() *processor.Processor {
+	return a.processor
 }
 
 func (a *SmfApp) SetLogEnable(enable bool) {
@@ -118,7 +130,7 @@ func (a *SmfApp) SetReportCaller(reportCaller bool) {
 	logger.Log.SetReportCaller(reportCaller)
 }
 
-func (a *SmfApp) Start(tlsKeyLogPath string) {
+func (a *SmfApp) Start() error {
 	logger.InitLog.Infoln("Server started")
 
 	a.sbiServer.Run(context.Background(), &a.wg)
@@ -131,10 +143,11 @@ func (a *SmfApp) Start(tlsKeyLogPath string) {
 	smf_context.GetSelf().PFCPCancelFunc = cancel
 	for _, upNode := range smf_context.GetSelf().UserPlaneInformation.UPFs {
 		upNode.UPF.Ctx, upNode.UPF.CancelFunc = context.WithCancel(context.Background())
-		go association.ToBeAssociatedWithUPF(ctx, upNode.UPF)
+		go association.ToBeAssociatedWithUPF(ctx, upNode.UPF, a.processor)
 	}
 
 	time.Sleep(1000 * time.Millisecond)
+	return nil
 }
 
 func (a *SmfApp) listenShutDownEvent() {
@@ -155,7 +168,7 @@ func (a *SmfApp) listenShutDownEvent() {
 func (a *SmfApp) Terminate() {
 	logger.MainLog.Infof("Terminating SMF...")
 	// deregister with NRF
-	problemDetails, err := a.consumer.SendDeregisterNFInstance()
+	problemDetails, err := a.Consumer().SendDeregisterNFInstance()
 	if problemDetails != nil {
 		logger.MainLog.Errorf("Deregister NF instance Failed Problem[%+v]", problemDetails)
 	} else if err != nil {

@@ -1,4 +1,4 @@
-package producer
+package processor
 
 import (
 	"fmt"
@@ -220,7 +220,7 @@ func waitAllPfcpRsp(
 	}
 }
 
-func EstHandler(isDone <-chan struct{},
+func (p *Processor) EstHandler(isDone <-chan struct{},
 	smContext *smf_context.SMContext, success bool,
 ) {
 	// Waiting for Create SMContext Request completed
@@ -231,14 +231,14 @@ func EstHandler(isDone <-chan struct{},
 		sendPDUSessionEstablishmentAccept(smContext)
 	} else {
 		// TODO: set appropriate 5GSM cause according to PFCP cause value
-		sendPDUSessionEstablishmentReject(smContext, nasMessage.Cause5GSMNetworkFailure)
+		p.sendPDUSessionEstablishmentReject(smContext, nasMessage.Cause5GSMNetworkFailure)
 	}
 }
 
 func ModHandler(smContext *smf_context.SMContext, success bool) {
 }
 
-func sendPDUSessionEstablishmentReject(
+func (p *Processor) sendPDUSessionEstablishmentReject(
 	smContext *smf_context.SMContext,
 	nasErrorCause uint8,
 ) {
@@ -285,7 +285,7 @@ func sendPDUSessionEstablishmentReject(
 	if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 		logger.PduSessLog.Warnf("%v", rspData.Cause)
 	}
-	RemoveSMContextFromAllNF(smContext, true)
+	p.RemoveSMContextFromAllNF(smContext, true)
 }
 
 func sendPDUSessionEstablishmentAccept(
@@ -356,7 +356,7 @@ func sendPDUSessionEstablishmentAccept(
 	}
 }
 
-func updateAnUpfPfcpSession(
+func (p *Processor) updateAnUpfPfcpSession(
 	smContext *smf_context.SMContext,
 	pdrList []*smf_context.PDR,
 	farList []*smf_context.FAR,
@@ -385,7 +385,7 @@ func updateAnUpfPfcpSession(
 		if smContext.BPManager.BPStatus == smf_context.UnInitialized {
 			logger.PfcpLog.Infoln("Add PSAAndULCL")
 			// TODO: handle error cases
-			AddPDUSessionAnchorAndULCL(smContext)
+			p.AddPDUSessionAnchorAndULCL(smContext)
 			smContext.BPManager.BPStatus = smf_context.AddingPSA
 		}
 	}

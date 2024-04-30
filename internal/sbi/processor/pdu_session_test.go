@@ -1,4 +1,4 @@
-package producer_test
+package processor_test
 
 import (
 	"net/http"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"gopkg.in/h2non/gock.v1"
 
 	"github.com/free5gc/nas"
@@ -17,7 +18,9 @@ import (
 	"github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/pfcp"
 	"github.com/free5gc/smf/internal/pfcp/udp"
-	"github.com/free5gc/smf/internal/sbi/producer"
+	"github.com/free5gc/smf/internal/sbi/consumer"
+	"github.com/free5gc/smf/internal/sbi/processor"
+	"github.com/free5gc/smf/pkg/app"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/httpwrapper"
 )
@@ -572,9 +575,16 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 		}
 	}
 
+	mockSmf := app.NewMockApp(gomock.NewController(t))
+	consumer, _ := consumer.NewConsumer(mockSmf)
+	processor, err := processor.NewProcessor(mockSmf, consumer)
+	if err != nil {
+		t.Fatalf("Failed to create processor: %+v", err)
+	}
+
 	for _, tc := range testCases {
 		t.Run(tc.paramStr, func(t *testing.T) {
-			httpResp := producer.HandlePDUSessionSMContextCreate(nil, tc.request)
+			httpResp := processor.HandlePDUSessionSMContextCreate(nil, tc.request)
 
 			require.Equal(t, tc.expectedHTTPRsp.Status, httpResp.Status)
 			require.Equal(t, tc.expectedHTTPRsp.Body, httpResp.Body)
@@ -592,6 +602,6 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 		})
 	}
 
-	err := udp.Server.Close()
+	err = udp.Server.Close()
 	require.NoError(t, err)
 }
