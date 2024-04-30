@@ -50,7 +50,7 @@ func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMCon
 ) *models.ChargingDataRequest {
 	var triggers []models.Trigger
 
-	smfContext := s.consumer.smf.Context()
+	smfContext := s.consumer.Context()
 	date := time.Now()
 
 	for _, unitUsage := range multipleUnitUsage {

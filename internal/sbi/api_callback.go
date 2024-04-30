@@ -9,7 +9,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/free5gc/smf/internal/sbi/producer"
+	"github.com/free5gc/smf/internal/sbi/processor"
 	"github.com/free5gc/util/httpwrapper"
 )
 
@@ -51,7 +51,7 @@ func (s *Server) HTTPSmPolicyUpdateNotification(c *gin.Context) {
 	reqWrapper.Params["smContextRef"] = c.Params.ByName("smContextRef")
 
 	smContextRef := reqWrapper.Params["smContextRef"]
-	HTTPResponse := producer.HandleSMPolicyUpdateNotify(smContextRef, reqWrapper.Body.(models.SmPolicyNotification))
+	HTTPResponse := processor.HandleSMPolicyUpdateNotify(smContextRef, reqWrapper.Body.(models.SmPolicyNotification))
 
 	for key, val := range HTTPResponse.Header {
 		c.Header(key, val[0])
@@ -90,7 +90,7 @@ func (s *Server) HTTPChargingNotification(c *gin.Context) {
 	reqWrapper.Params["notifyUri"] = c.Params.ByName("notifyUri")
 	smContextRef := strings.Split(reqWrapper.Params["notifyUri"], "_")[1]
 
-	HTTPResponse := producer.HandleChargingNotification(reqWrapper.Body.(models.ChargingNotifyRequest), smContextRef)
+	HTTPResponse := s.processor.HandleChargingNotification(reqWrapper.Body.(models.ChargingNotifyRequest), smContextRef)
 
 	for key, val := range HTTPResponse.Header {
 		c.Header(key, val[0])

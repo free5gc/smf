@@ -3,6 +3,7 @@ package sbi
 import (
 	"context"
 	"fmt"
+
 	// "log"
 	"net/http"
 	"runtime/debug"
@@ -12,9 +13,11 @@ import (
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
-	// "github.com/free5gc/smf/internal/sbi/consumer"
+	"github.com/free5gc/smf/internal/sbi/processor"
+
 	// "github.com/free5gc/smf/internal/sbi/processor"
 	util_oauth "github.com/free5gc/smf/internal/util/oauth"
+	"github.com/free5gc/smf/pkg/app"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/httpwrapper"
 	logger_util "github.com/free5gc/util/logger"
@@ -49,24 +52,17 @@ func applyRoutes(group *gin.RouterGroup, routes []Route) {
 	}
 }
 
-type Smf interface {
-	Config() *factory.Config
-	Context() *smf_context.SMFContext
-	CancelContext() context.Context
-	// Consumer() *consumer.Consumer
-	// Processor() *processor.Processor
-}
-
 type Server struct {
-	Smf
+	app.App
 
 	httpServer *http.Server
 	router     *gin.Engine
+	processor  *processor.Processor
 }
 
-func NewServer(smf Smf, tlsKeyLogPath string) (_ *Server, err error) {
+func NewServer(smf app.App, tlsKeyLogPath string) (_ *Server, err error) {
 	s := &Server{
-		Smf:    smf,
+		App: smf,
 		// router: logger_util.NewGinWithLogrus(logger.GinLog),
 	}
 

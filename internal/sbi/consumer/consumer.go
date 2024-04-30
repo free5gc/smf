@@ -1,8 +1,6 @@
 package consumer
 
 import (
-	"context"
-
 	"github.com/free5gc/openapi/Nchf_ConvergedCharging"
 	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
 	"github.com/free5gc/openapi/Nnrf_NFManagement"
@@ -10,18 +8,11 @@ import (
 	"github.com/free5gc/openapi/Nsmf_PDUSession"
 	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
 	"github.com/free5gc/openapi/Nudm_UEContextManagement"
-	smf_context "github.com/free5gc/smf/internal/context"
-	"github.com/free5gc/smf/pkg/factory"
+	"github.com/free5gc/smf/pkg/app"
 )
 
-type smf interface {
-	Config() *factory.Config
-	Context() *smf_context.SMFContext
-	CancelContext() context.Context
-}
-
 type Consumer struct {
-	smf
+	app.App
 
 	// consumer services
 	*nsmfService
@@ -31,9 +22,9 @@ type Consumer struct {
 	*nnrfService
 }
 
-func NewConsumer(smf smf) (*Consumer, error) {
+func NewConsumer(smf app.App) (*Consumer, error) {
 	c := &Consumer{
-		smf: smf,
+		App: smf,
 	}
 
 	c.nsmfService = &nsmfService{

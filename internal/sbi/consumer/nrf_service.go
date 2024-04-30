@@ -76,7 +76,7 @@ func (s *nnrfService) getNFDiscoveryClient(uri string) *Nnrf_NFDiscovery.APIClie
 
 // Done 4/28 14:03
 func (s *nnrfService) RegisterNFInstance() error {
-	smfContext := s.consumer.smf.Context()
+	smfContext := s.consumer.Context()
 	client := s.getNFManagementClient(smfContext.NrfUri)
 	nfProfile, err := s.buildNfProfile(smfContext)
 	if err != nil {
@@ -214,7 +214,7 @@ func (s *nnrfService) SendDeregisterNFInstance() (problemDetails *models.Problem
 		return pd, err
 	}
 
-	smfContext := s.consumer.smf.Context()
+	smfContext := s.consumer.Context()
 	client := s.getNFManagementClient(smfContext.NrfUri)
 
 	var res *http.Response
@@ -245,7 +245,7 @@ func (s *nnrfService) SendSearchNFInstances(nrfUri string, targetNfType, request
 	param *Nnrf_NFDiscovery.SearchNFInstancesParamOpts,
 ) (*models.SearchResult, error) {
 	// Set client and set url
-	smfContext := s.consumer.smf.Context()
+	smfContext := s.consumer.Context()
 	client := s.getNFDiscoveryClient(smfContext.NrfUri)
 
 	if client == nil {
@@ -275,7 +275,7 @@ func (s *nnrfService) SendSearchNFInstances(nrfUri string, targetNfType, request
 func (s *nnrfService) NFDiscoveryUDM(ctx context.Context) (result models.SearchResult, httpResp *http.Response, localErr error) {
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
 
-	smfContext := s.consumer.smf.Context()
+	smfContext := s.consumer.Context()
 	// Not sure (?
 	client := s.getNFDiscoveryClient(smfContext.NrfUri)
 	// Check data
@@ -287,7 +287,7 @@ func (s *nnrfService) NFDiscoveryUDM(ctx context.Context) (result models.SearchR
 func (s *nnrfService) NFDiscoveryPCF(ctx context.Context) (result models.SearchResult, httpResp *http.Response, localErr error) {
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
 
-	smfContext := s.consumer.smf.Context()
+	smfContext := s.consumer.Context()
 	// Not sure (?
 	client := s.getNFDiscoveryClient(smfContext.NrfUri)
 	// Check data
@@ -301,7 +301,7 @@ func (s *nnrfService) NFDiscoveryAMF(smContext *smf_context.SMContext, ctx conte
 
 	localVarOptionals.TargetNfInstanceId = optional.NewInterface(smContext.ServingNfId)
 
-	smfContext := s.consumer.smf.Context()
+	smfContext := s.consumer.Context()
 	// Not sure (?
 	client := s.getNFDiscoveryClient(smfContext.NrfUri)
 	// Check data
@@ -316,7 +316,7 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 		return pd, err
 	}
 
-	smfContext := s.consumer.smf.Context()
+	smfContext := s.consumer.Context()
 
 	// Check data
 	result, httpResp, localErr := s.NFDiscoveryUDM(ctx)
@@ -326,7 +326,7 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 
 		for _, service := range *smfContext.UDMProfile.NfServices {
 			if service.ServiceName == models.ServiceName_NUDM_SDM {
-				smfContext.SubscriberDataManagementClient = 
+				smfContext.SubscriberDataManagementClient =
 					s.consumer.nudmService.getSubscribeDataManagementClient(service.ApiPrefix)
 			}
 		}

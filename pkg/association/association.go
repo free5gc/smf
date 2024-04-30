@@ -13,10 +13,10 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/pfcp/message"
-	"github.com/free5gc/smf/internal/sbi/producer"
+	"github.com/free5gc/smf/internal/sbi/processor"
 )
 
-func ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF) {
+func ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF, processor *processor.Processor) {
 	var upfStr string
 	if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
 		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.NodeID.ResolveNodeIdToIp().String())
@@ -40,21 +40,21 @@ func ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF) {
 			break
 		}
 
-		releaseAllResourcesOfUPF(upf, upfStr)
+		releaseAllResourcesOfUPF(upf, upfStr, processor)
 		if isDone(ctx, upf) {
 			break
 		}
 	}
 }
 
-func ReleaseAllResourcesOfUPF(upf *smf_context.UPF) {
+func ReleaseAllResourcesOfUPF(upf *smf_context.UPF, processor *processor.Processor) {
 	var upfStr string
 	if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
 		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.NodeID.ResolveNodeIdToIp().String())
 	} else {
 		upfStr = fmt.Sprintf("[%s]", upf.NodeID.ResolveNodeIdToIp().String())
 	}
-	releaseAllResourcesOfUPF(upf, upfStr)
+	releaseAllResourcesOfUPF(upf, upfStr, processor)
 }
 
 func isDone(ctx context.Context, upf *smf_context.UPF) bool {
@@ -187,7 +187,7 @@ func doPfcpHeartbeat(upf *smf_context.UPF, upfStr string) error {
 	return nil
 }
 
-func releaseAllResourcesOfUPF(upf *smf_context.UPF, upfStr string) {
+func releaseAllResourcesOfUPF(upf *smf_context.UPF, upfStr string, processor *processor.Processor) {
 	logger.MainLog.Infof("Release all resources of UPF %s", upfStr)
 
 	upf.ProcEachSMContext(func(smContext *smf_context.SMContext) {
@@ -197,11 +197,11 @@ func releaseAllResourcesOfUPF(upf *smf_context.UPF, upfStr string) {
 		case smf_context.Active, smf_context.ModificationPending, smf_context.PFCPModification:
 			needToSendNotify, removeContext := requestAMFToReleasePDUResources(smContext)
 			if needToSendNotify {
-				producer.SendReleaseNotification(smContext)
+				processor.SendReleaseNotification(smContext)
 			}
 			if removeContext {
 				// Notification has already been sent, if it is needed
-				producer.RemoveSMContextFromAllNF(smContext, false)
+				processor.RemoveSMContextFromAllNF(smContext, false)
 			}
 		}
 	})

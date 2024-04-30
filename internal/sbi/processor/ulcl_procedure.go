@@ -1,4 +1,4 @@
-package producer
+package processor
 
 import (
 	"net"
@@ -13,7 +13,7 @@ import (
 	"github.com/free5gc/util/flowdesc"
 )
 
-func AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
+func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
 	bpMGR := smContext.BPManager
 
 	switch bpMGR.AddingPSAState {
@@ -37,7 +37,7 @@ func AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
 			// N1N2MessageTransfer Here
 
 			// Establish PSA2
-			EstablishPSA2(smContext)
+			p.EstablishPSA2(smContext)
 
 			EstablishRANTunnelInfo(smContext)
 			// Establish ULCL
@@ -52,7 +52,7 @@ func AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
 	}
 }
 
-func EstablishPSA2(smContext *context.SMContext) {
+func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 	smContext.Log.Infoln("Establish PSA2")
 	bpMGR := smContext.BPManager
 	activatingPath := bpMGR.ActivatingPath
@@ -86,7 +86,7 @@ func EstablishPSA2(smContext *context.SMContext) {
 			}
 
 			// According to  32.255 5.2.2.7, Addition of additional PDU Session Anchor is a charging event
-			UpdateChargingSession(smContext, chgUrrList, models.Trigger{
+			p.UpdateChargingSession(smContext, chgUrrList, models.Trigger{
 				TriggerType:     models.TriggerType_ADDITION_OF_UPF,
 				TriggerCategory: models.TriggerCategory_IMMEDIATE_REPORT,
 			})
