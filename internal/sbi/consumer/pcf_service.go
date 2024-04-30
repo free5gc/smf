@@ -51,7 +51,16 @@ func (s *npcfService) getSMPolicyControlClient(uri string) *Npcf_SMPolicyControl
 
 // SendSMPolicyAssociationCreate create the session management association to the PCF
 func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (string, *models.SmPolicyDecision, error) {
-	if smContext.SMPolicyClient == nil {
+	var client *Npcf_SMPolicyControl.APIClient
+
+	// Create SMPolicyControl Client for this SM Context
+	for _, service := range *smContext.SelectedPCFProfile.NfServices {
+		if service.ServiceName == models.ServiceName_NPCF_SMPOLICYCONTROL {
+			client = s.getSMPolicyControlClient(service.ApiPrefix)
+		}
+	}
+
+	if client == nil {
 		return "", nil, errors.Errorf("smContext not selected PCF")
 	}
 
@@ -86,7 +95,7 @@ func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMCon
 
 	var smPolicyID string
 	var smPolicyDecision *models.SmPolicyDecision
-	smPolicyDecisionFromPCF, httpRsp, err := smContext.SMPolicyClient.DefaultApi.
+	smPolicyDecisionFromPCF, httpRsp, err := client.DefaultApi.
 		SmPoliciesPost(ctx, smPolicyData)
 	defer func() {
 		if httpRsp != nil {
@@ -185,8 +194,17 @@ func (s *npcfService) SendSMPolicyAssociationUpdateByUERequestModification(
 		return nil, err
 	}
 
+	var client *Npcf_SMPolicyControl.APIClient
+
+	// Create SMPolicyControl Client for this SM Context
+	for _, service := range *smContext.SelectedPCFProfile.NfServices {
+		if service.ServiceName == models.ServiceName_NPCF_SMPOLICYCONTROL {
+			client = s.getSMPolicyControlClient(service.ApiPrefix)
+		}
+	}
+
 	var smPolicyDecision *models.SmPolicyDecision
-	smPolicyDecisionFromPCF, rsp, err := smContext.SMPolicyClient.
+	smPolicyDecisionFromPCF, rsp, err := client.
 		DefaultApi.SmPoliciesSmPolicyIdUpdatePost(ctx, smContext.SMPolicyID, updateSMPolicy)
 	defer func() {
 		if rsp != nil {
@@ -402,7 +420,16 @@ func (s *npcfService) buildPktFilterInfo(pf nasType.PacketFilter) (*models.Packe
 }
 
 func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.SMContext) error {
-	if smContext.SMPolicyClient == nil {
+	var client *Npcf_SMPolicyControl.APIClient
+
+	// Create SMPolicyControl Client for this SM Context
+	for _, service := range *smContext.SelectedPCFProfile.NfServices {
+		if service.ServiceName == models.ServiceName_NPCF_SMPOLICYCONTROL {
+			client = s.getSMPolicyControlClient(service.ApiPrefix)
+		}
+	}
+
+	if client == nil {
 		return errors.Errorf("smContext not selected PCF")
 	}
 
@@ -411,7 +438,7 @@ func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.
 		return err
 	}
 
-	rsp, err := smContext.SMPolicyClient.DefaultApi.SmPoliciesSmPolicyIdDeletePost(
+	rsp, err := client.DefaultApi.SmPoliciesSmPolicyIdDeletePost(
 		ctx, smContext.SMPolicyID, models.SmPolicyDeleteData{})
 	defer func() {
 		if rsp != nil {
