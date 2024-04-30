@@ -1,4 +1,4 @@
-package producer
+package processor
 
 import (
 	"context"
@@ -12,12 +12,12 @@ import (
 	"github.com/free5gc/util/httpwrapper"
 )
 
-func HandleChargingNotification(chargingNotifyRequest models.ChargingNotifyRequest,
+func (p *Processor) HandleChargingNotification(chargingNotifyRequest models.ChargingNotifyRequest,
 	smContextRef string,
 ) *httpwrapper.Response {
 	logger.ChargingLog.Info("Handle Charging Notification")
 
-	problemDetails := chargingNotificationProcedure(chargingNotifyRequest, smContextRef)
+	problemDetails := p.chargingNotificationProcedure(chargingNotifyRequest, smContextRef)
 	if problemDetails != nil {
 		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
 	} else {
@@ -27,7 +27,7 @@ func HandleChargingNotification(chargingNotifyRequest models.ChargingNotifyReque
 
 // While receive Charging Notification from CHF, SMF will send Charging Information to CHF and update UPF
 // The Charging Notification will be sent when CHF found the changes of the quota file.
-func chargingNotificationProcedure(req models.ChargingNotifyRequest, smContextRef string) *models.ProblemDetails {
+func (p *Processor) chargingNotificationProcedure(req models.ChargingNotifyRequest, smContextRef string) *models.ProblemDetails {
 	if smContext := smf_context.GetSMContextByRef(smContextRef); smContext != nil {
 		smContext.SMLock.Lock()
 		defer smContext.SMLock.Unlock()
@@ -53,7 +53,7 @@ func chargingNotificationProcedure(req models.ChargingNotifyRequest, smContextRe
 			}
 			QueryReport(smContext, upf, urrList, models.TriggerType_FORCED_REAUTHORISATION)
 		}
-		ReportUsageAndUpdateQuota(smContext)
+		p.ReportUsageAndUpdateQuota(smContext)
 	} else {
 		problemDetails := &models.ProblemDetails{
 			Status: http.StatusNotFound,

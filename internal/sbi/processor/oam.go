@@ -1,4 +1,4 @@
-package producer
+package processor
 
 import (
 	"net/http"
@@ -23,7 +23,7 @@ type PDUSessionInfo struct {
 	Tunnel       context.UPTunnel
 }
 
-func HandleOAMGetUEPDUSessionInfo(smContextRef string) *httpwrapper.Response {
+func (p *Processor) HandleOAMGetUEPDUSessionInfo(smContextRef string) *httpwrapper.Response {
 	smContext := context.GetSMContextByRef(smContextRef)
 	if smContext == nil {
 		httpResponse := &httpwrapper.Response{
@@ -56,7 +56,7 @@ func HandleOAMGetUEPDUSessionInfo(smContextRef string) *httpwrapper.Response {
 	return httpResponse
 }
 
-func HandleGetSMFUserPlaneInfo() *httpwrapper.Response {
+func (p *Processor) HandleGetSMFUserPlaneInfo() *httpwrapper.Response {
 	httpResponse := &httpwrapper.Response{
 		Header: nil,
 		Status: http.StatusOK,

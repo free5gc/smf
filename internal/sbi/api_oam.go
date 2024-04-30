@@ -2,9 +2,9 @@ package sbi
 
 import (
 	"net/http"
+
 	"github.com/gin-gonic/gin"
 
-	"github.com/free5gc/smf/internal/sbi/producer"
 	"github.com/free5gc/util/httpwrapper"
 )
 
@@ -35,13 +35,13 @@ func (s *Server) HTTPGetUEPDUSessionInfo(c *gin.Context) {
 	req.Params["smContextRef"] = c.Params.ByName("smContextRef")
 
 	smContextRef := req.Params["smContextRef"]
-	HTTPResponse := producer.HandleOAMGetUEPDUSessionInfo(smContextRef)
+	HTTPResponse := s.processor.HandleOAMGetUEPDUSessionInfo(smContextRef)
 
 	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
 }
 
 func (s *Server) HTTPGetSMFUserPlaneInfo(c *gin.Context) {
-	HTTPResponse := producer.HandleGetSMFUserPlaneInfo()
+	HTTPResponse := s.processor.HandleGetSMFUserPlaneInfo()
 
 	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
 }

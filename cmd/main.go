@@ -87,7 +87,7 @@ func action(cliCtx *cli.Context) error {
 	}
 	SMF = smf
 
-	smf.Start(tlsKeyLogPath)
+	smf.Start()
 	// SMF.WaitRoutineStopped()
 
 	return nil

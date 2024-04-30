@@ -1,4 +1,4 @@
-package producer
+package processor
 
 import (
 	"time"
@@ -9,11 +9,10 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	pfcp_message "github.com/free5gc/smf/internal/pfcp/message"
-	"github.com/free5gc/smf/internal/sbi/consumer"
 )
 
-func CreateChargingSession(smContext *smf_context.SMContext) {
-	_, problemDetails, err := consumer.SendConvergedChargingRequest(smContext, smf_context.CHARGING_INIT, nil)
+func (p *Processor) CreateChargingSession(smContext *smf_context.SMContext) {
+	_, problemDetails, err := p.Consumer().SendConvergedChargingRequest(smContext, smf_context.CHARGING_INIT, nil)
 	if problemDetails != nil {
 		logger.ChargingLog.Errorf("Send Charging Data Request[Init] Failed Problem[%+v]", problemDetails)
 	} else if err != nil {
@@ -23,7 +22,7 @@ func CreateChargingSession(smContext *smf_context.SMContext) {
 	}
 }
 
-func UpdateChargingSession(smContext *smf_context.SMContext, urrList []*smf_context.URR, trigger models.Trigger) {
+func (p *Processor) UpdateChargingSession(smContext *smf_context.SMContext, urrList []*smf_context.URR, trigger models.Trigger) {
 	var multipleUnitUsage []models.MultipleUnitUsage
 
 	for _, urr := range urrList {
@@ -49,7 +48,7 @@ func UpdateChargingSession(smContext *smf_context.SMContext, urrList []*smf_cont
 		}
 	}
 
-	_, problemDetails, err := consumer.SendConvergedChargingRequest(smContext,
+	_, problemDetails, err := p.Consumer().SendConvergedChargingRequest(smContext,
 		smf_context.CHARGING_UPDATE, multipleUnitUsage)
 	if problemDetails != nil {
 		logger.ChargingLog.Errorf("Send Charging Data Request[Init] Failed Problem[%+v]", problemDetails)
@@ -60,10 +59,10 @@ func UpdateChargingSession(smContext *smf_context.SMContext, urrList []*smf_cont
 	}
 }
 
-func ReleaseChargingSession(smContext *smf_context.SMContext) {
+func (p *Processor) ReleaseChargingSession(smContext *smf_context.SMContext) {
 	multipleUnitUsage := buildMultiUnitUsageFromUsageReport(smContext)
 
-	_, problemDetails, err := consumer.SendConvergedChargingRequest(smContext,
+	_, problemDetails, err := p.Consumer().SendConvergedChargingRequest(smContext,
 		smf_context.CHARGING_RELEASE, multipleUnitUsage)
 	if problemDetails != nil {
 		logger.ChargingLog.Errorf("Send Charging Data Request[Termination] Failed Problem[%+v]", problemDetails)
@@ -75,11 +74,11 @@ func ReleaseChargingSession(smContext *smf_context.SMContext) {
 }
 
 // Report usage report to the CHF and update the URR with the charging information in the charging response
-func ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) {
+func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) {
 	multipleUnitUsage := buildMultiUnitUsageFromUsageReport(smContext)
 
 	if len(multipleUnitUsage) != 0 {
-		rsp, problemDetails, err := consumer.SendConvergedChargingRequest(smContext,
+		rsp, problemDetails, err := p.Consumer().SendConvergedChargingRequest(smContext,
 			smf_context.CHARGING_UPDATE, multipleUnitUsage)
 
 		if problemDetails != nil {
@@ -94,7 +93,7 @@ func ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) {
 			logger.ChargingLog.Infof("Send Charging Data Request[Update] successfully")
 			smContext.SetState(smf_context.PFCPModification)
 
-			updateGrantedQuota(smContext, rsp.MultipleUnitInformation)
+			p.updateGrantedQuota(smContext, rsp.MultipleUnitInformation)
 			// Usually only the anchor UPF need	to be updated
 			for _, urr := range smContext.UrrUpfMap {
 				upfId := smContext.ChargingInfo[urr.URRID].UpfId
@@ -243,7 +242,7 @@ func getUrrByRg(smContext *smf_context.SMContext, upfId string, rg int32) *smf_c
 }
 
 // Update the urr by the charging information renewed by chf
-func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformation []models.MultipleUnitInformation) {
+func (p *Processor) updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformation []models.MultipleUnitInformation) {
 	for _, ui := range multipleUnitInformation {
 		trigger := pfcpType.ReportingTriggers{}
 
@@ -285,7 +284,7 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 									upf := smf_context.GetUpfById(ui.UPFID)
 									if upf != nil {
 										QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
-										ReportUsageAndUpdateQuota(smContext)
+										p.ReportUsageAndUpdateQuota(smContext)
 									}
 								},
 								func() {
@@ -331,7 +330,7 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 								upf := smf_context.GetUpfById(ui.UPFID)
 								if upf != nil {
 									QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
-									ReportUsageAndUpdateQuota(smContext)
+									p.ReportUsageAndUpdateQuota(smContext)
 								}
 							},
 							func() {

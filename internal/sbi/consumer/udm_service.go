@@ -74,7 +74,7 @@ func (s *nudmService) getUEContextManagementClient(uri string) *Nudm_UEContextMa
 func (s *nudmService) UeCmRegistration(smCtx *smf_context.SMContext) (
 	*models.ProblemDetails, error,
 ) {
-	smfContext := s.consumer.smf.Context()
+	smfContext := s.consumer.Context()
 
 	uecmUri := util.SearchNFServiceUri(smfContext.UDMProfile, models.ServiceName_NUDM_UECM,
 		models.NfServiceStatus_REGISTERED)
@@ -131,7 +131,7 @@ func (s *nudmService) UeCmRegistration(smCtx *smf_context.SMContext) (
 }
 
 func (s *nudmService) UeCmDeregistration(smCtx *smf_context.SMContext) (*models.ProblemDetails, error) {
-	smfContext := s.consumer.smf.Context()
+	smfContext := s.consumer.Context()
 
 	uecmUri := util.SearchNFServiceUri(smfContext.UDMProfile, models.ServiceName_NUDM_UECM,
 		models.NfServiceStatus_REGISTERED)

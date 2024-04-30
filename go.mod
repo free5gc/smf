@@ -20,6 +20,7 @@ require (
 	github.com/smartystreets/goconvey v1.6.4
 	github.com/stretchr/testify v1.8.3
 	github.com/urfave/cli v1.22.5
+	go.uber.org/mock v0.4.0
 	gopkg.in/h2non/gock.v1 v1.1.2
 	gopkg.in/yaml.v2 v2.4.0
 )
