@@ -23,7 +23,7 @@ type nchfService struct {
 	ConvergedChargingClients map[string]*Nchf_ConvergedCharging.APIClient
 }
 
-func (s *nchfService) GetConvergedChargingClient(uri string) *Nchf_ConvergedCharging.APIClient {
+func (s *nchfService) getConvergedChargingClient(uri string) *Nchf_ConvergedCharging.APIClient {
 	if uri == "" {
 		return nil
 	}
@@ -119,17 +119,25 @@ func (s *nchfService) SendConvergedChargingRequest(smContext *smf_context.SMCont
 		return nil, pd, err
 	}
 
+	var client *Nchf_ConvergedCharging.APIClient
+	// Create Converged Charging Client for this SM Context
+	for _, service := range *smContext.SelectedCHFProfile.NfServices {
+		if service.ServiceName == models.ServiceName_NCHF_CONVERGEDCHARGING {
+			client = s.getConvergedChargingClient(service.ApiPrefix)
+		}
+	}
+
 	// select the appropriate converged charging service based on trigger type
 	switch requestType {
 	case smf_context.CHARGING_INIT:
-		rsp, httpResponse, err = smContext.ChargingClient.DefaultApi.ChargingdataPost(ctx, *req)
+		rsp, httpResponse, err = client.DefaultApi.ChargingdataPost(ctx, *req)
 		chargingDataRef := strings.Split(httpResponse.Header.Get("Location"), "/")
 		smContext.ChargingDataRef = chargingDataRef[len(chargingDataRef)-1]
 	case smf_context.CHARGING_UPDATE:
-		rsp, httpResponse, err = smContext.ChargingClient.DefaultApi.ChargingdataChargingDataRefUpdatePost(
+		rsp, httpResponse, err = client.DefaultApi.ChargingdataChargingDataRefUpdatePost(
 			ctx, smContext.ChargingDataRef, *req)
 	case smf_context.CHARGING_RELEASE:
-		httpResponse, err = smContext.ChargingClient.DefaultApi.ChargingdataChargingDataRefReleasePost(ctx,
+		httpResponse, err = client.DefaultApi.ChargingdataChargingDataRefReleasePost(ctx,
 			smContext.ChargingDataRef, *req)
 	}
 
