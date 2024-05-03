@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	// "log"
 	"net/http"
 	"runtime/debug"
 	"sync"
@@ -13,16 +12,14 @@ import (
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/sbi/consumer"
 	"github.com/free5gc/smf/internal/sbi/processor"
-
-	// "github.com/free5gc/smf/internal/sbi/processor"
 	util_oauth "github.com/free5gc/smf/internal/util/oauth"
 	"github.com/free5gc/smf/pkg/app"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/httpwrapper"
 	logger_util "github.com/free5gc/util/logger"
 	"github.com/gin-gonic/gin"
-	// "github.com/sirupsen/logrus"
 )
 
 const (
@@ -57,13 +54,17 @@ type Server struct {
 
 	httpServer *http.Server
 	router     *gin.Engine
+	consumer   *consumer.Consumer
 	processor  *processor.Processor
 }
 
-func NewServer(smf app.App, tlsKeyLogPath string) (_ *Server, err error) {
+func NewServer(
+	smf app.App, tlsKeyLogPath string, consumer *consumer.Consumer, processor *processor.Processor,
+) (_ *Server, err error) {
 	s := &Server{
-		App: smf,
-		// router: logger_util.NewGinWithLogrus(logger.GinLog),
+		App:       smf,
+		consumer:  consumer,
+		processor: processor,
 	}
 
 	smf_context.InitSmfContext(factory.SmfConfig)
@@ -72,15 +73,6 @@ func NewServer(smf app.App, tlsKeyLogPath string) (_ *Server, err error) {
 	smf_context.InitSMFUERouting(factory.UERoutingConfig)
 
 	s.router = newRouter(s)
-
-	// err := consumer.SendNFRegistration()
-	// if err != nil {
-	// 	retry_err := consumer.RetrySendNFRegistration(10)
-	// 	if retry_err != nil {
-	// 		logger.InitLog.Errorln(retry_err)
-	// 		return
-	// 	}
-	// }
 
 	bindAddr := fmt.Sprintf("%s:%d", s.Context().BindingIPv4, s.Context().SBIPort)
 	if s.httpServer, err = httpwrapper.NewHttp2Server(bindAddr, tlsKeyLogPath, s.router); err != nil {
@@ -123,7 +115,10 @@ func newRouter(s *Server) *gin.Engine {
 		case models.ServiceName_NSMF_OAM:
 			smfOAMGroup := router.Group(factory.SmfOamUriPrefix)
 			smfOAMRoutes := s.getOAMRoutes()
-			// TODO: Add authorization check
+			routerAuthorizationCheck := util_oauth.NewRouterAuthorizationCheck(models.ServiceName_NSMF_OAM)
+			smfOAMGroup.Use(func(c *gin.Context) {
+				routerAuthorizationCheck.Check(c, smf_context.GetSelf())
+			})
 			applyRoutes(smfOAMGroup, smfOAMRoutes)
 		}
 	}
@@ -132,11 +127,14 @@ func newRouter(s *Server) *gin.Engine {
 }
 
 func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {
-	// var err error
-	// _, s.Context().NfId, err = s.Consumer().RegisterNFInstance(s.CancelContext())
-	// if err != nil {
-	// 	logger.InitLog.Errorf("SMF register to NRF Error[%s]", err.Error())
-	// }
+	err := s.consumer.RegisterNFInstance()
+	if err != nil {
+		retry_err := s.consumer.RetrySendNFRegistration(10)
+		if retry_err != nil {
+			logger.InitLog.Errorln(retry_err)
+			return err
+		}
+	}
 
 	wg.Add(1)
 	go s.startServer(wg)

@@ -10,7 +10,7 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	pfcp_message "github.com/free5gc/smf/internal/pfcp/message"
-	"github.com/free5gc/smf/internal/sbi/producer"
+	"github.com/free5gc/smf/pkg/service"
 )
 
 func HandlePfcpHeartbeatRequest(msg *pfcpUdp.Message) {
@@ -200,7 +200,7 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 		// After receiving the Usage Report, it should send charging request to the CHF
 		// and update the URR with the quota or other charging information according to
 		// the charging response
-		producer.ReportUsageAndUpdateQuota(smContext)
+		service.GetApp().Processor().ReportUsageAndUpdateQuota(smContext)
 	}
 
 	// TS 23.502 4.2.3.3 2b. Send Data Notification Ack, SMF->UPF
