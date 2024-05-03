@@ -6,19 +6,15 @@ import (
 	"os"
 	"runtime/debug"
 	"sync"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/free5gc/smf/internal/pfcp"
-	"github.com/free5gc/smf/internal/pfcp/udp"
 	"github.com/free5gc/smf/internal/sbi"
 	"github.com/free5gc/smf/internal/sbi/consumer"
 	"github.com/free5gc/smf/internal/sbi/processor"
 	"github.com/free5gc/smf/pkg/app"
-	"github.com/free5gc/smf/pkg/association"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
@@ -35,7 +31,7 @@ type SmfApp struct {
 	wg        sync.WaitGroup
 
 	pfcpStart     func(*SmfApp)
-	pfcpTerminate func(*SmfApp)
+	pfcpTerminate func()
 }
 
 var _ app.App = &SmfApp{}
@@ -44,17 +40,35 @@ func GetApp() *SmfApp {
 	return SMF
 }
 
-func NewApp(cfg *factory.Config, tlsKeyLogPath string) (*SmfApp, error) {
+func NewApp(
+	cfg *factory.Config, tlsKeyLogPath string, pfcpStart func(*SmfApp), pfcpTerminate func(),
+) (*SmfApp, error) {
 	smf := &SmfApp{
 		cfg: cfg,
 		wg:  sync.WaitGroup{},
+		pfcpStart: pfcpStart,
+		pfcpTerminate: pfcpTerminate,
 	}
 	smf.SetLogEnable(cfg.GetLogEnable())
 	smf.SetLogLevel(cfg.GetLogLevel())
 	smf.SetReportCaller(cfg.GetLogReportCaller())
 
+	// Initialize consumer
+	consumer, err := consumer.NewConsumer(smf)
+	if err != nil {
+		return nil, err
+	}
+	smf.consumer = consumer
+
+	// Initialize processor
+	processor, err := processor.NewProcessor(smf, consumer)
+	if err != nil {
+		return nil, err
+	}
+	smf.processor = processor
+
 	// TODO: Initialize sbi server
-	sbiServer, err := sbi.NewServer(smf, tlsKeyLogPath)
+	sbiServer, err := sbi.NewServer(smf, tlsKeyLogPath, consumer, processor)
 	if err != nil {
 		return nil, err
 	}
@@ -136,17 +150,9 @@ func (a *SmfApp) Start() error {
 	a.sbiServer.Run(context.Background(), &a.wg)
 	go a.listenShutDownEvent()
 
-	udp.Run(pfcp.Dispatch)
+	// Initialize PFCP server
+	a.pfcpStart(a)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	smf_context.GetSelf().Ctx = ctx
-	smf_context.GetSelf().PFCPCancelFunc = cancel
-	for _, upNode := range smf_context.GetSelf().UserPlaneInformation.UPFs {
-		upNode.UPF.Ctx, upNode.UPF.CancelFunc = context.WithCancel(context.Background())
-		go association.ToBeAssociatedWithUPF(ctx, upNode.UPF, a.processor)
-	}
-
-	time.Sleep(1000 * time.Millisecond)
 	return nil
 }
 
@@ -167,6 +173,7 @@ func (a *SmfApp) listenShutDownEvent() {
 
 func (a *SmfApp) Terminate() {
 	logger.MainLog.Infof("Terminating SMF...")
+	a.pfcpTerminate()
 	// deregister with NRF
 	problemDetails, err := a.Consumer().SendDeregisterNFInstance()
 	if problemDetails != nil {
