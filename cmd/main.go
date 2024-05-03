@@ -13,6 +13,7 @@ import (
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/smf/pkg/service"
 	logger_util "github.com/free5gc/util/logger"
+	"github.com/free5gc/smf/pkg/utils"
 	"github.com/free5gc/util/version"
 )
 
@@ -81,7 +82,8 @@ func action(cliCtx *cli.Context) error {
 	}
 	factory.UERoutingConfig = ueRoutingCfg
 
-	smf, err := service.NewApp(cfg, tlsKeyLogPath)
+	pfcpStart, pfcpTerminate := utils.InitPFCPFunc()
+	smf, err := service.NewApp(cfg, tlsKeyLogPath, pfcpStart, pfcpTerminate)
 	if err != nil {
 		return err
 	}
