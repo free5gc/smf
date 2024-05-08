@@ -27,7 +27,9 @@ func (p *Processor) HandleChargingNotification(chargingNotifyRequest models.Char
 
 // While receive Charging Notification from CHF, SMF will send Charging Information to CHF and update UPF
 // The Charging Notification will be sent when CHF found the changes of the quota file.
-func (p *Processor) chargingNotificationProcedure(req models.ChargingNotifyRequest, smContextRef string) *models.ProblemDetails {
+func (p *Processor) chargingNotificationProcedure(
+	req models.ChargingNotifyRequest, smContextRef string,
+) *models.ProblemDetails {
 	if smContext := smf_context.GetSMContextByRef(smContextRef); smContext != nil {
 		smContext.SMLock.Lock()
 		defer smContext.SMLock.Unlock()

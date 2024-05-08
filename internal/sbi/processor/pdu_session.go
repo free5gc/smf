@@ -247,7 +247,9 @@ func (p *Processor) HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	}
 }
 
-func (p *Processor) HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmContextRequest) *httpwrapper.Response {
+func (p *Processor) HandlePDUSessionSMContextUpdate(
+	smContextRef string, body models.UpdateSmContextRequest,
+) *httpwrapper.Response {
 	// GSM State
 	// PDU Session Modification Reject(Cause Value == 43 || Cause Value != 43)/Complete
 	// PDU Session Release Command/Complete
@@ -867,7 +869,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(smContextRef string, body mo
 	return httpResponse
 }
 
-func (p *Processor) HandlePDUSessionSMContextRelease(smContextRef string, body models.ReleaseSmContextRequest) *httpwrapper.Response {
+func (p *Processor) HandlePDUSessionSMContextRelease(
+	smContextRef string, body models.ReleaseSmContextRequest,
+) *httpwrapper.Response {
 	logger.PduSessLog.Infoln("In HandlePDUSessionSMContextRelease")
 	smContext := smf_context.GetSMContextByRef(smContextRef)
 
@@ -994,7 +998,9 @@ func (p *Processor) HandlePDUSessionSMContextRelease(smContextRef string, body m
 	return httpResponse
 }
 
-func (p *Processor) HandlePDUSessionSMContextLocalRelease(smContext *smf_context.SMContext, createData *models.SmContextCreateData) {
+func (p *Processor) HandlePDUSessionSMContextLocalRelease(
+	smContext *smf_context.SMContext, createData *models.SmContextCreateData,
+) {
 	smContext.SMLock.Lock()
 	defer smContext.SMLock.Unlock()
 

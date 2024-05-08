@@ -22,7 +22,9 @@ func (p *Processor) CreateChargingSession(smContext *smf_context.SMContext) {
 	}
 }
 
-func (p *Processor) UpdateChargingSession(smContext *smf_context.SMContext, urrList []*smf_context.URR, trigger models.Trigger) {
+func (p *Processor) UpdateChargingSession(
+	smContext *smf_context.SMContext, urrList []*smf_context.URR, trigger models.Trigger,
+) {
 	var multipleUnitUsage []models.MultipleUnitUsage
 
 	for _, urr := range urrList {
@@ -242,7 +244,9 @@ func getUrrByRg(smContext *smf_context.SMContext, upfId string, rg int32) *smf_c
 }
 
 // Update the urr by the charging information renewed by chf
-func (p *Processor) updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformation []models.MultipleUnitInformation) {
+func (p *Processor) updateGrantedQuota(
+	smContext *smf_context.SMContext, multipleUnitInformation []models.MultipleUnitInformation,
+) {
 	for _, ui := range multipleUnitInformation {
 		trigger := pfcpType.ReportingTriggers{}
 

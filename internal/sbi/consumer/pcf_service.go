@@ -50,7 +50,9 @@ func (s *npcfService) getSMPolicyControlClient(uri string) *Npcf_SMPolicyControl
 }
 
 // SendSMPolicyAssociationCreate create the session management association to the PCF
-func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (string, *models.SmPolicyDecision, error) {
+func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (
+	string, *models.SmPolicyDecision, error,
+) {
 	var client *Npcf_SMPolicyControl.APIClient
 
 	// Create SMPolicyControl Client for this SM Context

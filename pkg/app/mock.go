@@ -105,11 +105,9 @@ func (mr *MockAppMockRecorder) SetReportCaller(reportCaller any) *gomock.Call {
 }
 
 // Start mocks base method.
-func (m *MockApp) Start() error {
+func (m *MockApp) Start() {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Start")
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.Call(m, "Start")
 }
 
 // Start indicates an expected call of Start.

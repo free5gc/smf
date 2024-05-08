@@ -10,7 +10,7 @@ type App interface {
 	SetLogLevel(level string)
 	SetReportCaller(reportCaller bool)
 
-	Start() error
+	Start()
 	Terminate()
 
 	Context() *smf_context.SMFContext

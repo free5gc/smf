@@ -272,7 +272,9 @@ func (s *nnrfService) SendSearchNFInstances(nrfUri string, targetNfType, request
 	return &result, err
 }
 
-func (s *nnrfService) NFDiscoveryUDM(ctx context.Context) (result models.SearchResult, httpResp *http.Response, localErr error) {
+func (s *nnrfService) NFDiscoveryUDM(ctx context.Context) (result models.SearchResult,
+	httpResp *http.Response, localErr error,
+) {
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
 
 	smfContext := s.consumer.Context()
@@ -284,7 +286,9 @@ func (s *nnrfService) NFDiscoveryUDM(ctx context.Context) (result models.SearchR
 	return result, httpResp, localErr
 }
 
-func (s *nnrfService) NFDiscoveryPCF(ctx context.Context) (result models.SearchResult, httpResp *http.Response, localErr error) {
+func (s *nnrfService) NFDiscoveryPCF(ctx context.Context) (
+	result models.SearchResult, httpResp *http.Response, localErr error,
+) {
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
 
 	smfContext := s.consumer.Context()
@@ -296,7 +300,9 @@ func (s *nnrfService) NFDiscoveryPCF(ctx context.Context) (result models.SearchR
 	return result, httpResp, localErr
 }
 
-func (s *nnrfService) NFDiscoveryAMF(smContext *smf_context.SMContext, ctx context.Context) (result models.SearchResult, httpResp *http.Response, localErr error) {
+func (s *nnrfService) NFDiscoveryAMF(smContext *smf_context.SMContext, ctx context.Context) (
+	result models.SearchResult, httpResp *http.Response, localErr error,
+) {
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
 
 	localVarOptionals.TargetNfInstanceId = optional.NewInterface(smContext.ServingNfId)
@@ -326,8 +332,8 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 
 		for _, service := range *smfContext.UDMProfile.NfServices {
 			if service.ServiceName == models.ServiceName_NUDM_SDM {
-				smfContext.SubscriberDataManagementClient =
-					s.consumer.nudmService.getSubscribeDataManagementClient(service.ApiPrefix)
+				smfContext.SubscriberDataManagementClient = s.consumer.nudmService.
+					getSubscribeDataManagementClient(service.ApiPrefix)
 			}
 		}
 

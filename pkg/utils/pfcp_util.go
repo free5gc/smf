@@ -5,6 +5,7 @@ import (
 	"time"
 
 	smf_context "github.com/free5gc/smf/internal/context"
+	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/pfcp"
 	"github.com/free5gc/smf/internal/pfcp/udp"
 	"github.com/free5gc/smf/pkg/association"
@@ -34,7 +35,10 @@ func InitPFCPFunc() (func(a *service.SmfApp), func()) {
 	}
 
 	pfcpStop = func() {
-		udp.Server.Close()
+		err := udp.Server.Close()
+		if err != nil {
+			logger.Log.Errorf("udp server close failed %+v", err)
+		}
 	}
 
 	return pfcpStart, pfcpStop

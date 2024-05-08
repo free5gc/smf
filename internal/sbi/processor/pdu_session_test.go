@@ -576,7 +576,10 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 	}
 
 	mockSmf := app.NewMockApp(gomock.NewController(t))
-	consumer, _ := consumer.NewConsumer(mockSmf)
+	consumer, err := consumer.NewConsumer(mockSmf)
+	if err != nil {
+		t.Fatalf("Failed to create consumer: %+v", err)
+	}
 	processor, err := processor.NewProcessor(mockSmf, consumer)
 	if err != nil {
 		t.Fatalf("Failed to create processor: %+v", err)
@@ -594,7 +597,8 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 
 			createData := tc.request.JsonData
 			if createData != nil {
-				if ref, err := context.ResolveRef(createData.Supi,
+				var ref string
+				if ref, err = context.ResolveRef(createData.Supi,
 					createData.PduSessionId); err == nil {
 					context.RemoveSMContext(ref)
 				}

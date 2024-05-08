@@ -103,8 +103,8 @@ func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMCon
 	return req
 }
 
-func (s *nchfService) SendConvergedChargingRequest(smContext *smf_context.SMContext, requestType smf_context.RequestType,
-	multipleUnitUsage []models.MultipleUnitUsage,
+func (s *nchfService) SendConvergedChargingRequest(smContext *smf_context.SMContext,
+	requestType smf_context.RequestType, multipleUnitUsage []models.MultipleUnitUsage,
 ) (*models.ChargingDataResponse, *models.ProblemDetails, error) {
 	logger.ChargingLog.Info("Handle SendConvergedChargingRequest")
 

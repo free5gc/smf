@@ -44,9 +44,9 @@ func NewApp(
 	cfg *factory.Config, tlsKeyLogPath string, pfcpStart func(*SmfApp), pfcpTerminate func(),
 ) (*SmfApp, error) {
 	smf := &SmfApp{
-		cfg: cfg,
-		wg:  sync.WaitGroup{},
-		pfcpStart: pfcpStart,
+		cfg:           cfg,
+		wg:            sync.WaitGroup{},
+		pfcpStart:     pfcpStart,
 		pfcpTerminate: pfcpTerminate,
 	}
 	smf.SetLogEnable(cfg.GetLogEnable())
@@ -144,16 +144,18 @@ func (a *SmfApp) SetReportCaller(reportCaller bool) {
 	logger.Log.SetReportCaller(reportCaller)
 }
 
-func (a *SmfApp) Start() error {
+func (a *SmfApp) Start() {
 	logger.InitLog.Infoln("Server started")
 
-	a.sbiServer.Run(context.Background(), &a.wg)
+	err := a.sbiServer.Run(context.Background(), &a.wg)
+	if err != nil {
+		logger.MainLog.Errorf("sbi server run error %+v", err)
+	}
+
 	go a.listenShutDownEvent()
 
 	// Initialize PFCP server
 	a.pfcpStart(a)
-
-	return nil
 }
 
 func (a *SmfApp) listenShutDownEvent() {

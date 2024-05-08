@@ -21,7 +21,9 @@ func (p *Processor) RemoveSMContextFromAllNF(smContext *smf_context.SMContext, s
 	go p.sendSMContextStatusNotificationAndRemoveSMContext(smContext, sendNotification)
 }
 
-func (p *Processor) sendSMContextStatusNotificationAndRemoveSMContext(smContext *smf_context.SMContext, sendNotification bool) {
+func (p *Processor) sendSMContextStatusNotificationAndRemoveSMContext(
+	smContext *smf_context.SMContext, sendNotification bool,
+) {
 	smContext.SMLock.Lock()
 	defer smContext.SMLock.Unlock()
 

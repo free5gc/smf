@@ -12,8 +12,8 @@ import (
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/smf/pkg/service"
-	logger_util "github.com/free5gc/util/logger"
 	"github.com/free5gc/smf/pkg/utils"
+	logger_util "github.com/free5gc/util/logger"
 	"github.com/free5gc/util/version"
 )
 

@@ -49,7 +49,7 @@ type SMFContext struct {
 	ListenAddr   string
 
 	UDMProfile models.NfProfile
-	NfProfile NFProfile
+	NfProfile  NFProfile
 
 	Key    string
 	PEM    string

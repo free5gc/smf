@@ -3,11 +3,12 @@ package sbi
 import (
 	"context"
 	"fmt"
-
 	"net/http"
 	"runtime/debug"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
@@ -19,7 +20,6 @@ import (
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/httpwrapper"
 	logger_util "github.com/free5gc/util/logger"
-	"github.com/gin-gonic/gin"
 )
 
 const (
