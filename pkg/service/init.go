@@ -24,6 +24,7 @@ type SmfApp struct {
 	cfg    *factory.Config
 	smfCtx *smf_context.SMFContext
 	ctx    context.Context
+	cancel context.CancelFunc
 
 	sbiServer *sbi.Server
 	consumer  *consumer.Consumer
@@ -41,7 +42,8 @@ func GetApp() *SmfApp {
 }
 
 func NewApp(
-	cfg *factory.Config, tlsKeyLogPath string, pfcpStart func(*SmfApp), pfcpTerminate func(),
+	ctx context.Context, cfg *factory.Config, tlsKeyLogPath string,
+	pfcpStart func(*SmfApp), pfcpTerminate func(),
 ) (*SmfApp, error) {
 	smf := &SmfApp{
 		cfg:           cfg,
@@ -74,6 +76,7 @@ func NewApp(
 	}
 	smf.sbiServer = sbiServer
 
+	smf.ctx, smf.cancel = context.WithCancel(ctx)
 	smf_context.Init()
 	smf.smfCtx = smf_context.GetSelf()
 
@@ -170,11 +173,11 @@ func (a *SmfApp) listenShutDownEvent() {
 	<-a.ctx.Done()
 	a.Terminate()
 	a.sbiServer.Stop()
-	a.wg.Wait()
 }
 
 func (a *SmfApp) Terminate() {
 	logger.MainLog.Infof("Terminating SMF...")
+	a.cancel()
 	a.pfcpTerminate()
 	// deregister with NRF
 	problemDetails, err := a.Consumer().SendDeregisterNFInstance()
@@ -186,4 +189,9 @@ func (a *SmfApp) Terminate() {
 		logger.MainLog.Infof("Deregister from NRF successfully")
 	}
 	logger.MainLog.Infof("SMF SBI Server terminated")
+}
+
+func (a *SmfApp) WaitRoutineStopped() {
+	a.wg.Wait()
+	logger.MainLog.Infof("SMF App is terminated")
 }
