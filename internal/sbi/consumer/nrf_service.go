@@ -178,15 +178,15 @@ func (s *nnrfService) RetrySendNFRegistration(MaxRetry int) error {
 // func (s *nnrfService) SendNFDeregistration() error {
 // 	// Check data (Use RESTful DELETE)
 
-// 	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_NFM, models.NfType_NRF)
+// 	ctx, _, err :=  s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_NFM, models.NfType_NRF)
 // 	if err != nil {
 // 		return err
 // 	}
 
-// 	res, localErr := smf_context.GetSelf().
+// 	res, localErr :=  s.consumer.Context().
 // 		NFManagementClient.
 // 		NFInstanceIDDocumentApi.
-// 		DeregisterNFInstance(ctx, smf_context.GetSelf().NfInstanceID)
+// 		DeregisterNFInstance(ctx,  s.consumer.Context().NfInstanceID)
 // 	if localErr != nil {
 // 		logger.ConsumerLog.Warnln(localErr)
 // 		return localErr
@@ -209,12 +209,12 @@ func (s *nnrfService) RetrySendNFRegistration(MaxRetry int) error {
 func (s *nnrfService) SendDeregisterNFInstance() (problemDetails *models.ProblemDetails, err error) {
 	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
-	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_NFM, models.NfType_NRF)
+	smfContext := s.consumer.Context()
+	ctx, pd, err := smfContext.GetTokenCtx(models.ServiceName_NNRF_NFM, models.NfType_NRF)
 	if err != nil {
 		return pd, err
 	}
 
-	smfContext := s.consumer.Context()
 	client := s.getNFManagementClient(smfContext.NrfUri)
 
 	var res *http.Response
@@ -252,7 +252,7 @@ func (s *nnrfService) SendSearchNFInstances(nrfUri string, targetNfType, request
 		return nil, openapi.ReportError("nrf not found")
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
+	ctx, _, err := smfContext.GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
 	if err != nil {
 		return nil, err
 	}
@@ -317,12 +317,11 @@ func (s *nnrfService) NFDiscoveryAMF(smContext *smf_context.SMContext, ctx conte
 }
 
 func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
-	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
+	smfContext := s.consumer.Context()
+	ctx, pd, err := smfContext.GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
 	if err != nil {
 		return pd, err
 	}
-
-	smfContext := s.consumer.Context()
 
 	// Check data
 	result, httpResp, localErr := s.NFDiscoveryUDM(ctx)
@@ -359,7 +358,7 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 }
 
 func (s *nnrfService) SendNFDiscoveryPCF() (problemDetails *models.ProblemDetails, err error) {
-	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
 	if err != nil {
 		return pd, err
 	}
@@ -390,7 +389,7 @@ func (s *nnrfService) SendNFDiscoveryPCF() (problemDetails *models.ProblemDetail
 }
 
 func (s *nnrfService) SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.ProblemDetails, error) {
-	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
 	if err != nil {
 		return pd, err
 	}
