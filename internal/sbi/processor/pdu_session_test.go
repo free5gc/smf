@@ -20,8 +20,8 @@ import (
 	"github.com/free5gc/smf/internal/pfcp/udp"
 	"github.com/free5gc/smf/internal/sbi/consumer"
 	"github.com/free5gc/smf/internal/sbi/processor"
-	"github.com/free5gc/smf/pkg/app"
 	"github.com/free5gc/smf/pkg/factory"
+	"github.com/free5gc/smf/pkg/service"
 	"github.com/free5gc/util/httpwrapper"
 )
 
@@ -575,7 +575,7 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 		}
 	}
 
-	mockSmf := app.NewMockApp(gomock.NewController(t))
+	mockSmf := service.NewMockSmfAppInterface(gomock.NewController(t))
 	consumer, err := consumer.NewConsumer(mockSmf)
 	if err != nil {
 		t.Fatalf("Failed to create consumer: %+v", err)
@@ -584,6 +584,8 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create processor: %+v", err)
 	}
+
+	service.SMF = mockSmf
 
 	for _, tc := range testCases {
 		t.Run(tc.paramStr, func(t *testing.T) {

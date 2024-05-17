@@ -78,7 +78,7 @@ func (s *Server) PostUpNodesLinks(c *gin.Context) {
 		// only associate new ones
 		if upf.UPF.UPFStatus == smf_context.NotAssociated {
 			upf.UPF.Ctx, upf.UPF.CancelFunc = context.WithCancel(context.Background())
-			go association.ToBeAssociatedWithUPF(smf_context.GetSelf().Ctx, upf.UPF, s.processor)
+			go association.ToBeAssociatedWithUPF(smf_context.GetSelf().Ctx, upf.UPF, s.Processor())
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "OK"})
@@ -97,7 +97,7 @@ func (s *Server) DeleteUpNodeLink(c *gin.Context) {
 		defer upi.Mu.Unlock()
 		if upNode, ok := upi.UPNodes[upNodeRef]; ok {
 			if upNode.Type == smf_context.UPNODE_UPF {
-				go association.ReleaseAllResourcesOfUPF(upNode.UPF, s.processor)
+				go association.ReleaseAllResourcesOfUPF(upNode.UPF, s.Processor())
 			}
 			upi.UpNodeDelete(upNodeRef)
 			upNode.UPF.CancelFunc()

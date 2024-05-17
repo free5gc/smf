@@ -93,7 +93,7 @@ func (s *Server) HTTPReleaseSmContext(c *gin.Context) {
 	req.Params["smContextRef"] = c.Params.ByName("smContextRef")
 
 	smContextRef := req.Params["smContextRef"]
-	s.processor.HandlePDUSessionSMContextRelease(
+	s.Processor().HandlePDUSessionSMContextRelease(
 		smContextRef, req.Body.(models.ReleaseSmContextRequest))
 
 	c.Status(http.StatusNoContent)
@@ -127,7 +127,7 @@ func (s *Server) HTTPUpdateSmContext(c *gin.Context) {
 	req.Params["smContextRef"] = c.Params.ByName("smContextRef")
 
 	smContextRef := req.Params["smContextRef"]
-	HTTPResponse := s.processor.HandlePDUSessionSMContextUpdate(
+	HTTPResponse := s.Processor().HandlePDUSessionSMContextUpdate(
 		smContextRef, req.Body.(models.UpdateSmContextRequest))
 
 	if HTTPResponse.Status < 300 {
@@ -172,7 +172,7 @@ func (s *Server) HTTPPostSmContexts(c *gin.Context) {
 
 	req := httpwrapper.NewRequest(c.Request, request)
 	isDone := c.Done()
-	HTTPResponse := s.processor.HandlePDUSessionSMContextCreate(isDone,
+	HTTPResponse := s.Processor().HandlePDUSessionSMContextCreate(isDone,
 		req.Body.(models.PostSmContextsRequest))
 	// Http Response to AMF
 	for key, val := range HTTPResponse.Header {

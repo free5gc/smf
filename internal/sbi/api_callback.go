@@ -90,7 +90,7 @@ func (s *Server) HTTPChargingNotification(c *gin.Context) {
 	reqWrapper.Params["notifyUri"] = c.Params.ByName("notifyUri")
 	smContextRef := strings.Split(reqWrapper.Params["notifyUri"], "_")[1]
 
-	HTTPResponse := s.processor.HandleChargingNotification(reqWrapper.Body.(models.ChargingNotifyRequest), smContextRef)
+	HTTPResponse := s.Processor().HandleChargingNotification(reqWrapper.Body.(models.ChargingNotifyRequest), smContextRef)
 
 	for key, val := range HTTPResponse.Header {
 		c.Header(key, val[0])

@@ -5,8 +5,12 @@ import (
 	"github.com/free5gc/smf/pkg/app"
 )
 
-type Processor struct {
+type ProcessorSmf interface {
 	app.App
+}
+
+type Processor struct {
+	ProcessorSmf
 
 	consumer *consumer.Consumer
 }
@@ -17,10 +21,10 @@ type HandlerResponse struct {
 	Body    interface{}
 }
 
-func NewProcessor(smf app.App, consumer *consumer.Consumer) (*Processor, error) {
+func NewProcessor(smf ProcessorSmf, consumer *consumer.Consumer) (*Processor, error) {
 	p := &Processor{
-		App:      smf,
-		consumer: consumer,
+		ProcessorSmf: smf,
+		consumer:     consumer,
 	}
 	return p, nil
 }

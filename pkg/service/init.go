@@ -18,9 +18,18 @@ import (
 	"github.com/free5gc/smf/pkg/factory"
 )
 
-var SMF *SmfApp
+type SmfAppInterface interface {
+	app.App
+
+	Consumer() *consumer.Consumer
+	Processor() *processor.Processor
+}
+
+var SMF SmfAppInterface
 
 type SmfApp struct {
+	SmfAppInterface
+
 	cfg    *factory.Config
 	smfCtx *smf_context.SMFContext
 	ctx    context.Context
@@ -35,9 +44,7 @@ type SmfApp struct {
 	pfcpTerminate func()
 }
 
-var _ app.App = &SmfApp{}
-
-func GetApp() *SmfApp {
+func GetApp() SmfAppInterface {
 	return SMF
 }
 
@@ -70,7 +77,7 @@ func NewApp(
 	smf.processor = processor
 
 	// TODO: Initialize sbi server
-	sbiServer, err := sbi.NewServer(smf, tlsKeyLogPath, consumer, processor)
+	sbiServer, err := sbi.NewServer(smf, tlsKeyLogPath)
 	if err != nil {
 		return nil, err
 	}

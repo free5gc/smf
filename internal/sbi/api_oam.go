@@ -35,13 +35,13 @@ func (s *Server) HTTPGetUEPDUSessionInfo(c *gin.Context) {
 	req.Params["smContextRef"] = c.Params.ByName("smContextRef")
 
 	smContextRef := req.Params["smContextRef"]
-	HTTPResponse := s.processor.HandleOAMGetUEPDUSessionInfo(smContextRef)
+	HTTPResponse := s.Processor().HandleOAMGetUEPDUSessionInfo(smContextRef)
 
 	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
 }
 
 func (s *Server) HTTPGetSMFUserPlaneInfo(c *gin.Context) {
-	HTTPResponse := s.processor.HandleGetSMFUserPlaneInfo()
+	HTTPResponse := s.Processor().HandleGetSMFUserPlaneInfo()
 
 	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
 }

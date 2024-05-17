@@ -49,22 +49,23 @@ func applyRoutes(group *gin.RouterGroup, routes []Route) {
 	}
 }
 
-type Server struct {
+type ServerSmf interface {
 	app.App
+
+	Consumer() *consumer.Consumer
+	Processor() *processor.Processor
+}
+
+type Server struct {
+	ServerSmf
 
 	httpServer *http.Server
 	router     *gin.Engine
-	consumer   *consumer.Consumer
-	processor  *processor.Processor
 }
 
-func NewServer(
-	smf app.App, tlsKeyLogPath string, consumer *consumer.Consumer, processor *processor.Processor,
-) (_ *Server, err error) {
+func NewServer(smf ServerSmf, tlsKeyLogPath string) (*Server, error) {
 	s := &Server{
-		App:       smf,
-		consumer:  consumer,
-		processor: processor,
+		ServerSmf: smf,
 	}
 
 	smf_context.InitSmfContext(factory.SmfConfig)
@@ -75,6 +76,7 @@ func NewServer(
 	s.router = newRouter(s)
 
 	bindAddr := fmt.Sprintf("%s:%d", s.Context().BindingIPv4, s.Context().SBIPort)
+	var err error
 	if s.httpServer, err = httpwrapper.NewHttp2Server(bindAddr, tlsKeyLogPath, s.router); err != nil {
 		logger.InitLog.Errorf("Initialize HTTP server failed: %v", err)
 		return nil, err
@@ -127,9 +129,9 @@ func newRouter(s *Server) *gin.Engine {
 }
 
 func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {
-	err := s.consumer.RegisterNFInstance()
+	err := s.Consumer().RegisterNFInstance()
 	if err != nil {
-		retry_err := s.consumer.RetrySendNFRegistration(10)
+		retry_err := s.Consumer().RetrySendNFRegistration(10)
 		if retry_err != nil {
 			logger.InitLog.Errorln(retry_err)
 			return err
