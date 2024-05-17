@@ -4,8 +4,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/free5gc/util/httpwrapper"
 )
 
 func (s *Server) getOAMRoutes() []Route {
@@ -31,17 +29,11 @@ func (s *Server) getOAMRoutes() []Route {
 }
 
 func (s *Server) HTTPGetUEPDUSessionInfo(c *gin.Context) {
-	req := httpwrapper.NewRequest(c.Request, nil)
-	req.Params["smContextRef"] = c.Params.ByName("smContextRef")
+	smContextRef := c.Params.ByName("smContextRef")
 
-	smContextRef := req.Params["smContextRef"]
-	HTTPResponse := s.Processor().HandleOAMGetUEPDUSessionInfo(smContextRef)
-
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
+	s.Processor().HandleOAMGetUEPDUSessionInfo(c, smContextRef)
 }
 
 func (s *Server) HTTPGetSMFUserPlaneInfo(c *gin.Context) {
-	HTTPResponse := s.Processor().HandleGetSMFUserPlaneInfo()
-
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
+	s.Processor().HandleGetSMFUserPlaneInfo(c)
 }

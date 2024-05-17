@@ -4,10 +4,11 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/factory"
-	"github.com/free5gc/util/httpwrapper"
 )
 
 type PDUSessionInfo struct {
@@ -23,44 +24,30 @@ type PDUSessionInfo struct {
 	Tunnel       context.UPTunnel
 }
 
-func (p *Processor) HandleOAMGetUEPDUSessionInfo(smContextRef string) *httpwrapper.Response {
+func (p *Processor) HandleOAMGetUEPDUSessionInfo(c *gin.Context, smContextRef string) {
 	smContext := context.GetSMContextByRef(smContextRef)
 	if smContext == nil {
-		httpResponse := &httpwrapper.Response{
-			Header: nil,
-			Status: http.StatusNotFound,
-			Body:   nil,
-		}
-
-		return httpResponse
+		c.JSON(http.StatusNotFound, nil)
+		return
 	}
 
-	httpResponse := &httpwrapper.Response{
-		Header: nil,
-		Status: http.StatusOK,
-		Body: PDUSessionInfo{
-			Supi:         smContext.Supi,
-			PDUSessionID: strconv.Itoa(int(smContext.PDUSessionID)),
-			Dnn:          smContext.Dnn,
-			Sst:          strconv.Itoa(int(smContext.SNssai.Sst)),
-			Sd:           smContext.SNssai.Sd,
-			AnType:       smContext.AnType,
-			PDUAddress:   smContext.PDUAddress.String(),
-			UpCnxState:   smContext.UpCnxState,
-			// Tunnel: context.UPTunnel{
-			// 	//UpfRoot:  smContext.Tunnel.UpfRoot,
-			// 	ULCLRoot: smContext.Tunnel.UpfRoot,
-			// },
-		},
+	pduSessionInfo := &PDUSessionInfo{
+		Supi:         smContext.Supi,
+		PDUSessionID: strconv.Itoa(int(smContext.PDUSessionID)),
+		Dnn:          smContext.Dnn,
+		Sst:          strconv.Itoa(int(smContext.SNssai.Sst)),
+		Sd:           smContext.SNssai.Sd,
+		AnType:       smContext.AnType,
+		PDUAddress:   smContext.PDUAddress.String(),
+		UpCnxState:   smContext.UpCnxState,
+		// Tunnel: context.UPTunnel{
+		// 	//UpfRoot:  smContext.Tunnel.UpfRoot,
+		// 	ULCLRoot: smContext.Tunnel.UpfRoot,
+		// },
 	}
-	return httpResponse
+	c.JSON(http.StatusOK, pduSessionInfo)
 }
 
-func (p *Processor) HandleGetSMFUserPlaneInfo() *httpwrapper.Response {
-	httpResponse := &httpwrapper.Response{
-		Header: nil,
-		Status: http.StatusOK,
-		Body:   factory.SmfConfig.Configuration.UserPlaneInformation,
-	}
-	return httpResponse
+func (p *Processor) HandleGetSMFUserPlaneInfo(c *gin.Context) {
+	c.JSON(http.StatusOK, factory.SmfConfig.Configuration.UserPlaneInformation)
 }

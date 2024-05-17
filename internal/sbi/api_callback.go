@@ -10,7 +10,6 @@ import (
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/sbi/processor"
-	"github.com/free5gc/util/httpwrapper"
 )
 
 func (s *Server) getCallbackRoutes() []Route {
@@ -47,26 +46,8 @@ func (s *Server) HTTPSmPolicyUpdateNotification(c *gin.Context) {
 		logger.PduSessLog.Errorln("Deserialize request failed")
 	}
 
-	reqWrapper := httpwrapper.NewRequest(c.Request, request)
-	reqWrapper.Params["smContextRef"] = c.Params.ByName("smContextRef")
-
-	smContextRef := reqWrapper.Params["smContextRef"]
-	HTTPResponse := processor.HandleSMPolicyUpdateNotify(smContextRef, reqWrapper.Body.(models.SmPolicyNotification))
-
-	for key, val := range HTTPResponse.Header {
-		c.Header(key, val[0])
-	}
-
-	resBody, err := openapi.Serialize(HTTPResponse.Body, "application/json")
-	if err != nil {
-		logger.PduSessLog.Errorln("Serialize failed")
-	}
-
-	_, err = c.Writer.Write(resBody)
-	if err != nil {
-		logger.PduSessLog.Errorln("Write failed")
-	}
-	c.Status(HTTPResponse.Status)
+	smContextRef := c.Params.ByName("smContextRef")
+	processor.HandleSMPolicyUpdateNotify(c, request, smContextRef)
 }
 
 func (s *Server) SmPolicyControlTerminationRequestNotification(c *gin.Context) {
@@ -86,24 +67,7 @@ func (s *Server) HTTPChargingNotification(c *gin.Context) {
 		logger.PduSessLog.Errorln("Deserialize request failed")
 	}
 
-	reqWrapper := httpwrapper.NewRequest(c.Request, req)
-	reqWrapper.Params["notifyUri"] = c.Params.ByName("notifyUri")
-	smContextRef := strings.Split(reqWrapper.Params["notifyUri"], "_")[1]
+	smContextRef := strings.Split(c.Params.ByName("notifyUri"), "_")[1]
 
-	HTTPResponse := s.Processor().HandleChargingNotification(reqWrapper.Body.(models.ChargingNotifyRequest), smContextRef)
-
-	for key, val := range HTTPResponse.Header {
-		c.Header(key, val[0])
-	}
-
-	resBody, err := openapi.Serialize(HTTPResponse.Body, "application/json")
-	if err != nil {
-		logger.PduSessLog.Errorln("Serialize failed")
-	}
-
-	_, err = c.Writer.Write(resBody)
-	if err != nil {
-		logger.PduSessLog.Errorln("Write failed")
-	}
-	c.Status(HTTPResponse.Status)
+	s.Processor().HandleChargingNotification(c, req, smContextRef)
 }

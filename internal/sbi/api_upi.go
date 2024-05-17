@@ -9,7 +9,6 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/association"
 	"github.com/free5gc/smf/pkg/factory"
-	"github.com/free5gc/util/httpwrapper"
 )
 
 func (s *Server) getUPIRoutes() []Route {
@@ -52,12 +51,7 @@ func (s *Server) GetUpNodesLinks(c *gin.Context) {
 		Links:   links,
 	}
 
-	httpResponse := &httpwrapper.Response{
-		Header: nil,
-		Status: http.StatusOK,
-		Body:   json,
-	}
-	c.JSON(httpResponse.Status, httpResponse.Body)
+	c.JSON(http.StatusOK, json)
 }
 
 func (s *Server) PostUpNodesLinks(c *gin.Context) {
@@ -89,9 +83,7 @@ func (s *Server) DeleteUpNodeLink(c *gin.Context) {
 	if smf_context.GetSelf().ULCLSupport {
 		c.JSON(http.StatusForbidden, gin.H{})
 	} else {
-		req := httpwrapper.NewRequest(c.Request, nil)
-		req.Params["upNodeRef"] = c.Params.ByName("upNodeRef")
-		upNodeRef := req.Params["upNodeRef"]
+		upNodeRef := c.Params.ByName("upNodeRef")
 		upi := smf_context.GetSelf().UserPlaneInformation
 		upi.Mu.Lock()
 		defer upi.Mu.Unlock()

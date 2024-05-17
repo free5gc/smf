@@ -5,24 +5,27 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/free5gc/openapi/Nsmf_EventExposure"
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/free5gc/util/httpwrapper"
 )
 
-func (p *Processor) HandleChargingNotification(chargingNotifyRequest models.ChargingNotifyRequest,
+func (p *Processor) HandleChargingNotification(
+	c *gin.Context,
+	chargingNotifyRequest models.ChargingNotifyRequest,
 	smContextRef string,
-) *httpwrapper.Response {
+) {
 	logger.ChargingLog.Info("Handle Charging Notification")
 
 	problemDetails := p.chargingNotificationProcedure(chargingNotifyRequest, smContextRef)
-	if problemDetails != nil {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
-	} else {
-		return httpwrapper.NewResponse(http.StatusNoContent, nil, nil)
+	if problemDetails == nil {
+		c.Status(http.StatusNoContent)
+		return
 	}
+	c.JSON(int(problemDetails.Status), problemDetails)
 }
 
 // While receive Charging Notification from CHF, SMF will send Charging Information to CHF and update UPF
@@ -68,15 +71,19 @@ func (p *Processor) chargingNotificationProcedure(
 	return nil
 }
 
-func HandleSMPolicyUpdateNotify(smContextRef string, request models.SmPolicyNotification) *httpwrapper.Response {
+func HandleSMPolicyUpdateNotify(
+	c *gin.Context,
+	request models.SmPolicyNotification,
+	smContextRef string,
+) {
 	logger.PduSessLog.Infoln("In HandleSMPolicyUpdateNotify")
 	decision := request.SmPolicyDecision
 	smContext := smf_context.GetSMContextByRef(smContextRef)
 
 	if smContext == nil {
 		logger.PduSessLog.Errorf("SMContext[%s] not found", smContextRef)
-		httpResponse := httpwrapper.NewResponse(http.StatusBadRequest, nil, nil)
-		return httpResponse
+		c.Status(http.StatusBadRequest)
+		return
 	}
 
 	smContext.SMLock.Lock()
@@ -92,7 +99,8 @@ func HandleSMPolicyUpdateNotify(smContextRef string, request models.SmPolicyNoti
 	if err := smContext.ApplySessionRules(decision); err != nil {
 		// TODO: Fill the error body
 		smContext.Log.Errorf("SMPolicyUpdateNotify err: %v", err)
-		return httpwrapper.NewResponse(http.StatusBadRequest, nil, nil)
+		c.Status(http.StatusBadRequest)
+		return
 	}
 
 	//TODO: Response data type -
@@ -102,7 +110,8 @@ func HandleSMPolicyUpdateNotify(smContextRef string, request models.SmPolicyNoti
 	if err := smContext.ApplyPccRules(decision); err != nil {
 		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
 		// TODO: Fill the error body
-		return httpwrapper.NewResponse(http.StatusBadRequest, nil, nil)
+		c.Status(http.StatusBadRequest)
+		return
 	}
 
 	smContext.SendUpPathChgNotification("EARLY", SendUpPathChgEventExposureNotification)
@@ -113,7 +122,7 @@ func HandleSMPolicyUpdateNotify(smContextRef string, request models.SmPolicyNoti
 
 	smContext.PostRemoveDataPath()
 
-	return httpwrapper.NewResponse(http.StatusNoContent, nil, nil)
+	c.Status(http.StatusNoContent)
 }
 
 func SendUpPathChgEventExposureNotification(

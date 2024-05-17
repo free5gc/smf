@@ -10,7 +10,6 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/free5gc/util/httpwrapper"
 )
 
 func (s *Server) getPDUSessionRoutes() []Route {
@@ -89,14 +88,8 @@ func (s *Server) HTTPReleaseSmContext(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, request)
-	req.Params["smContextRef"] = c.Params.ByName("smContextRef")
-
-	smContextRef := req.Params["smContextRef"]
-	s.Processor().HandlePDUSessionSMContextRelease(
-		smContextRef, req.Body.(models.ReleaseSmContextRequest))
-
-	c.Status(http.StatusNoContent)
+	smContextRef := c.Params.ByName("smContextRef")
+	s.Processor().HandlePDUSessionSMContextRelease(c, request, smContextRef)
 }
 
 // RetrieveSmContext - Retrieve SM Context
@@ -123,18 +116,8 @@ func (s *Server) HTTPUpdateSmContext(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, request)
-	req.Params["smContextRef"] = c.Params.ByName("smContextRef")
-
-	smContextRef := req.Params["smContextRef"]
-	HTTPResponse := s.Processor().HandlePDUSessionSMContextUpdate(
-		smContextRef, req.Body.(models.UpdateSmContextRequest))
-
-	if HTTPResponse.Status < 300 {
-		c.Render(HTTPResponse.Status, openapi.MultipartRelatedRender{Data: HTTPResponse.Body})
-	} else {
-		c.JSON(HTTPResponse.Status, HTTPResponse.Body)
-	}
+	smContextRef := c.Params.ByName("smContextRef")
+	s.Processor().HandlePDUSessionSMContextUpdate(c, request, smContextRef)
 }
 
 // PostPduSessions - Create
@@ -170,24 +153,6 @@ func (s *Server) HTTPPostSmContexts(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, request)
 	isDone := c.Done()
-	HTTPResponse := s.Processor().HandlePDUSessionSMContextCreate(isDone,
-		req.Body.(models.PostSmContextsRequest))
-	// Http Response to AMF
-	for key, val := range HTTPResponse.Header {
-		c.Header(key, val[0])
-	}
-	switch HTTPResponse.Status {
-	case http.StatusCreated,
-		http.StatusBadRequest,
-		http.StatusForbidden,
-		http.StatusNotFound,
-		http.StatusInternalServerError,
-		http.StatusServiceUnavailable,
-		http.StatusGatewayTimeout:
-		c.Render(HTTPResponse.Status, openapi.MultipartRelatedRender{Data: HTTPResponse.Body})
-	default:
-		c.JSON(HTTPResponse.Status, HTTPResponse.Body)
-	}
+	s.Processor().HandlePDUSessionSMContextCreate(c, request, isDone)
 }

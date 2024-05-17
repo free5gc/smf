@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/antihax/optional"
+	"github.com/gin-gonic/gin"
 
 	"github.com/free5gc/nas"
 	"github.com/free5gc/nas/nasMessage"
@@ -19,12 +20,13 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
-	"github.com/free5gc/util/httpwrapper"
 )
 
-func (p *Processor) HandlePDUSessionSMContextCreate(isDone <-chan struct{},
+func (p *Processor) HandlePDUSessionSMContextCreate(
+	c *gin.Context,
 	request models.PostSmContextsRequest,
-) *httpwrapper.Response {
+	isDone <-chan struct{},
+) {
 	// GSM State
 	// PDU Session Establishment Accept/Reject
 	var response models.PostSmContextsResponse
@@ -36,16 +38,13 @@ func (p *Processor) HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	if err := m.GsmMessageDecode(&request.BinaryDataN1SmMessage); err != nil ||
 		m.GsmHeader.GetMessageType() != nas.MsgTypePDUSessionEstablishmentRequest {
 		logger.PduSessLog.Warnln("GsmMessageDecode Error: ", err)
-		httpResponse := &httpwrapper.Response{
-			Header: nil,
-			Status: http.StatusForbidden,
-			Body: models.PostSmContextsErrorResponse{
-				JsonData: &models.SmContextCreateError{
-					Error: &Nsmf_PDUSession.N1SmError,
-				},
+		postSmContextsError := models.PostSmContextsErrorResponse{
+			JsonData: &models.SmContextCreateError{
+				Error: &Nsmf_PDUSession.N1SmError,
 			},
 		}
-		return httpResponse
+		c.JSON(http.StatusForbidden, postSmContextsError)
+		return
 	}
 
 	createData := request.JsonData
@@ -102,7 +101,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	ctx, _, oauthErr := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_SDM, models.NfType_UDM)
 	if oauthErr != nil {
 		smContext.Log.Errorf("Get Token Context Error[%v]", oauthErr)
-		return nil
+		return
 	}
 
 	if sessSubData, rsp, err := SubscriberDataManagementClient.
@@ -131,13 +130,15 @@ func (p *Processor) HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 		smContext.Log.Errorf("PDU Session Establishment fail by %s", err)
 		gsmError := &GSMError{}
 		if errors.As(err, &gsmError) {
-			return p.makeEstRejectResAndReleaseSMContext(smContext,
+			p.makeEstRejectResAndReleaseSMContext(c, smContext,
 				gsmError.GSMCause,
 				&Nsmf_PDUSession.N1SmError)
+			return
 		}
-		return p.makeEstRejectResAndReleaseSMContext(smContext,
+		p.makeEstRejectResAndReleaseSMContext(c, smContext,
 			nasMessage.Cause5GSMRequestRejectedUnspecified,
 			&Nsmf_PDUSession.N1SmError)
+		return
 	}
 
 	// Discover and new Namf_Comm client for use later
@@ -160,9 +161,10 @@ func (p *Processor) HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	if err := smContext.AllocUeIP(); err != nil {
 		smContext.SetState(smf_context.InActive)
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
-		return p.makeEstRejectResAndReleaseSMContext(smContext,
+		p.makeEstRejectResAndReleaseSMContext(c, smContext,
 			nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN,
 			&Nsmf_PDUSession.InsufficientResourceSliceDnn)
+		return
 	}
 
 	if err := smContext.PCFSelection(); err != nil {
@@ -176,14 +178,16 @@ func (p *Processor) HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 			smContext.Log.Errorln("setup sm policy association failed:", err, problemDetails)
 			smContext.SetState(smf_context.InActive)
 			if problemDetails.Cause == "USER_UNKNOWN" {
-				return p.makeEstRejectResAndReleaseSMContext(smContext,
+				p.makeEstRejectResAndReleaseSMContext(c, smContext,
 					nasMessage.Cause5GSMRequestRejectedUnspecified,
 					&Nsmf_PDUSession.SubscriptionDenied)
+				return
 			}
 		}
-		return p.makeEstRejectResAndReleaseSMContext(smContext,
+		p.makeEstRejectResAndReleaseSMContext(c, smContext,
 			nasMessage.Cause5GSMNetworkFailure,
 			&Nsmf_PDUSession.NetworkFailure)
+		return
 	}
 	smContext.SMPolicyID = smPolicyID
 
@@ -199,9 +203,10 @@ func (p *Processor) HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	// Update SessionRule from decision
 	if err = smContext.ApplySessionRules(smPolicyDecision); err != nil {
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
-		return p.makeEstRejectResAndReleaseSMContext(smContext,
+		p.makeEstRejectResAndReleaseSMContext(c, smContext,
 			nasMessage.Cause5GSMRequestRejectedUnspecified,
 			&Nsmf_PDUSession.SubscriptionDenied)
+		return
 	}
 
 	// If PCF prepares default Pcc Rule, SMF do not need to create defaultDataPath.
@@ -213,9 +218,10 @@ func (p *Processor) HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	if err := smContext.SelectDefaultDataPath(); err != nil {
 		smContext.SetState(smf_context.InActive)
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
-		return p.makeEstRejectResAndReleaseSMContext(smContext,
+		p.makeEstRejectResAndReleaseSMContext(c, smContext,
 			nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN,
 			&Nsmf_PDUSession.InsufficientResourceSliceDnn)
+		return
 	}
 
 	// generate goroutine to handle PFCP and
@@ -238,18 +244,15 @@ func (p *Processor) HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 	}()
 
 	response.JsonData = smContext.BuildCreatedData()
-	return &httpwrapper.Response{
-		Header: http.Header{
-			"Location": {smContext.Ref},
-		},
-		Status: http.StatusCreated,
-		Body:   response,
-	}
+	c.Header("Location", smContext.Ref)
+	c.JSON(http.StatusCreated, response)
 }
 
 func (p *Processor) HandlePDUSessionSMContextUpdate(
-	smContextRef string, body models.UpdateSmContextRequest,
-) *httpwrapper.Response {
+	c *gin.Context,
+	body models.UpdateSmContextRequest,
+	smContextRef string,
+) {
 	// GSM State
 	// PDU Session Modification Reject(Cause Value == 43 || Cause Value != 43)/Complete
 	// PDU Session Release Command/Complete
@@ -262,24 +265,20 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	if smContext == nil {
 		logger.PduSessLog.Warnf("SMContext[%s] is not found", smContextRef)
 
-		httpResponse := &httpwrapper.Response{
-			Header: nil,
-			Status: http.StatusNotFound,
-			Body: models.UpdateSmContextErrorResponse{
-				JsonData: &models.SmContextUpdateError{
-					UpCnxState: models.UpCnxState_DEACTIVATED,
-					Error: &models.ProblemDetails{
-						Type:   "Resource Not Found",
-						Title:  "SMContext Ref is not found",
-						Status: http.StatusNotFound,
-					},
+		updateSmContextError := models.UpdateSmContextErrorResponse{
+			JsonData: &models.SmContextUpdateError{
+				UpCnxState: models.UpCnxState_DEACTIVATED,
+				Error: &models.ProblemDetails{
+					Type:   "Resource Not Found",
+					Title:  "SMContext Ref is not found",
+					Status: http.StatusNotFound,
 				},
 			},
 		}
-		return httpResponse
+		c.JSON(http.StatusNotFound, updateSmContextError)
+		return
 	}
 
-	var httpResponse *httpwrapper.Response
 	smContext.SMLock.Lock()
 	defer smContext.SMLock.Unlock()
 
@@ -296,15 +295,13 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		smContext.Log.Tracef("N1 Message: %s", hex.EncodeToString(body.BinaryDataN1SmMessage))
 		if err != nil {
 			smContext.Log.Errorf("N1 Message parse failed: %v", err)
-			httpResponse = &httpwrapper.Response{
-				Status: http.StatusForbidden,
-				Body: models.UpdateSmContextErrorResponse{
-					JsonData: &models.SmContextUpdateError{
-						Error: &Nsmf_PDUSession.N1SmError,
-					},
-				}, // Depends on the reason why N4 fail
-			}
-			return httpResponse
+			updateSmContextError := models.UpdateSmContextErrorResponse{
+				JsonData: &models.SmContextUpdateError{
+					Error: &Nsmf_PDUSession.N1SmError,
+				},
+			} // Depends on the reason why N4 fail
+			c.JSON(http.StatusForbidden, updateSmContextError)
+			return
 		}
 
 		switch m.GsmHeader.GetMessageType() {
@@ -405,10 +402,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			}
 
 			response.JsonData.N1SmMsg = &models.RefToBinaryData{ContentId: "PDUSessionModificationReject"}
-			return &httpwrapper.Response{
-				Status: http.StatusOK,
-				Body:   response,
-			}
+			c.JSON(http.StatusOK, response)
+			return
 		case nas.MsgTypePDUSessionModificationComplete:
 			smContext.StopT3591()
 		case nas.MsgTypePDUSessionModificationReject:
@@ -453,10 +448,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			logger.CtxLog.Infof("Skip sending PFCP Session Modification Request of PDUSessionID:%d of SUPI:%s",
 				smContext.PDUSessionID, smContext.Supi)
 			response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
-			return &httpwrapper.Response{
-				Status: http.StatusOK,
-				Body:   response,
-			}
+			c.JSON(http.StatusOK, response)
+			return
 		}
 		smContext.SetState(smf_context.ModificationPending)
 		response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
@@ -785,32 +778,24 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		case smf_context.SessionUpdateSuccess:
 			smContext.Log.Traceln("In case SessionUpdateSuccess")
 			smContext.SetState(smf_context.Active)
-			httpResponse = &httpwrapper.Response{
-				Status: http.StatusOK,
-				Body:   response,
-			}
+			c.JSON(http.StatusOK, response)
 		case smf_context.SessionUpdateFailed:
 			smContext.Log.Traceln("In case SessionUpdateFailed")
 			smContext.SetState(smf_context.Active)
 			// It is just a template
-			httpResponse = &httpwrapper.Response{
-				Status: http.StatusForbidden,
-				Body: models.UpdateSmContextErrorResponse{
-					JsonData: &models.SmContextUpdateError{
-						Error: &Nsmf_PDUSession.N1SmError,
-					},
-				}, // Depends on the reason why N4 fail
-			}
+			updateSmContextError := models.UpdateSmContextErrorResponse{
+				JsonData: &models.SmContextUpdateError{
+					Error: &Nsmf_PDUSession.N1SmError,
+				},
+			} // Depends on the reason why N4 fail
+			c.JSON(http.StatusForbidden, updateSmContextError)
 
 		case smf_context.SessionReleaseSuccess:
 			p.ReleaseChargingSession(smContext)
 
 			smContext.Log.Traceln("In case SessionReleaseSuccess")
 			smContext.SetState(smf_context.InActivePending)
-			httpResponse = &httpwrapper.Response{
-				Status: http.StatusOK,
-				Body:   response,
-			}
+			c.JSON(http.StatusOK, response)
 
 		case smf_context.SessionReleaseFailed:
 			// Update SmContext Request(N1 PDU Session Release Request)
@@ -819,9 +804,6 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			problemDetail := models.ProblemDetails{
 				Status: http.StatusInternalServerError,
 				Cause:  "SYSTEM_FAILURE",
-			}
-			httpResponse = &httpwrapper.Response{
-				Status: int(problemDetail.Status),
 			}
 			smContext.SetState(smf_context.Active)
 			errResponse := models.UpdateSmContextErrorResponse{
@@ -837,27 +819,18 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					errResponse.JsonData.N1SmMsg = &models.RefToBinaryData{ContentId: "PDUSessionReleaseReject"}
 				}
 			}
-			httpResponse.Body = errResponse
+			c.JSON(int(problemDetail.Status), errResponse)
 		}
 		smContext.PostRemoveDataPath()
 	case smf_context.ModificationPending:
 		smContext.Log.Traceln("In case ModificationPending")
 		smContext.SetState(smf_context.Active)
-		httpResponse = &httpwrapper.Response{
-			Status: http.StatusOK,
-			Body:   response,
-		}
+		c.JSON(http.StatusOK, response)
 	case smf_context.InActive, smf_context.InActivePending:
 		smContext.Log.Traceln("In case InActive, InActivePending")
-		httpResponse = &httpwrapper.Response{
-			Status: http.StatusOK,
-			Body:   response,
-		}
+		c.JSON(http.StatusOK, response)
 	default:
-		httpResponse = &httpwrapper.Response{
-			Status: http.StatusOK,
-			Body:   response,
-		}
+		c.JSON(http.StatusOK, response)
 	}
 
 	if smContext.PDUSessionRelease_DUE_TO_DUP_PDU_ID {
@@ -866,33 +839,31 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		// So, local release smCtx and notify AMF after sending PDUSessionResourceReleaseCommand
 		p.RemoveSMContextFromAllNF(smContext, true)
 	}
-	return httpResponse
 }
 
 func (p *Processor) HandlePDUSessionSMContextRelease(
-	smContextRef string, body models.ReleaseSmContextRequest,
-) *httpwrapper.Response {
+	c *gin.Context,
+	body models.ReleaseSmContextRequest,
+	smContextRef string,
+) {
 	logger.PduSessLog.Infoln("In HandlePDUSessionSMContextRelease")
 	smContext := smf_context.GetSMContextByRef(smContextRef)
 
 	if smContext == nil {
 		logger.PduSessLog.Warnf("SMContext[%s] is not found", smContextRef)
 
-		httpResponse := &httpwrapper.Response{
-			Header: nil,
-			Status: http.StatusNotFound,
-			Body: models.UpdateSmContextErrorResponse{
-				JsonData: &models.SmContextUpdateError{
-					UpCnxState: models.UpCnxState_DEACTIVATED,
-					Error: &models.ProblemDetails{
-						Type:   "Resource Not Found",
-						Title:  "SMContext Ref is not found",
-						Status: http.StatusNotFound,
-					},
+		updateSmContextError := &models.UpdateSmContextErrorResponse{
+			JsonData: &models.SmContextUpdateError{
+				UpCnxState: models.UpCnxState_DEACTIVATED,
+				Error: &models.ProblemDetails{
+					Type:   "Resource Not Found",
+					Title:  "SMContext Ref is not found",
+					Status: http.StatusNotFound,
 				},
 			},
 		}
-		return httpResponse
+		c.JSON(http.StatusNotFound, updateSmContextError)
+		return
 	}
 
 	smContext.SMLock.Lock()
@@ -928,18 +899,13 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 	}
 	pfcpResponseStatus := releaseSession(smContext)
 
-	var httpResponse *httpwrapper.Response
-
 	switch pfcpResponseStatus {
 	case smf_context.SessionReleaseSuccess:
 		p.ReleaseChargingSession(smContext)
 
 		smContext.Log.Traceln("In case SessionReleaseSuccess")
 		smContext.SetState(smf_context.InActive)
-		httpResponse = &httpwrapper.Response{
-			Status: http.StatusNoContent,
-			Body:   nil,
-		}
+		c.Status(http.StatusNoContent)
 
 	case smf_context.SessionReleaseFailed:
 		// Update SmContext Request(N1 PDU Session Release Request)
@@ -949,9 +915,6 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 			Status: http.StatusInternalServerError,
 			Cause:  "SYSTEM_FAILURE",
 		}
-		httpResponse = &httpwrapper.Response{
-			Status: int(problemDetail.Status),
-		}
 		smContext.SetState(smf_context.Active)
 		errResponse := models.UpdateSmContextErrorResponse{
 			JsonData: &models.SmContextUpdateError{
@@ -965,7 +928,8 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 			errResponse.JsonData.N1SmMsg = &models.RefToBinaryData{ContentId: "PDUSessionReleaseReject"}
 		}
 
-		httpResponse.Body = errResponse
+		c.JSON(int(problemDetail.Status), errResponse)
+
 	default:
 		smContext.Log.Warnf("The state shouldn't be [%s]\n", pfcpResponseStatus)
 
@@ -974,9 +938,6 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 			Status: http.StatusInternalServerError,
 			Cause:  "SYSTEM_FAILURE",
 		}
-		httpResponse = &httpwrapper.Response{
-			Status: int(problemDetail.Status),
-		}
 		smContext.SetState(smf_context.Active)
 		errResponse := models.UpdateSmContextErrorResponse{
 			JsonData: &models.SmContextUpdateError{
@@ -990,12 +951,10 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 			errResponse.JsonData.N1SmMsg = &models.RefToBinaryData{ContentId: "PDUSessionReleaseReject"}
 		}
 
-		httpResponse.Body = errResponse
+		c.JSON(int(problemDetail.Status), errResponse)
 	}
 
 	p.RemoveSMContextFromAllNF(smContext, false)
-
-	return httpResponse
 }
 
 func (p *Processor) HandlePDUSessionSMContextLocalRelease(
@@ -1074,40 +1033,34 @@ func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionRes
 	return smf_context.SessionReleaseSuccess
 }
 
-func (p *Processor) makeEstRejectResAndReleaseSMContext(smContext *smf_context.SMContext, nasErrorCause uint8,
+func (p *Processor) makeEstRejectResAndReleaseSMContext(
+	c *gin.Context,
+	smContext *smf_context.SMContext,
+	nasErrorCause uint8,
 	sbiError *models.ProblemDetails,
-) *httpwrapper.Response {
-	var httpResponse *httpwrapper.Response
-
+) {
 	if buf, err := smf_context.
 		BuildGSMPDUSessionEstablishmentReject(
 			smContext,
 			nasErrorCause); err != nil {
-		httpResponse = &httpwrapper.Response{
-			Header: nil,
-			Status: int(sbiError.Status),
-			Body: models.PostSmContextsErrorResponse{
-				JsonData: &models.SmContextCreateError{
-					Error:   sbiError,
-					N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
-				},
+		postSmContextsError := models.PostSmContextsErrorResponse{
+			JsonData: &models.SmContextCreateError{
+				Error:   sbiError,
+				N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
 			},
 		}
+		c.JSON(int(sbiError.Status), postSmContextsError)
 	} else {
-		httpResponse = &httpwrapper.Response{
-			Header: nil,
-			Status: int(sbiError.Status),
-			Body: models.PostSmContextsErrorResponse{
-				JsonData: &models.SmContextCreateError{
-					Error:   sbiError,
-					N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
-				},
-				BinaryDataN1SmMessage: buf,
+		postSmContextsError := models.PostSmContextsErrorResponse{
+			JsonData: &models.SmContextCreateError{
+				Error:   sbiError,
+				N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
 			},
+			BinaryDataN1SmMessage: buf,
 		}
+		c.JSON(int(sbiError.Status), postSmContextsError)
 	}
 	p.RemoveSMContextFromAllNF(smContext, false)
-	return httpResponse
 }
 
 func (p *Processor) sendGSMPDUSessionReleaseCommand(smContext *smf_context.SMContext, nasPdu []byte) {
