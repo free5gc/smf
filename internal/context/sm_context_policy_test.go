@@ -671,6 +671,12 @@ func TestApplyPccRules(t *testing.T) {
 		},
 	}
 	smctx.SelectedSessionRuleID = "SessRuleId-1"
+	smctx.DnnConfiguration = models.DnnConfiguration{
+		SessionAmbr: &models.Ambr{
+			Uplink:   "1 Gbps",
+			Downlink: "1 Gbps",
+		},
+	}
 	err := smctx.AllocUeIP()
 	require.NoError(t, err)
 	err = smctx.SelectDefaultDataPath()
