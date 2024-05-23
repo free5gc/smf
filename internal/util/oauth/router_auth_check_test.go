@@ -1,4 +1,4 @@
-package util_oauth
+package util_oauth_test
 
 import (
 	"net/http"
@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/smf/internal/util/oauth"
 )
 
 const (
@@ -83,7 +84,7 @@ func TestRouterAuthorizationCheck_Check(t *testing.T) {
 			}
 			c.Request.Header.Set("Authorization", tt.args.token)
 
-			rac := NewRouterAuthorizationCheck(models.ServiceName("testService"))
+			rac := util_oauth.NewRouterAuthorizationCheck(models.ServiceName("testService"))
 			rac.Check(c, newMockSMFContext())
 			if w.Code != tt.want.statusCode {
 				t.Errorf("StatusCode should be %d, but got %d", tt.want.statusCode, w.Code)

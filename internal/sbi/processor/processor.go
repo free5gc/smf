@@ -5,6 +5,10 @@ import (
 	"github.com/free5gc/smf/pkg/app"
 )
 
+const (
+	CONTEXT_NOT_FOUND = "CONTEXT_NOT_FOUND"
+)
+
 type ProcessorSmf interface {
 	app.App
 }

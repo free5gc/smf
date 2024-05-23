@@ -62,7 +62,7 @@ func (s *Server) HTTPChargingNotification(c *gin.Context) {
 		logger.PduSessLog.Errorln("GetRawData failed")
 	}
 
-	err = openapi.Deserialize(&req, requestBody, "application/json")
+	err = openapi.Deserialize(&req, requestBody, APPLICATION_JSON)
 	if err != nil {
 		logger.PduSessLog.Errorln("Deserialize request failed")
 	}

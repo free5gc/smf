@@ -43,7 +43,7 @@ func NewUEIPPool(factoryPool *factory.UEIPPool) *UeIPPool {
 	return ueIPPool
 }
 
-func (ueIPPool *UeIPPool) allocate(request net.IP) net.IP {
+func (ueIPPool *UeIPPool) Allocate(request net.IP) net.IP {
 	var allocVal int
 	var ok bool
 	if request != nil {
@@ -69,7 +69,7 @@ RETURNIP:
 	return retIP
 }
 
-func (ueIPPool *UeIPPool) exclude(excludePool *UeIPPool) error {
+func (ueIPPool *UeIPPool) Exclude(excludePool *UeIPPool) error {
 	excludeMin := excludePool.pool.Min()
 	excludeMax := excludePool.pool.Max()
 	if err := ueIPPool.pool.Reserve(excludeMin, excludeMax); err != nil {
@@ -78,13 +78,17 @@ func (ueIPPool *UeIPPool) exclude(excludePool *UeIPPool) error {
 	return nil
 }
 
+func (u *UeIPPool) Pool() *pool.LazyReusePool {
+	return u.pool
+}
+
 func uint32ToIP(intval uint32) net.IP {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, intval)
 	return buf
 }
 
-func (ueIPPool *UeIPPool) release(addr net.IP) {
+func (ueIPPool *UeIPPool) Release(addr net.IP) {
 	addrVal := binary.BigEndian.Uint32(addr)
 	res := ueIPPool.pool.Free(int(addrVal))
 	if !res {

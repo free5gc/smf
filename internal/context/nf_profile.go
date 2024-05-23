@@ -15,7 +15,7 @@ type NFProfile struct {
 	PLMNList         *[]models.PlmnId
 }
 
-func (c *SMFContext) SetupNFProfile(NFProfileconfig *factory.Config) {
+func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 	// Set time
 	nfSetupTime := time.Now()
 
@@ -31,7 +31,7 @@ func (c *SMFContext) SetupNFProfile(NFProfileconfig *factory.Config) {
 
 	// set NFServices
 	c.NfProfile.NFServices = new([]models.NfService)
-	for _, serviceName := range NFProfileconfig.Configuration.ServiceNameList {
+	for _, serviceName := range nfProfileconfig.Configuration.ServiceNameList {
 		*c.NfProfile.NFServices = append(*c.NfProfile.NFServices, models.NfService{
 			ServiceInstanceId: GetSelf().NfInstanceID + serviceName,
 			ServiceName:       models.ServiceName(serviceName),
@@ -48,7 +48,7 @@ func (c *SMFContext) SetupNFProfile(NFProfileconfig *factory.Config) {
 	}
 
 	// set PlmnList if exists
-	if plmnList := NFProfileconfig.Configuration.PLMNList; plmnList != nil {
+	if plmnList := nfProfileconfig.Configuration.PLMNList; plmnList != nil {
 		c.NfProfile.PLMNList = new([]models.PlmnId)
 		for _, plmn := range plmnList {
 			*c.NfProfile.PLMNList = append(*c.NfProfile.PLMNList, models.PlmnId{

@@ -53,11 +53,9 @@ func (bpMGR *BPManager) SelectPSA2(smContext *SMContext) {
 	for _, dataPath := range smContext.Tunnel.DataPathPool {
 		if dataPath.Activated {
 			bpMGR.ActivatedPaths = append(bpMGR.ActivatedPaths, dataPath)
-		} else {
-			if !hasSelectPSA2 {
-				bpMGR.ActivatingPath = dataPath
-				hasSelectPSA2 = true
-			}
+		} else if !hasSelectPSA2 {
+			bpMGR.ActivatingPath = dataPath
+			hasSelectPSA2 = true
 		}
 	}
 }

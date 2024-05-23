@@ -76,7 +76,7 @@ type SMFContext struct {
 	// TODO: support "IPv6", "IPv4v6", "Ethernet"
 	SupportedPDUSessionType string
 
-	//*** For ULCL ** //
+	// *** For ULCL *** //
 	ULCLSupport         bool
 	ULCLGroups          map[string][]string
 	UEPreConfigPathPool map[string]*UEPreConfigPaths
@@ -111,9 +111,9 @@ func (s *SMFContext) ListenIP() net.IP {
 }
 
 // RetrieveDnnInformation gets the corresponding dnn info from S-NSSAI and DNN
-func RetrieveDnnInformation(Snssai *models.Snssai, dnn string) *SnssaiSmfDnnInfo {
+func RetrieveDnnInformation(snssai *models.Snssai, dnn string) *SnssaiSmfDnnInfo {
 	for _, snssaiInfo := range GetSelf().SnssaiInfos {
-		if snssaiInfo.Snssai.EqualModelsSnssai(Snssai) {
+		if snssaiInfo.Snssai.EqualModelsSnssai(snssai) {
 			return snssaiInfo.DnnInfos[dnn]
 		}
 	}
@@ -201,14 +201,14 @@ func InitSmfContext(config *factory.Config) {
 		}
 
 		smfContext.PfcpHeartbeatInterval = pfcp.HeartbeatInterval
-
+		var multipleOfInterval time.Duration = 5
 		if pfcp.AssocFailAlertInterval == 0 {
-			smfContext.AssocFailAlertInterval = 5 * time.Minute
+			smfContext.AssocFailAlertInterval = multipleOfInterval * time.Minute
 		} else {
 			smfContext.AssocFailAlertInterval = pfcp.AssocFailAlertInterval
 		}
 		if pfcp.AssocFailRetryInterval == 0 {
-			smfContext.AssocFailRetryInterval = 5 * time.Second
+			smfContext.AssocFailRetryInterval = multipleOfInterval * time.Second
 		} else {
 			smfContext.AssocFailRetryInterval = pfcp.AssocFailRetryInterval
 		}

@@ -161,9 +161,9 @@ func (s *nnrfService) buildNfProfile(smfContext *smf_context.SMFContext) (profil
 }
 
 // Done 4/28 14:04
-func (s *nnrfService) RetrySendNFRegistration(MaxRetry int) error {
+func (s *nnrfService) RetrySendNFRegistration(maxRetry int) error {
 	retryCount := 0
-	for retryCount < MaxRetry {
+	for retryCount < maxRetry {
 		err := s.RegisterNFInstance()
 		if err == nil {
 			return nil

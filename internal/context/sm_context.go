@@ -397,8 +397,8 @@ func RemoveSMContext(ref string) {
 }
 
 // *** add unit test ***//
-func GetSMContextBySEID(SEID uint64) *SMContext {
-	if value, ok := seidSMContextMap.Load(SEID); ok {
+func GetSMContextBySEID(seid uint64) *SMContext {
+	if value, ok := seidSMContextMap.Load(seid); ok {
 		smContext := value.(*SMContext)
 		return smContext
 	}
@@ -458,10 +458,12 @@ func (smContext *SMContext) PDUAddressToNAS() ([12]byte, uint8) {
 	copy(addr[:], smContext.PDUAddress)
 	switch smContext.SelectedPDUSessionType {
 	case nasMessage.PDUSessionTypeIPv4:
-		addrLen = 4 + 1
+		var addrLenBuf uint8 = 4 + 1
+		addrLen = addrLenBuf
 	case nasMessage.PDUSessionTypeIPv6:
 	case nasMessage.PDUSessionTypeIPv4IPv6:
-		addrLen = 12 + 1
+		var addrLenBuf uint8 = 12 + 1
+		addrLen = addrLenBuf
 	}
 	return addr, addrLen
 }

@@ -62,7 +62,7 @@ func (p *Processor) chargingNotificationProcedure(
 	} else {
 		problemDetails := &models.ProblemDetails{
 			Status: http.StatusNotFound,
-			Cause:  "CONTEXT_NOT_FOUND",
+			Cause:  CONTEXT_NOT_FOUND,
 			Detail: fmt.Sprintf("SM Context [%s] Not Found ", smContextRef),
 		}
 		return problemDetails
@@ -103,10 +103,10 @@ func HandleSMPolicyUpdateNotify(
 		return
 	}
 
-	//TODO: Response data type -
-	//[200 OK] UeCampingRep
-	//[200 OK] array(PartialSuccessReport)
-	//[400 Bad Request] ErrorReport
+	// TODO: Response data type -
+	// [200 OK] UeCampingRep
+	// [200 OK] array(PartialSuccessReport)
+	// [400 Bad Request] ErrorReport
 	if err := smContext.ApplyPccRules(decision); err != nil {
 		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
 		// TODO: Fill the error body

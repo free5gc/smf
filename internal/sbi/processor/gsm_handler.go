@@ -213,19 +213,19 @@ func (p *Processor) HandlePDUSessionModificationRequest(
 		}
 	}
 
-	smPolicyDecision, err := p.Consumer().SendSMPolicyAssociationUpdateByUERequestModification(
+	smPolicyDecision, err_ := p.Consumer().SendSMPolicyAssociationUpdateByUERequestModification(
 		smCtx, reqQoSRules, reqQoSFlowDescs)
-	if err != nil {
-		return nil, fmt.Errorf("sm policy update failed: %s", err)
+	if err_ != nil {
+		return nil, fmt.Errorf("sm policy update failed: %s", err_)
 	}
 
 	// Update SessionRule from decision
-	if err := smCtx.ApplySessionRules(smPolicyDecision); err != nil {
-		return nil, fmt.Errorf("PDUSessionSMContextCreate err: %v", err)
+	if errApplySessionRules := smCtx.ApplySessionRules(smPolicyDecision); errApplySessionRules != nil {
+		return nil, fmt.Errorf("PDUSessionSMContextCreate err: %v", errApplySessionRules)
 	}
 
-	if err := smCtx.ApplyPccRules(smPolicyDecision); err != nil {
-		smCtx.Log.Errorf("apply sm policy decision error: %+v", err)
+	if errApplyPccRules := smCtx.ApplyPccRules(smPolicyDecision); errApplyPccRules != nil {
+		smCtx.Log.Errorf("apply sm policy decision error: %+v", errApplyPccRules)
 	}
 
 	authQoSRules := nasType.QoSRules{}

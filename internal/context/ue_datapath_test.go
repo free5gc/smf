@@ -1,4 +1,4 @@
-package context
+package context_test
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
@@ -14,13 +15,13 @@ var config = configuration
 // smfContext.UserPlaneInformation = NewUserPlaneInformation(config)
 
 func TestNewUEPreConfigPaths(t *testing.T) {
-	smfContext := GetSelf()
-	smfContext.UserPlaneInformation = NewUserPlaneInformation(config)
+	smfContext := context.GetSelf()
+	smfContext.UserPlaneInformation = context.NewUserPlaneInformation(config)
 	fmt.Println("Start")
 	testcases := []struct {
 		name                  string
 		inPaths               []factory.SpecificPath
-		expectedDataPathNodes [][]*UPF
+		expectedDataPathNodes [][]*context.UPF
 	}{
 		{
 			name: "singlePath-singleUPF",
@@ -33,7 +34,7 @@ func TestNewUEPreConfigPaths(t *testing.T) {
 					},
 				},
 			},
-			expectedDataPathNodes: [][]*UPF{
+			expectedDataPathNodes: [][]*context.UPF{
 				{
 					getUpf("UPF1"),
 				},
@@ -51,7 +52,7 @@ func TestNewUEPreConfigPaths(t *testing.T) {
 					},
 				},
 			},
-			expectedDataPathNodes: [][]*UPF{
+			expectedDataPathNodes: [][]*context.UPF{
 				{
 					getUpf("UPF1"),
 					getUpf("UPF2"),
@@ -76,7 +77,7 @@ func TestNewUEPreConfigPaths(t *testing.T) {
 					},
 				},
 			},
-			expectedDataPathNodes: [][]*UPF{
+			expectedDataPathNodes: [][]*context.UPF{
 				{
 					getUpf("UPF1"),
 				},
@@ -105,7 +106,7 @@ func TestNewUEPreConfigPaths(t *testing.T) {
 					},
 				},
 			},
-			expectedDataPathNodes: [][]*UPF{
+			expectedDataPathNodes: [][]*context.UPF{
 				{
 					getUpf("UPF1"),
 					getUpf("UPF2"),
@@ -135,7 +136,7 @@ func TestNewUEPreConfigPaths(t *testing.T) {
 					},
 				},
 			},
-			expectedDataPathNodes: [][]*UPF{
+			expectedDataPathNodes: [][]*context.UPF{
 				{
 					getUpf("UPF1"),
 				},
@@ -149,7 +150,7 @@ func TestNewUEPreConfigPaths(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			retUePreConfigPaths, err := NewUEPreConfigPaths(tc.inPaths)
+			retUePreConfigPaths, err := context.NewUEPreConfigPaths(tc.inPaths)
 			require.Nil(t, err)
 			require.NotNil(t, retUePreConfigPaths.PathIDGenerator)
 			for pathIndex, path := range tc.inPaths {
@@ -168,8 +169,8 @@ func TestNewUEPreConfigPaths(t *testing.T) {
 	}
 }
 
-func getUpf(name string) *UPF {
-	newUeNode, err := NewUEDataPathNode(name)
+func getUpf(name string) *context.UPF {
+	newUeNode, err := context.NewUEDataPathNode(name)
 	if err != nil {
 		return nil
 	}

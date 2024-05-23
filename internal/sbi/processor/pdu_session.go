@@ -210,12 +210,12 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	}
 
 	// If PCF prepares default Pcc Rule, SMF do not need to create defaultDataPath.
-	if err := smContext.ApplyPccRules(smPolicyDecision); err != nil {
+	if err = smContext.ApplyPccRules(smPolicyDecision); err != nil {
 		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
 	}
 
 	// SelectDefaultDataPath() will create a default data path if default data path is not found.
-	if err := smContext.SelectDefaultDataPath(); err != nil {
+	if err = smContext.SelectDefaultDataPath(); err != nil {
 		smContext.SetState(smf_context.InActive)
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
 		p.makeEstRejectResAndReleaseSMContext(c, smContext,
@@ -256,6 +256,10 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	// GSM State
 	// PDU Session Modification Reject(Cause Value == 43 || Cause Value != 43)/Complete
 	// PDU Session Release Command/Complete
+	var buf []byte
+	var n2Buf []byte
+	var err error
+
 	smContext := smf_context.GetSMContextByRef(smContextRef)
 
 	upi := smf_context.GetUserPlaneInformation()
@@ -291,7 +295,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 	if body.BinaryDataN1SmMessage != nil {
 		m := nas.NewMessage()
-		err := m.GsmMessageDecode(&body.BinaryDataN1SmMessage)
+		err = m.GsmMessageDecode(&body.BinaryDataN1SmMessage)
 		smContext.Log.Tracef("N1 Message: %s", hex.EncodeToString(body.BinaryDataN1SmMessage))
 		if err != nil {
 			smContext.Log.Errorf("N1 Message parse failed: %v", err)
@@ -320,7 +324,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 			// remove SM Policy Association
 			if smContext.SMPolicyID != "" {
-				if err := p.Consumer().SendSMPolicyAssociationTermination(smContext); err != nil {
+				if err = p.Consumer().SendSMPolicyAssociationTermination(smContext); err != nil {
 					smContext.Log.Errorf("SM Policy Termination failed: %s", err)
 				} else {
 					smContext.SMPolicyID = ""
@@ -328,13 +332,13 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			}
 
 			if smContext.UeCmRegistered {
-				problemDetails, err := p.Consumer().UeCmDeregistration(smContext)
+				problemDetails, errUeCmDeregistration := p.Consumer().UeCmDeregistration(smContext)
 				if problemDetails != nil {
-					if problemDetails.Cause != "CONTEXT_NOT_FOUND" {
+					if problemDetails.Cause != CONTEXT_NOT_FOUND {
 						logger.PduSessLog.Errorf("UECM_DeRegistration Failed Problem[%+v]", problemDetails)
 					}
-				} else if err != nil {
-					logger.PduSessLog.Errorf("UECM_DeRegistration Error[%+v]", err)
+				} else if errUeCmDeregistration != nil {
+					logger.PduSessLog.Errorf("UECM_DeRegistration Error[%+v]", errUeCmDeregistration)
 				} else {
 					logger.PduSessLog.Traceln("UECM_DeRegistration successful")
 				}
@@ -345,7 +349,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				cause = m.PDUSessionReleaseRequest.Cause5GSM.GetCauseValue()
 			}
 
-			if buf, err := smf_context.BuildGSMPDUSessionReleaseCommand(smContext, cause, true); err != nil {
+			if buf, err = smf_context.
+				BuildGSMPDUSessionReleaseCommand(smContext, cause, true); err != nil {
 				smContext.Log.Errorf("Build GSM PDUSessionReleaseCommand failed: %+v", err)
 			} else {
 				response.BinaryDataN1SmMessage = buf
@@ -353,7 +358,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				p.sendGSMPDUSessionReleaseCommand(smContext, buf)
 			}
 
-			if buf, err := smf_context.BuildPDUSessionResourceReleaseCommandTransfer(smContext); err != nil {
+			if buf, err = smf_context.
+				BuildPDUSessionResourceReleaseCommandTransfer(smContext); err != nil {
 				smContext.Log.Errorf("Build PDUSessionResourceReleaseCommandTransfer failed: %+v", err)
 			} else {
 				response.JsonData.N2SmInfoType = models.N2SmInfoType_PDU_RES_REL_CMD
@@ -378,14 +384,15 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				p.RemoveSMContextFromAllNF(smContext, true)
 			}
 		case nas.MsgTypePDUSessionModificationRequest:
-			if rsp, err := p.HandlePDUSessionModificationRequest(smContext, m.PDUSessionModificationRequest); err != nil {
-				if buf, err := smf_context.BuildGSMPDUSessionModificationReject(smContext); err != nil {
+			if rsp, errHandleReq := p.
+				HandlePDUSessionModificationRequest(smContext, m.PDUSessionModificationRequest); errHandleReq != nil {
+				if buf, err = smf_context.BuildGSMPDUSessionModificationReject(smContext); err != nil {
 					smContext.Log.Errorf("build GSM PDUSessionModificationReject failed: %+v", err)
 				} else {
 					response.BinaryDataN1SmMessage = buf
 				}
 			} else {
-				if buf, err := rsp.PlainNasEncode(); err != nil {
+				if buf, err = rsp.PlainNasEncode(); err != nil {
 					smContext.Log.Errorf("build GSM PDUSessionModificationCommand failed: %+v", err)
 				} else {
 					response.BinaryDataN1SmMessage = buf
@@ -393,7 +400,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				}
 			}
 
-			if buf, err := smf_context.BuildPDUSessionResourceModifyRequestTransfer(smContext); err != nil {
+			if buf, err = smf_context.BuildPDUSessionResourceModifyRequestTransfer(smContext); err != nil {
 				smContext.Log.Errorf("build N2 BuildPDUSessionResourceModifyRequestTransfer failed: %v", err)
 			} else {
 				response.BinaryDataN2SmInformation = buf
@@ -429,7 +436,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		response.JsonData.UpCnxState = models.UpCnxState_ACTIVATING
 		response.JsonData.N2SmInfoType = models.N2SmInfoType_PDU_RES_SETUP_REQ
 
-		n2Buf, err := smf_context.BuildPDUSessionResourceSetupRequestTransfer(smContext)
+		n2Buf, err = smf_context.BuildPDUSessionResourceSetupRequestTransfer(smContext)
 		if err != nil {
 			logger.PduSessLog.Errorf("Build PDUSession Resource Setup Request Transfer Error(%s)", err.Error())
 		} else {
@@ -534,19 +541,19 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			}
 		}
 
-		if err := smf_context.
+		if err = smf_context.
 			HandlePDUSessionResourceSetupResponseTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			smContext.Log.Errorf("Handle PDUSessionResourceSetupResponseTransfer failed: %+v", err)
 		}
 		sendPFCPModification = true
 		smContext.SetState(smf_context.PFCPModification)
 	case models.N2SmInfoType_PDU_RES_SETUP_FAIL:
-		if err := smf_context.
+		if err = smf_context.
 			HandlePDUSessionResourceSetupUnsuccessfulTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			smContext.Log.Errorf("Handle PDUSessionResourceSetupResponseTransfer failed: %+v", err)
 		}
 	case models.N2SmInfoType_PDU_RES_MOD_RSP:
-		if err := smf_context.
+		if err = smf_context.
 			HandlePDUSessionResourceModifyResponseTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			smContext.Log.Errorf("Handle PDUSessionResourceModifyResponseTransfer failed: %+v", err)
 		}
@@ -568,16 +575,14 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			if smContext.CheckState(smf_context.InActive) {
 				p.RemoveSMContextFromAllNF(smContext, true)
 			}
-		} else { // normal case
+		} else if smContext.CheckState(smf_context.InActive) { // normal case
 			// Wait till the state becomes Active again
 			// TODO: implement sleep wait in concurrent architecture
 
-			if smContext.CheckState(smf_context.InActive) {
-				// If N1 PDU Session Release Complete is received, smContext state is InActive.
-				// Remove SMContext when receiving N2 PDU Resource Release Response.
-				// Use go routine to send Notification to prevent blocking the handling process
-				p.RemoveSMContextFromAllNF(smContext, true)
-			}
+			// If N1 PDU Session Release Complete is received, smContext state is InActive.
+			// Remove SMContext when receiving N2 PDU Resource Release Response.
+			// Use go routine to send Notification to prevent blocking the handling process
+			p.RemoveSMContextFromAllNF(smContext, true)
 		}
 	case models.N2SmInfoType_PATH_SWITCH_REQ:
 		smContext.Log.Traceln("Handle Path Switch Request")
@@ -587,11 +592,11 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 		smContext.SetState(smf_context.ModificationPending)
 
-		if err := smf_context.HandlePathSwitchRequestTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
+		if err = smf_context.HandlePathSwitchRequestTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			smContext.Log.Errorf("Handle PathSwitchRequestTransfer: %+v", err)
 		}
 
-		if n2Buf, err := smf_context.BuildPathSwitchRequestAcknowledgeTransfer(smContext); err != nil {
+		if n2Buf, err = smf_context.BuildPathSwitchRequestAcknowledgeTransfer(smContext); err != nil {
 			smContext.Log.Errorf("Build Path Switch Transfer Error(%+v)", err)
 		} else {
 			response.JsonData.N2SmInfoType = models.N2SmInfoType_PATH_SWITCH_REQ_ACK
@@ -619,7 +624,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		// TODO: implement sleep wait in concurrent architecture
 
 		smContext.SetState(smf_context.ModificationPending)
-		err := smf_context.HandlePathSwitchRequestSetupFailedTransfer(
+		err = smf_context.HandlePathSwitchRequestSetupFailedTransfer(
 			body.BinaryDataN2SmInformation, smContext)
 		if err != nil {
 			smContext.Log.Errorf("HandlePathSwitchRequestSetupFailedTransfer failed: %v", err)
@@ -641,14 +646,14 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 		smContext.SetState(smf_context.ModificationPending)
 		smContext.HoState = models.HoState_PREPARING
-		err := smf_context.HandleHandoverRequiredTransfer(
+		err = smf_context.HandleHandoverRequiredTransfer(
 			body.BinaryDataN2SmInformation, smContext)
 		if err != nil {
 			smContext.Log.Errorf("Handle HandoverRequiredTransfer failed: %+v", err)
 		}
 		response.JsonData.N2SmInfoType = models.N2SmInfoType_PDU_RES_SETUP_REQ
 
-		if n2Buf, err := smf_context.BuildPDUSessionResourceSetupRequestTransfer(smContext); err != nil {
+		if n2Buf, err = smf_context.BuildPDUSessionResourceSetupRequestTransfer(smContext); err != nil {
 			smContext.Log.Errorf("Build PDUSession Resource Setup Request Transfer Error(%s)", err.Error())
 		} else {
 			response.BinaryDataN2SmInformation = n2Buf
@@ -667,7 +672,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		smContext.SetState(smf_context.ModificationPending)
 		smContext.HoState = models.HoState_PREPARED
 		response.JsonData.HoState = models.HoState_PREPARED
-		err := smf_context.HandleHandoverRequestAcknowledgeTransfer(
+		err = smf_context.HandleHandoverRequestAcknowledgeTransfer(
 			body.BinaryDataN2SmInformation, smContext)
 		if err != nil {
 			smContext.Log.Errorf("Handle HandoverRequestAcknowledgeTransfer failed: %+v", err)
@@ -682,7 +687,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			farList = append(farList, IndirectForwardingPDR.FAR)
 
 			// release indirect forwading path
-			if err := ANUPF.UPF.RemovePDR(IndirectForwardingPDR); err != nil {
+			if err = ANUPF.UPF.RemovePDR(IndirectForwardingPDR); err != nil {
 				logger.PduSessLog.Errorln("release indirect path: ", err)
 			}
 
@@ -690,7 +695,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			smContext.SetState(smf_context.PFCPModification)
 		}
 
-		if n2Buf, err := smf_context.BuildHandoverCommandTransfer(smContext); err != nil {
+		if n2Buf, err = smf_context.BuildHandoverCommandTransfer(smContext); err != nil {
 			smContext.Log.Errorf("Build HandoverCommandTransfer failed: %v", err)
 		} else {
 			response.BinaryDataN2SmInformation = n2Buf
@@ -731,10 +736,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		response.JsonData.HoState = models.HoState_COMPLETED
 	}
 
-	switch smContextUpdateData.Cause {
-	case models.Cause_REL_DUE_TO_DUPLICATE_SESSION_ID:
-		//* release PDU Session Here
-
+	if smContextUpdateData.Cause == models.Cause_REL_DUE_TO_DUPLICATE_SESSION_ID {
+		// * release PDU Session Here
 		smContext.Log.Infoln("[SMF] Cause_REL_DUE_TO_DUPLICATE_SESSION_ID")
 		if smContext.CheckState(smf_context.Active) {
 			// Wait till the state becomes Active again
@@ -747,7 +750,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 		switch smContext.State() {
 		case smf_context.ActivePending, smf_context.ModificationPending, smf_context.Active:
-			if buf, err := smf_context.BuildPDUSessionResourceReleaseCommandTransfer(smContext); err != nil {
+			if buf, err = smf_context.BuildPDUSessionResourceReleaseCommandTransfer(smContext); err != nil {
 				smContext.Log.Errorf("Build PDUSessionResourceReleaseCommandTransfer failed: %v", err)
 			} else {
 				response.BinaryDataN2SmInformation = buf
@@ -812,7 +815,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				},
 			}
 			if smContextUpdateData.Cause != models.Cause_REL_DUE_TO_DUPLICATE_SESSION_ID {
-				if buf, err := smf_context.BuildGSMPDUSessionReleaseReject(smContext); err != nil {
+				if buf, err = smf_context.BuildGSMPDUSessionReleaseReject(smContext); err != nil {
 					logger.PduSessLog.Errorf("build GSM PDUSessionReleaseReject failed: %+v", err)
 				} else {
 					errResponse.BinaryDataN1SmMessage = buf
@@ -884,7 +887,7 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 	if smContext.UeCmRegistered {
 		problemDetails, err := p.Consumer().UeCmDeregistration(smContext)
 		if problemDetails != nil {
-			if problemDetails.Cause != "CONTEXT_NOT_FOUND" {
+			if problemDetails.Cause != CONTEXT_NOT_FOUND {
 				logger.PduSessLog.Errorf("UECM_DeRegistration Failed Problem[%+v]", problemDetails)
 			}
 		} else if err != nil {
@@ -975,7 +978,7 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 	if smContext.UeCmRegistered {
 		problemDetails, err := p.Consumer().UeCmDeregistration(smContext)
 		if problemDetails != nil {
-			if problemDetails.Cause != "CONTEXT_NOT_FOUND" {
+			if problemDetails.Cause != CONTEXT_NOT_FOUND {
 				logger.PduSessLog.Errorf("UECM_DeRegistration Failed Problem[%+v]", problemDetails)
 			}
 		} else if err != nil {
@@ -1089,18 +1092,18 @@ func (p *Processor) sendGSMPDUSessionReleaseCommand(smContext *smf_context.SMCon
 
 		smContext.T3592 = smf_context.NewTimer(t3592.ExpireTime, t3592.MaxRetryTimes, func(expireTimes int32) {
 			smContext.SMLock.Lock()
-			rspData, rsp, err := smContext.
+			rspData, rsp, errN1N2MessageTransfer := smContext.
 				CommunicationClient.
 				N1N2MessageCollectionDocumentApi.
 				N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request)
-			if err != nil {
-				smContext.Log.Warnf("Send N1N2Transfer for GSMPDUSessionReleaseCommand failed: %s", err)
+			if errN1N2MessageTransfer != nil {
+				smContext.Log.Warnf("Send N1N2Transfer for GSMPDUSessionReleaseCommand failed: %s", errN1N2MessageTransfer)
 			}
 			if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 				smContext.Log.Warnf("%v", rspData.Cause)
 			}
-			if err := rsp.Body.Close(); err != nil {
-				smContext.Log.Warn("Close body failed", err)
+			if errClose := rsp.Body.Close(); errClose != nil {
+				smContext.Log.Warn("Close body failed", errClose)
 			}
 			smContext.SMLock.Unlock()
 		}, func() {
@@ -1141,18 +1144,18 @@ func sendGSMPDUSessionModificationCommand(smContext *smf_context.SMContext, nasP
 		smContext.T3591 = smf_context.NewTimer(t3591.ExpireTime, t3591.MaxRetryTimes, func(expireTimes int32) {
 			smContext.SMLock.Lock()
 			defer smContext.SMLock.Unlock()
-			rspData, rsp, err := smContext.
+			rspData, rsp, errN1N2MessageTransfer := smContext.
 				CommunicationClient.
 				N1N2MessageCollectionDocumentApi.
 				N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request)
-			if err != nil {
-				smContext.Log.Warnf("Send N1N2Transfer for GSMPDUSessionModificationCommand failed: %s", err)
+			if errN1N2MessageTransfer != nil {
+				smContext.Log.Warnf("Send N1N2Transfer for GSMPDUSessionModificationCommand failed: %s", errN1N2MessageTransfer)
 			}
 			if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 				smContext.Log.Warnf("%v", rspData.Cause)
 			}
-			if err := rsp.Body.Close(); err != nil {
-				smContext.Log.Warn("Close body failed", err)
+			if errClose := rsp.Body.Close(); errClose != nil {
+				smContext.Log.Warn("Close body failed", errClose)
 			}
 		}, func() {
 			smContext.Log.Warn("T3591 Expires3 times, abort notification procedure")

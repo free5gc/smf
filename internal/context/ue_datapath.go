@@ -80,8 +80,8 @@ func NewUEPreConfigPaths(paths []factory.SpecificPath) (*UEPreConfigPaths, error
 	return uePreConfigPaths, nil
 }
 
-func GetUEPreConfigPaths(SUPI string, upfName string) *UEPreConfigPaths {
-	groupName := GetULCLGroupNameFromSUPI(SUPI)
+func GetUEPreConfigPaths(supi string, upfName string) *UEPreConfigPaths {
+	groupName := GetULCLGroupNameFromSUPI(supi)
 	if groupName == "" {
 		return nil
 	}
@@ -106,9 +106,9 @@ func GetUEPreConfigPaths(SUPI string, upfName string) *UEPreConfigPaths {
 	return paths
 }
 
-func CheckUEHasPreConfig(SUPI string) (exist bool) {
-	groupName := GetULCLGroupNameFromSUPI(SUPI)
-	logger.CtxLog.Tracef("UE [%s] belongs to group [%s]", SUPI, groupName)
+func CheckUEHasPreConfig(supi string) (exist bool) {
+	groupName := GetULCLGroupNameFromSUPI(supi)
+	logger.CtxLog.Tracef("UE [%s] belongs to group [%s]", supi, groupName)
 	if groupName == "" {
 		return false
 	}

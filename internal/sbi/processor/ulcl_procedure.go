@@ -116,10 +116,8 @@ func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 			} else {
 				go modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
 			}
-		} else {
-			if reflect.DeepEqual(node.UPF.NodeID, ulcl.NodeID) {
-				nodeAfterULCL = true
-			}
+		} else if reflect.DeepEqual(node.UPF.NodeID, ulcl.NodeID) {
+			nodeAfterULCL = true
 		}
 	}
 

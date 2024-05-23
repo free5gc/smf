@@ -78,9 +78,9 @@ func (s *Server) HTTPReleaseSmContext(c *gin.Context) {
 	contentType := strings.Split(c.GetHeader("Content-Type"), ";")
 	var err error
 	switch contentType[0] {
-	case "application/json":
+	case APPLICATION_JSON:
 		err = c.ShouldBindJSON(request.JsonData)
-	case "multipart/related":
+	case MULTIPART_RELATED:
 		err = c.ShouldBindWith(&request, openapi.MultipartRelatedBinding{})
 	}
 	if err != nil {
@@ -106,9 +106,9 @@ func (s *Server) HTTPUpdateSmContext(c *gin.Context) {
 	contentType := strings.Split(c.GetHeader("Content-Type"), ";")
 	var err error
 	switch contentType[0] {
-	case "application/json":
+	case APPLICATION_JSON:
 		err = c.ShouldBindJSON(request.JsonData)
-	case "multipart/related":
+	case MULTIPART_RELATED:
 		err = c.ShouldBindWith(&request, openapi.MultipartRelatedBinding{})
 	}
 	if err != nil {
@@ -135,9 +135,9 @@ func (s *Server) HTTPPostSmContexts(c *gin.Context) {
 	contentType := strings.Split(c.GetHeader("Content-Type"), ";")
 	var err error
 	switch contentType[0] {
-	case "application/json":
+	case APPLICATION_JSON:
 		err = c.ShouldBindJSON(request.JsonData)
-	case "multipart/related":
+	case MULTIPART_RELATED:
 		err = c.ShouldBindWith(&request, openapi.MultipartRelatedBinding{})
 	}
 

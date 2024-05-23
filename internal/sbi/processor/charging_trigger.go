@@ -80,13 +80,13 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 	multipleUnitUsage := buildMultiUnitUsageFromUsageReport(smContext)
 
 	if len(multipleUnitUsage) != 0 {
-		rsp, problemDetails, err := p.Consumer().SendConvergedChargingRequest(smContext,
+		rsp, problemDetails, errSendConvergedChargingRequest := p.Consumer().SendConvergedChargingRequest(smContext,
 			smf_context.CHARGING_UPDATE, multipleUnitUsage)
 
 		if problemDetails != nil {
 			logger.ChargingLog.Errorf("Send Charging Data Request[Update] Failed Problem[%+v]", problemDetails)
-		} else if err != nil {
-			logger.ChargingLog.Errorf("Send Charging Data Request[Update] Error[%+v]", err)
+		} else if errSendConvergedChargingRequest != nil {
+			logger.ChargingLog.Errorf("Send Charging Data Request[Update] Error[%+v]", errSendConvergedChargingRequest)
 		} else {
 			var pfcpResponseStatus smf_context.PFCPSessionResponseStatus
 
@@ -116,10 +116,10 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 					logger.PduSessLog.Warnf("Cound not find upf %s", upfId)
 					continue
 				}
-				rcvMsg, err := pfcp_message.SendPfcpSessionModificationRequest(
+				rcvMsg, err_ := pfcp_message.SendPfcpSessionModificationRequest(
 					upf, smContext, nil, nil, nil, nil, urrList)
-				if err != nil {
-					logger.PduSessLog.Warnf("Sending PFCP Session Modification Request to AN UPF error: %+v", err)
+				if err_ != nil {
+					logger.PduSessLog.Warnf("Sending PFCP Session Modification Request to AN UPF error: %+v", err_)
 					pfcpResponseStatus = smf_context.SessionUpdateFailed
 				} else {
 					logger.PduSessLog.Infoln("Received PFCP Session Modification Response")
@@ -198,8 +198,7 @@ func buildMultiUnitUsageFromUsageReport(smContext *smf_context.SMContext) []mode
 
 				// Only online charging should request unit
 				// offline charging is only for recording usage
-				switch chgInfo.ChargingMethod {
-				case models.QuotaManagementIndicator_ONLINE_CHARGING:
+				if chgInfo.ChargingMethod == models.QuotaManagementIndicator_ONLINE_CHARGING {
 					requestUnit = &models.RequestedUnit{
 						TotalVolume:    smContext.RequestedUnit,
 						DownlinkVolume: smContext.RequestedUnit,

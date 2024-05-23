@@ -18,7 +18,7 @@ var Server *pfcpUdp.PfcpServer
 
 var ServerStartTime time.Time
 
-func Run(Dispatch func(*pfcpUdp.Message)) {
+func Run(dispatch func(*pfcpUdp.Message)) {
 	defer func() {
 		if p := recover(); p != nil {
 			// Print stack for panic to log. Fatalf() will let program exit.
@@ -45,19 +45,19 @@ func Run(Dispatch func(*pfcpUdp.Message)) {
 		}()
 
 		for {
-			msg, err := p.ReadFrom()
-			if err != nil {
-				if err == pfcpUdp.ErrReceivedResentRequest {
-					logger.PfcpLog.Infoln(err)
+			msg, errReadFrom := p.ReadFrom()
+			if errReadFrom != nil {
+				if errReadFrom == pfcpUdp.ErrReceivedResentRequest {
+					logger.PfcpLog.Infoln(errReadFrom)
 				} else {
-					logger.PfcpLog.Warnf("Read PFCP error: %v", err)
+					logger.PfcpLog.Warnf("Read PFCP error: %v", errReadFrom)
 				}
 
 				continue
 			}
 
 			if msg.PfcpMessage.IsRequest() {
-				go Dispatch(msg)
+				go dispatch(msg)
 			}
 		}
 	}(Server)

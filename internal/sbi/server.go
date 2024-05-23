@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	CorsConfigMaxAge = 86400
+	APPLICATION_JSON  = "application/json"
+	MULTIPART_RELATED = "multipart/related"
 )
 
 type Route struct {

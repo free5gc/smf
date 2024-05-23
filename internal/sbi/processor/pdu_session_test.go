@@ -366,7 +366,7 @@ func initStubPFCP() {
 	udp.Run(pfcp.Dispatch)
 }
 
-func buildPDUSessionEstablishmentRequest(pduSessID uint8, PTI uint8, pduType uint8) []byte {
+func buildPDUSessionEstablishmentRequest(pduSessID uint8, pti uint8, pduType uint8) []byte {
 	msg := nas.NewMessage()
 	msg.GsmMessage = nas.NewGsmMessage()
 	msg.GsmMessage.PDUSessionEstablishmentRequest = nasMessage.NewPDUSessionEstablishmentRequest(0)
@@ -377,7 +377,7 @@ func buildPDUSessionEstablishmentRequest(pduSessID uint8, PTI uint8, pduType uin
 	// Set GSM Message
 	pduEstReq.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
 	pduEstReq.SetPDUSessionID(pduSessID)
-	pduEstReq.SetPTI(PTI)
+	pduEstReq.SetPTI(pti)
 	pduEstReq.SetMessageType(nas.MsgTypePDUSessionEstablishmentRequest)
 	pduEstReq.PDUSessionType = nasType.NewPDUSessionType(nasMessage.PDUSessionEstablishmentRequestPDUSessionTypeType)
 	pduEstReq.PDUSessionType.SetPDUSessionTypeValue(pduType)
@@ -389,7 +389,7 @@ func buildPDUSessionEstablishmentRequest(pduSessID uint8, PTI uint8, pduType uin
 	}
 }
 
-func buildPDUSessionModificationRequest(pduSessID uint8, PTI uint8) []byte {
+func buildPDUSessionModificationRequest(pduSessID uint8, pti uint8) []byte {
 	msg := nas.NewMessage()
 	msg.GsmMessage = nas.NewGsmMessage()
 	msg.GsmMessage.PDUSessionModificationRequest = nasMessage.NewPDUSessionModificationRequest(0)
@@ -400,7 +400,7 @@ func buildPDUSessionModificationRequest(pduSessID uint8, PTI uint8) []byte {
 	// Set GSM Message
 	pduModReq.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
 	pduModReq.SetPDUSessionID(pduSessID)
-	pduModReq.SetPTI(PTI)
+	pduModReq.SetPTI(pti)
 	pduModReq.SetMessageType(nas.MsgTypePDUSessionModificationRequest)
 
 	if b, err := msg.PlainNasEncode(); err != nil {
@@ -410,7 +410,7 @@ func buildPDUSessionModificationRequest(pduSessID uint8, PTI uint8) []byte {
 	}
 }
 
-func buildPDUSessionEstablishmentReject(pduSessID uint8, PTI uint8, cause uint8) []byte {
+func buildPDUSessionEstablishmentReject(pduSessID uint8, pti uint8, cause uint8) []byte {
 	msg := nas.NewMessage()
 	msg.GsmMessage = nas.NewGsmMessage()
 	msg.GsmMessage.PDUSessionEstablishmentReject = nasMessage.NewPDUSessionEstablishmentReject(0)
@@ -421,7 +421,7 @@ func buildPDUSessionEstablishmentReject(pduSessID uint8, PTI uint8, cause uint8)
 	// Set GSM Message
 	pduEstRej.SetExtendedProtocolDiscriminator(nasMessage.Epd5GSSessionManagementMessage)
 	pduEstRej.SetPDUSessionID(pduSessID)
-	pduEstRej.SetPTI(PTI)
+	pduEstRej.SetPTI(pti)
 	pduEstRej.SetMessageType(nas.MsgTypePDUSessionEstablishmentReject)
 	pduEstRej.Cause5GSM.SetCauseValue(cause)
 
