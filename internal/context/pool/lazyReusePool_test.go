@@ -490,13 +490,13 @@ func TestLazyReusePool_ManyGoroutine(t *testing.T) {
 
 	expected := make([]int, numOfThreads*2)
 	for i := 0; i < numOfThreads*2; i++ {
-		expected[i] = p.GetHead().First() + i
+		expected[i] = p.Min() + i
 	}
 	assert.Equal(t, expected, allocated)
 	assert.Equal(t, 900-numOfThreads, p.Remain())
 
 	a, ok := p.Allocate()
-	assert.Equal(t, p.GetHead().First()+numOfThreads*2, a)
+	assert.Equal(t, p.Min()+numOfThreads*2, a)
 	assert.True(t, ok)
 	assert.Equal(t, 900-numOfThreads-1, p.Remain())
 }
