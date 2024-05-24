@@ -1,13 +1,15 @@
 package processor_test
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	// "github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"gopkg.in/h2non/gock.v1"
 
@@ -589,15 +591,30 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 
 	service.SMF = mockSmf
 
-	httpRecorder := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(httpRecorder)
-
 	for _, tc := range testCases {
 		t.Run(tc.paramStr, func(t *testing.T) {
+			httpRecorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(httpRecorder)
+
 			processor.HandlePDUSessionSMContextCreate(c, tc.request, nil)
 
-			// require.Equal(t, tc.expectedHTTPRsp.Status, httpResp.Status)
-			// require.Equal(t, tc.expectedHTTPRsp.Body, httpResp.Body)
+			httpResp := httpRecorder.Result()
+			if errClose := httpResp.Body.Close(); errClose != nil {
+				t.Fatalf("Failed to close response body: %+v", errClose)
+			}
+
+			respBytes, errReadAll := io.ReadAll(httpResp.Body)
+			if errReadAll != nil {
+				t.Fatalf("Failed to read response body: %+v", errReadAll)
+			}
+
+			expectedBytes, errMarshal := json.Marshal(tc.expectedHTTPRsp.Body)
+			if errMarshal != nil {
+				t.Fatalf("Failed to marshal expected response body: %+v", errMarshal)
+			}
+
+			require.Equal(t, tc.expectedHTTPRsp.Status, httpResp.StatusCode)
+			require.Equal(t, expectedBytes, respBytes)
 
 			// wait for another go-routine to execute following procedure
 			time.Sleep(100 * time.Millisecond)
@@ -614,5 +631,5 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 	}
 
 	err = udp.Server.Close()
-	// require.NoError(t, err)
+	require.NoError(t, err)
 }
