@@ -861,8 +861,10 @@ func (c *SMContext) SendUpPathChgNotification(chgType string, notifCb NotifCallb
 
 func (smContext *SMContext) UpdateANInformation(ip net.IP, teid uint32) {
 	tunnel := smContext.Tunnel
-	tunnel.ANInformation.IPAddress = ip
-	tunnel.ANInformation.TEID = teid
+	tunnel.ANInformation = &ANInformation{
+		IPAddress: ip,
+		TEID:      teid,
+	}
 
 	for _, dataPath := range tunnel.DataPathPool {
 		if dataPath.Activated {
