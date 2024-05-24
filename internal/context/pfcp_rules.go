@@ -30,6 +30,8 @@ func (rs RuleState) String() string {
 		return "RULE_REMOVE"
 	case RULE_QUERY:
 		return "RULE_QUERY"
+	case RULE_SYNCED:
+		return "RULE_SYNCED"
 	default:
 		return fmt.Sprintf("UNKNOWN_RULE_STATE(%d)", rs)
 	}
