@@ -24,32 +24,25 @@ func ActivatePDUSessionAtUPFs(
 	resChan := make(chan smf_context.SendPfcpResult)
 	defer close(resChan)
 
-	waitForReply := 0
-
-	for _, pfcpSessionContext := range smContext.PFCPSessionContexts {
-		upf := pfcpSessionContext.UPF
-		nodeID := upf.NodeIDToString()
-		select {
-		case <-upf.Association.Done():
-			logger.PduSessLog.Warnf("UPF[%s] not associated, skip session establishment for %s", nodeID, pfcpSessionContext.PDUSessionParams())
-			continue
-		default:
-			logger.PduSessLog.Infof("Init session establishment on UPF[%s] for %s", nodeID, pfcpSessionContext.PDUSessionParams())
-			waitForReply += 1
-			if pfcpSessionContext.RemoteSEID == 0 {
-				go establishPfcpSession(pfcpSessionContext, resChan)
-			} else {
-				go modifyExistingPfcpSession(smContext, pfcpSessionContext, resChan, "")
-			}
+	defaultPath := smContext.Tunnel.DataPathPool.GetDefaultPath()
+	anUPF := defaultPath.FirstDPNode.UPF
+	pfcpSessionContext := smContext.PFCPSessionContexts[anUPF.ID]
+	upf := pfcpSessionContext.UPF
+	nodeID := upf.NodeIDToString()
+	select {
+	case <-upf.Association.Done():
+		logger.PduSessLog.Warnf("UPF[%s] not associated, skip session establishment for %s", nodeID, pfcpSessionContext.PDUSessionParams())
+		return smf_context.SessionEstablishFailed
+	default:
+		logger.PduSessLog.Infof("Init session establishment on UPF[%s] for %s", nodeID, pfcpSessionContext.PDUSessionParams())
+		if pfcpSessionContext.RemoteSEID == 0 {
+			go establishPfcpSession(pfcpSessionContext, resChan)
+		} else {
+			go modifyExistingPfcpSession(smContext, pfcpSessionContext, resChan, "")
 		}
 	}
 
-	if waitForReply == 0 {
-		logger.PduSessLog.Warnln("No UPFs are associated to establish the session")
-		return smf_context.SessionEstablishFailed
-	}
-
-	return waitAllPfcpRsp(waitForReply, smf_context.SessionEstablishSuccess, smf_context.SessionEstablishFailed, resChan)
+	return waitAllPfcpRsp(1, smf_context.SessionEstablishSuccess, smf_context.SessionEstablishFailed, resChan)
 }
 
 func UpdatePDUSessionAtANUPF(
@@ -183,6 +176,7 @@ func establishPfcpSession(
 	}
 
 	logger.PduSessLog.Infof("Sending SessionEstablishmentRequest for %s to UPF[%s]", pfcpSessionContext.PDUSessionParams(), nodeID)
+	logger.PduSessLog.Tracef("Transfer the following PFCPSessionContext: %s", pfcpSessionContext)
 
 	rcvMsg, err := pfcp_message.SendPfcpSessionEstablishmentRequest(pfcpSessionContext)
 	if err != nil {
@@ -245,6 +239,8 @@ func modifyExistingPfcpSession(
 	}
 
 	logger.PduSessLog.Infof("Sending SessionModificationRequest for %s to UPF[%s]", pfcpSessionContext.PDUSessionParams(), nodeID)
+
+	logger.PduSessLog.Tracef("Transfer the following PFCPSessionContext: %s", pfcpSessionContext)
 
 	rcvMsg, err := pfcp_message.SendPfcpSessionModificationRequest(pfcpSessionContext)
 	if err != nil {
