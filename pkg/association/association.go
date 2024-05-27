@@ -168,7 +168,6 @@ func keepHeartbeatTo(ctx context.Context, upf *smf_context.UPF) {
 		case err := <-errChan:
 			// disassociate and cancel session management as soon as heartbeat failed
 			upf.UPFStatus = smf_context.NotAssociated
-			//upf.SessionManagementCancelFunc()
 			upf.AssociationCancelFunc()
 			upf.RecoveryTimeStamp = time.Time{}
 
@@ -203,9 +202,14 @@ func doPfcpHeartbeat(upf *smf_context.UPF, errChan chan error, quit chan bool) {
 
 	resMsg, err := message.SendPfcpHeartbeatRequest(upf)
 	if err != nil {
-		upf.UPFStatus = smf_context.NotAssociated
-		upf.RecoveryTimeStamp = time.Time{}
-		return
+		select {
+		case <-quit:
+			logger.MainLog.Warnf("Previous heartbeat already crashed UPF[%s]", upf.NodeIDToString())
+			return
+		default:
+			errChan <- fmt.Errorf("%w", err)
+			return
+		}
 	}
 
 	rsp := resMsg.PfcpMessage.Body.(pfcp.HeartbeatResponse)
