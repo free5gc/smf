@@ -24,25 +24,43 @@ func ActivatePDUSessionAtUPFs(
 	resChan := make(chan smf_context.SendPfcpResult)
 	defer close(resChan)
 
-	defaultPath := smContext.Tunnel.DataPathPool.GetDefaultPath()
-	anUPF := defaultPath.FirstDPNode.UPF
-	pfcpSessionContext := smContext.PFCPSessionContexts[anUPF.ID]
-	upf := pfcpSessionContext.UPF
-	nodeID := upf.NodeIDToString()
-	select {
-	case <-upf.Association.Done():
-		logger.PduSessLog.Warnf("UPF[%s] not associated, skip session establishment for %s", nodeID, pfcpSessionContext.PDUSessionParams())
-		return smf_context.SessionEstablishFailed
-	default:
-		logger.PduSessLog.Infof("Init session establishment on UPF[%s] for %s", nodeID, pfcpSessionContext.PDUSessionParams())
-		if pfcpSessionContext.RemoteSEID == 0 {
-			go establishPfcpSession(pfcpSessionContext, resChan)
-		} else {
-			go modifyExistingPfcpSession(smContext, pfcpSessionContext, resChan, "")
+	parsedUPFs := make(map[uuid.UUID]*smf_context.UPF)
+
+	// collect all individual UPFs that are part of a datapath in this SMContext and send the session rules to them
+	for _, dataPath := range smContext.Tunnel.DataPathPool {
+		if !dataPath.Activated {
+			continue
+		}
+		for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
+			if _, exists := parsedUPFs[node.UPF.ID]; exists {
+				continue
+			}
+			// get PFCPSessionContext for this UPF in this session, contains all session rules for all DPs
+			upf := node.UPF
+			nodeID := upf.NodeIDToString()
+			pfcpSessionContext := smContext.PFCPSessionContexts[upf.ID]
+			select {
+			case <-upf.Association.Done():
+				logger.PduSessLog.Warnf("UPF[%s] not associated, skip session establishment for %s", nodeID, pfcpSessionContext.PDUSessionParams())
+				continue
+			default:
+				logger.PduSessLog.Infof("Init session establishment on UPF[%s] for %s", nodeID, pfcpSessionContext.PDUSessionParams())
+				if pfcpSessionContext.RemoteSEID == 0 {
+					go establishPfcpSession(pfcpSessionContext, resChan)
+				} else {
+					go modifyExistingPfcpSession(smContext, pfcpSessionContext, resChan, "")
+				}
+			}
 		}
 	}
 
-	return waitAllPfcpRsp(1, smf_context.SessionEstablishSuccess, smf_context.SessionEstablishFailed, resChan)
+	waitForReply := len(parsedUPFs)
+	if waitForReply == 0 {
+		logger.PduSessLog.Warnln("No UPFs are associated to establish the session")
+		return smf_context.SessionReleaseFailed
+	}
+
+	return waitAllPfcpRsp(waitForReply, smf_context.SessionEstablishSuccess, smf_context.SessionEstablishFailed, resChan)
 }
 
 func UpdatePDUSessionAtANUPF(
