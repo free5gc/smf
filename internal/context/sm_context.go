@@ -292,7 +292,10 @@ func (smContext *SMContext) String() string {
 	return str
 }
 
-func NewSMContext(createData *models.SmContextCreateData, sessSubData []models.SessionManagementSubscriptionData) *SMContext {
+func NewSMContext(
+	createData *models.SmContextCreateData,
+	sessSubData []models.SessionManagementSubscriptionData,
+) *SMContext {
 	smContext := new(SMContext)
 
 	smContext.SmContextCreateData = createData
@@ -656,7 +659,6 @@ func (c *SMContext) findPSAandAllocUeIP(param *UPFSelectionParams) error {
 		if err != nil {
 			return fmt.Errorf("failed to find PSA and allocate PDU address: %v", err)
 		}
-
 	}
 	if c.SelectedUPF == nil {
 		return fmt.Errorf("failed to select PSA UPF, selection parameters: %s", param.String())

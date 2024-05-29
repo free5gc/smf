@@ -30,7 +30,7 @@ func HandlePfcpAssociationSetupRequest(msg *pfcpUdp.Message) {
 		logger.PfcpLog.Errorln("pfcp association needs NodeID")
 		return
 	}
-	logger.PfcpLog.Debugf("Handle PFCP Association Setup Request with NodeID[%s]", nodeID)
+	logger.PfcpLog.Debugf("Handle PFCP Association Setup Request with NodeID[%v]", nodeID)
 
 	upf := smf_context.GetUserPlaneInformation().GetUPFNodeByNodeID(*nodeID)
 	if upf == nil {

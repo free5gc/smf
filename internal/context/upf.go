@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
@@ -16,7 +18,6 @@ import (
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/idgenerator"
-	"github.com/google/uuid"
 )
 
 type UPFStatus int
@@ -231,7 +232,11 @@ func (i *UPFInterfaceInfo) IP(pduSessType uint8) (net.IP, error) {
 
 // *** add unit test ***//
 // NewUPF returns a new UPF context in SMF
-func NewUPF(upNode *UPNode, ifaces []*factory.InterfaceUpfInfoItem, upfSNssaiInfos []*factory.SnssaiUpfInfoItem) (upf *UPF) {
+func NewUPF(
+	upNode *UPNode,
+	ifaces []*factory.InterfaceUpfInfoItem,
+	upfSNssaiInfos []*factory.SnssaiUpfInfoItem,
+) (upf *UPF) {
 	upf = new(UPF)
 	upf.UPNode = upNode
 
@@ -349,7 +354,6 @@ func (upf *UPF) GetInterface(interfaceType models.UpInterfaceType, dnn string) *
 					}
 				}
 			}
-
 		}
 	case models.UpInterfaceType_N9:
 		for i, iface := range upf.N9Interfaces {
@@ -371,6 +375,12 @@ func (upf *UPF) PFCPAddr() *net.UDPAddr {
 }
 
 func (upf *UPF) generatePDRID() (uint16, error) {
+	select {
+	case <-upf.Association.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF, do not generate PDR ID", upf.NodeID.ResolveNodeIdToIp().String())
+		return 0, err
+	default:
+	}
 	var pdrID uint16
 	if tmpID, err := upf.pdrIDGenerator.Allocate(); err != nil {
 		return 0, err
@@ -382,6 +392,12 @@ func (upf *UPF) generatePDRID() (uint16, error) {
 }
 
 func (upf *UPF) generateFARID() (uint32, error) {
+	select {
+	case <-upf.Association.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF, do not generate FAR ID", upf.NodeID.ResolveNodeIdToIp().String())
+		return 0, err
+	default:
+	}
 	var farID uint32
 	if tmpID, err := upf.farIDGenerator.Allocate(); err != nil {
 		return 0, err
@@ -393,6 +409,12 @@ func (upf *UPF) generateFARID() (uint32, error) {
 }
 
 func (upf *UPF) generateBARID() (uint8, error) {
+	select {
+	case <-upf.Association.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF, do not generate BAR ID", upf.NodeID.ResolveNodeIdToIp().String())
+		return 0, err
+	default:
+	}
 	var barID uint8
 	if tmpID, err := upf.barIDGenerator.Allocate(); err != nil {
 		return 0, err
@@ -404,6 +426,12 @@ func (upf *UPF) generateBARID() (uint8, error) {
 }
 
 func (upf *UPF) generateQERID() (uint32, error) {
+	select {
+	case <-upf.Association.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF, do not generate QER ID", upf.NodeID.ResolveNodeIdToIp().String())
+		return 0, err
+	default:
+	}
 	var qerID uint32
 	if tmpID, err := upf.qerIDGenerator.Allocate(); err != nil {
 		return 0, err
@@ -415,6 +443,12 @@ func (upf *UPF) generateQERID() (uint32, error) {
 }
 
 func (upf *UPF) generateURRID() (uint32, error) {
+	select {
+	case <-upf.Association.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF, do not generate URR ID", upf.NodeID.ResolveNodeIdToIp().String())
+		return 0, err
+	default:
+	}
 	var urrID uint32
 	if tmpID, err := upf.urrIDGenerator.Allocate(); err != nil {
 		return 0, err
@@ -426,6 +460,13 @@ func (upf *UPF) generateURRID() (uint32, error) {
 }
 
 func (upf *UPF) AddPDR() (*PDR, error) {
+	select {
+	case <-upf.Association.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF, do not add PDR", upf.NodeID.ResolveNodeIdToIp().String())
+		return nil, err
+	default:
+	}
+
 	pdr := new(PDR)
 	if PDRID, err := upf.generatePDRID(); err != nil {
 		return nil, err
@@ -445,6 +486,12 @@ func (upf *UPF) AddPDR() (*PDR, error) {
 }
 
 func (upf *UPF) addFAR() (*FAR, error) {
+	select {
+	case <-upf.Association.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF, do not add FAR", upf.NodeID.ResolveNodeIdToIp().String())
+		return nil, err
+	default:
+	}
 	far := new(FAR)
 	if FARID, err := upf.generateFARID(); err != nil {
 		return nil, err
@@ -458,6 +505,12 @@ func (upf *UPF) addFAR() (*FAR, error) {
 }
 
 func (upf *UPF) AddBAR() (*BAR, error) {
+	select {
+	case <-upf.Association.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF, do not add BAR", upf.NodeID.ResolveNodeIdToIp().String())
+		return nil, err
+	default:
+	}
 	bar := new(BAR)
 	if BARID, err := upf.generateBARID(); err != nil {
 	} else {
@@ -470,6 +523,12 @@ func (upf *UPF) AddBAR() (*BAR, error) {
 }
 
 func (upf *UPF) AddQER() (*QER, error) {
+	select {
+	case <-upf.Association.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF, do not add QER", upf.NodeID.ResolveNodeIdToIp().String())
+		return nil, err
+	default:
+	}
 	qer := new(QER)
 	if QERID, err := upf.generateQERID(); err != nil {
 	} else {
@@ -482,6 +541,12 @@ func (upf *UPF) AddQER() (*QER, error) {
 }
 
 func (upf *UPF) AddURR(urrId uint32, opts ...UrrOpt) (*URR, error) {
+	select {
+	case <-upf.Association.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF, do not add URR", upf.NodeID.ResolveNodeIdToIp().String())
+		return nil, err
+	default:
+	}
 	urr := new(URR)
 	urr.MeasureMethod = MesureMethodVol
 	urr.MeasurementInformation = MeasureInformation(true, false)

@@ -70,6 +70,7 @@ func (pfcpSessionContext *PFCPSessionContext) String() string {
 
 	return str
 }
+
 func (pfcpSessionContext *PFCPSessionContext) MarkAsSyncedToUPFRecursive() {
 	for _, pdr := range pfcpSessionContext.PDRs {
 		pdr.SetStateRecursive(RULE_SYNCED)

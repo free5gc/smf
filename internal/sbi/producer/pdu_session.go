@@ -175,6 +175,16 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 
 	if err != nil {
 		logger.PduSessLog.Errorln("Get SessionManagementSubscriptionData error:", err)
+		httpResponse := &httpwrapper.Response{
+			Header: nil,
+			Status: http.StatusInternalServerError,
+			Body: models.PostSmContextsErrorResponse{
+				JsonData: &models.SmContextCreateError{
+					Error: &Nsmf_PDUSession.SubscriptionDenied, // TODO: correct?
+				},
+			},
+		}
+		return httpResponse
 	} else {
 		defer func() {
 			if rspCloseErr := rsp.Body.Close(); rspCloseErr != nil {
@@ -366,7 +376,8 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 		return httpResponse
 	}
 
-	logger.PduSessLog.Infof("HandlePDUSessionSMContextUpdate for UE IP %s and PDU session %d", smContext.PDUAddress.String(), smContext.PduSessionId)
+	logger.PduSessLog.Infof("HandlePDUSessionSMContextUpdate for UE IP %s and PDU session %d",
+		smContext.PDUAddress.String(), smContext.PduSessionId)
 
 	var httpResponse *httpwrapper.Response
 	var sendPFCPModification bool

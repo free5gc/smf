@@ -24,7 +24,7 @@ func SendPfcpAssociationSetupRequest(addr *net.UDPAddr) (resMsg *pfcpUdp.Message
 	logger.PfcpLog.Tracef("Build AssociationSetupRequest to UPF [%s]", addr.String())
 	pfcpMsg, err := BuildPfcpAssociationSetupRequest()
 	if err != nil {
-		return nil, fmt.Errorf("Build PFCP Association Setup Request failed: %v", err)
+		return nil, fmt.Errorf("build PFCP Association Setup Request failed: %v", err)
 	}
 	logger.PfcpLog.Tracef("Create PFCP message to UPF [%s]", addr.String())
 
@@ -40,7 +40,8 @@ func SendPfcpAssociationSetupRequest(addr *net.UDPAddr) (resMsg *pfcpUdp.Message
 	}
 
 	logger.PfcpLog.Tracef("Send AssociationSetupRequest to UPF [%s]", addr.String())
-	resMsg, err = udp.SendPfcpRequest(message, addr, context.Background()) // pass empty context as association is not established yet
+	resMsg, err = udp.SendPfcpRequest(message, addr, context.Background())
+	// pass empty context as association is not established yet
 
 	if err != nil {
 		return nil, err
@@ -58,7 +59,7 @@ func SendPfcpAssociationSetupRequest(addr *net.UDPAddr) (resMsg *pfcpUdp.Message
 func SendPfcpAssociationSetupResponse(addr *net.UDPAddr, cause pfcpType.Cause) {
 	pfcpMsg, err := BuildPfcpAssociationSetupResponse(cause)
 	if err != nil {
-		logger.PfcpLog.Errorf("Build PFCP Association Setup Response failed: %v", err)
+		logger.PfcpLog.Errorf("build PFCP Association Setup Response failed: %v", err)
 		return
 	}
 
@@ -79,7 +80,7 @@ func SendPfcpAssociationSetupResponse(addr *net.UDPAddr, cause pfcpType.Cause) {
 func SendPfcpAssociationReleaseRequest(addr *net.UDPAddr) (resMsg *pfcpUdp.Message, err error) {
 	pfcpMsg, err := BuildPfcpAssociationReleaseRequest()
 	if err != nil {
-		logger.PfcpLog.Errorf("Build PFCP Association Release Request failed: %v", err)
+		logger.PfcpLog.Errorf("build PFCP Association Release Request failed: %v", err)
 		return nil, err
 	}
 
@@ -143,7 +144,7 @@ func SendPfcpSessionEstablishmentRequest(
 
 	logger.PfcpLog.Tracef("Build PFCP Session Establishment Request to UPF[%s]", nodeID)
 
-	pfcpMsg, err := BuildPfcpSessionEstablishmentRequest(pfcpContext)
+	pfcpMsg, _ := BuildPfcpSessionEstablishmentRequest(pfcpContext)
 
 	message := &pfcp.Message{
 		Header: pfcp.Header{
@@ -249,7 +250,6 @@ func SendPfcpSessionModificationRequest(
 func SendPfcpSessionReleaseRequest(
 	pfcpContext *smf_context.PFCPSessionContext,
 ) (resMsg *pfcpUdp.Message, err error) {
-
 	upf := pfcpContext.UPF
 	nodeID := upf.NodeIDToString()
 	localSEID := pfcpContext.LocalSEID
@@ -268,7 +268,7 @@ func SendPfcpSessionReleaseRequest(
 	pfcpMsg, err := BuildPfcpSessionDeletionRequest()
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Release Request failed: %v", err)
-		return
+		return nil, err
 	}
 	seqNum := getSeqNumber()
 	message := &pfcp.Message{
@@ -329,7 +329,7 @@ func SendPfcpSessionRecoveryRequest(
 	pfcpMsg, err := BuildPfcpSessionRecoveryRequest(pfcpContext)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Recovery Request failed: %v", err)
-		return
+		return nil, err
 	}
 
 	message := &pfcp.Message{

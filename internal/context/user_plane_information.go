@@ -515,7 +515,6 @@ func (upi *UserPlaneInformation) UpNodeDelete(name string) {
 		for _, node := range upi.NameToUPNode {
 			node.RemoveLink(toDelete)
 		}
-
 	} else {
 		logger.CtxLog.Infof("UPNode [%s] NOT found.\n", name)
 	}
@@ -648,7 +647,10 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(selection *UPFSelectionPara
 	return pathExist
 }
 
-func (upi *UserPlaneInformation) GenerateDefaultPathToUPF(selection *UPFSelectionParams, destination *UPF) (UPPath, error) {
+func (upi *UserPlaneInformation) GenerateDefaultPathToUPF(
+	selection *UPFSelectionParams,
+	destination *UPF,
+) (UPPath, error) {
 	var source UPNodeInterface
 
 	for _, node := range upi.AccessNetwork {
@@ -833,10 +835,10 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionPa
 	var selectedPSA *UPF
 
 	for _, upf := range sortedUPFList {
-		logger.CtxLog.Debugf("Check candiate PSA UPF[%s] and its secondary UPF", upf.NodeIDToString())
+		logger.CtxLog.Debugf("Check candidate PSA UPF[%s]", upf.NodeIDToString())
 		select {
 		case <-upf.Association.Done():
-			logger.CtxLog.Warnf("Primary UPF[%s] is not associated, do not select as PSA", upf.NodeIDToString())
+			logger.CtxLog.Warnf("PSA UPF[%s] is not associated, do not select as PSA", upf.NodeIDToString())
 		default:
 			selectedPSA = upf
 		}
@@ -920,7 +922,8 @@ func (upi *UserPlaneInformation) ReleaseUEIP(upf *UPF, addr net.IP, static bool)
 	pool := findPoolByAddr(upf, addr, static)
 	if pool == nil {
 		// nothing to do
-		logger.CtxLog.Warnf("Failed to release UE IP address %s of UPF[%s]: pool is empty", addr.String(), upf.NodeIDToString())
+		logger.CtxLog.Warnf("Failed to release UE IP address %s of UPF[%s]: pool is empty",
+			addr.String(), upf.NodeIDToString())
 		return
 	}
 	pool.release(addr)

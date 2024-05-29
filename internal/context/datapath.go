@@ -229,7 +229,6 @@ func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 	}
 
 	// TODO: free TEID?
-	//teid := node.UpLinkTunnel.TEID
 }
 
 func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
@@ -241,7 +240,6 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 		}
 	}
 	// TODO: free TEID?
-	//teid := node.DownLinkTunnel.TEID
 }
 
 func (node *DataPathNode) ID() string {
@@ -306,15 +304,14 @@ func (dataPath *DataPath) String() string {
 	str += "  DataPath Routing Information:\n"
 	index := 1
 	for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
-		failover := "none"
 		if node.IsANUPF() && node.IsAnchorUPF() {
-			str += fmt.Sprintf("    AN ---N3--- [UPF %d %s][Failover %s] ---N6--- DN", index, node.ID(), failover)
+			str += fmt.Sprintf("    AN ---N3--- [UPF %d %s] ---N6--- DN", index, node.ID())
 		} else if node.IsANUPF() {
-			str += fmt.Sprintf("    AN ---N3--- [UPF %d %s][Failover %s] ", index, node.ID(), failover)
+			str += fmt.Sprintf("    AN ---N3--- [UPF %d %s]", index, node.ID())
 		} else if node.IsBranchingPoint {
-			str += fmt.Sprintf("---N9--- [UPF %d %s][Failover %s] ---N9--- ", index, node.ID(), failover)
+			str += fmt.Sprintf("---N9--- [UPF %d %s] ---N9--- ", index, node.ID())
 		} else if node.IsAnchorUPF() {
-			str += fmt.Sprintf(" [UPF %d %s][Failover %s] ---N6--- DN", index, node.ID(), failover)
+			str += fmt.Sprintf(" [UPF %d %s] ---N6--- DN", index, node.ID())
 		} else {
 			logger.CtxLog.Warnf("UPF %s is no AN, PSA or branching point", node.ID())
 		}
@@ -406,8 +403,10 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 			return
 		}
 
-		logger.PduSessLog.Debugf("DP node %s: Added Uplink Tunnel PDR %s", node.UPF.NodeIDToString(), node.UpLinkTunnel.PDR.String())
-		logger.PduSessLog.Debugf("DP node %s: Added Downlink Tunnel PDR %s", node.UPF.NodeIDToString(), node.DownLinkTunnel.PDR.String())
+		logger.PduSessLog.Debugf("DP node %s: Added Uplink Tunnel PDR %s",
+			node.UPF.NodeIDToString(), node.UpLinkTunnel.PDR.String())
+		logger.PduSessLog.Debugf("DP node %s: Added Downlink Tunnel PDR %s",
+			node.UPF.NodeIDToString(), node.DownLinkTunnel.PDR.String())
 	}
 
 	// Note: This should be after Activate Tunnels
@@ -661,7 +660,8 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				DLFAR.ForwardingParameters.DestinationInterface.InterfaceValue = pfcpType.DestinationInterfaceAccess
 
 				if anInfo := smContext.Tunnel.ANInformation; anInfo != nil {
-					logger.PduSessLog.Tracef("anIP not nil, set DL FAR OuterHeaderCreation to IP %s and TEID %d", anInfo.IPAddress, anInfo.TEID)
+					logger.PduSessLog.Tracef("anIP not nil, set DL FAR OuterHeaderCreation to IP %s and TEID %d",
+						anInfo.IPAddress, anInfo.TEID)
 					DLFAR.ForwardingParameters.NetworkInstance = &pfcpType.NetworkInstance{
 						NetworkInstance: smContext.Dnn,
 						FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
@@ -676,8 +676,10 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 			}
 		}
 
-		logger.PduSessLog.Debugf("DP node %s: Activated Uplink Tunnel PDR %s", curDataPathNode.UPF.NodeIDToString(), curDataPathNode.UpLinkTunnel.PDR.String())
-		logger.PduSessLog.Debugf("DP node %s: Activated Downlink Tunnel PDR %s", curDataPathNode.UPF.NodeIDToString(), curDataPathNode.DownLinkTunnel.PDR.String())
+		logger.PduSessLog.Debugf("DP node %s: Activated Uplink Tunnel PDR %s",
+			curDataPathNode.UPF.NodeIDToString(), curDataPathNode.UpLinkTunnel.PDR.String())
+		logger.PduSessLog.Debugf("DP node %s: Activated Downlink Tunnel PDR %s",
+			curDataPathNode.UPF.NodeIDToString(), curDataPathNode.DownLinkTunnel.PDR.String())
 	}
 
 	logger.PduSessLog.Traceln("[ActivateTunnelAndPDR] Activated data path")

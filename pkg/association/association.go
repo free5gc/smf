@@ -126,7 +126,8 @@ func setupPfcpAssociation(upf *smf_context.UPF) error {
 	// let other processes know that UPF is recovering sessions
 	upf.RestoresSessions, upf.RestoresSessionsCancelFunc = context.WithCancel(context.Background())
 
-	// create context to signal processes that UPF is ready for session management messages (still needs to recover old sessions though)
+	// create context to signal processes that UPF is ready for session management messages
+	// (still needs to recover old sessions though)
 	// if the session was not established in the first place (RemoteSEID == 0), then special logic applies
 	upf.UPFStatus = smf_context.AssociatedSetUpSuccess
 	upf.Association, upf.AssociationCancelFunc = context.WithCancel(context.Background())
@@ -190,7 +191,6 @@ func keepHeartbeatTo(ctx context.Context, upf *smf_context.UPF) {
 }
 
 func doPfcpHeartbeat(upf *smf_context.UPF, errChan chan error, quit chan bool) {
-	logger.PfcpLog.Tracef("Sending PFCP Heartbeat Request to UPF[%s]", upf.NodeIDToString())
 	select {
 	case <-quit:
 		logger.MainLog.Warnf("Previous heartbeat already crashed UPF[%s]", upf.NodeIDToString())
@@ -246,33 +246,39 @@ func ReleaseAllResourcesOfUPF(upf *smf_context.UPF) {
 		pfcpSessionContext.Restoring.Unlock()
 	}
 
-	// find the SMContexts that belong to the UPF and its failover and release resources
+	// find the SMContexts that belong to the UPF and release resources
 	allResourcesReleased := true
 	for {
 		smf_context.GetSelf().ProcEachSMContext(func(smContext *smf_context.SMContext) bool {
-			logger.CtxLog.Infof("Release session: check context for PDU Session[ UEIP %s | ID %d ]", smContext.PDUAddress.String(), smContext.PduSessionId)
+			logger.CtxLog.Infof("Release session: check context for PDU Session[ UEIP %s | ID %d ]",
+				smContext.PDUAddress.String(), smContext.PduSessionId)
 			if smContext.SelectedUPF != nil && smContext.SelectedUPF == upf {
 				switch smContext.State() {
 				case smf_context.Active, smf_context.ModificationPending, smf_context.PFCPModification:
-					logger.CtxLog.Infof("Request AMF to release session resources for PDU Session[ UEIP %s | ID %d ]", smContext.PDUAddress.String(), smContext.PduSessionId)
+					logger.CtxLog.Infof("Request AMF to release session resources for PDU Session[ UEIP %s | ID %d ]",
+						smContext.PDUAddress.String(), smContext.PduSessionId)
 					needToSendNotify, removeContext := requestAMFToReleasePDUResources(smContext)
 					if needToSendNotify {
-						logger.CtxLog.Infof("Send release notification for PDU Session[ UEIP %s | ID %d ]", smContext.PDUAddress.String(), smContext.PduSessionId)
+						logger.CtxLog.Infof("Send release notification for PDU Session[ UEIP %s | ID %d ]",
+							smContext.PDUAddress.String(), smContext.PduSessionId)
 						producer.SendReleaseNotification(smContext.SmStatusNotifyUri)
 					}
 					if removeContext {
-						logger.CtxLog.Infof("Remove context  for for PDU Session[ UEIP %s | ID %d ] from all NFs", smContext.PDUAddress.String(), smContext.PduSessionId)
+						logger.CtxLog.Infof("Remove context  for for PDU Session[ UEIP %s | ID %d ] from all NFs",
+							smContext.PDUAddress.String(), smContext.PduSessionId)
 						// Notification has already been sent, if it is needed
 						producer.RemoveSMContextFromAllNF(smContext, false)
 					}
 				default:
-					logger.MainLog.Errorf("SMContext for UPF[%s], UE IP [%s] and session ID %d is in state %s, do not release resources yet", upf.NodeIDToString(), smContext.PDUAddress.String(), smContext.PDUSessionID, smContext.State())
+					logger.MainLog.Errorf("SMContext for UPF[%s], UE IP [%s] and session ID %d is in state %s, do not release resources yet",
+						upf.NodeIDToString(), smContext.PDUAddress.String(), smContext.PDUSessionID, smContext.State())
 
 					//time.Sleep(2 * time.Second)
 					allResourcesReleased = false // continue with loop
 				}
 			} else {
-				logger.CtxLog.Warnf("Found session context without UPF for PDU Session[ UEIP %s | ID %d ]!", smContext.PDUAddress.String(), smContext.PduSessionId)
+				logger.CtxLog.Warnf("Found session context without UPF for PDU Session[ UEIP %s | ID %d ]!",
+					smContext.PDUAddress.String(), smContext.PduSessionId)
 			}
 			return true
 		})
