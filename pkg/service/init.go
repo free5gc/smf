@@ -52,11 +52,13 @@ func NewApp(
 	ctx context.Context, cfg *factory.Config, tlsKeyLogPath string,
 	pfcpStart func(*SmfApp), pfcpTerminate func(),
 ) (*SmfApp, error) {
+	smf_context.Init()
 	smf := &SmfApp{
 		cfg:           cfg,
 		wg:            sync.WaitGroup{},
 		pfcpStart:     pfcpStart,
 		pfcpTerminate: pfcpTerminate,
+		smfCtx:        smf_context.GetSelf(),
 	}
 	smf.SetLogEnable(cfg.GetLogEnable())
 	smf.SetLogLevel(cfg.GetLogLevel())
@@ -84,8 +86,6 @@ func NewApp(
 	smf.sbiServer = sbiServer
 
 	smf.ctx, smf.cancel = context.WithCancel(ctx)
-	smf_context.Init()
-	smf.smfCtx = smf_context.GetSelf()
 
 	SMF = smf
 
