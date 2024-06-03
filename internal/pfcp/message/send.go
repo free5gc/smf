@@ -133,7 +133,7 @@ func SendPfcpSessionEstablishmentRequest(
 	pfcpContext *smf_context.PFCPSessionContext,
 ) (resMsg *pfcpUdp.Message, err error) {
 	upf := pfcpContext.UPF
-	nodeID := upf.NodeIDToString()
+	nodeID := upf.GetNodeIDString()
 	localSEID := pfcpContext.LocalSEID
 
 	select {
@@ -188,7 +188,7 @@ func SendPfcpSessionModificationRequest(
 	pfcpContext *smf_context.PFCPSessionContext,
 ) (resMsg *pfcpUdp.Message, err error) {
 	upf := pfcpContext.UPF
-	nodeID := upf.NodeIDToString()
+	nodeID := upf.GetNodeIDString()
 	localSEID := pfcpContext.LocalSEID
 	remoteSEID := pfcpContext.RemoteSEID
 
@@ -251,7 +251,7 @@ func SendPfcpSessionReleaseRequest(
 	pfcpContext *smf_context.PFCPSessionContext,
 ) (resMsg *pfcpUdp.Message, err error) {
 	upf := pfcpContext.UPF
-	nodeID := upf.NodeIDToString()
+	nodeID := upf.GetNodeIDString()
 	localSEID := pfcpContext.LocalSEID
 	remoteSEID := pfcpContext.RemoteSEID
 
@@ -315,7 +315,7 @@ func SendPfcpSessionRecoveryRequest(
 	pfcpContext *smf_context.PFCPSessionContext,
 ) (resMsg *pfcpUdp.Message, err error) {
 	upf := pfcpContext.UPF
-	nodeID := upf.NodeIDToString()
+	nodeID := upf.GetNodeIDString()
 	localSEID := pfcpContext.LocalSEID
 
 	select {
@@ -374,7 +374,7 @@ func SendPfcpSessionDeletionRequest(
 	upf *smf_context.UPF,
 	smContext *smf_context.SMContext,
 ) (resMsg *pfcpUdp.Message, err error) {
-	nodeID := upf.NodeIDToString()
+	nodeID := upf.GetNodeIDString()
 	localSEID := smContext.PFCPSessionContexts[upf.GetID()].LocalSEID
 	remoteSEID := smContext.PFCPSessionContexts[upf.GetID()].RemoteSEID
 
@@ -459,7 +459,7 @@ func SendPfcpSessionReportResponse(
 }
 
 func SendPfcpHeartbeatRequest(upf *smf_context.UPF) (resMsg *pfcpUdp.Message, err error) {
-	nodeID := upf.NodeIDToString()
+	nodeID := upf.GetNodeIDString()
 
 	select {
 	case <-upf.Association.Done():

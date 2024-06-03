@@ -122,7 +122,7 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 
 	select {
 	case <-upf.Association.Done():
-		logger.PfcpLog.Warnf("UPF[%s] is not associated, reject SessionReportRequest", upf.NodeIDToString())
+		logger.PfcpLog.Warnf("UPF[%s] is not associated, reject SessionReportRequest", upf.GetNodeIDString())
 		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
 		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
 		return

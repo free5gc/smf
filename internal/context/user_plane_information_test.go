@@ -161,8 +161,8 @@ func TestNewUserPlaneInformation(t *testing.T) {
 	// check UPFs are in other UP maps as well
 	for uuid, upf := range userplaneInformation.UPFs {
 		require.NotNil(t, uuid)
-		require.NotNil(t, userplaneInformation.NodeIDToName[upf.NodeIDToString()])
-		require.NotNil(t, userplaneInformation.NodeIDToUPF[upf.NodeIDToString()])
+		require.NotNil(t, userplaneInformation.NodeIDToName[upf.GetNodeIDString()])
+		require.NotNil(t, userplaneInformation.NodeIDToUPF[upf.GetNodeIDString()])
 	}
 
 	require.NotNil(t, userplaneInformation.NameToUPNode["UPF1"])

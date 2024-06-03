@@ -16,6 +16,19 @@ import (
 	"github.com/google/uuid"
 )
 
+// static/ global function to convert a NodeID to a string depending on the NodeID type
+func NodeIDToString(nodeID pfcpType.NodeID) string {
+	switch nodeID.NodeIdType {
+	case pfcpType.NodeIdTypeIpv4Address, pfcpType.NodeIdTypeIpv6Address:
+		return nodeID.IP.String()
+	case pfcpType.NodeIdTypeFqdn:
+		return nodeID.FQDN
+	default:
+		logger.CtxLog.Errorf("nodeID has unknown type %d", nodeID.NodeIdType)
+		return ""
+	}
+}
+
 // UserPlaneInformation store userplane topology
 type UserPlaneInformation struct {
 	Mu sync.RWMutex // protect UPF and topology structure
@@ -55,7 +68,7 @@ type UPNodeInterface interface {
 	GetLinks() UPPath
 	AddLink(link UPNodeInterface) bool
 	RemoveLink(link UPNodeInterface) bool
-	NodeIDToString() string
+	GetNodeIDString() string
 }
 
 type GNB struct {
@@ -81,17 +94,17 @@ func (gNB *GNB) String() string {
 	str += prefix + fmt.Sprintf("Name: %s\n", gNB.Name)
 	str += prefix + fmt.Sprintf("ANIP: %s\n", gNB.ANIP)
 	str += prefix + fmt.Sprintf("ID: %s\n", gNB.ID)
-	str += prefix + fmt.Sprintf("NodeID: %s\n", gNB.NodeIDToString())
+	str += prefix + fmt.Sprintf("NodeID: %s\n", gNB.GetNodeIDString())
 	str += prefix + fmt.Sprintf("Dnn: %s\n", gNB.Dnn)
 	str += prefix + fmt.Sprintln("Links:")
 	for _, link := range gNB.Links {
-		str += prefix + fmt.Sprintf("-- %s: %s\n", link.GetName(), link.NodeIDToString())
+		str += prefix + fmt.Sprintf("-- %s: %s\n", link.GetName(), link.GetNodeIDString())
 	}
 	str += "}"
 	return str
 }
 
-func (gNB *GNB) NodeIDToString() string {
+func (gNB *GNB) GetNodeIDString() string {
 	switch gNB.NodeID.NodeIdType {
 	case pfcpType.NodeIdTypeIpv4Address, pfcpType.NodeIdTypeIpv6Address:
 		return gNB.NodeID.IP.String()
@@ -120,7 +133,7 @@ func (gNB *GNB) AddLink(link UPNodeInterface) bool {
 
 func (gNB *GNB) RemoveLink(link UPNodeInterface) bool {
 	for i, existingLink := range gNB.Links {
-		if link.GetName() == existingLink.GetName() && existingLink.NodeIDToString() == link.NodeIDToString() {
+		if link.GetName() == existingLink.GetName() && existingLink.GetNodeIDString() == link.GetNodeIDString() {
 			logger.CfgLog.Warningf("Remove UPLink [%s] <=> [%s]\n", existingLink.GetName(), link.GetName())
 			gNB.Links = append(gNB.Links[:i], gNB.Links[i+1:]...)
 			return true
@@ -222,13 +235,13 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) (upi *Use
 			}
 			upi.NameToUPNode[name] = gNB
 			upi.AccessNetwork[name] = gNB
-			upi.NodeIDToName[gNB.NodeIDToString()] = name
+			upi.NodeIDToName[gNB.GetNodeIDString()] = name
 		case UPNODE_UPF:
 			upf := NewUPF(upNode, node.InterfaceUpfInfoList, node.SNssaiInfos)
 			upi.NameToUPNode[name] = upf
 			upi.UPFs[upf.ID] = upf
-			upi.NodeIDToUPF[upf.NodeIDToString()] = upf
-			upi.NodeIDToName[upf.NodeIDToString()] = name
+			upi.NodeIDToUPF[upf.GetNodeIDString()] = upf
+			upi.NodeIDToName[upf.GetNodeIDString()] = name
 
 			// collect IP pool of this UPF for later overlap check
 			for _, sNssaiInfo := range upf.SNssaiInfos {
@@ -265,7 +278,7 @@ func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]*factory.UP
 	nodes := make(map[string]*factory.UPNode)
 	for name, upNode := range upi.NameToUPNode {
 		node := &factory.UPNode{
-			NodeID: upNode.NodeIDToString(),
+			NodeID: upNode.GetNodeIDString(),
 		}
 
 		switch upNode.GetType() {
@@ -368,8 +381,8 @@ func (upi *UserPlaneInformation) LinksToConfiguration() []*factory.UPLink {
 			for _, link := range node.GetLinks() {
 				if !visited[link] {
 					queue = append(queue, link)
-					nodeIdA := node.NodeIDToString()
-					nodeIdB := link.NodeIDToString()
+					nodeIdA := node.GetNodeIDString()
+					nodeIdB := link.GetNodeIDString()
 					linkA := upi.NodeIDToName[nodeIdA]
 					linkB := upi.NodeIDToName[nodeIdB]
 					links = append(links, &factory.UPLink{
@@ -410,13 +423,13 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 			}
 			upi.NameToUPNode[name] = gNB
 			upi.AccessNetwork[name] = gNB
-			upi.NodeIDToName[gNB.NodeIDToString()] = name
+			upi.NodeIDToName[gNB.GetNodeIDString()] = name
 		case UPNODE_UPF:
 			upf := NewUPF(upNode, node.InterfaceUpfInfoList, node.SNssaiInfos)
 			upi.NameToUPNode[name] = upf
 			upi.UPFs[upf.ID] = upf
-			upi.NodeIDToUPF[upf.NodeIDToString()] = upf
-			upi.NodeIDToName[upf.NodeIDToString()] = name
+			upi.NodeIDToUPF[upf.GetNodeIDString()] = upf
+			upi.NodeIDToName[upf.GetNodeIDString()] = name
 
 			// collect IP pool of this UPF for later overlap check
 			for _, sNssaiInfo := range upf.SNssaiInfos {
@@ -453,11 +466,11 @@ func (upi *UserPlaneInformation) LinksFromConfiguration(upTopology *factory.User
 // *** add unit test ***//
 func (upi *UserPlaneInformation) GetUPFNodeByNodeID(nodeID pfcpType.NodeID) *UPF {
 	for id, upf := range upi.NodeIDToUPF {
-		if id == nodeID.ResolveNodeIdToIp().String() {
+		if id == NodeIDToString(nodeID) {
 			return upf
 		}
 	}
-	logger.CtxLog.Errorf("Could not find UPF with NodeID %s", nodeID.ResolveNodeIdToIp().String())
+	logger.CtxLog.Errorf("Could not find UPF with NodeID %s", NodeIDToString(nodeID))
 	return nil
 }
 
@@ -482,7 +495,7 @@ func (upi *UserPlaneInformation) GetUpfById(uuid uuid.UUID) *UPF {
 func (upi *UserPlaneInformation) UpNodeDelete(name string) {
 	if toDelete := upi.NameToUPNode[name]; toDelete != nil {
 		logger.InitLog.Infof("UPNode [%s] found. Deleting it.\n", name)
-		id := toDelete.NodeIDToString()
+		id := toDelete.GetNodeIDString()
 		delete(upi.NodeIDToName, id)
 		delete(upi.NameToUPNode, name)
 
@@ -543,12 +556,12 @@ func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNNAndUPF(
 
 	if upi.DefaultUserPlanePathToUPF[selection.String()] != nil {
 		if path, pathExists := upi.DefaultUserPlanePathToUPF[selection.String()][uuid]; pathExists {
-			logger.CtxLog.Debugf("Existing default UPPath for DNN %s and UPF[%s]", selection.String(), upf.NodeIDToString())
+			logger.CtxLog.Debugf("Existing default UPPath for DNN %s and UPF[%s]", selection.String(), upf.GetNodeIDString())
 			return path
 		}
 	}
 
-	logger.CtxLog.Debugf("Create new default UPPath for DNN %s and UPF[%s]", selection.String(), upf.NodeIDToString())
+	logger.CtxLog.Debugf("Create new default UPPath for DNN %s and UPF[%s]", selection.String(), upf.GetNodeIDString())
 	if path, err := upi.GenerateDefaultPathToUPF(selection, upf); err != nil {
 		logger.CtxLog.Errorln("Failed to create new default UPPath: ", err)
 		return nil
@@ -835,17 +848,17 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionPa
 	var selectedPSA *UPF
 
 	for _, upf := range sortedUPFList {
-		logger.CtxLog.Debugf("Check candidate PSA UPF[%s]", upf.NodeIDToString())
+		logger.CtxLog.Debugf("Check candidate PSA UPF[%s]", upf.GetNodeIDString())
 		select {
 		case <-upf.Association.Done():
-			logger.CtxLog.Warnf("PSA UPF[%s] is not associated, do not select as PSA", upf.NodeIDToString())
+			logger.CtxLog.Warnf("PSA UPF[%s] is not associated, do not select as PSA", upf.GetNodeIDString())
 		default:
 			selectedPSA = upf
 		}
 
 		IPPools, useStaticIPPool := getUEIPPool(upf, selection)
 		if len(IPPools) == 0 {
-			logger.CtxLog.Warnf("IP pool exhausted for candidate UPF[%s]", selectedPSA.NodeIDToString())
+			logger.CtxLog.Warnf("IP pool exhausted for candidate UPF[%s]", selectedPSA.GetNodeIDString())
 			continue
 		}
 		sortedIPPoolList := createPoolListForSelection(IPPools)
@@ -853,7 +866,7 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionPa
 			logger.CtxLog.Debugf("check UEIPPool(%+v)", pool.ueSubNet)
 			ueIP := pool.allocate(selection.PDUAddress)
 			if ueIP != nil {
-				logger.CtxLog.Infof("Selected PSA UPF[%s] and UE IP [%s]", selectedPSA.NodeIDToString(), ueIP.String())
+				logger.CtxLog.Infof("Selected PSA UPF[%s] and UE IP [%s]", selectedPSA.GetNodeIDString(), ueIP.String())
 				return upf, ueIP, useStaticIPPool, nil
 			}
 			// if all addresses in pool are used, search next pool
@@ -923,7 +936,7 @@ func (upi *UserPlaneInformation) ReleaseUEIP(upf *UPF, addr net.IP, static bool)
 	if pool == nil {
 		// nothing to do
 		logger.CtxLog.Warnf("Failed to release UE IP address %s of UPF[%s]: pool is empty",
-			addr.String(), upf.NodeIDToString())
+			addr.String(), upf.GetNodeIDString())
 		return
 	}
 	pool.release(addr)

@@ -265,7 +265,7 @@ func (smContext *SMContext) String() string {
 	str += prefix + fmt.Sprintf("PDUAddress %s\n", smContext.PDUAddress.String())
 
 	str += prefix + fmt.Sprintf("%s\n", smContext.Tunnel)
-	str += prefix + fmt.Sprintf("SelectedUPF %s\n", smContext.SelectedUPF.NodeIDToString())
+	str += prefix + fmt.Sprintf("SelectedUPF %s\n", smContext.SelectedUPF.GetNodeIDString())
 	for _, context := range smContext.PFCPSessionContexts {
 		str += prefix + fmt.Sprintf("%s\n", context)
 	}
@@ -604,7 +604,7 @@ func (smContext *SMContext) AllocateLocalSEIDForDataPath(dataPath *DataPath) {
 		if _, exist := smContext.PFCPSessionContexts[uuid]; !exist {
 			allocatedSEID := AllocateLocalSEID()
 
-			logger.PduSessLog.Debugf("Allocated local SEID %d for UPF[%s]", allocatedSEID, node.UPF.NodeIDToString())
+			logger.PduSessLog.Debugf("Allocated local SEID %d for UPF[%s]", allocatedSEID, node.UPF.GetNodeIDString())
 
 			newPFCPSessionContext := &PFCPSessionContext{
 				PDRs:         make(map[uint16]*PDR),
@@ -629,7 +629,7 @@ type RecoverPDR struct {
 
 func (smContext *SMContext) AddPDRtoPFCPSession(upf *UPF, pdr *PDR) error {
 	if pfcpSessionContext, exist := smContext.PFCPSessionContexts[upf.GetID()]; !exist {
-		return fmt.Errorf("cannot find PFCPContext for UPF[%s] to put PDR %d", upf.NodeIDToString(), pdr.PDRID)
+		return fmt.Errorf("cannot find PFCPContext for UPF[%s] to put PDR %d", upf.GetNodeIDString(), pdr.PDRID)
 	} else {
 		pfcpSessionContext.PDRs[pdr.PDRID] = pdr // store the same PDR reference for primary and secondary UPF
 		return nil

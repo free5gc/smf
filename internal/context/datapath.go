@@ -404,9 +404,9 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 		}
 
 		logger.PduSessLog.Debugf("DP node %s: Added Uplink Tunnel PDR %s",
-			node.UPF.NodeIDToString(), node.UpLinkTunnel.PDR.String())
+			node.UPF.GetNodeIDString(), node.UpLinkTunnel.PDR.String())
 		logger.PduSessLog.Debugf("DP node %s: Added Downlink Tunnel PDR %s",
-			node.UPF.NodeIDToString(), node.DownLinkTunnel.PDR.String())
+			node.UPF.GetNodeIDString(), node.DownLinkTunnel.PDR.String())
 	}
 
 	// Note: This should be after Activate Tunnels
@@ -677,9 +677,9 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 		}
 
 		logger.PduSessLog.Debugf("DP node %s: Activated Uplink Tunnel PDR %s",
-			curDataPathNode.UPF.NodeIDToString(), curDataPathNode.UpLinkTunnel.PDR.String())
+			curDataPathNode.UPF.GetNodeIDString(), curDataPathNode.UpLinkTunnel.PDR.String())
 		logger.PduSessLog.Debugf("DP node %s: Activated Downlink Tunnel PDR %s",
-			curDataPathNode.UPF.NodeIDToString(), curDataPathNode.DownLinkTunnel.PDR.String())
+			curDataPathNode.UPF.GetNodeIDString(), curDataPathNode.DownLinkTunnel.PDR.String())
 	}
 
 	logger.PduSessLog.Traceln("[ActivateTunnelAndPDR] Activated data path")

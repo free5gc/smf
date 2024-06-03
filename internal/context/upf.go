@@ -65,11 +65,11 @@ func (upf *UPF) String() string {
 	prefix := "  "
 	str += prefix + fmt.Sprintf("Name: %s\n", upf.Name)
 	str += prefix + fmt.Sprintf("ID: %s\n", upf.ID)
-	str += prefix + fmt.Sprintf("NodeID: %s\n", upf.NodeIDToString())
+	str += prefix + fmt.Sprintf("NodeID: %s\n", upf.GetNodeIDString())
 	str += prefix + fmt.Sprintf("Dnn: %s\n", upf.Dnn)
 	str += prefix + fmt.Sprintln("Links:")
 	for _, link := range upf.Links {
-		str += prefix + fmt.Sprintf("-- %s: %s\n", link.GetName(), link.NodeIDToString())
+		str += prefix + fmt.Sprintf("-- %s: %s\n", link.GetName(), link.GetNodeIDString())
 	}
 	str += prefix + fmt.Sprintf("N3Interfaces: %s\n", upf.N3Interfaces)
 	str += "}"
@@ -77,7 +77,7 @@ func (upf *UPF) String() string {
 }
 
 // Checks the NodeID type and either returns IPv4, IPv6, or FQDN
-func (upf *UPF) NodeIDToString() string {
+func (upf *UPF) GetNodeIDString() string {
 	switch upf.NodeID.NodeIdType {
 	case pfcpType.NodeIdTypeIpv4Address, pfcpType.NodeIdTypeIpv6Address:
 		return upf.NodeID.IP.String()
@@ -118,7 +118,7 @@ func (upf *UPF) AddLink(link UPNodeInterface) bool {
 
 func (upf *UPF) RemoveLink(link UPNodeInterface) bool {
 	for i, existingLink := range upf.Links {
-		if link.GetName() == existingLink.GetName() && existingLink.NodeIDToString() == link.NodeIDToString() {
+		if link.GetName() == existingLink.GetName() && existingLink.GetNodeIDString() == link.GetNodeIDString() {
 			logger.CfgLog.Warningf("Remove UPLink [%s] <=> [%s]\n", existingLink.GetName(), link.GetName())
 			upf.Links = append(upf.Links[:i], upf.Links[i+1:]...)
 			return true
@@ -342,12 +342,12 @@ func (upf *UPF) GetInterface(interfaceType models.UpInterfaceType, dnn string) *
 	switch interfaceType {
 	case models.UpInterfaceType_N3:
 		if len(upf.N3Interfaces) == 0 {
-			logger.CtxLog.Warnf("UPF[%s] has no known N3 interfaces!", upf.NodeIDToString())
+			logger.CtxLog.Warnf("UPF[%s] has no known N3 interfaces!", upf.GetNodeIDString())
 		} else {
-			logger.CtxLog.Tracef("Getting N3 interface for UPF[%s] for DNN %s", upf.NodeIDToString(), dnn)
+			logger.CtxLog.Tracef("Getting N3 interface for UPF[%s] for DNN %s", upf.GetNodeIDString(), dnn)
 
 			for i, iface := range upf.N3Interfaces {
-				logger.CtxLog.Tracef("UPF[%s] has interface %s", upf.NodeIDToString(), iface)
+				logger.CtxLog.Tracef("UPF[%s] has interface %s", upf.GetNodeIDString(), iface)
 				for _, nwInst := range iface.NetworkInstances {
 					if nwInst == dnn {
 						return upf.N3Interfaces[i]

@@ -39,7 +39,7 @@ func ActivatePDUSessionAtUPFs(
 			parsedUPFs[upf.ID] = upf
 
 			// get PFCPSessionContext for this UPF in this session, contains all session rules for all DPs
-			nodeID := upf.NodeIDToString()
+			nodeID := upf.GetNodeIDString()
 			pfcpSessionContext := smContext.PFCPSessionContexts[upf.ID]
 			select {
 			case <-upf.Association.Done():
@@ -72,7 +72,7 @@ func UpdatePDUSessionAtANUPF(
 ) smf_context.PFCPSessionResponseStatus {
 	defaultPath := smContext.Tunnel.DataPathPool.GetDefaultPath()
 	anUPF := defaultPath.FirstDPNode.UPF
-	nodeID := anUPF.NodeIDToString()
+	nodeID := anUPF.GetNodeIDString()
 	pfcpSessionContext := smContext.PFCPSessionContexts[anUPF.ID]
 
 	resChan := make(chan smf_context.SendPfcpResult)
@@ -118,7 +118,7 @@ func ReleaseSessionAtUPFs(
 
 	for _, pfcpSessionContext := range smContext.PFCPSessionContexts {
 		upf := pfcpSessionContext.UPF
-		nodeID := upf.NodeIDToString()
+		nodeID := upf.GetNodeIDString()
 		select {
 		case <-upf.Association.Done():
 			logger.PduSessLog.Warnf("UPF[%s] not associated, skip session release for %s",
@@ -152,7 +152,7 @@ func RestorePDUSessionAtUPF(
 	// unlock happens in restorePfcpSession
 
 	upf := pfcpSessionContext.UPF
-	nodeID := upf.NodeIDToString()
+	nodeID := upf.GetNodeIDString()
 
 	if pfcpSessionContext.RemoteSEID > 0 {
 		logger.CtxLog.Infof("Some other process already established %s on UPF[%s]",
@@ -189,7 +189,7 @@ func establishPfcpSession(
 	resCh chan<- smf_context.SendPfcpResult,
 ) {
 	upf := pfcpSessionContext.UPF
-	nodeID := upf.NodeIDToString()
+	nodeID := upf.GetNodeIDString()
 
 	select {
 	case <-upf.Association.Done():
@@ -258,7 +258,7 @@ func modifyExistingPfcpSession(
 	reportResaon models.TriggerType,
 ) {
 	upf := pfcpSessionContext.UPF
-	nodeID := upf.NodeIDToString()
+	nodeID := upf.GetNodeIDString()
 
 	select {
 	case <-upf.Association.Done():
@@ -321,7 +321,7 @@ func restorePfcpSession(
 	defer pfcpSessionContext.Restoring.Unlock()
 
 	upf := pfcpSessionContext.UPF
-	nodeID := upf.NodeIDToString()
+	nodeID := upf.GetNodeIDString()
 
 	select {
 	case <-upf.Association.Done():
@@ -386,7 +386,7 @@ func releasePfcpSession(
 	resCh chan<- smf_context.SendPfcpResult,
 ) {
 	upf := pfcpSessionContext.UPF
-	nodeID := upf.NodeIDToString()
+	nodeID := upf.GetNodeIDString()
 
 	select {
 	case <-upf.Association.Done():
@@ -468,7 +468,7 @@ func waitAllPfcpRsp(
 		// simply do not process such a response
 		select {
 		case <-upf.Association.Done():
-			logger.CtxLog.Warnf("UPF[%s] no longer associated, do not process late PFCP response", upf.NodeIDToString())
+			logger.CtxLog.Warnf("UPF[%s] no longer associated, do not process late PFCP response", upf.GetNodeIDString())
 			timedOutUPFs[upf.ID] = upf
 			continue
 		default:
@@ -495,7 +495,7 @@ func waitAllPfcpRsp(
 			return failedState
 		}
 		for _, upf := range timedOutUPFs {
-			logger.PfcpLog.Infof("UPF[%s] timed out", upf.NodeIDToString())
+			logger.PfcpLog.Infof("UPF[%s] timed out", upf.GetNodeIDString())
 		}
 	}
 
