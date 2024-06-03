@@ -88,8 +88,10 @@ type SMFContext struct {
 }
 
 func GenerateChargingID() int32 {
-	if id, err := smfContext.ChargingIDGenerator.Allocate(); err == nil {
-		return int32(id)
+	if smfContext.ChargingIDGenerator != nil {
+		if id, err := smfContext.ChargingIDGenerator.Allocate(); err == nil {
+			return int32(id)
+		}
 	}
 	return 0
 }

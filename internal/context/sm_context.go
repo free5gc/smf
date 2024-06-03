@@ -320,7 +320,8 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 	smContext.ChargingInfo = make(map[uint32]*ChargingInfo)
 	smContext.ChargingID = GenerateChargingID()
 
-	if factory.SmfConfig.Configuration != nil {
+	if factory.SmfConfig != nil &&
+		factory.SmfConfig.Configuration != nil {
 		smContext.UrrReportTime = time.Duration(factory.SmfConfig.Configuration.UrrPeriod) * time.Second
 		smContext.UrrReportThreshold = factory.SmfConfig.Configuration.UrrThreshold
 		logger.CtxLog.Infof("UrrPeriod: %v", smContext.UrrReportTime)

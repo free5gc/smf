@@ -847,6 +847,12 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 						ULMBR: util.BitRateTokbps(qos.MaxbrUl),
 						DLMBR: util.BitRateTokbps(qos.MaxbrDl),
 					}
+				} else {
+					// Non-GBR flow should follows session-AMBR
+					newQER.MBR = &pfcpType.MBR{
+						ULMBR: util.BitRateTokbps(smContext.DnnConfiguration.SessionAmbr.Uplink),
+						DLMBR: util.BitRateTokbps(smContext.DnnConfiguration.SessionAmbr.Downlink),
+					}
 				}
 				qer = newQER
 			}
