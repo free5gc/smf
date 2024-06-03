@@ -32,11 +32,13 @@ func ActivatePDUSessionAtUPFs(
 			continue
 		}
 		for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
-			if _, exists := parsedUPFs[node.UPF.ID]; exists {
+			upf := node.UPF
+			if _, exists := parsedUPFs[upf.ID]; exists {
 				continue
 			}
+			parsedUPFs[upf.ID] = upf
+
 			// get PFCPSessionContext for this UPF in this session, contains all session rules for all DPs
-			upf := node.UPF
 			nodeID := upf.NodeIDToString()
 			pfcpSessionContext := smContext.PFCPSessionContexts[upf.ID]
 			select {
