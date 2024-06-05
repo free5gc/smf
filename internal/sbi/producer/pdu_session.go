@@ -193,7 +193,8 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 			}
 		}()
 		if len(sessSubData) == 0 {
-			logger.PduSessLog.Errorln("SessionManagementSubscriptionData from UDM is nil")
+			logger.PduSessLog.Errorf("No SessionManagementSubscriptionData registered in UDM for requested session %+v",
+				smDataParams)
 			httpResponse := &httpwrapper.Response{
 				Header: nil,
 				Status: http.StatusInternalServerError,
@@ -884,7 +885,7 @@ func HandlePDUSessionSMContextUpdate(smContextRef string, body models.UpdateSmCo
 			smContext.SetState(smf_context.Active)
 
 			for upf, pfcp := range smContext.PFCPSessionContexts {
-				logger.PduSessLog.Tracef("After session modification: UPF %s has PFCP session context %+v", upf, pfcp)
+				logger.PduSessLog.Tracef("After session modification: UPF %s has PFCP session context %s", upf, pfcp)
 			}
 
 			httpResponse = &httpwrapper.Response{

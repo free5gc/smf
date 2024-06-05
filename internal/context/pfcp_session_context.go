@@ -60,9 +60,9 @@ func (pfcpSessionContext *PFCPSessionContext) PDUSessionParams() string {
 func (pfcpSessionContext *PFCPSessionContext) String() string {
 	str := "\n"
 	str += fmt.Sprintf("PFCPSessionContext for UPF[%s]\n", pfcpSessionContext.UPF.GetNodeIDString())
-	//for _, pdr := range psc.PDRs {
-	//	str += pdr.String()
-	//}
+	for _, pdr := range pfcpSessionContext.PDRs {
+		str += pdr.String()
+	}
 	str += fmt.Sprintln("LocalSEID: ", pfcpSessionContext.LocalSEID)
 	str += fmt.Sprintln("RemoteSEID: ", pfcpSessionContext.RemoteSEID)
 
