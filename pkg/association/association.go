@@ -135,6 +135,7 @@ func setupPfcpAssociation(upf *smf_context.UPF) error {
 	// check if UPF has existing session contexts and restore them
 	// these are the PDRs that were applied before the UPF crashed plus the ones created/ changed during its downtime
 	// here, we again check if the RemoteSEID == 0 before sending the establishment request
+	restored := 0
 	for _, pfcpSessionContext := range upf.PFCPSessionContexts {
 		pfcpSessionContext.Restoring.Lock()
 		// unlock happens in restorePfcpSession
@@ -144,12 +145,15 @@ func setupPfcpAssociation(upf *smf_context.UPF) error {
 			continue
 		}
 		producer.RestorePDUSessionAtUPF(pfcpSessionContext)
+		restored++
 	}
 
 	// signal other processes that session recovery is completed
 	upf.RestoresSessionsCancelFunc()
 
-	logger.PfcpLog.Infof("Successfully restored sessions on UPF[%s] (if existing)", upf.GetNodeIDString())
+	if restored > 0 {
+		logger.PfcpLog.Infof("Successfully restored sessions on UPF[%s]", upf.GetNodeIDString())
+	}
 
 	return nil
 }
