@@ -74,7 +74,6 @@ func (s *nnrfService) getNFDiscoveryClient(uri string) *Nnrf_NFDiscovery.APIClie
 	return client
 }
 
-// Done 4/28 14:03
 func (s *nnrfService) RegisterNFInstance() error {
 	smfContext := s.consumer.Context()
 	client := s.getNFManagementClient(smfContext.NrfUri)
@@ -134,7 +133,6 @@ func (s *nnrfService) RegisterNFInstance() error {
 	return nil
 }
 
-// Done 4/28 14:03
 func (s *nnrfService) buildNfProfile(smfContext *smf_context.SMFContext) (profile models.NfProfile, err error) {
 	smfProfile := smfContext.NfProfile
 
@@ -160,7 +158,6 @@ func (s *nnrfService) buildNfProfile(smfContext *smf_context.SMFContext) (profil
 	return profile, err
 }
 
-// Done 4/28 14:04
 func (s *nnrfService) RetrySendNFRegistration(maxRetry int) error {
 	retryCount := 0
 	for retryCount < maxRetry {
@@ -175,37 +172,6 @@ func (s *nnrfService) RetrySendNFRegistration(maxRetry int) error {
 	return fmt.Errorf("[SMF] Retry NF Registration has meet maximum")
 }
 
-// func (s *nnrfService) SendNFDeregistration() error {
-// 	// Check data (Use RESTful DELETE)
-
-// 	ctx, _, err :=  s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_NFM, models.NfType_NRF)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	res, localErr :=  s.consumer.Context().
-// 		NFManagementClient.
-// 		NFInstanceIDDocumentApi.
-// 		DeregisterNFInstance(ctx,  s.consumer.Context().NfInstanceID)
-// 	if localErr != nil {
-// 		logger.ConsumerLog.Warnln(localErr)
-// 		return localErr
-// 	}
-// 	defer func() {
-// 		if resCloseErr := res.Body.Close(); resCloseErr != nil {
-// 			logger.ConsumerLog.Errorf("DeregisterNFInstance response body cannot close: %+v", resCloseErr)
-// 		}
-// 	}()
-// 	if res != nil {
-// 		if status := res.StatusCode; status != http.StatusNoContent {
-// 			logger.ConsumerLog.Warnln("handler returned wrong status code ", status)
-// 			return openapi.ReportError("handler returned wrong status code %d", status)
-// 		}
-// 	}
-// 	return nil
-// }
-
-// Done 4/26 18:44
 func (s *nnrfService) SendDeregisterNFInstance() (problemDetails *models.ProblemDetails, err error) {
 	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
@@ -240,7 +206,6 @@ func (s *nnrfService) SendDeregisterNFInstance() (problemDetails *models.Problem
 	return problemDetails, err
 }
 
-// Done 4/28 14:18
 func (s *nnrfService) SendSearchNFInstances(nrfUri string, targetNfType, requestNfType models.NfType,
 	param *Nnrf_NFDiscovery.SearchNFInstancesParamOpts,
 ) (*models.SearchResult, error) {
@@ -278,7 +243,7 @@ func (s *nnrfService) NFDiscoveryUDM(ctx context.Context) (result models.SearchR
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
 
 	smfContext := s.consumer.Context()
-	// Not sure (?
+
 	client := s.getNFDiscoveryClient(smfContext.NrfUri)
 	// Check data
 	result, httpResp, localErr = client.NFInstancesStoreApi.
@@ -292,7 +257,7 @@ func (s *nnrfService) NFDiscoveryPCF(ctx context.Context) (
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
 
 	smfContext := s.consumer.Context()
-	// Not sure (?
+
 	client := s.getNFDiscoveryClient(smfContext.NrfUri)
 	// Check data
 	result, httpResp, localErr = client.NFInstancesStoreApi.
@@ -308,7 +273,7 @@ func (s *nnrfService) NFDiscoveryAMF(smContext *smf_context.SMContext, ctx conte
 	localVarOptionals.TargetNfInstanceId = optional.NewInterface(smContext.ServingNfId)
 
 	smfContext := s.consumer.Context()
-	// Not sure (?
+
 	client := s.getNFDiscoveryClient(smfContext.NrfUri)
 	// Check data
 	result, httpResp, localErr = client.NFInstancesStoreApi.

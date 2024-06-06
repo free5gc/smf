@@ -17,8 +17,8 @@ type Consumer struct {
 
 	// consumer services
 	*nsmfService
-	*nchfService // Not sure
-	*npcfService // Not sure
+	*nchfService
+	*npcfService
 	*nudmService
 	*nnrfService
 }

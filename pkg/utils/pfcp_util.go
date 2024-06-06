@@ -30,7 +30,7 @@ func InitPFCPFunc() (func(a *service.SmfApp), func()) {
 			go association.ToBeAssociatedWithUPF(ctx, upNode.UPF, a.Processor())
 		}
 
-		// Wait for PFCF start
+		// Wait for PFCP start
 		time.Sleep(1000 * time.Millisecond)
 	}
 

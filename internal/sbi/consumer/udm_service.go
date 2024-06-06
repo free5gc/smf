@@ -1,11 +1,8 @@
 package consumer
 
 import (
-	// "net/http"
 	"sync"
 
-	// "github.com/antihax/optional"
-	// "github.com/mohae/deepcopy"
 	"github.com/pkg/errors"
 
 	"github.com/free5gc/openapi"
