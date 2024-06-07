@@ -71,7 +71,7 @@ func (p *Processor) chargingNotificationProcedure(
 	return nil
 }
 
-func HandleSMPolicyUpdateNotify(
+func (p *Processor) HandleSMPolicyUpdateNotify(
 	c *gin.Context,
 	request models.SmPolicyNotification,
 	smContextRef string,

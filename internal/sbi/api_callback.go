@@ -9,7 +9,6 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/free5gc/smf/internal/sbi/processor"
 )
 
 func (s *Server) getCallbackRoutes() []Route {
@@ -47,7 +46,7 @@ func (s *Server) HTTPSmPolicyUpdateNotification(c *gin.Context) {
 	}
 
 	smContextRef := c.Params.ByName("smContextRef")
-	processor.HandleSMPolicyUpdateNotify(c, request, smContextRef)
+	s.Processor().HandleSMPolicyUpdateNotify(c, request, smContextRef)
 }
 
 func (s *Server) SmPolicyControlTerminationRequestNotification(c *gin.Context) {
