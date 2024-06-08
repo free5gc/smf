@@ -4,8 +4,6 @@ import (
 	"net"
 	"testing"
 
-	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/pfcp"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/pfcp/message"
@@ -13,59 +11,6 @@ import (
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/stretchr/testify/assert"
 )
-
-var userPlaneConfig = factory.UserPlaneInformation{
-	UPNodes: map[string]*factory.UPNode{
-		"GNodeB": {
-			Type: "AN",
-		},
-		"UPF1": {
-			Type:   "UPF",
-			NodeID: "10.4.0.11",
-			Addr:   "10.4.0.11",
-			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
-				{
-					SNssai: &models.Snssai{
-						Sst: 1,
-						Sd:  "010203",
-					},
-					DnnUpfInfoList: []*factory.DnnUpfInfoItem{
-						{
-							Dnn:      "internet",
-							DnaiList: []string{"mec"},
-						},
-					},
-				},
-			},
-			InterfaceUpfInfoList: []*factory.InterfaceUpfInfoItem{
-				{
-					InterfaceType: "N3",
-					Endpoints: []string{
-						"10.3.0.11",
-					},
-					NetworkInstances: []string{"internet"},
-				},
-				{
-					InterfaceType: "N9",
-					Endpoints: []string{
-						"10.3.0.11",
-					},
-					NetworkInstances: []string{"internet"},
-				},
-			},
-		},
-	},
-	Links: []*factory.UPLink{
-		{
-			A: "GNodeB",
-			B: "UPF1",
-		},
-		{
-			A: "UPF1",
-			B: "UPF2",
-		},
-	},
-}
 
 var testConfig = factory.Config{
 	Info: &factory.Info{
@@ -79,13 +24,71 @@ var testConfig = factory.Config{
 			BindingIPv4:  "127.0.0.1",
 			Port:         8000,
 		},
-		UserPlaneInformation: userPlaneConfig,
 	},
 }
 
-func initConfig() {
+var testNodeID = pfcpType.NodeID{
+	NodeIdType: 0,
+	IP:         net.ParseIP("10.4.0.1").To4(),
+}
+
+func initSmfContext() {
 	context.InitSmfContext(&testConfig)
-	factory.SmfConfig = &testConfig
+}
+
+func initRuleList() ([]*context.PDR, []*context.FAR, []*context.BAR,
+	[]*context.QER, []*context.URR,
+) {
+	var testPDR = &context.PDR{
+		PDRID: uint16(1),
+		State: context.RULE_INITIAL,
+		OuterHeaderRemoval: &pfcpType.OuterHeaderRemoval{
+			OuterHeaderRemovalDescription: (1),
+		},
+		FAR: &context.FAR{},
+		URR: []*context.URR{},
+		QER: []*context.QER{},
+	}
+
+	var testFAR = &context.FAR{
+		FARID: uint32(123),
+		// State Can be RULE_INITIAL or RULE_UPDATE or RULE_REMOVE
+		State: context.RULE_INITIAL,
+		ApplyAction: pfcpType.ApplyAction{
+			Forw: true,
+		},
+		ForwardingParameters: &context.ForwardingParameters{},
+		BAR:                  &context.BAR{},
+	}
+
+	var testBAR = &context.BAR{
+		BARID: uint8(124),
+		// State Can be RULE_INITIAL or RULE_UPDATE or RULE_REMOVE
+		State: context.RULE_INITIAL,
+	}
+
+	var testQER = &context.QER{
+		QERID: uint32(123),
+		// State Can be RULE_INITIAL or RULE_UPDATE or RULE_REMOVE
+		State: context.RULE_INITIAL,
+	}
+
+	var testURR = &context.URR{
+		URRID: uint32(123),
+		// State Can be RULE_INITIAL or RULE_UPDATE or RULE_REMOVE
+		State: context.RULE_INITIAL,
+	}
+	pdrList := make([]*context.PDR, 0)
+	farList := make([]*context.FAR, 0)
+	barList := make([]*context.BAR, 0)
+	qerList := make([]*context.QER, 0)
+	urrList := make([]*context.URR, 0)
+	pdrList = append(pdrList, testPDR)
+	farList = append(farList, testFAR)
+	barList = append(barList, testBAR)
+	qerList = append(qerList, testQER)
+	urrList = append(urrList, testURR)
+	return pdrList, farList, barList, qerList, urrList
 }
 
 func TestBuildPfcpAssociationSetupRequest(t *testing.T) {
@@ -112,7 +115,6 @@ func TestBuildPfcpAssociationSetupRequest(t *testing.T) {
 func TestBuildPfcpAssociationSetupResponse(t *testing.T) {
 	cause := pfcpType.Cause{CauseValue: pfcpType.CauseRequestAccepted}
 	rsp, err := message.BuildPfcpAssociationSetupResponse(cause)
-
 	if err != nil {
 		t.Errorf("TestBuildPfcpAssociationSetupResponse failed: %v", err)
 	}
@@ -139,7 +141,6 @@ func TestBuildPfcpAssociationReleaseRequest(t *testing.T) {
 func TestBuildPfcpAssociationReleaseResponse(t *testing.T) {
 	cause := pfcpType.Cause{CauseValue: pfcpType.CauseRequestAccepted}
 	rsp, err := message.BuildPfcpAssociationReleaseResponse(cause)
-
 	if err != nil {
 		t.Errorf("TestBuildPfcpAssociationReleaseResponse failed: %v", err)
 	}
@@ -149,30 +150,24 @@ func TestBuildPfcpAssociationReleaseResponse(t *testing.T) {
 }
 
 func TestBuildPfcpSessionEstablishmentRequest(t *testing.T) {
-	initConfig()
-	var NodeID = pfcpType.NodeID{
-		NodeIdType: 0,
-		IP:         net.ParseIP("10.4.0.11").To4(),
-	}
-	smctx := context.NewSMContext("imsi-208930000000001", 10)
-	pdrList := make([]*context.PDR, 0, 2)
-	farList := make([]*context.FAR, 0, 2)
-	qerList := make([]*context.QER, 0, 2)
-	urrList := make([]*context.URR, 0, 2)
-	barList := make([]*context.BAR, 0, 2)
+	initSmfContext()
+	var smctx = context.NewSMContext("imsi-208930000000001", 10)
+	pdrList, farList, barList, qerList, urrList := initRuleList()
+	smctx.PFCPContext["10.4.0.1"] = &context.PFCPSessionContext{}
 
-	smctx.PFCPContext["10.4.0.11"] = &context.PFCPSessionContext{}
-
-	req, err := message.BuildPfcpSessionEstablishmentRequest(NodeID, "10.4.0.11", smctx, pdrList, farList, barList, qerList, urrList)
+	req, err := message.BuildPfcpSessionEstablishmentRequest(
+		testNodeID, "10.4.0.1", smctx, pdrList, farList, barList, qerList, urrList)
 	if err != nil {
 		t.Errorf("TestBuildPfcpSessionEstablishmentRequest failed: %v", err)
 	}
-
-	createPDR := make([]*pfcp.CreatePDR, 0)
 	assert.Equal(t, uint8(0), req.NodeID.NodeIdType)
 	assert.NotNil(t, req.CPFSEID)
 	assert.NotNil(t, req.PDNType)
-	assert.Equal(t, createPDR, req.CreatePDR)
+	assert.NotNil(t, req.CreatePDR)
+	assert.NotNil(t, req.CreateFAR)
+	assert.NotNil(t, req.CreateBAR)
+	assert.NotNil(t, req.CreateQER)
+	assert.NotNil(t, req.CreateURR)
 }
 
 // hsien
@@ -188,7 +183,25 @@ func TestBuildPfcpSessionEstablishmentResponse(t *testing.T) {
 }
 
 func TestBuildPfcpSessionModificationRequest(t *testing.T) {
+	initSmfContext()
+	var smctx = context.NewSMContext("imsi-208930000000001", 10)
+	pdrList, farList, barList, qerList, urrList := initRuleList()
+	smctx.PFCPContext["10.4.0.1"] = &context.PFCPSessionContext{}
 
+	req, err := message.BuildPfcpSessionModificationRequest(
+		testNodeID, "10.4.0.1", smctx, pdrList, farList, barList, qerList, urrList)
+	if err != nil {
+		t.Errorf("TestBuildPfcpSessionModificationRequest failed: %v", err)
+	}
+
+	assert.Equal(t, context.RULE_CREATE, pdrList[0].State)
+
+	assert.NotNil(t, req.CPFSEID)
+	assert.NotNil(t, req.CreateBAR)
+	assert.NotNil(t, req.CreateFAR)
+	assert.NotNil(t, req.CreateBAR)
+	assert.NotNil(t, req.CreateQER)
+	assert.NotNil(t, req.CreateURR)
 }
 
 func TestBuildPfcpSessionModificationResponse(t *testing.T) {
