@@ -16,6 +16,26 @@ func RemoveSMContextFromAllNF(smContext *smf_context.SMContext, sendNotification
 		}
 	}
 
+	problemDetails, err := consumer.SDMUnSubscribe(smContext)
+	if problemDetails != nil {
+		smContext.Log.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
+	} else if err != nil {
+		smContext.Log.Errorf("SDM UnSubscriptio Error[%+v]", err)
+	}
+
+	if smContext.UeCmRegistered {
+		problemDetails, err := consumer.UeCmDeregistration(smContext)
+		if problemDetails != nil {
+			if problemDetails.Cause != "CONTEXT_NOT_FOUND" {
+				smContext.Log.Errorf("UECM_DeRegistration Failed Problem[%+v]", problemDetails)
+			}
+		} else if err != nil {
+			smContext.Log.Errorf("UECM_DeRegistration Error[%+v]", err)
+		} else {
+			smContext.Log.Traceln("UECM_DeRegistration successful")
+		}
+	}
+
 	// Because the amfUE who called this SMF API is being locked until the API Handler returns,
 	// sending SMContext Status Notification should run asynchronously
 	// so that this function returns immediately.
