@@ -130,6 +130,7 @@ func SDMUnSubscribe(smCtx *smf_context.SMContext) (problemDetails *models.Proble
 	err error,
 ) {
 	if smf_context.GetSelf().Ues.UeExists(smCtx.Supi) {
+		// Check if the session being deleted is the last session for the UE
 		if smf_context.GetSelf().Ues.IsLastPduSession(smCtx.Supi) {
 			sdmUri := util.SearchNFServiceUri(smf_context.GetSelf().UDMProfile, models.ServiceName_NUDM_SDM,
 				models.NfServiceStatus_REGISTERED)
