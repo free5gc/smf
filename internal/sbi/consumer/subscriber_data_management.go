@@ -140,7 +140,6 @@ func SDMUnSubscribe(smCtx *smf_context.SMContext) (problemDetails *models.Proble
 			configuration.SetBasePath(sdmUri)
 
 			client := Nudm_SubscriberDataManagement.NewAPIClient(configuration)
-
 			subscriptionId := smf_context.GetSelf().Ues.GetSubscriptionId(smCtx.Supi)
 
 			ctx, pd, oauthErr := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_SDM, models.NfType_UDM)
