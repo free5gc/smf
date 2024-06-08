@@ -62,4 +62,10 @@ var routes = Routes{
 		"/ue-pdu-session-info/:smContextRef",
 		HTTPGetUEPDUSessionInfo,
 	},
+	{
+		"Get SMF Userplane Information",
+		"GET",
+		"/user-plane-info/",
+		HTTPGetSMFUserPlaneInfo,
+	},
 }

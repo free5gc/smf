@@ -324,7 +324,8 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 	smContext.ChargingInfo = make(map[uint32]*ChargingInfo)
 	smContext.ChargingID = GenerateChargingID()
 
-	if factory.SmfConfig.Configuration != nil {
+	if factory.SmfConfig != nil &&
+		factory.SmfConfig.Configuration != nil {
 		smContext.UrrReportTime = time.Duration(factory.SmfConfig.Configuration.UrrPeriod) * time.Second
 		smContext.UrrReportThreshold = factory.SmfConfig.Configuration.UrrThreshold
 		logger.CtxLog.Infof("UrrPeriod: %v", smContext.UrrReportTime)
@@ -401,7 +402,7 @@ func RemoveSMContext(ref string) {
 }
 
 // *** add unit test ***//
-func GetSMContextBySEID(SEID uint64) *SMContext {
+func GetSMContextBySEID(SEID uint64) *SMContext {>>>>>>> main
 	if value, ok := seidSMContextMap.Load(SEID); ok {
 		smContext := value.(*SMContext)
 		return smContext

@@ -67,7 +67,7 @@ func HandlePDUSessionSMContextCreate(isDone <-chan struct{},
 
 	upi := smf_context.GetUserPlaneInformation()
 	upi.Mu.RLock()
-	defer upi.Mu.RUnlock()
+	defer upi.Mu.RUnlock()>>>>>>> main
 
 	// DNN Information from config
 	smContext.DNNInfo = smf_context.RetrieveDnnInformation(smContext.SNssai, smContext.Dnn)
