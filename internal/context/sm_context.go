@@ -402,7 +402,7 @@ func RemoveSMContext(ref string) {
 }
 
 // *** add unit test ***//
-func GetSMContextBySEID(SEID uint64) *SMContext {>>>>>>> main
+func GetSMContextBySEID(SEID uint64) *SMContext {
 	if value, ok := seidSMContextMap.Load(SEID); ok {
 		smContext := value.(*SMContext)
 		return smContext
