@@ -76,9 +76,6 @@ func ensureSetupPfcpAssociation(ctx context.Context, upf *smf_context.UPF) {
 		case <-ctx.Done():
 			logger.PfcpLog.Infof("Canceled smf context, stop association request to UPF[%s]", upf.GetNodeIDString())
 			return
-		case <-upf.Association.Done():
-			logger.MainLog.Infof("Canceled association request to this UPF%s only", upf.GetNodeIDString())
-			return
 		case <-timer:
 			continue
 		default:
@@ -139,6 +136,8 @@ func setupPfcpAssociation(upf *smf_context.UPF) error {
 	for _, pfcpSessionContext := range upf.PFCPSessionContexts {
 		pfcpSessionContext.Restoring.Lock()
 		// unlock happens in restorePfcpSession
+
+		logger.PfcpLog.Infof("UPF[%s]: restoring session %s", upf.GetNodeIDString(), pfcpSessionContext)
 
 		if pfcpSessionContext.RemoteSEID > 0 {
 			logger.PfcpLog.Infof("Some other process already established session rules for UPF[%s]", upf.GetNodeIDString())
