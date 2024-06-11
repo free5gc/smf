@@ -95,7 +95,7 @@ func action(cliCtx *cli.Context) error {
 	SMF = smf
 
 	smf.Start()
-	SMF.WaitRoutineStopped()
+	smf.WaitRoutineStopped()
 
 	return nil
 }
