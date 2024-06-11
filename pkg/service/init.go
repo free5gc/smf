@@ -97,8 +97,6 @@ func (a *SmfApp) Start(tlsKeyLogPath string) {
 	}
 
 	smf_context.InitSmfContext(factory.SmfConfig)
-	// allocate id for each upf
-	smf_context.AllocateUPFID()
 	smf_context.InitSMFUERouting(factory.UERoutingConfig)
 
 	logger.InitLog.Infoln("Server started")
@@ -144,23 +142,18 @@ func (a *SmfApp) Start(tlsKeyLogPath string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	smf_context.GetSelf().Ctx = ctx
 	smf_context.GetSelf().PFCPCancelFunc = cancel
-	for _, upNode := range smf_context.GetSelf().UserPlaneInformation.UPFs {
-		upNode.UPF.Ctx, upNode.UPF.CancelFunc = context.WithCancel(context.Background())
-		go association.ToBeAssociatedWithUPF(ctx, upNode.UPF)
+	for _, upf := range smf_context.GetSelf().UserPlaneInformation.UPFs {
+		go association.ToBeAssociatedWithUPF(ctx, upf)
 	}
 
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	HTTPAddr := fmt.Sprintf("%s:%d", smf_context.GetSelf().BindingIPv4, smf_context.GetSelf().SBIPort)
 	server, err := httpwrapper.NewHttp2Server(HTTPAddr, tlsKeyLogPath, router)
 
-	if server == nil {
-		logger.InitLog.Error("Initialize HTTP server failed:", err)
+	if server == nil || err != nil {
+		logger.InitLog.Fatalln("Initialize HTTP server failed:", err)
 		return
-	}
-
-	if err != nil {
-		logger.InitLog.Warnln("Initialize HTTP server:", err)
 	}
 
 	serverScheme := factory.SmfConfig.Configuration.Sbi.Scheme

@@ -10,6 +10,7 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/util/httpwrapper"
+	"github.com/google/uuid"
 )
 
 func HandleChargingNotification(chargingNotifyRequest models.ChargingNotifyRequest,
@@ -28,10 +29,8 @@ func HandleChargingNotification(chargingNotifyRequest models.ChargingNotifyReque
 // While receive Charging Notification from CHF, SMF will send Charging Information to CHF and update UPF
 // The Charging Notification will be sent when CHF found the changes of the quota file.
 func chargingNotificationProcedure(req models.ChargingNotifyRequest, smContextRef string) *models.ProblemDetails {
-	if smContext := smf_context.GetSMContextByRef(smContextRef); smContext != nil {
-		smContext.SMLock.Lock()
-		defer smContext.SMLock.Unlock()
-		upfUrrMap := make(map[string][]*smf_context.URR)
+	if smContext := smf_context.GetSelf().GetSMContextByRef(smContextRef); smContext != nil {
+		upfUrrMap := make(map[uuid.UUID][]*smf_context.URR)
 		for _, reauthorizeDetail := range req.ReauthorizationDetails {
 			rg := reauthorizeDetail.RatingGroup
 			logger.ChargingLog.Infof("Force update charging information for rating group %d", rg)
@@ -40,15 +39,15 @@ func chargingNotificationProcedure(req models.ChargingNotifyRequest, smContextRe
 				if chgInfo.RatingGroup == rg ||
 					chgInfo.ChargingLevel == smf_context.PduSessionCharging {
 					logger.ChargingLog.Tracef("Query URR (%d) for Rating Group (%d)", urr.URRID, rg)
-					upfId := smContext.ChargingInfo[urr.URRID].UpfId
-					upfUrrMap[upfId] = append(upfUrrMap[upfId], urr)
+					upfUUID := smContext.ChargingInfo[urr.URRID].UpfUUID
+					upfUrrMap[upfUUID] = append(upfUrrMap[upfUUID], urr)
 				}
 			}
 		}
-		for upfId, urrList := range upfUrrMap {
-			upf := smf_context.GetUpfById(upfId)
+		for upfUUID, urrList := range upfUrrMap {
+			upf := smf_context.GetUserPlaneInformation().GetUpfById(upfUUID)
 			if upf == nil {
-				logger.ChargingLog.Warnf("Cound not find upf %s", upfId)
+				logger.ChargingLog.Warnf("Cound not find UPF[%s]", upfUUID)
 				continue
 			}
 			QueryReport(smContext, upf, urrList, models.TriggerType_FORCED_REAUTHORISATION)
@@ -69,16 +68,13 @@ func chargingNotificationProcedure(req models.ChargingNotifyRequest, smContextRe
 func HandleSMPolicyUpdateNotify(smContextRef string, request models.SmPolicyNotification) *httpwrapper.Response {
 	logger.PduSessLog.Infoln("In HandleSMPolicyUpdateNotify")
 	decision := request.SmPolicyDecision
-	smContext := smf_context.GetSMContextByRef(smContextRef)
+	smContext := smf_context.GetSelf().GetSMContextByRef(smContextRef)
 
 	if smContext == nil {
 		logger.PduSessLog.Errorf("SMContext[%s] not found", smContextRef)
 		httpResponse := httpwrapper.NewResponse(http.StatusBadRequest, nil, nil)
 		return httpResponse
 	}
-
-	smContext.SMLock.Lock()
-	defer smContext.SMLock.Unlock()
 
 	smContext.CheckState(smf_context.Active)
 	// Wait till the state becomes Active again
@@ -105,7 +101,7 @@ func HandleSMPolicyUpdateNotify(smContextRef string, request models.SmPolicyNoti
 
 	smContext.SendUpPathChgNotification("EARLY", SendUpPathChgEventExposureNotification)
 
-	ActivateUPFSession(smContext, nil)
+	ActivatePDUSessionAtUPFs(smContext)
 
 	smContext.SendUpPathChgNotification("LATE", SendUpPathChgEventExposureNotification)
 

@@ -60,10 +60,10 @@ func SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 	return nil, nil
 }
 
-func SendNFDiscoveryPCF() (problemDetails *models.ProblemDetails, err error) {
+func SendNFDiscoveryPCF() (*models.NfProfile, *models.ProblemDetails, error) {
 	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
 	if err != nil {
-		return pd, err
+		return nil, pd, err
 	}
 
 	// Set targetNfType
@@ -89,21 +89,22 @@ func SendNFDiscoveryPCF() (problemDetails *models.ProblemDetails, err error) {
 		logger.ConsumerLog.Warnln("handler returned wrong status code ", httpResp.Status)
 		if httpResp.Status != localErr.Error() {
 			err = localErr
-			return problemDetails, err
+			return nil, nil, err
 		}
-		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-		problemDetails = &problem
+		problemDetails := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
+		return nil, &problemDetails, nil
 	} else {
-		err = openapi.ReportError("server no response")
+		return nil, nil, openapi.ReportError("server no response")
 	}
 
-	return problemDetails, err
+	pcf := deepcopy.Copy(result.NfInstances[0]).(models.NfProfile)
+	return &pcf, nil, nil
 }
 
-func SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.ProblemDetails, error) {
+func SendNFDiscoveryServingAMF(servingNfId string) (*models.NfProfile, *models.ProblemDetails, error) {
 	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
 	if err != nil {
-		return pd, err
+		return nil, pd, err
 	}
 
 	targetNfType := models.NfType_AMF
@@ -111,7 +112,7 @@ func SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.Proble
 
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
 
-	localVarOptionals.TargetNfInstanceId = optional.NewInterface(smContext.ServingNfId)
+	localVarOptionals.TargetNfInstanceId = optional.NewInterface(servingNfId)
 
 	// Check data
 	result, httpResp, localErr := smf_context.GetSelf().
@@ -125,10 +126,9 @@ func SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.Proble
 				logger.ConsumerLog.Warnln("handler returned wrong status code", status)
 			}
 			logger.ConsumerLog.Warnln("NfInstances is nil")
-			return nil, openapi.ReportError("NfInstances is nil")
+			return nil, nil, openapi.ReportError("NfInstances is nil")
 		}
 		logger.ConsumerLog.Info("SendNFDiscoveryServingAMF ok")
-		smContext.AMFProfile = deepcopy.Copy(result.NfInstances[0]).(models.NfProfile)
 	} else if httpResp != nil {
 		defer func() {
 			if resCloseErr := httpResp; resCloseErr != nil {
@@ -136,13 +136,14 @@ func SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.Proble
 			}
 		}()
 		if httpResp.Status != localErr.Error() {
-			return nil, localErr
+			return nil, nil, localErr
 		}
 		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-		return &problem, nil
+		return nil, &problem, nil
 	} else {
-		return nil, openapi.ReportError("server no response")
+		return nil, nil, openapi.ReportError("server no response")
 	}
 
-	return nil, nil
+	amf := deepcopy.Copy(result.NfInstances[0]).(models.NfProfile)
+	return &amf, nil, nil
 }

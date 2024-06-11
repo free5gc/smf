@@ -1,6 +1,8 @@
 package context
 
 import (
+	"github.com/google/uuid"
+
 	"github.com/free5gc/openapi/models"
 )
 
@@ -29,5 +31,5 @@ type ChargingInfo struct {
 	EventLimitExpiryTimer  *Timer
 	ChargingLevel          ChargingLevel
 	RatingGroup            int32
-	UpfId                  string
+	UpfUUID                uuid.UUID
 }

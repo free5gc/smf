@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -27,12 +26,6 @@ import (
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/idgenerator"
-)
-
-var (
-	smContextPool    sync.Map
-	canonicalRef     sync.Map
-	seidSMContextMap sync.Map
 )
 
 type DLForwardingType int
@@ -101,7 +94,7 @@ type EventExposureNotification struct {
 
 type UsageReport struct {
 	UrrId uint32
-	UpfId string
+	UpfId uuid.UUID
 
 	TotalVolume    uint64
 	UplinkVolume   uint64
@@ -169,10 +162,12 @@ type SMContext struct {
 	SmStatusNotifyUri  string
 
 	Tunnel      *UPTunnel
-	SelectedUPF *UPNode
+	SelectedUPF *UPF
 	BPManager   *BPManager
-	// NodeID(string form) to PFCP Session Context
-	PFCPContext                         map[string]*PFCPSessionContext
+
+	// UPF UUID to PFCP Session Context
+	PFCPSessionContexts map[uuid.UUID]*PFCPSessionContext
+
 	PDUSessionRelease_DUE_TO_DUP_PDU_ID bool
 
 	DNNInfo *SnssaiSmfDnnInfo
@@ -242,9 +237,6 @@ type SMContext struct {
 	T3591 *Timer
 	// T3592 is PDU SESSION RELEASE COMMAND timer
 	T3592 *Timer
-
-	// lock
-	SMLock sync.Mutex
 }
 
 func GenerateTEID() (uint32, error) {
@@ -262,35 +254,68 @@ func ReleaseTEID(teid uint32) {
 	TeidGenerator.FreeID(int64(teid))
 }
 
-func canonicalName(id string, pduSessID int32) string {
-	return fmt.Sprintf("%s-%d", id, pduSessID)
-}
+func (smContext *SMContext) String() string {
+	str := "SMContext {\n"
+	prefix := "  "
+	str += prefix + fmt.Sprintf("Ref: %s\n", smContext.Ref)
+	str += prefix + fmt.Sprintf("State: %s\n", smContext.state)
+	str += prefix + fmt.Sprintf("LocalSEID: %d\n", smContext.LocalSEID)
+	str += prefix + fmt.Sprintf("RemoteSEID: %d\n", smContext.RemoteSEID)
+	str += prefix + fmt.Sprintf("PDUSessionID: %d\n", smContext.PDUSessionID)
+	str += prefix + fmt.Sprintf("PDUAddress %s\n", smContext.PDUAddress.String())
 
-func ResolveRef(id string, pduSessID int32) (string, error) {
-	if value, ok := canonicalRef.Load(canonicalName(id, pduSessID)); ok {
-		ref := value.(string)
-		return ref, nil
-	} else {
-		return "", fmt.Errorf("UE[%s] - PDUSessionID[%d] not found in SMContext", id, pduSessID)
+	str += prefix + fmt.Sprintf("%s\n", smContext.Tunnel)
+	str += prefix + fmt.Sprintf("SelectedUPF %s\n", smContext.SelectedUPF.GetNodeIDString())
+	for _, context := range smContext.PFCPSessionContexts {
+		str += prefix + fmt.Sprintf("%s\n", context)
 	}
+
+	str += prefix + fmt.Sprintf("Pei: %s\n", smContext.Pei)
+	str += prefix + fmt.Sprintf("Identifier (Supi): %s\n", smContext.Identifier)
+	str += prefix + fmt.Sprintf("%s\n", smContext.SelectionParam)
+	str += prefix + fmt.Sprintf("UseStaticIP %t\n", smContext.UseStaticIP)
+	str += prefix + fmt.Sprintf("SelectedPDUSessionType %d\n", smContext.SelectedPDUSessionType)
+
+	str += prefix + fmt.Sprintf("AMFProfile %s\n", smContext.AMFProfile.NfInstanceId)
+	str += prefix + fmt.Sprintf("SelectedPCFProfile %s\n", smContext.SelectedPCFProfile.NfInstanceId)
+
+	str += prefix + fmt.Sprintf("SMPolicyID: %s\n", smContext.SMPolicyID)
+	str += prefix + fmt.Sprintf("DnnConfiguration: %+v\n", smContext.DnnConfiguration)
+	str += prefix + fmt.Sprintf("UnauthenticatedSupi: %t\n", smContext.UnauthenticatedSupi)
+	str += prefix + fmt.Sprintf("UpCnxState: %s\n", smContext.UpCnxState)
+	str += prefix + fmt.Sprintf("HoState: %s\n", smContext.HoState)
+	str += prefix + fmt.Sprintf("DLForwardingType: %d\n", smContext.DLForwardingType)
+	str += prefix + fmt.Sprintf("DLDirectForwardingTunnel: %+v\n", smContext.DLDirectForwardingTunnel)
+	str += prefix + fmt.Sprintf("IndirectForwardingTunnel: %s\n", smContext.IndirectForwardingTunnel)
+
+	str += "}"
+	return str
 }
 
-func NewSMContext(id string, pduSessID int32) *SMContext {
+func NewSMContext(
+	createData *models.SmContextCreateData,
+	sessSubData []models.SessionManagementSubscriptionData,
+) *SMContext {
 	smContext := new(SMContext)
+
+	smContext.SmContextCreateData = createData
+	smContext.SmStatusNotifyUri = createData.SmContextStatusUri
+
 	// Create Ref and identifier
 	smContext.Ref = uuid.New().URN()
-	smContextPool.Store(smContext.Ref, smContext)
-	canonicalRef.Store(canonicalName(id, pduSessID), smContext.Ref)
+	smfContext.SmContextPool.Store(smContext.Ref, smContext)
+	smfContext.CanonicalRef.Store(canonicalName(createData.Supi, createData.PduSessionId), smContext.Ref)
 
 	smContext.Log = logger.PduSessLog.WithFields(logrus.Fields{
-		logger.FieldSupi:         id,
-		logger.FieldPDUSessionID: fmt.Sprintf("%d", pduSessID),
+		logger.FieldSupi:         createData.Supi,
+		logger.FieldPDUSessionID: fmt.Sprintf("%d", createData.PduSessionId),
 	})
 
 	smContext.SetState(InActive)
-	smContext.Identifier = id
-	smContext.PDUSessionID = pduSessID
-	smContext.PFCPContext = make(map[string]*PFCPSessionContext)
+	smContext.Identifier = createData.Supi
+	smContext.PDUSessionID = createData.PduSessionId
+	smContext.PFCPSessionContexts = make(map[uuid.UUID]*PFCPSessionContext)
+
 	smContext.LocalSEID = GetSMContextCount()
 
 	// initialize SM Policy Data
@@ -304,7 +329,7 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 
 	smContext.ProtocolConfigurationOptions = &ProtocolConfigurationOptions{}
 
-	smContext.BPManager = NewBPManager(id)
+	smContext.BPManager = NewBPManager(createData.Supi)
 	smContext.Tunnel = NewUPTunnel()
 
 	smContext.QoSRuleIDGenerator = idgenerator.NewGenerator(1, 255)
@@ -328,13 +353,28 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 		factory.SmfConfig.Configuration != nil {
 		smContext.UrrReportTime = time.Duration(factory.SmfConfig.Configuration.UrrPeriod) * time.Second
 		smContext.UrrReportThreshold = factory.SmfConfig.Configuration.UrrThreshold
-		logger.CtxLog.Infof("UrrPeriod: %v", smContext.UrrReportTime)
-		logger.CtxLog.Infof("UrrThreshold: %d", smContext.UrrReportThreshold)
+		logger.CtxLog.Debugf("UrrPeriod: %v", smContext.UrrReportTime)
+		logger.CtxLog.Debugf("UrrThreshold: %d", smContext.UrrReportThreshold)
 		if factory.SmfConfig.Configuration.RequestedUnit != 0 {
 			smContext.RequestedUnit = factory.SmfConfig.Configuration.RequestedUnit
 		} else {
 			smContext.RequestedUnit = 1000
 		}
+	}
+
+	// DNN Information from config
+	smContext.DNNInfo = RetrieveDnnInformation(createData.SNssai, createData.Dnn)
+	if smContext.DNNInfo == nil {
+		logger.PduSessLog.Errorf("S-NSSAI[sst: %d, sd: %s] DNN[%s] not matched DNN Config",
+			smContext.SNssai.Sst, smContext.SNssai.Sd, smContext.Dnn)
+	}
+	logger.PduSessLog.Debugf("S-NSSAI[sst: %d, sd: %s] DNN[%s]",
+		smContext.SNssai.Sst, smContext.SNssai.Sd, smContext.Dnn)
+
+	smContext.DnnConfiguration = sessSubData[0].DnnConfigurations[smContext.Dnn]
+	// UP Security info present in session management subscription data
+	if smContext.DnnConfiguration.UpSecurity != nil {
+		smContext.UpSecurity = smContext.DnnConfiguration.UpSecurity
 	}
 
 	var err error
@@ -349,65 +389,6 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 	}
 
 	return smContext
-}
-
-// *** add unit test ***//
-func GetSMContextByRef(ref string) *SMContext {
-	var smCtx *SMContext
-	if value, ok := smContextPool.Load(ref); ok {
-		smCtx = value.(*SMContext)
-	}
-	return smCtx
-}
-
-func GetSMContextById(id string, pduSessID int32) *SMContext {
-	var smCtx *SMContext
-	ref, err := ResolveRef(id, pduSessID)
-	if err != nil {
-		return nil
-	}
-	if value, ok := smContextPool.Load(ref); ok {
-		smCtx = value.(*SMContext)
-	}
-	return smCtx
-}
-
-// *** add unit test ***//
-func RemoveSMContext(ref string) {
-	var smContext *SMContext
-	if value, ok := smContextPool.Load(ref); ok {
-		smContext = value.(*SMContext)
-	} else {
-		return
-	}
-
-	if smContext.SelectedUPF != nil && smContext.PDUAddress != nil {
-		logger.PduSessLog.Infof("UE[%s] PDUSessionID[%d] Release IP[%s]",
-			smContext.Supi, smContext.PDUSessionID, smContext.PDUAddress.String())
-		GetUserPlaneInformation().
-			ReleaseUEIP(smContext.SelectedUPF, smContext.PDUAddress, smContext.UseStaticIP)
-		smContext.SelectedUPF = nil
-	}
-
-	for _, pfcpSessionContext := range smContext.PFCPContext {
-		seidSMContextMap.Delete(pfcpSessionContext.LocalSEID)
-	}
-
-	ReleaseTEID(smContext.LocalULTeid)
-	ReleaseTEID(smContext.LocalDLTeid)
-
-	smContextPool.Delete(ref)
-	canonicalRef.Delete(canonicalName(smContext.Supi, smContext.PDUSessionID))
-	smContext.Log.Infof("smContext[%s] is deleted from pool", ref)
-}
-
-// *** add unit test ***//
-func GetSMContextBySEID(SEID uint64) *SMContext {
-	if value, ok := seidSMContextMap.Load(SEID); ok {
-		smContext := value.(*SMContext)
-		return smContext
-	}
-	return nil
 }
 
 func (smContext *SMContext) GenerateUrrId() {
@@ -469,6 +450,40 @@ func (smContext *SMContext) PDUAddressToNAS() ([12]byte, uint8) {
 		addrLen = 12 + 1
 	}
 	return addr, addrLen
+}
+
+func (smContext *SMContext) SetServingAMF(amf *models.NfProfile) error {
+	if amf.NfType != models.NfType_AMF {
+		return fmt.Errorf("cannot set AMF to NF of type %s", amf.NfType)
+	}
+	smContext.AMFProfile = *amf
+	// Create AMF Comm Client for this SM Context
+	for _, service := range *smContext.AMFProfile.NfServices {
+		if service.ServiceName == models.ServiceName_NAMF_COMM {
+			communicationConf := Namf_Communication.NewConfiguration()
+			communicationConf.SetBasePath(service.ApiPrefix)
+			smContext.CommunicationClient = Namf_Communication.NewAPIClient(communicationConf)
+		}
+	}
+	return nil
+}
+
+func (smContext *SMContext) SetServingPCF(pcf *models.NfProfile) error {
+	if pcf.NfType != models.NfType_PCF {
+		return fmt.Errorf("cannot set PCF to NF of type %s", pcf.NfType)
+	}
+	smContext.SelectedPCFProfile = *pcf
+
+	// Create SMPolicyControl Client for this SM Context
+	for _, service := range *smContext.SelectedPCFProfile.NfServices {
+		if service.ServiceName == models.ServiceName_NPCF_SMPOLICYCONTROL {
+			SmPolicyControlConf := Npcf_SMPolicyControl.NewConfiguration()
+			SmPolicyControlConf.SetBasePath(service.ApiPrefix)
+			smContext.SMPolicyClient = Npcf_SMPolicyControl.NewAPIClient(SmPolicyControlConf)
+		}
+	}
+
+	return nil
 }
 
 // CHFSelection will select CHF for this SM Context
@@ -575,58 +590,51 @@ func (smContext *SMContext) PCFSelection() error {
 }
 
 func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) pfcpType.NodeID {
-	for _, pfcpCtx := range smContext.PFCPContext {
+	for _, pfcpCtx := range smContext.PFCPSessionContexts {
 		if pfcpCtx.LocalSEID == seid {
-			return pfcpCtx.NodeID
+			return pfcpCtx.UPF.NodeID
 		}
 	}
 
 	return pfcpType.NodeID{}
 }
 
-func (smContext *SMContext) AllocateLocalSEIDForUPPath(path UPPath) {
-	for _, upNode := range path {
-		NodeIDtoIP := upNode.NodeID.ResolveNodeIdToIp().String()
-		if _, exist := smContext.PFCPContext[NodeIDtoIP]; !exist {
-			allocatedSEID := AllocateLocalSEID()
-
-			smContext.PFCPContext[NodeIDtoIP] = &PFCPSessionContext{
-				PDRs:      make(map[uint16]*PDR),
-				NodeID:    upNode.NodeID,
-				LocalSEID: allocatedSEID,
-			}
-
-			seidSMContextMap.Store(allocatedSEID, smContext)
-		}
-	}
-}
-
 func (smContext *SMContext) AllocateLocalSEIDForDataPath(dataPath *DataPath) {
-	logger.PduSessLog.Traceln("In AllocateLocalSEIDForDataPath")
 	for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
-		NodeIDtoIP := node.UPF.NodeID.ResolveNodeIdToIp().String()
-		logger.PduSessLog.Traceln("NodeIDtoIP: ", NodeIDtoIP)
-		if _, exist := smContext.PFCPContext[NodeIDtoIP]; !exist {
+		uuid := node.UPF.GetID()
+		if _, exist := smContext.PFCPSessionContexts[uuid]; !exist {
 			allocatedSEID := AllocateLocalSEID()
-			smContext.PFCPContext[NodeIDtoIP] = &PFCPSessionContext{
-				PDRs:      make(map[uint16]*PDR),
-				NodeID:    node.UPF.NodeID,
-				LocalSEID: allocatedSEID,
+
+			logger.PduSessLog.Debugf("Allocated local SEID %d for UPF[%s]", allocatedSEID, node.UPF.GetNodeIDString())
+
+			newPFCPSessionContext := &PFCPSessionContext{
+				PDRs:         make(map[uint16]*PDR),
+				UPF:          node.UPF,
+				PDUSessionID: smContext.PDUSessionID,
+				UeIP:         smContext.PDUAddress,
+				LocalSEID:    allocatedSEID,
 			}
 
-			seidSMContextMap.Store(allocatedSEID, smContext)
+			smContext.PFCPSessionContexts[uuid] = newPFCPSessionContext
+			node.UPF.PFCPSessionContexts[newPFCPSessionContext.LocalSEID] = newPFCPSessionContext
+			smfContext.SeidSMContextMap.Store(allocatedSEID, smContext)
 		}
 	}
 }
 
-func (smContext *SMContext) PutPDRtoPFCPSession(nodeID pfcpType.NodeID, pdr *PDR) error {
-	NodeIDtoIP := nodeID.ResolveNodeIdToIp().String()
-	if pfcpSessCtx, exist := smContext.PFCPContext[NodeIDtoIP]; exist {
-		pfcpSessCtx.PDRs[pdr.PDRID] = pdr
+type RecoverPDR struct {
+	PDR                *PDR
+	State              RuleState
+	PFCPSessionContext *PFCPSessionContext
+}
+
+func (smContext *SMContext) AddPDRtoPFCPSession(upf *UPF, pdr *PDR) error {
+	if pfcpSessionContext, exist := smContext.PFCPSessionContexts[upf.GetID()]; !exist {
+		return fmt.Errorf("cannot find PFCPContext for UPF[%s] to put PDR %d", upf.GetNodeIDString(), pdr.PDRID)
 	} else {
-		return fmt.Errorf("Can't find PFCPContext[%s] to put PDR(%d)", NodeIDtoIP, pdr.PDRID)
+		pfcpSessionContext.PDRs[pdr.PDRID] = pdr // store the same PDR reference for primary and secondary UPF
+		return nil
 	}
-	return nil
 }
 
 func (c *SMContext) findPSAandAllocUeIP(param *UPFSelectionParams) error {
@@ -643,16 +651,23 @@ func (c *SMContext) findPSAandAllocUeIP(param *UPFSelectionParams) error {
 			selectedUPFName := ""
 			selectedUPFName, c.PDUAddress, c.UseStaticIP = preConfigPathPool.SelectUPFAndAllocUEIPForULCL(
 				upi, param)
-			c.SelectedUPF = upi.UPFs[selectedUPFName]
+			c.SelectedUPF = upi.NameToUPNode[selectedUPFName].(*UPF)
 		}
 	} else {
-		c.SelectedUPF, c.PDUAddress, c.UseStaticIP = upi.SelectUPFAndAllocUEIP(param)
-		c.Log.Infof("Allocated PDUAdress[%s]", c.PDUAddress.String())
+		// single UPF case
+		var err error
+		c.SelectedUPF, c.PDUAddress, c.UseStaticIP, err = upi.SelectUPFAndAllocUEIP(param)
+		if err != nil {
+			return fmt.Errorf("failed to find PSA and allocate PDU address: %v", err)
+		}
+	}
+	if c.SelectedUPF == nil {
+		return fmt.Errorf("failed to select PSA UPF, selection parameters: %s", param.String())
 	}
 	if c.PDUAddress == nil {
-		return fmt.Errorf("fail to allocate PDU address, Selection Parameter: %s",
-			param.String())
+		return fmt.Errorf("failed to allocate PDU address, selection parameters: %s", param.String())
 	}
+
 	return nil
 }
 
@@ -695,12 +710,15 @@ func (c *SMContext) SelectDefaultDataPath() error {
 		// UE has no pre-config path and default path
 		// Use default route
 		c.Log.Infof("Has no pre-config route. Has no default path")
-		defaultUPPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNNAndUPF(
-			c.SelectionParam, c.SelectedUPF)
+		defaultUPPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNNAndUPF(c.SelectionParam, c.SelectedUPF)
+		c.Log.Traceln("[GenerateDataPath] Generated defaultUPPath ", defaultUPPath)
 		defaultPath = GenerateDataPath(defaultUPPath)
+		c.Log.Traceln("[GenerateDataPath] Successfully generated data path ", defaultPath)
 		if defaultPath != nil {
 			defaultPath.IsDefaultPath = true
+			c.Log.Traceln("[GenerateDataPath] Adding data path to tunnel")
 			c.Tunnel.AddDataPath(defaultPath)
+			c.Log.Traceln("[GenerateDataPath] Successfully added data path to tunnel")
 		}
 	} else {
 		c.Log.Infof("Has no pre-config route. Has default path")
@@ -713,7 +731,9 @@ func (c *SMContext) SelectDefaultDataPath() error {
 	}
 
 	if !defaultPath.Activated {
+		c.Log.Traceln("[GenerateDataPath] Activating tunnel and PDR for generated data path")
 		defaultPath.ActivateTunnelAndPDR(c, DefaultPrecedence)
+		c.Log.Traceln("[GenerateDataPath] Successfully activated tunnel and PDR for generated data path")
 	}
 
 	return nil
@@ -842,9 +862,48 @@ func (c *SMContext) SendUpPathChgNotification(chgType string, notifCb NotifCallb
 	}
 }
 
-func (smContext *SMContext) RemovePDRfromPFCPSession(nodeID pfcpType.NodeID, pdr *PDR) {
-	NodeIDtoIP := nodeID.ResolveNodeIdToIp().String()
-	pfcpSessCtx := smContext.PFCPContext[NodeIDtoIP]
+func (smContext *SMContext) UpdateANInformation(ip net.IP, teid uint32) {
+	tunnel := smContext.Tunnel
+	tunnel.ANInformation = &ANInformation{
+		IPAddress: ip,
+		TEID:      teid,
+	}
+
+	for _, dataPath := range tunnel.DataPathPool {
+		if dataPath.Activated {
+			ANUPF := dataPath.FirstDPNode
+			DLPDR := ANUPF.DownLinkTunnel.PDR
+
+			if DLPDR.FAR.ForwardingParameters.OuterHeaderCreation != nil {
+				// Old AN tunnel exists
+				DLPDR.FAR.ForwardingParameters.SendEndMarker = true
+			}
+
+			DLPDR.FAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
+			dlOuterHeaderCreation := DLPDR.FAR.ForwardingParameters.OuterHeaderCreation
+			dlOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+			dlOuterHeaderCreation.Teid = tunnel.ANInformation.TEID
+			dlOuterHeaderCreation.Ipv4Address = tunnel.ANInformation.IPAddress.To4()
+			DLPDR.FAR.SetState(RULE_UPDATE)
+		}
+	}
+}
+
+func (smContext *SMContext) MarkPDRsAsRemove(dataPath *DataPath) {
+	for curDPNode := dataPath.FirstDPNode; curDPNode != nil; curDPNode = curDPNode.Next() {
+		if curDPNode.DownLinkTunnel != nil && curDPNode.DownLinkTunnel.PDR != nil {
+			curDPNode.DownLinkTunnel.PDR.SetState(RULE_REMOVE)
+			curDPNode.DownLinkTunnel.PDR.FAR.SetState(RULE_REMOVE)
+		}
+		if curDPNode.UpLinkTunnel != nil && curDPNode.UpLinkTunnel.PDR != nil {
+			curDPNode.UpLinkTunnel.PDR.SetState(RULE_REMOVE)
+			curDPNode.UpLinkTunnel.PDR.FAR.SetState(RULE_REMOVE)
+		}
+	}
+}
+
+func (smContext *SMContext) RemovePDRfromPFCPSession(uuid uuid.UUID, pdr *PDR) {
+	pfcpSessCtx := smContext.PFCPSessionContexts[uuid]
 	delete(pfcpSessCtx.PDRs, pdr.PDRID)
 }
 

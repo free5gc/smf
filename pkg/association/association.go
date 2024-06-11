@@ -16,93 +16,77 @@ import (
 	"github.com/free5gc/smf/internal/sbi/producer"
 )
 
-func ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF) {
-	var upfStr string
-	if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
-		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.NodeID.ResolveNodeIdToIp().String())
-	} else {
-		upfStr = fmt.Sprintf("[%s]", upf.NodeID.ResolveNodeIdToIp().String())
-	}
+func ToBeAssociatedWithUPF(smfCtx context.Context, upf *smf_context.UPF) {
+	// set up association and restore sessions, returns when successful
+	// do this once before loop
+	ensureSetupPfcpAssociation(smfCtx, upf)
 
 	for {
-		ensureSetupPfcpAssociation(ctx, upf, upfStr)
-		if isDone(ctx, upf) {
-			break
-		}
-
 		if smf_context.GetSelf().PfcpHeartbeatInterval == 0 {
+			logger.MainLog.Warnln("PfcpHeartbeatInterval is zero, no heartbeats are expected from UPF")
 			return
 		}
 
-		keepHeartbeatTo(ctx, upf, upfStr)
-		// return when UPF heartbeat lost is detected or association is canceled
-		if isDone(ctx, upf) {
-			break
-		}
+		// wait a short time after association before starting heartbeat
+		time.Sleep(1 * time.Second)
 
-		releaseAllResourcesOfUPF(upf, upfStr)
-		if isDone(ctx, upf) {
-			break
-		}
+		keepHeartbeatTo(smfCtx, upf)
+		// inifinite loop that returns when UPF heartbeat loss is detected or association is canceled
+		// UPF now is already in state NotAssociated
+		// and Association and SessionManagement Contexts are cancelled
+
+		logger.CtxLog.Warnf("UPF[%s] missed a heartbeat :(", upf.GetNodeIDString())
+
+		// delete resources on AMF and SMF
+		ReleaseAllResourcesOfUPF(upf)
+
+		logger.CtxLog.Infof("UPF[%s] is waiting to resume association after releasing all sessions", upf.GetNodeIDString())
+
+		// just sleep some time before trying to re-associate both UPFs
+		// (in a real system, e.g. a failure analysis would be performed)
+		// this is important to let all pending PFCP messages time out
+		time.Sleep(2 * time.Second)
+
+		// re-associate and restore sessions, returns when successful
+		logger.CtxLog.Infof("Re-associate UPF[%s]", upf.GetNodeIDString())
+		ensureSetupPfcpAssociation(smfCtx, upf)
 	}
 }
 
-func ReleaseAllResourcesOfUPF(upf *smf_context.UPF) {
-	var upfStr string
-	if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
-		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.NodeID.ResolveNodeIdToIp().String())
-	} else {
-		upfStr = fmt.Sprintf("[%s]", upf.NodeID.ResolveNodeIdToIp().String())
-	}
-	releaseAllResourcesOfUPF(upf, upfStr)
-}
-
-func isDone(ctx context.Context, upf *smf_context.UPF) bool {
-	select {
-	case <-ctx.Done():
-		return true
-	case <-upf.Ctx.Done():
-		return true
-	default:
-		return false
-	}
-}
-
-func ensureSetupPfcpAssociation(ctx context.Context, upf *smf_context.UPF, upfStr string) {
+func ensureSetupPfcpAssociation(ctx context.Context, upf *smf_context.UPF) {
 	alertTime := time.Now()
 	alertInterval := smf_context.GetSelf().AssocFailAlertInterval
 	retryInterval := smf_context.GetSelf().AssocFailRetryInterval
 	for {
 		timer := time.After(retryInterval)
-		err := setupPfcpAssociation(upf, upfStr)
+		err := setupPfcpAssociation(upf)
 		if err == nil {
+			// success
 			return
 		}
-		logger.MainLog.Warnf("Failed to setup an association with UPF%s, error:%+v", upfStr, err)
+		logger.PfcpLog.Warnf("Failed to setup an association with UPF[%s], error:%+v", upf.GetNodeIDString(), err)
 		now := time.Now()
-		logger.MainLog.Debugf("now %+v, alertTime %+v", now, alertTime)
+		logger.PfcpLog.Debugf("now %+v, alertTime %+v", now, alertTime)
 		if now.After(alertTime.Add(alertInterval)) {
-			logger.MainLog.Errorf("ALERT for UPF%s", upfStr)
+			logger.PfcpLog.Errorf("ALERT for UPF[%s]", upf.GetNodeIDString())
 			alertTime = now
 		}
-		logger.MainLog.Debugf("Wait %+v (or less) until next retry attempt", retryInterval)
+		logger.PfcpLog.Debugf("Wait %+v (or less) until next retry attempt", retryInterval)
 		select {
 		case <-ctx.Done():
-			logger.MainLog.Infof("Canceled association request to UPF%s", upfStr)
-			return
-		case <-upf.Ctx.Done():
-			logger.MainLog.Infof("Canceled association request to this UPF%s only", upfStr)
+			logger.PfcpLog.Infof("Canceled smf context, stop association request to UPF[%s]", upf.GetNodeIDString())
 			return
 		case <-timer:
 			continue
+		default:
 		}
 	}
 }
 
-func setupPfcpAssociation(upf *smf_context.UPF, upfStr string) error {
-	logger.MainLog.Infof("Sending PFCP Association Request to UPF%s", upfStr)
+func setupPfcpAssociation(upf *smf_context.UPF) error {
+	logger.PfcpLog.Infof("Send an Association Setup Request to UPF[%s]", upf.GetNodeIDString())
 
-	resMsg, err := message.SendPfcpAssociationSetupRequest(upf.NodeID)
+	resMsg, err := message.SendPfcpAssociationSetupRequest(upf.PFCPAddr())
 	if err != nil {
 		return err
 	}
@@ -110,101 +94,201 @@ func setupPfcpAssociation(upf *smf_context.UPF, upfStr string) error {
 	rsp := resMsg.PfcpMessage.Body.(pfcp.PFCPAssociationSetupResponse)
 
 	if rsp.Cause == nil || rsp.Cause.CauseValue != pfcpType.CauseRequestAccepted {
-		return fmt.Errorf("received PFCP Association Setup Not Accepted Response from UPF%s", upfStr)
+		return fmt.Errorf("received PFCP Association Setup Not Accepted Response from UPF[%s]", upf.GetNodeIDString())
 	}
 
-	nodeID := rsp.NodeID
-	if nodeID == nil {
+	if rsp.NodeID == nil {
 		return fmt.Errorf("pfcp association needs NodeID")
 	}
 
-	logger.MainLog.Infof("Received PFCP Association Setup Accepted Response from UPF%s", upfStr)
+	logger.PfcpLog.Infof("Received PFCP Association Setup Accepted Response from UPF[%s]", upf.GetNodeIDString())
 
 	upf.UPFStatus = smf_context.AssociatedSetUpSuccess
 
 	if rsp.UserPlaneIPResourceInformation != nil {
 		upf.UPIPInfo = *rsp.UserPlaneIPResourceInformation
+		logger.MainLog.Infof("UPF(%s)[%s] setup association", upf.GetNodeIDString(), upf.UPIPInfo.NetworkInstance.NetworkInstance)
+	}
 
-		logger.MainLog.Infof("UPF(%s)[%s] setup association",
-			upf.NodeID.ResolveNodeIdToIp().String(), upf.UPIPInfo.NetworkInstance.NetworkInstance)
+	// new session restoration procedure
+	// reset remote SEID (the one of the rebooted UPF node)
+	// this tells all subsequent session management processes that modify or delete a session
+	// that it was not established at the UPF after its re-association
+	for _, pfcpSessionContext := range upf.PFCPSessionContexts {
+		pfcpSessionContext.Restoring.Lock()
+		pfcpSessionContext.RemoteSEID = 0
+		pfcpSessionContext.Restoring.Unlock()
+	}
+
+	// let other processes know that UPF is recovering sessions
+	upf.RestoresSessions, upf.RestoresSessionsCancelFunc = context.WithCancel(context.Background())
+
+	// create context to signal processes that UPF is ready for session management messages
+	// (still needs to recover old sessions though)
+	// if the session was not established in the first place (RemoteSEID == 0), then special logic applies
+	upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+	upf.Association, upf.AssociationCancelFunc = context.WithCancel(context.Background())
+
+	// check if UPF has existing session contexts and restore them
+	// these are the PDRs that were applied before the UPF crashed plus the ones created/ changed during its downtime
+	// here, we again check if the RemoteSEID == 0 before sending the establishment request
+	restored := 0
+	for _, pfcpSessionContext := range upf.PFCPSessionContexts {
+		pfcpSessionContext.Restoring.Lock()
+		// unlock happens in restorePfcpSession
+
+		logger.PfcpLog.Infof("UPF[%s]: restoring session %s", upf.GetNodeIDString(), pfcpSessionContext)
+
+		if pfcpSessionContext.RemoteSEID > 0 {
+			logger.PfcpLog.Infof("Some other process already established session rules for UPF[%s]", upf.GetNodeIDString())
+			continue
+		}
+		producer.RestorePDUSessionAtUPF(pfcpSessionContext)
+		restored++
+	}
+
+	// signal other processes that session recovery is completed
+	upf.RestoresSessionsCancelFunc()
+
+	if restored > 0 {
+		logger.PfcpLog.Infof("Successfully restored sessions on UPF[%s]", upf.GetNodeIDString())
 	}
 
 	return nil
 }
 
-func keepHeartbeatTo(ctx context.Context, upf *smf_context.UPF, upfStr string) {
+func keepHeartbeatTo(ctx context.Context, upf *smf_context.UPF) {
+	// use a ticker to send heartbeat at regular interval
+	ticker := time.NewTicker(smf_context.GetSelf().PfcpHeartbeatInterval)
+	defer ticker.Stop()
+
+	errChan := make(chan error)
+	defer close(errChan)
+
+	quit := make(chan bool)
+
 	for {
-		err := doPfcpHeartbeat(upf, upfStr)
-		if err != nil {
+		select {
+		case err := <-errChan:
+			// disassociate and cancel session management as soon as heartbeat failed
+			upf.UPFStatus = smf_context.NotAssociated
+			upf.AssociationCancelFunc()
+			upf.RecoveryTimeStamp = time.Time{}
+
+			close(quit)
 			logger.MainLog.Errorf("PFCP Heartbeat error: %v", err)
 			return
+		case <-upf.Association.Done():
+			close(quit)
+			logger.MainLog.Errorf("UPF[%s] no longer associated, stop heartbeat", upf.GetNodeIDString())
+			return
+		case <-ctx.Done():
+			close(quit)
+			logger.MainLog.Errorf("Canceled smf context, stop heartbeat to UPF[%s]", upf.GetNodeIDString())
+			return
+		case <-ticker.C:
+			go doPfcpHeartbeat(upf, errChan, quit)
 		}
 
-		timer := time.After(smf_context.GetSelf().PfcpHeartbeatInterval)
-		select {
-		case <-ctx.Done():
-			logger.MainLog.Infof("Canceled Heartbeat with UPF%s", upfStr)
-			return
-		case <-upf.Ctx.Done():
-			logger.MainLog.Infof("Canceled Heartbeat to this UPF%s only", upfStr)
-			return
-		case <-timer:
-			continue
-		}
 	}
 }
 
-func doPfcpHeartbeat(upf *smf_context.UPF, upfStr string) error {
-	if upf.UPFStatus != smf_context.AssociatedSetUpSuccess {
-		return fmt.Errorf("invalid status of UPF%s: %d", upfStr, upf.UPFStatus)
+func doPfcpHeartbeat(upf *smf_context.UPF, errChan chan error, quit chan bool) {
+	select {
+	case <-quit:
+		logger.MainLog.Warnf("Previous heartbeat already crashed UPF[%s]", upf.GetNodeIDString())
+		return
+	default:
 	}
 
-	logger.MainLog.Debugf("Sending PFCP Heartbeat Request to UPF%s", upfStr)
+	logger.PfcpLog.Tracef("Sending PFCP Heartbeat Request to UPF[%s]", upf.GetNodeIDString())
 
 	resMsg, err := message.SendPfcpHeartbeatRequest(upf)
 	if err != nil {
-		upf.UPFStatus = smf_context.NotAssociated
-		upf.RecoveryTimeStamp = time.Time{}
-		return fmt.Errorf("SendPfcpHeartbeatRequest error: %w", err)
+		select {
+		case <-quit:
+			logger.MainLog.Warnf("Previous heartbeat already crashed UPF[%s]", upf.GetNodeIDString())
+			return
+		default:
+			errChan <- fmt.Errorf("%w", err)
+			return
+		}
 	}
 
 	rsp := resMsg.PfcpMessage.Body.(pfcp.HeartbeatResponse)
 	if rsp.RecoveryTimeStamp == nil {
-		logger.MainLog.Warnf("Received PFCP Heartbeat Response without timestamp from UPF%s", upfStr)
-		return nil
+		logger.PfcpLog.Warnf("Received PFCP Heartbeat Response without timestamp from UPF[%s]", upf.GetNodeIDString())
+		return
 	}
 
-	logger.MainLog.Debugf("Received PFCP Heartbeat Response from UPF%s", upfStr)
+	logger.PfcpLog.Tracef("Received PFCP Heartbeat Response from UPF[%s]", upf.GetNodeIDString())
 	if upf.RecoveryTimeStamp.IsZero() {
 		// first receive
 		upf.RecoveryTimeStamp = rsp.RecoveryTimeStamp.RecoveryTimeStamp
 	} else if upf.RecoveryTimeStamp.Before(rsp.RecoveryTimeStamp.RecoveryTimeStamp) {
-		// received a newer recovery timestamp
-		upf.UPFStatus = smf_context.NotAssociated
-		upf.RecoveryTimeStamp = time.Time{}
-		return fmt.Errorf("received PFCP Heartbeat Response RecoveryTimeStamp has been updated")
+		select {
+		case <-quit:
+			logger.MainLog.Warnf("Previous heartbeat already crashed UPF[%s]", upf.GetNodeIDString())
+			return
+		default:
+		}
+		errChan <- fmt.Errorf("received PFCP Heartbeat Response RecoveryTimeStamp has been updated")
+		return
 	}
-	return nil
 }
 
-func releaseAllResourcesOfUPF(upf *smf_context.UPF, upfStr string) {
-	logger.MainLog.Infof("Release all resources of UPF %s", upfStr)
+func ReleaseAllResourcesOfUPF(upf *smf_context.UPF) {
+	logger.MainLog.Infof("Release all resources of UPF [%s]", upf.GetNodeIDString())
 
-	upf.ProcEachSMContext(func(smContext *smf_context.SMContext) {
-		smContext.SMLock.Lock()
-		defer smContext.SMLock.Unlock()
-		switch smContext.State() {
-		case smf_context.Active, smf_context.ModificationPending, smf_context.PFCPModification:
-			needToSendNotify, removeContext := requestAMFToReleasePDUResources(smContext)
-			if needToSendNotify {
-				producer.SendReleaseNotification(smContext)
+	// first thing to do: remove PFCPSessionContext of affected UPF to avoid session recovery when UPF reboots!
+	for _, pfcpSessionContext := range upf.PFCPSessionContexts {
+		pfcpSessionContext.Restoring.Lock() // avoid accidental parallel restoration
+		localSEID := pfcpSessionContext.LocalSEID
+		smf_context.GetSelf().SeidSMContextMap.Delete(localSEID)
+		delete(upf.PFCPSessionContexts, localSEID)
+		pfcpSessionContext.Restoring.Unlock()
+	}
+
+	// find the SMContexts that belong to the UPF and release resources
+	allResourcesReleased := true
+	for {
+		smf_context.GetSelf().ProcEachSMContext(func(smContext *smf_context.SMContext) bool {
+			logger.CtxLog.Infof("Release session: check context for PDU Session[ UEIP %s | ID %d ]",
+				smContext.PDUAddress.String(), smContext.PduSessionId)
+			if smContext.SelectedUPF != nil && smContext.SelectedUPF == upf {
+				switch smContext.State() {
+				case smf_context.Active, smf_context.ModificationPending, smf_context.PFCPModification:
+					logger.CtxLog.Infof("Request AMF to release session resources for PDU Session[ UEIP %s | ID %d ]",
+						smContext.PDUAddress.String(), smContext.PduSessionId)
+					needToSendNotify, removeContext := requestAMFToReleasePDUResources(smContext)
+					if needToSendNotify {
+						logger.CtxLog.Infof("Send release notification for PDU Session[ UEIP %s | ID %d ]",
+							smContext.PDUAddress.String(), smContext.PduSessionId)
+						producer.SendReleaseNotification(smContext.SmStatusNotifyUri)
+					}
+					if removeContext {
+						logger.CtxLog.Infof("Remove context  for for PDU Session[ UEIP %s | ID %d ] from all NFs",
+							smContext.PDUAddress.String(), smContext.PduSessionId)
+						// Notification has already been sent, if it is needed
+						producer.RemoveSMContextFromAllNF(smContext, false)
+					}
+				default:
+					logger.MainLog.Errorf("SMContext for UPF[%s], UE IP [%s] and session ID %d is in state %s, do not release resources yet",
+						upf.GetNodeIDString(), smContext.PDUAddress.String(), smContext.PDUSessionID, smContext.State())
+
+					//time.Sleep(2 * time.Second)
+					allResourcesReleased = false // continue with loop
+				}
+			} else {
+				logger.CtxLog.Warnf("Found session context without UPF for PDU Session[ UEIP %s | ID %d ]!",
+					smContext.PDUAddress.String(), smContext.PduSessionId)
 			}
-			if removeContext {
-				// Notification has already been sent, if it is needed
-				producer.RemoveSMContextFromAllNF(smContext, false)
-			}
+			return true
+		})
+		if allResourcesReleased {
+			break
 		}
-	})
+	}
 }
 
 func requestAMFToReleasePDUResources(smContext *smf_context.SMContext) (sendNotify bool, releaseContext bool) {

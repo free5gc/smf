@@ -1,6 +1,7 @@
 package context
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -17,7 +18,6 @@ var userPlaneConfig = factory.UserPlaneInformation{
 		"UPF1": {
 			Type:   "UPF",
 			NodeID: "10.4.0.11",
-			Addr:   "10.4.0.11",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
 					SNssai: &models.Snssai{
@@ -52,7 +52,6 @@ var userPlaneConfig = factory.UserPlaneInformation{
 		"UPF2": {
 			Type:   "UPF",
 			NodeID: "10.4.0.12",
-			Addr:   "10.4.0.12",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
 					SNssai: &models.Snssai{
@@ -105,6 +104,69 @@ var testConfig = factory.Config{
 			Port:         8000,
 		},
 		UserPlaneInformation: userPlaneConfig,
+	},
+}
+
+var createData = &models.SmContextCreateData{
+	Supi:         "imsi-208930000000001",
+	Pei:          "imeisv-1110000000000000",
+	Gpsi:         "msisdn-",
+	PduSessionId: 10,
+	Dnn:          "internet",
+	SNssai: &models.Snssai{
+		Sst: 1,
+		Sd:  "112232",
+	},
+	ServingNfId: "c8d0ee65-f466-48aa-a42f-235ec771cb52",
+	Guami: &models.Guami{
+		PlmnId: &models.PlmnId{
+			Mcc: "208",
+			Mnc: "93",
+		},
+		AmfId: "cafe00",
+	},
+	AnType: "3GPP_ACCESS",
+	ServingNetwork: &models.PlmnId{
+		Mcc: "208",
+		Mnc: "93",
+	},
+}
+
+var sessSubData = []models.SessionManagementSubscriptionData{
+	{
+		SingleNssai: &models.Snssai{
+			Sst: 1,
+			Sd:  "112232",
+		},
+		DnnConfigurations: map[string]models.DnnConfiguration{
+			"internet": {
+				PduSessionTypes: &models.PduSessionTypes{
+					DefaultSessionType: "IPV4",
+					AllowedSessionTypes: []models.PduSessionType{
+						"IPV4",
+					},
+				},
+				SscModes: &models.SscModes{
+					DefaultSscMode: "SSC_MODE_1",
+					AllowedSscModes: []models.SscMode{
+						"SSC_MODE_1",
+						"SSC_MODE_2",
+						"SSC_MODE_3",
+					},
+				},
+				Var5gQosProfile: &models.SubscribedDefaultQos{
+					Var5qi: 9,
+					Arp: &models.Arp{
+						PriorityLevel: 8,
+					},
+					PriorityLevel: 8,
+				},
+				SessionAmbr: &models.Ambr{
+					Uplink:   "1000 Kbps",
+					Downlink: "1000 Kbps",
+				},
+			},
+		},
 	},
 }
 
@@ -323,7 +385,7 @@ func TestApplySessionRules(t *testing.T) {
 		},
 	}
 
-	smctx := NewSMContext("imsi-208930000000001", 10)
+	smctx := NewSMContext(createData, sessSubData)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -620,14 +682,12 @@ func TestApplyPccRules(t *testing.T) {
 
 	smfContext := GetSelf()
 	smfContext.UserPlaneInformation = NewUserPlaneInformation(&userPlaneConfig)
-	for _, n := range smfContext.UserPlaneInformation.UPFs {
-		n.UPF.UPFStatus = AssociatedSetUpSuccess
+	for _, upf := range smfContext.UserPlaneInformation.UPFs {
+		upf.UPFStatus = AssociatedSetUpSuccess
+		upf.Association, upf.AssociationCancelFunc = context.WithCancel(context.Background())
 	}
 
-	smctx := NewSMContext("imsi-208930000000002", 10)
-
-	smctx.SMLock.Lock()
-	defer smctx.SMLock.Unlock()
+	smctx := NewSMContext(createData, sessSubData)
 
 	smctx.SmContextCreateData = &models.SmContextCreateData{
 		Supi:         "imsi-208930000000002",

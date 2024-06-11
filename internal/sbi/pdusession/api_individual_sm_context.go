@@ -59,7 +59,7 @@ func RetrieveSmContext(c *gin.Context) {
 
 // HTTPUpdateSmContext - Update SM Context
 func HTTPUpdateSmContext(c *gin.Context) {
-	logger.PduSessLog.Info("Receive Update SM Context Request")
+	logger.PduSessLog.Info("Received Update SM Context Request")
 	var request models.UpdateSmContextRequest
 	request.JsonData = new(models.SmContextUpdateData)
 

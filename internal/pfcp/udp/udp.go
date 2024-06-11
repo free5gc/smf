@@ -1,18 +1,24 @@
 package udp
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net"
 	"runtime/debug"
 	"time"
 
 	"github.com/free5gc/pfcp"
 	"github.com/free5gc/pfcp/pfcpUdp"
-	"github.com/free5gc/smf/internal/context"
+	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 )
 
-const MaxPfcpUdpDataSize = 1024
+const (
+	MaxPfcpUdpDataSize = 1024
+	PFCP_PORT          = 8805
+	PFCP_MAX_UDP_LEN   = 2048
+)
 
 var Server *pfcpUdp.PfcpServer
 
@@ -26,12 +32,12 @@ func Run(Dispatch func(*pfcpUdp.Message)) {
 		}
 	}()
 
-	serverIP := context.GetSelf().ListenIP().To4()
+	serverIP := smf_context.GetSelf().ListenIP().To4()
 	Server = pfcpUdp.NewPfcpServer(serverIP.String())
 
 	err := Server.Listen()
 	if err != nil {
-		logger.PfcpLog.Errorf("Failed to listen: %v", err)
+		logger.PfcpLog.Fatalf("Failed to listen: %v", err)
 	}
 
 	logger.PfcpLog.Infof("Listen on %s", Server.Conn.LocalAddr().String())
@@ -69,9 +75,22 @@ func SendPfcpResponse(sndMsg *pfcp.Message, addr *net.UDPAddr) {
 	Server.WriteResponseTo(sndMsg, addr)
 }
 
-func SendPfcpRequest(sndMsg *pfcp.Message, addr *net.UDPAddr) (rsvMsg *pfcpUdp.Message, err error) {
+func SendPfcpRequest(
+	sndMsg *pfcp.Message,
+	addr *net.UDPAddr,
+	targetRunning context.Context,
+) (rsvMsg *pfcpUdp.Message, err error) {
 	if addr.IP.Equal(net.IPv4zero) {
 		return nil, errors.New("no destination IP address is specified")
 	}
+
+	select {
+	case <-targetRunning.Done():
+		// UPF was disassociated
+		return nil, fmt.Errorf("UPF association was cancelled before sending PFCP request")
+	default:
+	}
+
+	logger.PfcpLog.Tracef("Write AssociationSetupRequest to UPF [%s]", addr.String())
 	return Server.WriteRequestTo(sndMsg, addr)
 }

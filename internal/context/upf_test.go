@@ -5,16 +5,24 @@ import (
 	"net"
 	"testing"
 
+	"github.com/google/uuid"
 	. "github.com/smartystreets/goconvey/convey"
 
 	"github.com/free5gc/nas/nasMessage"
+	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
-var mockIPv4NodeID = &pfcpType.NodeID{
-	NodeIdType: pfcpType.NodeIdTypeIpv4Address,
-	IP:         net.ParseIP("127.0.0.1"),
+var mockUPNode = &UPNode{
+	Name: "UPF1",
+	Type: UPNODE_UPF,
+	ID:   uuid.New(),
+	NodeID: pfcpType.NodeID{
+		NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+		IP:         net.ParseIP("127.0.0.1"),
+	},
+	Dnn: "internet",
 }
 
 var mockIfaces = []*factory.InterfaceUpfInfoItem{
@@ -22,6 +30,27 @@ var mockIfaces = []*factory.InterfaceUpfInfoItem{
 		InterfaceType:    "N3",
 		Endpoints:        []string{"127.0.0.1"},
 		NetworkInstances: []string{"internet"},
+	},
+}
+
+var mockUpfSNssaiInfos = []*factory.SnssaiUpfInfoItem{
+	{
+		SNssai: &models.Snssai{
+			Sst: 1,
+			Sd:  "010203",
+		},
+		DnnUpfInfoList: []*factory.DnnUpfInfoItem{
+			{
+				Dnn:      "internet",
+				DnaiList: []string{"mec"},
+				PduSessionTypes: []models.PduSessionType{
+					models.PduSessionType_IPV4,
+				},
+				Pools: []*factory.UEIPPool{
+					{Cidr: "10.60.0.0/16"},
+				},
+			},
+		},
 	},
 }
 
@@ -142,12 +171,12 @@ func TestAddPDR(t *testing.T) {
 		expectedError error
 	}{
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddPDR should success",
 			expectedError: nil,
 		},
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddPDR should fail",
 			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
 		},
@@ -185,12 +214,12 @@ func TestAddFAR(t *testing.T) {
 		expectedError error
 	}{
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddFAR should success",
 			expectedError: nil,
 		},
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddFAR should fail",
 			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
 		},
@@ -204,7 +233,7 @@ func TestAddFAR(t *testing.T) {
 			infoStr := fmt.Sprintf("testcase[%d]: ", i)
 
 			Convey(infoStr, func() {
-				_, err := upf.AddFAR()
+				_, err := upf.addFAR()
 
 				Convey(testcase.resultStr, func() {
 					if testcase.expectedError == nil {
@@ -228,12 +257,12 @@ func TestAddQER(t *testing.T) {
 		expectedError error
 	}{
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddQER should success",
 			expectedError: nil,
 		},
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddQER should fail",
 			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
 		},
@@ -271,12 +300,12 @@ func TestAddBAR(t *testing.T) {
 		expectedError error
 	}{
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddBAR should success",
 			expectedError: nil,
 		},
 		{
-			upf:           NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddBAR should fail",
 			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
 		},

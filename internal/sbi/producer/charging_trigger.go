@@ -10,6 +10,7 @@ import (
 	"github.com/free5gc/smf/internal/logger"
 	pfcp_message "github.com/free5gc/smf/internal/pfcp/message"
 	"github.com/free5gc/smf/internal/sbi/consumer"
+	"github.com/google/uuid"
 )
 
 func CreateChargingSession(smContext *smf_context.SMContext) {
@@ -41,7 +42,7 @@ func UpdateChargingSession(smContext *smf_context.SMContext, urrList []*smf_cont
 
 			muu := models.MultipleUnitUsage{
 				RatingGroup:       rg,
-				UPFID:             chgInfo.UpfId,
+				UPFID:             chgInfo.UpfUUID.String(),
 				UsedUnitContainer: []models.UsedUnitContainer{uu},
 			}
 
@@ -89,17 +90,19 @@ func ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) {
 		} else {
 			var pfcpResponseStatus smf_context.PFCPSessionResponseStatus
 
-			upfUrrMap := make(map[string][]*smf_context.URR)
+			upfUrrMap := make(map[uuid.UUID][]*smf_context.URR)
 
 			logger.ChargingLog.Infof("Send Charging Data Request[Update] successfully")
 			smContext.SetState(smf_context.PFCPModification)
 
 			updateGrantedQuota(smContext, rsp.MultipleUnitInformation)
-			// Usually only the anchor UPF need	to be updated
-			for _, urr := range smContext.UrrUpfMap {
-				upfId := smContext.ChargingInfo[urr.URRID].UpfId
 
-				if urr.State == smf_context.RULE_UPDATE {
+			//URRs in PFCPSessionContexts of UPF are already set to RULE_UPDATE
+
+			// Usually only the anchor UPF needs	to be updated
+			for _, urr := range smContext.UrrUpfMap {
+				upfId := smContext.ChargingInfo[urr.URRID].UpfUUID
+				if urr.CheckState(smf_context.RULE_UPDATE) {
 					upfUrrMap[upfId] = append(upfUrrMap[upfId], urr)
 				}
 			}
@@ -109,14 +112,8 @@ func ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) {
 				return
 			}
 
-			for upfId, urrList := range upfUrrMap {
-				upf := smf_context.GetUpfById(upfId)
-				if upf == nil {
-					logger.PduSessLog.Warnf("Cound not find upf %s", upfId)
-					continue
-				}
-				rcvMsg, err := pfcp_message.SendPfcpSessionModificationRequest(
-					upf, smContext, nil, nil, nil, nil, urrList)
+			for upfId := range upfUrrMap {
+				rcvMsg, err := pfcp_message.SendPfcpSessionModificationRequest(smContext.PFCPSessionContexts[upfId])
 				if err != nil {
 					logger.PduSessLog.Warnf("Sending PFCP Session Modification Request to AN UPF error: %+v", err)
 					pfcpResponseStatus = smf_context.SessionUpdateFailed
@@ -208,7 +205,7 @@ func buildMultiUnitUsageFromUsageReport(smContext *smf_context.SMContext) []mode
 
 				ratingGroupUnitUsagesMap[rg] = models.MultipleUnitUsage{
 					RatingGroup:       rg,
-					UPFID:             ur.UpfId,
+					UPFID:             ur.UpfId.String(),
 					UsedUnitContainer: []models.UsedUnitContainer{uu},
 					RequestedUnit:     requestUnit,
 				}
@@ -230,11 +227,11 @@ func buildMultiUnitUsageFromUsageReport(smContext *smf_context.SMContext) []mode
 	return multipleUnitUsage
 }
 
-func getUrrByRg(smContext *smf_context.SMContext, upfId string, rg int32) *smf_context.URR {
+func getUrrByRg(smContext *smf_context.SMContext, upfId uuid.UUID, rg int32) *smf_context.URR {
 	for _, urr := range smContext.UrrUpfMap {
 		if smContext.ChargingInfo[urr.URRID] != nil &&
 			smContext.ChargingInfo[urr.URRID].RatingGroup == rg &&
-			smContext.ChargingInfo[urr.URRID].UpfId == upfId {
+			smContext.ChargingInfo[urr.URRID].UpfUUID == upfId {
 			return urr
 		}
 	}
@@ -248,10 +245,14 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 		trigger := pfcpType.ReportingTriggers{}
 
 		rg := ui.RatingGroup
-		upfId := ui.UPFID
+		upfId, err := uuid.Parse(ui.UPFID)
+		if err != nil {
+			logger.ChargingLog.Errorf("Cannot parse UUID from input string %s\n", ui.UPFID)
+			return
+		}
 
 		if urr := getUrrByRg(smContext, upfId, rg); urr != nil {
-			urr.State = smf_context.RULE_UPDATE
+			urr.SetState(smf_context.RULE_UPDATE)
 			chgInfo := smContext.ChargingInfo[urr.URRID]
 
 			for _, t := range ui.Triggers {
@@ -279,10 +280,8 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 
 							chgInfo.VolumeLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.VolumeLimit)*time.Second, 1,
 								func(expireTimes int32) {
-									smContext.SMLock.Lock()
-									defer smContext.SMLock.Unlock()
 									urrList := []*smf_context.URR{urr}
-									upf := smf_context.GetUpfById(ui.UPFID)
+									upf := smf_context.GetSelf().UserPlaneInformation.GetUpfById(upfId)
 									if upf != nil {
 										QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
 										ReportUsageAndUpdateQuota(smContext)
@@ -305,10 +304,8 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 
 							chgInfo.VolumeLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.VolumeLimit)*time.Second, 1,
 								func(expireTimes int32) {
-									smContext.SMLock.Lock()
-									defer smContext.SMLock.Unlock()
 									urrList := []*smf_context.URR{urr}
-									upf := smf_context.GetUpfById(ui.UPFID)
+									upf := smf_context.GetSelf().UserPlaneInformation.GetUpfById(upfId)
 									if upf != nil {
 										QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
 									}
@@ -325,10 +322,8 @@ func updateGrantedQuota(smContext *smf_context.SMContext, multipleUnitInformatio
 					case smf_context.PduSessionCharging:
 						chgInfo.EventLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.EventLimit)*time.Second, 1,
 							func(expireTimes int32) {
-								smContext.SMLock.Lock()
-								defer smContext.SMLock.Unlock()
 								urrList := []*smf_context.URR{urr}
-								upf := smf_context.GetUpfById(ui.UPFID)
+								upf := smf_context.GetSelf().UserPlaneInformation.GetUpfById(upfId)
 								if upf != nil {
 									QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
 									ReportUsageAndUpdateQuota(smContext)

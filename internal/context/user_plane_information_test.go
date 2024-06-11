@@ -1,6 +1,7 @@
 package context
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -149,19 +150,31 @@ var configuration = &factory.UserPlaneInformation{
 
 func TestNewUserPlaneInformation(t *testing.T) {
 	userplaneInformation := NewUserPlaneInformation(configuration)
+	for _, upf := range userplaneInformation.UPFs {
+		upf.UPFStatus = AssociatedSetUpSuccess
+		upf.Association, upf.AssociationCancelFunc = context.WithCancel(context.Background())
+	}
 
 	require.NotNil(t, userplaneInformation.AccessNetwork["GNodeB"])
 
-	require.NotNil(t, userplaneInformation.UPFs["UPF1"])
-	require.NotNil(t, userplaneInformation.UPFs["UPF2"])
-	require.NotNil(t, userplaneInformation.UPFs["UPF3"])
-	require.NotNil(t, userplaneInformation.UPFs["UPF4"])
+	// check UUIDs have been created
+	// check UPFs are in other UP maps as well
+	for uuid, upf := range userplaneInformation.UPFs {
+		require.NotNil(t, uuid)
+		require.NotNil(t, userplaneInformation.NodeIDToName[upf.GetNodeIDString()])
+		require.NotNil(t, userplaneInformation.NodeIDToUPF[upf.GetNodeIDString()])
+	}
+
+	require.NotNil(t, userplaneInformation.NameToUPNode["UPF1"])
+	require.NotNil(t, userplaneInformation.NameToUPNode["UPF2"])
+	require.NotNil(t, userplaneInformation.NameToUPNode["UPF3"])
+	require.NotNil(t, userplaneInformation.NameToUPNode["UPF4"])
 
 	// check links
-	require.Contains(t, userplaneInformation.AccessNetwork["GNodeB"].Links, userplaneInformation.UPFs["UPF1"])
-	require.Contains(t, userplaneInformation.UPFs["UPF1"].Links, userplaneInformation.UPFs["UPF2"])
-	require.Contains(t, userplaneInformation.UPFs["UPF2"].Links, userplaneInformation.UPFs["UPF3"])
-	require.Contains(t, userplaneInformation.UPFs["UPF3"].Links, userplaneInformation.UPFs["UPF4"])
+	require.Contains(t, userplaneInformation.AccessNetwork["GNodeB"].GetLinks(), userplaneInformation.NameToUPNode["UPF1"])
+	require.Contains(t, userplaneInformation.NameToUPNode["UPF1"].GetLinks(), userplaneInformation.NameToUPNode["UPF2"])
+	require.Contains(t, userplaneInformation.NameToUPNode["UPF2"].GetLinks(), userplaneInformation.NameToUPNode["UPF3"])
+	require.Contains(t, userplaneInformation.NameToUPNode["UPF3"].GetLinks(), userplaneInformation.NameToUPNode["UPF4"])
 }
 
 func TestGenerateDefaultPath(t *testing.T) {
@@ -268,11 +281,12 @@ func TestSelectUPFAndAllocUEIP(t *testing.T) {
 
 	userplaneInformation := NewUserPlaneInformation(configuration)
 	for _, upf := range userplaneInformation.UPFs {
-		upf.UPF.UPFStatus = AssociatedSetUpSuccess
+		upf.UPFStatus = AssociatedSetUpSuccess
+		upf.Association, upf.AssociationCancelFunc = context.WithCancel(context.Background())
 	}
 
 	for i := 0; i <= 100; i++ {
-		upf, allocatedIP, _ := userplaneInformation.SelectUPFAndAllocUEIP(&UPFSelectionParams{
+		upf, allocatedIP, _, err := userplaneInformation.SelectUPFAndAllocUEIP(&UPFSelectionParams{
 			Dnn: "internet",
 			SNssai: &SNssai{
 				Sst: 1,
@@ -280,6 +294,7 @@ func TestSelectUPFAndAllocUEIP(t *testing.T) {
 			},
 		})
 
+		require.Nil(t, err)
 		require.Contains(t, expectedIPPool, allocatedIP)
 		userplaneInformation.ReleaseUEIP(upf, allocatedIP, false)
 	}
@@ -485,7 +500,8 @@ var testCasesOfGetUEIPPool = []struct {
 func TestGetUEIPPool(t *testing.T) {
 	userplaneInformation := NewUserPlaneInformation(configForIPPoolAllocate)
 	for _, upf := range userplaneInformation.UPFs {
-		upf.UPF.UPFStatus = AssociatedSetUpSuccess
+		upf.UPFStatus = AssociatedSetUpSuccess
+		upf.Association, upf.AssociationCancelFunc = context.WithCancel(context.Background())
 	}
 
 	for ci, tc := range testCasesOfGetUEIPPool {
@@ -497,13 +513,15 @@ func TestGetUEIPPool(t *testing.T) {
 				}
 			}
 
-			var upf *UPNode
+			var upf *UPF
 			var allocatedIP net.IP
 			var useStatic bool
+			var err error
 			for times := 1; times <= tc.allocateTimes; times++ {
-				upf, allocatedIP, useStatic = userplaneInformation.SelectUPFAndAllocUEIP(tc.param)
+				upf, allocatedIP, useStatic, err = userplaneInformation.SelectUPFAndAllocUEIP(tc.param)
 			}
 
+			require.Nil(t, err)
 			require.Equal(t, tc.useStaticIP, useStatic)
 			// case 0 will not allocate IP
 			// case 2 and 4 which allocateTimes is 2 are used to test scenario which pool IP is exhausted

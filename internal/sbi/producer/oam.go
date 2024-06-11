@@ -24,7 +24,7 @@ type PDUSessionInfo struct {
 }
 
 func HandleOAMGetUEPDUSessionInfo(smContextRef string) *httpwrapper.Response {
-	smContext := context.GetSMContextByRef(smContextRef)
+	smContext := context.GetSelf().GetSMContextByRef(smContextRef)
 	if smContext == nil {
 		httpResponse := &httpwrapper.Response{
 			Header: nil,

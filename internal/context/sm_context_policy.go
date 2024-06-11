@@ -19,6 +19,26 @@ func (c *SMContext) SelectedSessionRule() *SessionRule {
 	return c.SessionRules[c.SelectedSessionRuleID]
 }
 
+func AuthDefQosToString(a *models.AuthorizedDefaultQos) string {
+	str := "AuthorizedDefaultQos: {"
+	str += fmt.Sprintf("Var5qi: %d ", a.Var5qi)
+	str += fmt.Sprintf("Arp: %+v ", a.Arp)
+	str += fmt.Sprintf("PriorityLevel: %d ", a.PriorityLevel)
+	str += "} "
+	return str
+}
+
+func SessRuleToString(rule *models.SessionRule, prefix string) string {
+	str := prefix + "SessionRule {"
+	str += fmt.Sprintf("AuthSessAmbr: { %+v } ", rule.AuthSessAmbr)
+	str += fmt.Sprint(AuthDefQosToString(rule.AuthDefQos))
+	str += fmt.Sprintf("SessRuleId: %s ", rule.SessRuleId)
+	str += fmt.Sprintf("RefUmData: %s ", rule.RefUmData)
+	str += fmt.Sprintf("RefCondData: %s ", rule.RefCondData)
+	str += prefix + "}"
+	return str
+}
+
 func (c *SMContext) ApplySessionRules(
 	decision *models.SmPolicyDecision,
 ) error {
@@ -35,7 +55,7 @@ func (c *SMContext) ApplySessionRules(
 				c.Log.Debugf("Modify SessionRule[%s]: %+v", id, r)
 				origRule.SessionRule = r
 			} else {
-				c.Log.Debugf("Install SessionRule[%s]: %+v", id, r)
+				c.Log.Debugf("Install SessionRule[%s]: %s", id, SessRuleToString(r, ""))
 				c.SessionRules[id] = NewSessionRule(r)
 			}
 		}
@@ -297,7 +317,7 @@ func (c *SMContext) PreRemoveDataPath(dp *DataPath) {
 	if dp == nil {
 		return
 	}
-	dp.RemovePDR()
+	c.MarkPDRsAsRemove(dp)
 	c.DataPathToBeRemoved[dp.PathID] = dp
 }
 
@@ -356,7 +376,7 @@ func checkUpPathChangeEvt(c *SMContext,
 	var upPathChgEvt *models.UpPathChgEvent
 
 	if srcTcData == nil && tgtTcData == nil {
-		c.Log.Infof("No srcTcData and tgtTcData. Nothing to do")
+		c.Log.Traceln("No srcTcData and tgtTcData. Nothing to do")
 		return nil
 	}
 

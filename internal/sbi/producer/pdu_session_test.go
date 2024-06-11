@@ -1,6 +1,7 @@
 package producer_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nsmf_PDUSession"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/smf/internal/context"
+	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/pfcp"
 	"github.com/free5gc/smf/internal/pfcp/udp"
 	"github.com/free5gc/smf/internal/sbi/producer"
@@ -111,7 +112,7 @@ var testConfig = factory.Config{
 }
 
 func initConfig() {
-	context.InitSmfContext(&testConfig)
+	smf_context.InitSmfContext(&testConfig)
 	factory.SmfConfig = &testConfig
 }
 
@@ -435,9 +436,10 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 	initStubPFCP()
 
 	// modify associate setup status
-	allUPFs := context.GetSelf().UserPlaneInformation.UPFs
+	allUPFs := smf_context.GetSelf().UserPlaneInformation.UPFs
 	for _, upfNode := range allUPFs {
-		upfNode.UPF.UPFStatus = context.AssociatedSetUpSuccess
+		upfNode.UPFStatus = smf_context.AssociatedSetUpSuccess
+		upfNode.Association, upfNode.AssociationCancelFunc = context.WithCancel(context.Background())
 	}
 
 	testCases := []struct {
@@ -584,9 +586,9 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 
 			createData := tc.request.JsonData
 			if createData != nil {
-				if ref, err := context.ResolveRef(createData.Supi,
-					createData.PduSessionId); err == nil {
-					context.RemoveSMContext(ref)
+				if ref, err := smf_context.GetSelf().ResolveRef(createData.Supi, createData.PduSessionId); err == nil {
+					smContext := smf_context.GetSelf().GetSMContextByRef(ref)
+					smf_context.GetSelf().RemoveSMContext(smContext)
 				}
 			}
 		})

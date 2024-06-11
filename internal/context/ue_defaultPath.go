@@ -45,7 +45,7 @@ func NewUEDefaultPaths(upi *UserPlaneInformation, topology []factory.UPLink) (*U
 func findSourceInTopology(upi *UserPlaneInformation, topology []factory.UPLink) (string, error) {
 	sourceList := make([]string, 0)
 	for key, node := range upi.AccessNetwork {
-		if node.Type == UPNODE_AN {
+		if node.GetType() == UPNODE_AN {
 			sourceList = append(sourceList, key)
 		}
 	}
@@ -189,7 +189,7 @@ func (dfp *UEDefaultPaths) SelectUPFAndAllocUEIPForULCL(upi *UserPlaneInformatio
 
 	for _, upfName := range sortedUPFList {
 		logger.CtxLog.Debugf("check start UPF: %s", upfName)
-		upf := upi.UPFs[upfName]
+		upf := upi.NameToUPNode[upfName].(*UPF)
 
 		pools, useStaticIPPool := getUEIPPool(upf, selection)
 		if len(pools) == 0 {
