@@ -19,9 +19,7 @@ import (
 	"github.com/free5gc/ngap/ngapType"
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Namf_Communication"
-	"github.com/free5gc/openapi/Nchf_ConvergedCharging"
 	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
-	"github.com/free5gc/openapi/Npcf_SMPolicyControl"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
@@ -159,9 +157,7 @@ type SMContext struct {
 	UpSecurityFromPathSwitchRequestSameAsLocalStored bool
 
 	// Client
-	SMPolicyClient      *Npcf_SMPolicyControl.APIClient
 	CommunicationClient *Namf_Communication.APIClient
-	ChargingClient      *Nchf_ConvergedCharging.APIClient
 
 	AMFProfile         models.NfProfile
 	SelectedPCFProfile models.NfProfile
@@ -402,8 +398,8 @@ func RemoveSMContext(ref string) {
 }
 
 // *** add unit test ***//
-func GetSMContextBySEID(SEID uint64) *SMContext {
-	if value, ok := seidSMContextMap.Load(SEID); ok {
+func GetSMContextBySEID(seid uint64) *SMContext {
+	if value, ok := seidSMContextMap.Load(seid); ok {
 		smContext := value.(*SMContext)
 		return smContext
 	}
@@ -463,10 +459,12 @@ func (smContext *SMContext) PDUAddressToNAS() ([12]byte, uint8) {
 	copy(addr[:], smContext.PDUAddress)
 	switch smContext.SelectedPDUSessionType {
 	case nasMessage.PDUSessionTypeIPv4:
-		addrLen = 4 + 1
+		var addrLenBuf uint8 = 4 + 1
+		addrLen = addrLenBuf
 	case nasMessage.PDUSessionTypeIPv6:
 	case nasMessage.PDUSessionTypeIPv4IPv6:
-		addrLen = 12 + 1
+		var addrLenBuf uint8 = 12 + 1
+		addrLen = addrLenBuf
 	}
 	return addr, addrLen
 }
@@ -507,17 +505,7 @@ func (smContext *SMContext) CHFSelection() error {
 	}
 
 	// Select CHF from available CHF
-
 	smContext.SelectedCHFProfile = rsp.NfInstances[0]
-
-	// Create Converged Charging Client for this SM Context
-	for _, service := range *smContext.SelectedCHFProfile.NfServices {
-		if service.ServiceName == models.ServiceName_NCHF_CONVERGEDCHARGING {
-			ConvergedChargingConf := Nchf_ConvergedCharging.NewConfiguration()
-			ConvergedChargingConf.SetBasePath(service.ApiPrefix)
-			smContext.ChargingClient = Nchf_ConvergedCharging.NewAPIClient(ConvergedChargingConf)
-		}
-	}
 
 	return nil
 }
@@ -561,15 +549,6 @@ func (smContext *SMContext) PCFSelection() error {
 	// Select PCF from available PCF
 
 	smContext.SelectedPCFProfile = rsp.NfInstances[0]
-
-	// Create SMPolicyControl Client for this SM Context
-	for _, service := range *smContext.SelectedPCFProfile.NfServices {
-		if service.ServiceName == models.ServiceName_NPCF_SMPOLICYCONTROL {
-			SmPolicyControlConf := Npcf_SMPolicyControl.NewConfiguration()
-			SmPolicyControlConf.SetBasePath(service.ApiPrefix)
-			smContext.SMPolicyClient = Npcf_SMPolicyControl.NewAPIClient(SmPolicyControlConf)
-		}
-	}
 
 	return nil
 }

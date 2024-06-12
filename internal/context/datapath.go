@@ -432,7 +432,7 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 		var defaultQER *QER
 		var ambrQER *QER
 		currentUUID := curDataPathNode.UPF.uuid
-		if qerId, ok := smContext.AMBRQerMap[currentUUID]; !ok {
+		if qerId, okCurrentId := smContext.AMBRQerMap[currentUUID]; !okCurrentId {
 			if newQER, err := curDataPathNode.UPF.AddQER(); err != nil {
 				logger.PduSessLog.Errorln("new QER failed")
 				return
@@ -448,13 +448,13 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				ambrQER = newQER
 			}
 			smContext.AMBRQerMap[currentUUID] = ambrQER.QERID
-		} else if oldQER, ok := curDataPathNode.UPF.qerPool.Load(qerId); ok {
+		} else if oldQER, okQerId := curDataPathNode.UPF.qerPool.Load(qerId); okQerId {
 			ambrQER = oldQER.(*QER)
 		}
 
 		if dataPath.IsDefaultPath {
 			id := getQosIdKey(currentUUID, sessionRule.DefQosQFI)
-			if qerId, ok := smContext.QerUpfMap[id]; !ok {
+			if qerId, okId := smContext.QerUpfMap[id]; !okId {
 				if newQER, err := curDataPathNode.UPF.AddQER(); err != nil {
 					logger.PduSessLog.Errorln("new QER failed")
 					return
@@ -467,7 +467,7 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 					defaultQER = newQER
 				}
 				smContext.QerUpfMap[id] = defaultQER.QERID
-			} else if oldQER, ok := curDataPathNode.UPF.qerPool.Load(qerId); ok {
+			} else if oldQER, okQerId := curDataPathNode.UPF.qerPool.Load(qerId); okQerId {
 				defaultQER = oldQER.(*QER)
 			}
 		}
@@ -661,8 +661,8 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				}
 			} else {
 				ANUPF := dataPath.FirstDPNode
-				DLPDR := ANUPF.DownLinkTunnel.PDR
-				DLFAR := DLPDR.FAR
+				DLPDR = ANUPF.DownLinkTunnel.PDR
+				DLFAR = DLPDR.FAR
 				DLFAR.ForwardingParameters = new(ForwardingParameters)
 				DLFAR.ForwardingParameters.DestinationInterface.InterfaceValue = pfcpType.DestinationInterfaceAccess
 
@@ -768,9 +768,9 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 				// For online charging, the charging trigger "Start of the Service data flow" are needed.
 				// Therefore, the START reporting trigger in the urr are needed to detect the Start of the SDF
 				if chgData.Online {
-					if newURR, err := node.UPF.AddURR(uint32(urrId),
+					if newURR, err2 := node.UPF.AddURR(uint32(urrId),
 						NewMeasureInformation(false, false),
-						SetStartOfSDFTrigger()); err != nil {
+						SetStartOfSDFTrigger()); err2 != nil {
 						logger.PduSessLog.Errorln("new URR failed")
 						return
 					} else {
@@ -780,9 +780,9 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 					chgInfo.ChargingMethod = models.QuotaManagementIndicator_ONLINE_CHARGING
 				} else if chgData.Offline {
 					// For offline charging, URR only need to report based on the volume threshold
-					if newURR, err := node.UPF.AddURR(uint32(urrId),
+					if newURR, err2 := node.UPF.AddURR(uint32(urrId),
 						NewMeasureInformation(false, false),
-						NewVolumeThreshold(smContext.UrrReportThreshold)); err != nil {
+						NewVolumeThreshold(smContext.UrrReportThreshold)); err2 != nil {
 						logger.PduSessLog.Errorln("new URR failed")
 						return
 					} else {

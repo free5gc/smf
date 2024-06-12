@@ -103,8 +103,8 @@ func (pdr *PDR) AppendURRs(urrs []*URR) {
 	}
 }
 
-func isUrrExist(URRs []*URR, urr *URR) bool { // check if urr is in URRs list
-	for _, URR := range URRs {
+func isUrrExist(urrs []*URR, urr *URR) bool { // check if urr is in URRs list
+	for _, URR := range urrs {
 		if urr.URRID == URR.URRID {
 			return true
 		}

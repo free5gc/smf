@@ -31,6 +31,7 @@ const (
 	SmfEventExposureResUriPrefix = "/nsmf_event-exposure/v1"
 	SmfPdusessionResUriPrefix    = "/nsmf-pdusession/v1"
 	SmfOamUriPrefix              = "/nsmf-oam/v1"
+	SmfCallbackUriPrefix         = "/nsmf-callback"
 	NrfDiscUriPrefix             = "/nnrf-disc/v1"
 	UdmSdmUriPrefix              = "/nudm-sdm/v1"
 	PcfSmpolicycontrolUriPrefix  = "/npcf-smpolicycontrol/v1"
@@ -625,7 +626,8 @@ type UEIPPool struct {
 
 func (u *UEIPPool) validate() (bool, error) {
 	govalidator.TagMap["cidr"] = govalidator.Validator(func(str string) bool {
-		return govalidator.IsCIDR(str)
+		isCIDR := govalidator.IsCIDR(str)
+		return isCIDR
 	})
 
 	result, err := govalidator.ValidateStruct(u)
@@ -640,7 +642,8 @@ type SpecificPath struct {
 
 func (p *SpecificPath) validate() (bool, error) {
 	govalidator.TagMap["cidr"] = govalidator.Validator(func(str string) bool {
-		return govalidator.IsCIDR(str)
+		isCIDR := govalidator.IsCIDR(str)
+		return isCIDR
 	})
 
 	for _, upf := range p.Path {
@@ -777,4 +780,25 @@ func (c *Config) GetLogReportCaller() bool {
 		return false
 	}
 	return c.Logger.ReportCaller
+}
+
+func (c *Config) GetSbiScheme() string {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Configuration != nil && c.Configuration.Sbi != nil && c.Configuration.Sbi.Scheme != "" {
+		return c.Configuration.Sbi.Scheme
+	}
+	return SmfSbiDefaultScheme
+}
+
+func (c *Config) GetCertPemPath() string {
+	c.RLock()
+	defer c.RUnlock()
+	return c.Configuration.Sbi.Tls.Pem
+}
+
+func (c *Config) GetCertKeyPath() string {
+	c.RLock()
+	defer c.RUnlock()
+	return c.Configuration.Sbi.Tls.Key
 }

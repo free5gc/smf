@@ -8,16 +8,16 @@ import (
 )
 
 func (smContext *SMContext) HandleReports(
-	UsageReportRequest []*pfcp.UsageReportPFCPSessionReportRequest,
-	UsageReportModification []*pfcp.UsageReportPFCPSessionModificationResponse,
-	UsageReportDeletion []*pfcp.UsageReportPFCPSessionDeletionResponse,
+	usageReportRequest []*pfcp.UsageReportPFCPSessionReportRequest,
+	usageReportModification []*pfcp.UsageReportPFCPSessionModificationResponse,
+	usageReportDeletion []*pfcp.UsageReportPFCPSessionDeletionResponse,
 	nodeId pfcpType.NodeID, reportTpye models.TriggerType,
 ) {
 	var usageReport UsageReport
 	upf := RetrieveUPFNodeByNodeID(nodeId)
 	upfId := upf.UUID()
 
-	for _, report := range UsageReportRequest {
+	for _, report := range usageReportRequest {
 		usageReport.UrrId = report.URRID.UrrIdValue
 		usageReport.UpfId = upfId
 		usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
@@ -34,7 +34,7 @@ func (smContext *SMContext) HandleReports(
 
 		smContext.UrrReports = append(smContext.UrrReports, usageReport)
 	}
-	for _, report := range UsageReportModification {
+	for _, report := range usageReportModification {
 		usageReport.UrrId = report.URRID.UrrIdValue
 		usageReport.UpfId = upfId
 		usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
@@ -51,7 +51,7 @@ func (smContext *SMContext) HandleReports(
 
 		smContext.UrrReports = append(smContext.UrrReports, usageReport)
 	}
-	for _, report := range UsageReportDeletion {
+	for _, report := range usageReportDeletion {
 		usageReport.UrrId = report.URRID.UrrIdValue
 		usageReport.UpfId = upfId
 		usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
@@ -73,20 +73,21 @@ func (smContext *SMContext) HandleReports(
 func identityTriggerType(usarTrigger *pfcpType.UsageReportTrigger) models.TriggerType {
 	var trigger models.TriggerType
 
-	if usarTrigger.Volth {
+	switch {
+	case usarTrigger.Volth:
 		trigger = models.TriggerType_QUOTA_THRESHOLD
-	} else if usarTrigger.Volqu {
+	case usarTrigger.Volqu:
 		trigger = models.TriggerType_QUOTA_EXHAUSTED
-	} else if usarTrigger.Quvti {
+	case usarTrigger.Quvti:
 		trigger = models.TriggerType_VALIDITY_TIME
-	} else if usarTrigger.Start {
+	case usarTrigger.Start:
 		trigger = models.TriggerType_START_OF_SERVICE_DATA_FLOW
-	} else if usarTrigger.Immer {
+	case usarTrigger.Immer:
 		logger.PduSessLog.Trace("Reports Query by SMF, trigger should be filled later")
 		return ""
-	} else if usarTrigger.Termr {
+	case usarTrigger.Termr:
 		trigger = models.TriggerType_FINAL
-	} else {
+	default:
 		logger.PduSessLog.Trace("Report is not a charging trigger")
 		return ""
 	}

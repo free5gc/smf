@@ -159,9 +159,9 @@ func createNasPacketFilter(
 ) (*nasType.PacketFilter, error) {
 	pf := new(nasType.PacketFilter)
 
-	pfId, err := smCtx.PacketFilterIDGenerator.Allocate()
-	if err != nil {
-		return nil, err
+	pfId, errAllocate := smCtx.PacketFilterIDGenerator.Allocate()
+	if errAllocate != nil {
+		return nil, errAllocate
 	}
 	pf.Identifier = uint8(pfId)
 	smCtx.PacketFilterIDToNASPFID[pfInfo.PackFiltId] = uint8(pfId)
@@ -208,9 +208,9 @@ func createNasPacketFilter(
 	}
 
 	if ipFilterRule.Dst != "assigned" {
-		_, ipNet, err := net.ParseCIDR(ipFilterRule.Dst)
-		if err != nil {
-			return nil, fmt.Errorf("parse IP fail: %s", err)
+		_, ipNet, errParseCIDR := net.ParseCIDR(ipFilterRule.Dst)
+		if errParseCIDR != nil {
+			return nil, fmt.Errorf("parse IP fail: %s", errParseCIDR)
 		}
 		pfComponents = append(pfComponents, &nasType.PacketFilterIPv4LocalAddress{
 			Address: ipNet.IP.To4(),
@@ -231,9 +231,9 @@ func createNasPacketFilter(
 	}
 
 	if ipFilterRule.Src != "any" {
-		_, ipNet, err := net.ParseCIDR(ipFilterRule.Src)
-		if err != nil {
-			return nil, fmt.Errorf("parse IP fail: %s", err)
+		_, ipNet, errParseCIDR := net.ParseCIDR(ipFilterRule.Src)
+		if errParseCIDR != nil {
+			return nil, fmt.Errorf("parse IP fail: %s", errParseCIDR)
 		}
 		pfComponents = append(pfComponents, &nasType.PacketFilterIPv4RemoteAddress{
 			Address: ipNet.IP.To4(),
@@ -271,10 +271,10 @@ func BuildNASPacketFiltersFromFlowInformation(pfInfo *models.FlowInformation,
 	smCtx *SMContext,
 ) ([]nasType.PacketFilter, error) {
 	var pfList []nasType.PacketFilter
-	var err error
 
 	ipFilterRule := flowdesc.NewIPFilterRule()
 	if pfInfo.FlowDescription != "" {
+		var err error
 		ipFilterRule, err = flowdesc.Decode(pfInfo.FlowDescription)
 		if err != nil {
 			return nil, fmt.Errorf("parse packet filter content fail: %s", err)

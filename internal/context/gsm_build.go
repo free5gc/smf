@@ -56,12 +56,12 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	}
 
 	for _, pccRule := range smContext.PCCRules {
-		if qosRule, err := pccRule.BuildNasQoSRule(smContext,
-			nasType.OperationCodeCreateNewQoSRule); err != nil {
-			logger.GsmLog.Warnln("Create QoS rule from pcc error ", err)
+		if qosRule, err1 := pccRule.BuildNasQoSRule(smContext,
+			nasType.OperationCodeCreateNewQoSRule); err1 != nil {
+			logger.GsmLog.Warnln("Create QoS rule from pcc error ", err1)
 		} else {
-			if ruleID, err := smContext.QoSRuleIDGenerator.Allocate(); err != nil {
-				return nil, err
+			if ruleID, err2 := smContext.QoSRuleIDGenerator.Allocate(); err2 != nil {
+				return nil, err2
 			} else {
 				qosRule.Identifier = uint8(ruleID)
 				smContext.PCCRuleIDToQoSRuleID[pccRule.PccRuleId] = uint8(ruleID)
@@ -70,9 +70,9 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 		}
 	}
 
-	qosRulesBytes, err := qoSRules.MarshalBinary()
-	if err != nil {
-		return nil, err
+	qosRulesBytes, errMarshalBinary := qoSRules.MarshalBinary()
+	if errMarshalBinary != nil {
+		return nil, errMarshalBinary
 	}
 
 	pDUSessionEstablishmentAccept.AuthorizedQosRules.SetLen(uint16(len(qosRulesBytes)))
@@ -102,9 +102,9 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 			authDescs = append(authDescs, qosDesc)
 		}
 	}
-	qosDescBytes, err := authDescs.MarshalBinary()
-	if err != nil {
-		return nil, err
+	qosDescBytes, errMarshalBinary := authDescs.MarshalBinary()
+	if errMarshalBinary != nil {
+		return nil, errMarshalBinary
 	}
 	pDUSessionEstablishmentAccept.AuthorizedQosFlowDescriptions = nasType.
 		NewAuthorizedQosFlowDescriptions(nasMessage.PDUSessionEstablishmentAcceptAuthorizedQosFlowDescriptionsType)
@@ -113,8 +113,8 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 
 	var sd [3]uint8
 
-	if byteArray, err := hex.DecodeString(smContext.SNssai.Sd); err != nil {
-		return nil, err
+	if byteArray, errDecodeString := hex.DecodeString(smContext.SNssai.Sd); errDecodeString != nil {
+		return nil, errDecodeString
 	} else {
 		copy(sd[:], byteArray)
 	}
@@ -138,33 +138,33 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 
 		// IPv4 DNS
 		if smContext.ProtocolConfigurationOptions.DNSIPv4Request {
-			err := protocolConfigurationOptions.AddDNSServerIPv4Address(smContext.DNNInfo.DNS.IPv4Addr)
-			if err != nil {
-				logger.GsmLog.Warnln("Error while adding DNS IPv4 Addr: ", err)
+			errAddDNSServerIPv4Address := protocolConfigurationOptions.AddDNSServerIPv4Address(smContext.DNNInfo.DNS.IPv4Addr)
+			if errAddDNSServerIPv4Address != nil {
+				logger.GsmLog.Warnln("Error while adding DNS IPv4 Addr: ", errAddDNSServerIPv4Address)
 			}
 		}
 
 		// IPv6 DNS
 		if smContext.ProtocolConfigurationOptions.DNSIPv6Request {
-			err := protocolConfigurationOptions.AddDNSServerIPv6Address(smContext.DNNInfo.DNS.IPv6Addr)
-			if err != nil {
-				logger.GsmLog.Warnln("Error while adding DNS IPv6 Addr: ", err)
+			errAddDNSServerIPv6Address := protocolConfigurationOptions.AddDNSServerIPv6Address(smContext.DNNInfo.DNS.IPv6Addr)
+			if errAddDNSServerIPv6Address != nil {
+				logger.GsmLog.Warnln("Error while adding DNS IPv6 Addr: ", errAddDNSServerIPv6Address)
 			}
 		}
 
 		// IPv4 PCSCF (need for ims DNN)
 		if smContext.ProtocolConfigurationOptions.PCSCFIPv4Request {
-			err := protocolConfigurationOptions.AddPCSCFIPv4Address(smContext.DNNInfo.PCSCF.IPv4Addr)
-			if err != nil {
-				logger.GsmLog.Warnln("Error while adding PCSCF IPv4 Addr: ", err)
+			errAddPCSCFIPv4Address := protocolConfigurationOptions.AddPCSCFIPv4Address(smContext.DNNInfo.PCSCF.IPv4Addr)
+			if errAddPCSCFIPv4Address != nil {
+				logger.GsmLog.Warnln("Error while adding PCSCF IPv4 Addr: ", errAddPCSCFIPv4Address)
 			}
 		}
 
 		// MTU
 		if smContext.ProtocolConfigurationOptions.IPv4LinkMTURequest {
-			err := protocolConfigurationOptions.AddIPv4LinkMTU(1400)
-			if err != nil {
-				logger.GsmLog.Warnln("Error while adding MTU: ", err)
+			errAddIPv4LinkMTU := protocolConfigurationOptions.AddIPv4LinkMTU(1400)
+			if errAddIPv4LinkMTU != nil {
+				logger.GsmLog.Warnln("Error while adding MTU: ", errAddIPv4LinkMTU)
 			}
 		}
 

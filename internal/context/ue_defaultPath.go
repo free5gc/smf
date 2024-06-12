@@ -29,9 +29,9 @@ func NewUEDefaultPaths(upi *UserPlaneInformation, topology []factory.UPLink) (*U
 		return nil, err
 	}
 	for _, destination := range destinations {
-		path, err := generateDefaultDataPath(source, destination, topology)
-		if err != nil {
-			return nil, err
+		path, errgenerate := generateDefaultDataPath(source, destination, topology)
+		if errgenerate != nil {
+			return nil, errgenerate
 		}
 		defaultPathPool[destination] = path
 	}
@@ -198,7 +198,7 @@ func (dfp *UEDefaultPaths) SelectUPFAndAllocUEIPForULCL(upi *UserPlaneInformatio
 		sortedPoolList := createPoolListForSelection(pools)
 		for _, pool := range sortedPoolList {
 			logger.CtxLog.Debugf("check start UEIPPool(%+v)", pool.ueSubNet)
-			addr := pool.allocate(selection.PDUAddress)
+			addr := pool.Allocate(selection.PDUAddress)
 			if addr != nil {
 				logger.CtxLog.Infof("Selected UPF: %s", upfName)
 				return upfName, addr, useStaticIPPool

@@ -550,15 +550,13 @@ func BuildPfcpSessionModificationRequest(
 	}
 
 	for _, bar := range barList {
-		switch bar.State {
-		case context.RULE_INITIAL:
+		if bar.State == context.RULE_INITIAL {
 			msg.CreateBAR = append(msg.CreateBAR, barToCreateBAR(bar))
 		}
 	}
 
 	for _, qer := range qerList {
-		switch qer.State {
-		case context.RULE_INITIAL:
+		if qer.State == context.RULE_INITIAL {
 			msg.CreateQER = append(msg.CreateQER, qerToCreateQER(qer))
 		}
 		qer.State = context.RULE_CREATE
