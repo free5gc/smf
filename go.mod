@@ -3,7 +3,6 @@ module github.com/free5gc/smf
 go 1.21.0
 
 require (
-	github.com/agiledragon/gomonkey/v2 v2.11.0
 	github.com/antihax/optional v1.0.0
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/davecgh/go-spew v1.1.1
@@ -27,6 +26,7 @@ require (
 )
 
 require (
+	github.com/agiledragon/gomonkey v2.0.2+incompatible
 	github.com/antonfisher/nested-logrus-formatter v1.3.1 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
