@@ -3,6 +3,7 @@ module github.com/free5gc/smf
 go 1.21.0
 
 require (
+	github.com/agiledragon/gomonkey/v2 v2.11.0
 	github.com/antihax/optional v1.0.0
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/davecgh/go-spew v1.1.1

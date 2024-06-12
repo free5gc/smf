@@ -24,11 +24,14 @@ var testConfig = factory.Config{
 			BindingIPv4:  "127.0.0.1",
 			Port:         8000,
 		},
+		PFCP: &factory.PFCP{
+			NodeID: "10.4.0.1",
+		},
 	},
 }
 
-var testNodeID = pfcpType.NodeID{
-	NodeIdType: 0,
+var testNodeID = &pfcpType.NodeID{
+	NodeIdType: pfcpType.NodeIdTypeIpv4Address,
 	IP:         net.ParseIP("10.4.0.1").To4(),
 }
 
@@ -156,26 +159,45 @@ func TestBuildPfcpSessionEstablishmentRequest(t *testing.T) {
 	smctx.PFCPContext["10.4.0.1"] = &context.PFCPSessionContext{}
 
 	req, err := message.BuildPfcpSessionEstablishmentRequest(
-		testNodeID, "10.4.0.1", smctx, pdrList, farList, barList, qerList, urrList)
+		*testNodeID, "10.4.0.1", smctx, pdrList, farList, barList, qerList, urrList)
 	if err != nil {
 		t.Errorf("TestBuildPfcpSessionEstablishmentRequest failed: %v", err)
 	}
-	assert.Equal(t, uint8(0), req.NodeID.NodeIdType)
-	assert.NotNil(t, req.CPFSEID)
-	assert.NotNil(t, req.PDNType)
-	assert.NotNil(t, req.CreatePDR)
-	assert.NotNil(t, req.CreateFAR)
-	assert.NotNil(t, req.CreateBAR)
-	assert.NotNil(t, req.CreateQER)
-	assert.NotNil(t, req.CreateURR)
+	// assert.Equal(t, uint8(0), req.NodeID.NodeIdType)
+	assert.Equal(t, testNodeID, req.NodeID)
+	assert.Equal(t, &pfcpType.PDNType{PdnType: pfcpType.PDNTypeIpv4}, req.PDNType)
+	assert.Equal(t, len(req.CreatePDR), 1)
+	assert.Equal(t, len(req.CreateFAR), 1)
+	assert.Equal(t, len(req.CreateBAR), 1)
+	assert.Equal(t, len(req.CreateQER), 1)
+	assert.Equal(t, len(req.CreateURR), 1)
+	assert.Equal(t, pdrList[0].State, context.RULE_CREATE)
+	assert.Equal(t, farList[0].State, context.RULE_CREATE)
+	assert.Equal(t, barList[0].State, context.RULE_CREATE)
+	assert.Equal(t, qerList[0].State, context.RULE_CREATE)
+	assert.Equal(t, urrList[0].State, context.RULE_CREATE)
+
+	req2, err2 := message.BuildPfcpSessionEstablishmentRequest(
+        *testNodeID, "10.4.0.1", smctx, nil, nil, nil, nil, nil)
+	if err2 != nil {
+		t.Errorf("TestBuildPfcpSessionEstablishmentRequest failed: %v", err2)
+	}
+	assert.NotEqual(t, req2, req)
+	assert.Equal(t, len(req2.CreatePDR), 0)
+	assert.Equal(t, len(req2.CreateFAR), 0)
+	assert.Equal(t, len(req2.CreateBAR), 0)
+	assert.Equal(t, len(req2.CreateQER), 0)
+	assert.Equal(t, len(req2.CreateURR), 0)
 }
 
 // hsien
 func TestBuildPfcpSessionEstablishmentResponse(t *testing.T) {
+	initSmfContext()
 	rsp, err := message.BuildPfcpSessionEstablishmentResponse()
 	if err != nil {
 		t.Errorf("TestBuildPfcpSessionEstablishmentResponse failed: %v", err)
 	}
+	assert.Equal(t, rsp.NodeID, testNodeID)
 	assert.Equal(t, uint8(0), rsp.NodeID.NodeIdType)
 	assert.Equal(t, pfcpType.CauseRequestAccepted, rsp.Cause.CauseValue)
 	assert.NotNil(t, rsp.UPFSEID)
@@ -189,26 +211,31 @@ func TestBuildPfcpSessionModificationRequest(t *testing.T) {
 	smctx.PFCPContext["10.4.0.1"] = &context.PFCPSessionContext{}
 
 	req, err := message.BuildPfcpSessionModificationRequest(
-		testNodeID, "10.4.0.1", smctx, pdrList, farList, barList, qerList, urrList)
+		*testNodeID, "10.4.0.1", smctx, pdrList, farList, barList, qerList, urrList)
 	if err != nil {
 		t.Errorf("TestBuildPfcpSessionModificationRequest failed: %v", err)
 	}
 
 	assert.Equal(t, context.RULE_CREATE, pdrList[0].State)
+	assert.Equal(t, context.RULE_CREATE, farList[0].State)
+	assert.Equal(t, context.RULE_INITIAL, barList[0].State)
+	assert.Equal(t, context.RULE_CREATE, qerList[0].State)
+	assert.Equal(t, context.RULE_CREATE, urrList[0].State)
 
-	assert.NotNil(t, req.CPFSEID)
-	assert.NotNil(t, req.CreateBAR)
-	assert.NotNil(t, req.CreateFAR)
-	assert.NotNil(t, req.CreateBAR)
-	assert.NotNil(t, req.CreateQER)
-	assert.NotNil(t, req.CreateURR)
+	assert.Equal(t, len(req.CreatePDR), 1)
+	assert.Equal(t, len(req.CreateFAR), 1)
+	assert.Equal(t, len(req.CreateBAR), 1)
+	assert.Equal(t, len(req.CreateQER), 1)
+	assert.Equal(t, len(req.CreateURR), 1)
 }
 
 func TestBuildPfcpSessionModificationResponse(t *testing.T) {
+	initSmfContext()
 	rsp, err := message.BuildPfcpSessionEstablishmentResponse()
 	if err != nil {
 		t.Errorf("BuildPfcpSessionModificationResponse failed: %v", err)
 	}
+	assert.Equal(t, rsp.NodeID, testNodeID)
 	assert.Equal(t, pfcpType.CauseRequestAccepted, rsp.Cause.CauseValue)
 	assert.NotNil(t, rsp.OffendingIE)
 	assert.NotNil(t, rsp.CreatedPDR)
