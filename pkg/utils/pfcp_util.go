@@ -20,21 +20,23 @@ var (
 func InitPFCPFunc() (func(a *service.SmfApp), func()) {
 	pfcpStart = func(a *service.SmfApp) {
 		// Initialize PFCP server
-		udp.Run(pfcp.Dispatch)
-
 		ctx, cancel := context.WithCancel(context.Background())
 		smf_context.GetSelf().Ctx = ctx
 		smf_context.GetSelf().PFCPCancelFunc = cancel
-		for _, upNode := range smf_context.GetSelf().UserPlaneInformation.UPFs {
-			upNode.UPF.Ctx, upNode.UPF.CancelFunc = context.WithCancel(context.Background())
-			go association.ToBeAssociatedWithUPF(ctx, upNode.UPF, a.Processor())
-		}
+
+		go udp.Run(pfcp.Dispatch)
 
 		// Wait for PFCP start
 		time.Sleep(1000 * time.Millisecond)
+
+		for _, upNode := range smf_context.GetSelf().UserPlaneInformation.UPFs {
+			upNode.UPF.Ctx, upNode.UPF.CancelFunc = context.WithCancel(ctx)
+			go association.ToBeAssociatedWithUPF(ctx, upNode.UPF, a.Processor())
+		}
 	}
 
 	pfcpStop = func() {
+		smf_context.GetSelf().PFCPCancelFunc()
 		err := udp.Server.Close()
 		if err != nil {
 			logger.Log.Errorf("udp server close failed %+v", err)

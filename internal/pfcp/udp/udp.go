@@ -51,8 +51,14 @@ func Run(dispatch func(*pfcpUdp.Message)) {
 					logger.PfcpLog.Infoln(errReadFrom)
 				} else {
 					logger.PfcpLog.Warnf("Read PFCP error: %v", errReadFrom)
+					select {
+					case <-context.GetSelf().Ctx.Done():
+						// SMF is closing
+						return
+					default:
+						continue
+					}
 				}
-
 				continue
 			}
 
@@ -63,6 +69,15 @@ func Run(dispatch func(*pfcpUdp.Message)) {
 	}(Server)
 
 	ServerStartTime = time.Now()
+
+	logger.PfcpLog.Infof("Pfcp running... [%v]", ServerStartTime)
+
+	<-context.GetSelf().Ctx.Done()
+	if closeErr := Server.Close(); closeErr != nil {
+		logger.PfcpLog.Errorf("Pfcp close err: %+v", closeErr)
+	} else {
+		logger.PfcpLog.Infof("Pfcp server closed")
+	}
 }
 
 func SendPfcpResponse(sndMsg *pfcp.Message, addr *net.UDPAddr) {

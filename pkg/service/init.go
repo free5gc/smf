@@ -87,6 +87,11 @@ func NewApp(
 
 	smf.ctx, smf.cancel = context.WithCancel(ctx)
 
+	// for PFCP
+	ctx, cancel := context.WithCancel(smf.ctx)
+	smf_context.GetSelf().Ctx = ctx
+	smf_context.GetSelf().PFCPCancelFunc = cancel
+
 	SMF = smf
 
 	return smf, nil
@@ -162,6 +167,7 @@ func (a *SmfApp) Start() {
 		logger.MainLog.Errorf("sbi server run error %+v", err)
 	}
 
+	a.wg.Add(1)
 	go a.listenShutDownEvent()
 
 	// Initialize PFCP server
