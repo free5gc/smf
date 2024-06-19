@@ -1,20 +1,24 @@
 package udp
 
 import (
+	"context"
 	"errors"
 	"net"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/free5gc/pfcp"
 	"github.com/free5gc/pfcp/pfcpUdp"
-	"github.com/free5gc/smf/internal/context"
+	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 )
 
 const MaxPfcpUdpDataSize = 1024
 
 var Server *pfcpUdp.PfcpServer
+
+var cancelFunc *context.CancelFunc
 
 var ServerStartTime time.Time
 
@@ -26,7 +30,10 @@ func Run(dispatch func(*pfcpUdp.Message)) {
 		}
 	}()
 
-	serverIP := context.GetSelf().ListenIP().To4()
+	newCtx, newCancelFunc := context.WithCancel(smf_context.GetSelf().Ctx)
+	cancelFunc = &newCancelFunc
+
+	serverIP := smf_context.GetSelf().ListenIP().To4()
 	Server = pfcpUdp.NewPfcpServer(serverIP.String())
 
 	err := Server.Listen()
@@ -49,11 +56,13 @@ func Run(dispatch func(*pfcpUdp.Message)) {
 			if errReadFrom != nil {
 				if errReadFrom == pfcpUdp.ErrReceivedResentRequest {
 					logger.PfcpLog.Infoln(errReadFrom)
+				} else if strings.Contains(errReadFrom.Error(), "use of closed network connection") {
+					continue
 				} else {
-					logger.PfcpLog.Warnf("Read PFCP error: %v", errReadFrom)
+					logger.PfcpLog.Warnf("Read PFCP error: %v, msg: [%v]", errReadFrom, msg)
 					select {
-					case <-context.GetSelf().Ctx.Done():
-						// SMF is closing
+					case <-newCtx.Done():
+						// PFCP is closing
 						return
 					default:
 						continue
@@ -71,13 +80,6 @@ func Run(dispatch func(*pfcpUdp.Message)) {
 	ServerStartTime = time.Now()
 
 	logger.PfcpLog.Infof("Pfcp running... [%v]", ServerStartTime)
-
-	<-context.GetSelf().Ctx.Done()
-	if closeErr := Server.Close(); closeErr != nil {
-		logger.PfcpLog.Errorf("Pfcp close err: %+v", closeErr)
-	} else {
-		logger.PfcpLog.Infof("Pfcp server closed")
-	}
 }
 
 func SendPfcpResponse(sndMsg *pfcp.Message, addr *net.UDPAddr) {
@@ -89,4 +91,15 @@ func SendPfcpRequest(sndMsg *pfcp.Message, addr *net.UDPAddr) (rsvMsg *pfcpUdp.M
 		return nil, errors.New("no destination IP address is specified")
 	}
 	return Server.WriteRequestTo(sndMsg, addr)
+}
+
+func ClosePfcp() error {
+	(*cancelFunc)()
+	closeErr := Server.Close()
+	if closeErr != nil {
+		logger.PfcpLog.Errorf("Pfcp close err: %+v", closeErr)
+	} else {
+		logger.PfcpLog.Infof("Pfcp server closed")
+	}
+	return closeErr
 }

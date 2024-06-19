@@ -24,7 +24,7 @@ func InitPFCPFunc() (func(a *service.SmfApp), func()) {
 		smf_context.GetSelf().Ctx = ctx
 		smf_context.GetSelf().PFCPCancelFunc = cancel
 
-		go udp.Run(pfcp.Dispatch)
+		udp.Run(pfcp.Dispatch)
 
 		// Wait for PFCP start
 		time.Sleep(1000 * time.Millisecond)

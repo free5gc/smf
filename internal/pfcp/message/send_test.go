@@ -1,12 +1,14 @@
 package message_test
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	smf_context "github.com/free5gc/smf/internal/context"
 	smf_pfcp "github.com/free5gc/smf/internal/pfcp"
 	"github.com/free5gc/smf/internal/pfcp/message"
 	"github.com/free5gc/smf/internal/pfcp/udp"
@@ -22,6 +24,9 @@ func TestSendPfcpSessionEstablishmentRequest(t *testing.T) {
 }
 
 func TestSendHeartbeatResponse(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	smf_context.GetSelf().Ctx = ctx
+	smf_context.GetSelf().PFCPCancelFunc = cancel
 	udp.Run(smf_pfcp.Dispatch)
 
 	udp.ServerStartTime = time.Now()
@@ -32,6 +37,6 @@ func TestSendHeartbeatResponse(t *testing.T) {
 	}
 	message.SendHeartbeatResponse(addr, seq)
 
-	err := udp.Server.Close()
+	err := udp.ClosePfcp()
 	require.NoError(t, err)
 }

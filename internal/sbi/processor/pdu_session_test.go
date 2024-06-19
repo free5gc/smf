@@ -1,6 +1,7 @@
 package processor_test
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -19,7 +20,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nsmf_PDUSession"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/smf/internal/context"
+	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/pfcp"
 	"github.com/free5gc/smf/internal/pfcp/udp"
 	"github.com/free5gc/smf/internal/sbi/consumer"
@@ -118,7 +119,7 @@ var testConfig = factory.Config{
 }
 
 func initConfig() {
-	context.InitSmfContext(&testConfig)
+	smf_context.InitSmfContext(&testConfig)
 	factory.SmfConfig = &testConfig
 }
 
@@ -365,6 +366,10 @@ func initDiscAMFStubNRF() {
 }
 
 func initStubPFCP() {
+	ctx, cancel := context.WithCancel(context.Background())
+	smf_context.GetSelf().Ctx = ctx
+	smf_context.GetSelf().PFCPCancelFunc = cancel
+
 	udp.Run(pfcp.Dispatch)
 }
 
@@ -442,9 +447,9 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 	initStubPFCP()
 
 	// modify associate setup status
-	allUPFs := context.GetSelf().UserPlaneInformation.UPFs
+	allUPFs := smf_context.GetSelf().UserPlaneInformation.UPFs
 	for _, upfNode := range allUPFs {
-		upfNode.UPF.UPFStatus = context.AssociatedSetUpSuccess
+		upfNode.UPF.UPFStatus = smf_context.AssociatedSetUpSuccess
 	}
 
 	testCases := []struct {
@@ -622,14 +627,14 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 			createData := tc.request.JsonData
 			if createData != nil {
 				var ref string
-				if ref, err = context.ResolveRef(createData.Supi,
+				if ref, err = smf_context.ResolveRef(createData.Supi,
 					createData.PduSessionId); err == nil {
-					context.RemoveSMContext(ref)
+					smf_context.RemoveSMContext(ref)
 				}
 			}
 		})
 	}
 
-	err = udp.Server.Close()
+	err = udp.ClosePfcp()
 	require.NoError(t, err)
 }
