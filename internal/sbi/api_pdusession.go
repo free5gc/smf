@@ -17,8 +17,8 @@ func (s *Server) getPDUSessionRoutes() []Route {
 		{
 			Method:  http.MethodGet,
 			Pattern: "/",
-			APIFunc: func(ctx *gin.Context) {
-				ctx.JSON(http.StatusOK, gin.H{"status": "Service Available"})
+			APIFunc: func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"status": "Service Available"})
 			},
 		},
 		{
@@ -61,12 +61,12 @@ func (s *Server) getPDUSessionRoutes() []Route {
 
 // ReleasePduSession - Release
 func (s *Server) ReleasePduSession(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 // UpdatePduSession - Update (initiated by V-SMF)
 func (s *Server) UpdatePduSession(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 // HTTPReleaseSmContext - Release SM Context
@@ -94,7 +94,7 @@ func (s *Server) HTTPReleaseSmContext(c *gin.Context) {
 
 // RetrieveSmContext - Retrieve SM Context
 func (s *Server) RetrieveSmContext(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 // HTTPUpdateSmContext - Update SM Context
@@ -122,7 +122,7 @@ func (s *Server) HTTPUpdateSmContext(c *gin.Context) {
 
 // PostPduSessions - Create
 func (s *Server) PostPduSessions(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 // HTTPPostSmContexts - Create SM Context

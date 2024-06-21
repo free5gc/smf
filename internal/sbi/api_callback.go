@@ -50,7 +50,7 @@ func (s *Server) HTTPSmPolicyUpdateNotification(c *gin.Context) {
 }
 
 func (s *Server) SmPolicyControlTerminationRequestNotification(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 func (s *Server) HTTPChargingNotification(c *gin.Context) {

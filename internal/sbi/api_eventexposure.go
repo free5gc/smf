@@ -20,8 +20,8 @@ func (s *Server) getEventExposureRoutes() []Route {
 		{
 			Method:  http.MethodGet,
 			Pattern: "/",
-			APIFunc: func(ctx *gin.Context) {
-				ctx.JSON(http.StatusOK, gin.H{"status": "Service Available"})
+			APIFunc: func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"status": "Service Available"})
 			},
 		},
 		{
@@ -49,20 +49,20 @@ func (s *Server) getEventExposureRoutes() []Route {
 
 // SubscriptionsPost -
 func (s *Server) SubscriptionsPost(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 // SubscriptionsSubIdDelete -
 func (s *Server) SubscriptionsSubIdDelete(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 // SubscriptionsSubIdGet -
 func (s *Server) SubscriptionsSubIdGet(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 // SubscriptionsSubIdPut -
 func (s *Server) SubscriptionsSubIdPut(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }

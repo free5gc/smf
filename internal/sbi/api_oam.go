@@ -11,8 +11,8 @@ func (s *Server) getOAMRoutes() []Route {
 		{
 			Method:  http.MethodGet,
 			Pattern: "/",
-			APIFunc: func(ctx *gin.Context) {
-				ctx.JSON(http.StatusOK, gin.H{"status": "Service Available"})
+			APIFunc: func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"status": "Service Available"})
 			},
 		},
 		{
