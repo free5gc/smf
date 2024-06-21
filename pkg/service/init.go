@@ -172,6 +172,8 @@ func (a *SmfApp) Start() {
 
 	// Initialize PFCP server
 	a.pfcpStart(a)
+
+	a.WaitRoutineStopped()
 }
 
 func (a *SmfApp) listenShutDownEvent() {
@@ -184,13 +186,15 @@ func (a *SmfApp) listenShutDownEvent() {
 	}()
 
 	<-a.ctx.Done()
-	a.Terminate()
-	a.sbiServer.Stop()
+	a.terminateProcedure()
 }
 
 func (a *SmfApp) Terminate() {
-	logger.MainLog.Infof("Terminating SMF...")
 	a.cancel()
+}
+
+func (a *SmfApp) terminateProcedure() {
+	logger.MainLog.Infof("Terminating SMF...")
 	a.pfcpTerminate()
 	// deregister with NRF
 	problemDetails, err := a.Consumer().SendDeregisterNFInstance()
@@ -201,6 +205,7 @@ func (a *SmfApp) Terminate() {
 	} else {
 		logger.MainLog.Infof("Deregister from NRF successfully")
 	}
+	a.sbiServer.Stop()
 	logger.MainLog.Infof("SMF SBI Server terminated")
 }
 

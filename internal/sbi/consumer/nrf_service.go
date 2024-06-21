@@ -74,7 +74,7 @@ func (s *nnrfService) getNFDiscoveryClient(uri string) *Nnrf_NFDiscovery.APIClie
 	return client
 }
 
-func (s *nnrfService) RegisterNFInstance() error {
+func (s *nnrfService) RegisterNFInstance(ctx context.Context) error {
 	smfContext := s.consumer.Context()
 	client := s.getNFManagementClient(smfContext.NrfUri)
 	nfProfile, err := s.buildNfProfile(smfContext)
@@ -88,7 +88,7 @@ func (s *nnrfService) RegisterNFInstance() error {
 	// Check data (Use RESTful PUT)
 	for {
 		nf, res, err = client.NFInstanceIDDocumentApi.
-			RegisterNFInstance(context.TODO(), smfContext.NfInstanceID, nfProfile)
+			RegisterNFInstance(ctx, smfContext.NfInstanceID, nfProfile)
 		if err != nil || res == nil {
 			logger.ConsumerLog.Infof("SMF register to NRF Error[%s]", err.Error())
 			time.Sleep(2 * time.Second)
@@ -161,7 +161,7 @@ func (s *nnrfService) buildNfProfile(smfContext *smf_context.SMFContext) (profil
 func (s *nnrfService) RetrySendNFRegistration(maxRetry int) error {
 	retryCount := 0
 	for retryCount < maxRetry {
-		err := s.RegisterNFInstance()
+		err := s.RegisterNFInstance(context.Background())
 		if err == nil {
 			return nil
 		}
