@@ -15,7 +15,7 @@ func init() {
 	// smfContext.CPNodeID.NodeIdType = 0
 	// smfContext.CPNodeID.NodeIdValue = net.ParseIP("127.0.0.2").To4()
 
-	// go udp.Run()
+	// udp.Run()
 
 	// testAddr = &net.UDPAddr{
 	// 	IP:   net.ParseIP("127.0.0.2"),

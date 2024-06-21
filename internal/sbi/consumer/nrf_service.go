@@ -37,7 +37,7 @@ func (s *nnrfService) getNFManagementClient(uri string) *Nnrf_NFManagement.APICl
 	s.NFManagementgMu.RLock()
 	client, ok := s.NFManagementClients[uri]
 	if ok {
-		defer s.NFManagementgMu.RUnlock()
+		s.NFManagementgMu.RUnlock()
 		return client
 	}
 
@@ -59,7 +59,7 @@ func (s *nnrfService) getNFDiscoveryClient(uri string) *Nnrf_NFDiscovery.APIClie
 	s.NFDiscoveryMu.RLock()
 	client, ok := s.NFDiscoveryClients[uri]
 	if ok {
-		defer s.NFDiscoveryMu.RUnlock()
+		s.NFDiscoveryMu.RUnlock()
 		return client
 	}
 
@@ -107,7 +107,6 @@ func (s *nnrfService) RegisterNFInstance(ctx context.Context) error {
 		} else if status == http.StatusCreated {
 			// NFRegister
 			resourceUri := res.Header.Get("Location")
-			// resouceNrfUri := resourceUri[strings.LastIndex(resourceUri, "/"):]
 			smfContext.NfInstanceID = resourceUri[strings.LastIndex(resourceUri, "/")+1:]
 
 			oauth2 := false
@@ -125,7 +124,6 @@ func (s *nnrfService) RegisterNFInstance(ctx context.Context) error {
 			break
 		} else {
 			logger.ConsumerLog.Infof("handler returned wrong status code %d", status)
-			// fmt.Errorf("NRF return wrong status code %d", status)
 		}
 	}
 

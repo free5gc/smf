@@ -30,7 +30,7 @@ func (s *nchfService) getConvergedChargingClient(uri string) *Nchf_ConvergedChar
 	s.ConvergedChargingMu.RLock()
 	client, ok := s.ConvergedChargingClients[uri]
 	if ok {
-		defer s.ConvergedChargingMu.RUnlock()
+		s.ConvergedChargingMu.RUnlock()
 		return client
 	}
 

@@ -34,7 +34,7 @@ func (s *npcfService) getSMPolicyControlClient(uri string) *Npcf_SMPolicyControl
 	s.SMPolicyControlMu.RLock()
 	client, ok := s.SMPolicyControlClients[uri]
 	if ok {
-		defer s.SMPolicyControlMu.RUnlock()
+		s.SMPolicyControlMu.RUnlock()
 		return client
 	}
 

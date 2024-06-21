@@ -31,7 +31,7 @@ func (s *nudmService) getSubscribeDataManagementClient(uri string) *Nudm_Subscri
 	s.SubscriberDataManagementMu.RLock()
 	client, ok := s.SubscriberDataManagementClients[uri]
 	if ok {
-		defer s.SubscriberDataManagementMu.RUnlock()
+		s.SubscriberDataManagementMu.RUnlock()
 		return client
 	}
 
@@ -53,7 +53,7 @@ func (s *nudmService) getUEContextManagementClient(uri string) *Nudm_UEContextMa
 	s.UEContextManagementMu.RLock()
 	client, ok := s.UEContextManagementClients[uri]
 	if ok {
-		defer s.UEContextManagementMu.RUnlock()
+		s.UEContextManagementMu.RUnlock()
 		return client
 	}
 

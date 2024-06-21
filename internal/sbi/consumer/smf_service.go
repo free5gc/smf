@@ -26,7 +26,7 @@ func (s *nsmfService) getPDUSessionClient(uri string) *Nsmf_PDUSession.APIClient
 	s.PDUSessionMu.RLock()
 	client, ok := s.PDUSessionClients[uri]
 	if ok {
-		defer s.PDUSessionMu.RUnlock()
+		s.PDUSessionMu.RUnlock()
 		return client
 	}
 
