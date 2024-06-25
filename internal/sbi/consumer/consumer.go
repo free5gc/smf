@@ -8,7 +8,6 @@ import (
 	"github.com/free5gc/openapi/Nsmf_PDUSession"
 	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
 	"github.com/free5gc/openapi/Nudm_UEContextManagement"
-	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/app"
 )
 
@@ -21,10 +20,6 @@ type Consumer struct {
 	*npcfService
 	*nudmService
 	*nnrfService
-}
-
-func (c *Consumer) Context() *smf_context.SMFContext {
-	return smf_context.GetSelf()
 }
 
 func NewConsumer(smf app.App) (*Consumer, error) {

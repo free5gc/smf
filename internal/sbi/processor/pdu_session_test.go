@@ -596,6 +596,8 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 
 	service.SMF = mockSmf
 
+	mockSmf.EXPECT().Context().Return(smf_context.GetSelf()).AnyTimes()
+
 	for _, tc := range testCases {
 		t.Run(tc.paramStr, func(t *testing.T) {
 			httpRecorder := httptest.NewRecorder()
