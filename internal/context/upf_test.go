@@ -26,8 +26,8 @@ var mockIfaces = []*factory.InterfaceUpfInfoItem{
 	},
 }
 
-func convertPDUSessTypeToString(pdutype uint8) string {
-	switch pdutype {
+func convertPDUSessTypeToString(pduType uint8) string {
+	switch pduType {
 	case nasMessage.PDUSessionTypeIPv4:
 		return "PDU Session Type IPv4"
 	case nasMessage.PDUSessionTypeIPv6:
