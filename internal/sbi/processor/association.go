@@ -206,7 +206,9 @@ func (p *Processor) releaseAllResourcesOfUPF(upf *smf_context.UPF, upfStr string
 	})
 }
 
-func (p *Processor) requestAMFToReleasePDUResources(smContext *smf_context.SMContext) (sendNotify bool, releaseContext bool) {
+func (p *Processor) requestAMFToReleasePDUResources(
+	smContext *smf_context.SMContext,
+) (sendNotify bool, releaseContext bool) {
 	n1n2Request := models.N1N2MessageTransferRequest{}
 	// TS 23.502 4.3.4.2 3b. Send Namf_Communication_N1N2MessageTransfer Request, SMF->AMF
 	n1n2Request.JsonData = &models.N1N2MessageTransferReqData{

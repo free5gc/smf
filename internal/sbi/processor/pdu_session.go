@@ -12,8 +12,6 @@ import (
 	"github.com/free5gc/nas"
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/openapi"
-
-	// "github.com/free5gc/openapi/Namf_Communication"
 	"github.com/free5gc/openapi/Nsmf_PDUSession"
 	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
 	"github.com/free5gc/openapi/models"
@@ -1151,7 +1149,6 @@ func (p *Processor) sendGSMPDUSessionModificationCommand(smContext *smf_context.
 			if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 				smContext.Log.Warnf("%v", rspData.Cause)
 			}
-
 		}, func() {
 			smContext.Log.Warn("T3591 Expires3 times, abort notification procedure")
 			smContext.SMLock.Lock()

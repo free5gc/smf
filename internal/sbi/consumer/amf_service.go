@@ -40,12 +40,18 @@ func (s *namfService) getCommunicationClient(uri string) *Namf_Communication.API
 	return client
 }
 
-func (s *namfService) N1N2MessageTransfer(ctx context.Context, supi string, n1n2Request models.N1N2MessageTransferRequest, apiPrefix string) (*models.N1N2MessageTransferRspData, *int, error) {
+func (s *namfService) N1N2MessageTransfer(
+	ctx context.Context, supi string, n1n2Request models.N1N2MessageTransferRequest, apiPrefix string,
+) (*models.N1N2MessageTransferRspData, *int, error) {
 	client := s.getCommunicationClient(apiPrefix)
 	if client == nil {
 		return nil, nil, fmt.Errorf("N1N2MessageTransfer client is nil: (%v)", apiPrefix)
 	}
-	rspData, rsp, errN1N2MessageTransfer := client.N1N2MessageCollectionDocumentApi.N1N2MessageTransfer(ctx, supi, n1n2Request)
+
+	rspData, rsp, err := client.N1N2MessageCollectionDocumentApi.N1N2MessageTransfer(ctx, supi, n1n2Request)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	defer func() {
 		if errClose := rsp.Body.Close(); errClose != nil {
@@ -53,10 +59,6 @@ func (s *namfService) N1N2MessageTransfer(ctx context.Context, supi string, n1n2
 		}
 	}()
 
-	if errN1N2MessageTransfer != nil {
-		return nil, nil, errN1N2MessageTransfer
-	}
-	
 	statusCode := rsp.StatusCode
-	return &rspData, &statusCode, errN1N2MessageTransfer
+	return &rspData, &statusCode, err
 }
