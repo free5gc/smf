@@ -8,7 +8,6 @@ import (
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/pfcp"
 	"github.com/free5gc/smf/internal/pfcp/udp"
-	"github.com/free5gc/smf/pkg/association"
 	"github.com/free5gc/smf/pkg/service"
 )
 
@@ -31,7 +30,7 @@ func InitPFCPFunc() (func(a *service.SmfApp), func()) {
 
 		for _, upNode := range smf_context.GetSelf().UserPlaneInformation.UPFs {
 			upNode.UPF.Ctx, upNode.UPF.CancelFunc = context.WithCancel(ctx)
-			go association.ToBeAssociatedWithUPF(ctx, upNode.UPF, a.Processor())
+			go a.Processor().ToBeAssociatedWithUPF(ctx, upNode.UPF)
 		}
 	}
 

@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	smf_context "github.com/free5gc/smf/internal/context"
-	"github.com/free5gc/smf/pkg/association"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
@@ -72,7 +71,7 @@ func (s *Server) PostUpNodesLinks(c *gin.Context) {
 		// only associate new ones
 		if upf.UPF.UPFStatus == smf_context.NotAssociated {
 			upf.UPF.Ctx, upf.UPF.CancelFunc = context.WithCancel(context.Background())
-			go association.ToBeAssociatedWithUPF(smf_context.GetSelf().Ctx, upf.UPF, s.Processor())
+			go s.Processor().ToBeAssociatedWithUPF(smf_context.GetSelf().Ctx, upf.UPF)
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "OK"})
@@ -89,7 +88,7 @@ func (s *Server) DeleteUpNodeLink(c *gin.Context) {
 		defer upi.Mu.Unlock()
 		if upNode, ok := upi.UPNodes[upNodeRef]; ok {
 			if upNode.Type == smf_context.UPNODE_UPF {
-				go association.ReleaseAllResourcesOfUPF(upNode.UPF, s.Processor())
+				go s.Processor().ReleaseAllResourcesOfUPF(upNode.UPF)
 			}
 			upi.UpNodeDelete(upNodeRef)
 			upNode.UPF.CancelFunc()

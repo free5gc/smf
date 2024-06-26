@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"github.com/free5gc/openapi/Namf_Communication"
 	"github.com/free5gc/openapi/Nchf_ConvergedCharging"
 	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
 	"github.com/free5gc/openapi/Nnrf_NFManagement"
@@ -16,6 +17,7 @@ type Consumer struct {
 
 	// consumer services
 	*nsmfService
+	*namfService
 	*nchfService
 	*npcfService
 	*nudmService
@@ -30,6 +32,11 @@ func NewConsumer(smf app.App) (*Consumer, error) {
 	c.nsmfService = &nsmfService{
 		consumer:          c,
 		PDUSessionClients: make(map[string]*Nsmf_PDUSession.APIClient),
+	}
+
+	c.namfService = &namfService{
+		consumer:             c,
+		CommunicationClients: make(map[string]*Namf_Communication.APIClient),
 	}
 
 	c.nchfService = &nchfService{

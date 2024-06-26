@@ -228,7 +228,7 @@ func (p *Processor) EstHandler(isDone <-chan struct{},
 		<-isDone
 	}
 	if success {
-		sendPDUSessionEstablishmentAccept(smContext)
+		p.sendPDUSessionEstablishmentAccept(smContext)
 	} else {
 		// TODO: set appropriate 5GSM cause according to PFCP cause value
 		p.sendPDUSessionEstablishmentReject(smContext, nasMessage.Cause5GSMNetworkFailure)
@@ -260,35 +260,27 @@ func (p *Processor) sendPDUSessionEstablishmentReject(
 		},
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+	smContext.SetState(smf_context.InActive)
+
+	ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+	if errToken != nil {
+		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", errToken)
+		return
+	}
+	rspData, _, err := p.Consumer().
+		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 	if err != nil {
-		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", err)
+		logger.ConsumerLog.Warnf("N1N2MessageTransfer for SendPDUSessionEstablishmentReject failed: %+v", err)
 		return
 	}
 
-	rspData, rsp, err := smContext.
-		CommunicationClient.
-		N1N2MessageCollectionDocumentApi.
-		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request)
-	defer func() {
-		if rsp != nil {
-			if resCloseErr := rsp.Body.Close(); resCloseErr != nil {
-				logger.PduSessLog.Warnf("response Body closed error")
-			}
-		}
-	}()
-	smContext.SetState(smf_context.InActive)
-	if err != nil {
-		logger.PduSessLog.Warnf("Send N1N2Transfer failed")
-		return
-	}
 	if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 		logger.PduSessLog.Warnf("%v", rspData.Cause)
 	}
 	p.RemoveSMContextFromAllNF(smContext, true)
 }
 
-func sendPDUSessionEstablishmentAccept(
+func (p *Processor) sendPDUSessionEstablishmentAccept(
 	smContext *smf_context.SMContext,
 ) {
 	smNasBuf, err := smf_context.BuildGSMPDUSessionEstablishmentAccept(smContext)
@@ -334,23 +326,15 @@ func sendPDUSessionEstablishmentAccept(
 		return
 	}
 
-	rspData, rsp, err := smContext.
-		CommunicationClient.
-		N1N2MessageCollectionDocumentApi.
-		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request)
-	defer func() {
-		if rsp != nil {
-			if resCloseErr := rsp.Body.Close(); resCloseErr != nil {
-				logger.PduSessLog.Warnf("response Body closed error")
-			}
-		}
-	}()
-	smContext.SetState(smf_context.Active)
-
+	rspData, _, err := p.Consumer().
+		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 	if err != nil {
-		logger.PduSessLog.Warnf("Send N1N2Transfer failed")
+		logger.ConsumerLog.Warnf("N1N2MessageTransfer for sendPDUSessionEstablishmentAccept failed: %+v", err)
 		return
 	}
+
+	smContext.SetState(smf_context.Active)
+
 	if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 		logger.PduSessLog.Warnf("%v", rspData.Cause)
 	}

@@ -18,7 +18,6 @@ import (
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/ngap/ngapType"
 	"github.com/free5gc/openapi"
-	"github.com/free5gc/openapi/Namf_Communication"
 	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
@@ -157,7 +156,7 @@ type SMContext struct {
 	UpSecurityFromPathSwitchRequestSameAsLocalStored bool
 
 	// Client
-	CommunicationClient *Namf_Communication.APIClient
+	CommunicationClientApiPrefix string
 
 	AMFProfile         models.NfProfile
 	SelectedPCFProfile models.NfProfile

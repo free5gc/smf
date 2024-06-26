@@ -1,4 +1,4 @@
-package association
+package processor
 
 import (
 	"context"
@@ -13,10 +13,9 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/pfcp/message"
-	"github.com/free5gc/smf/internal/sbi/processor"
 )
 
-func ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF, processor *processor.Processor) {
+func (p *Processor) ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF) {
 	var upfStr string
 	if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
 		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.NodeID.ResolveNodeIdToIp().String())
@@ -40,21 +39,21 @@ func ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF, processor 
 			break
 		}
 
-		releaseAllResourcesOfUPF(upf, upfStr, processor)
+		p.releaseAllResourcesOfUPF(upf, upfStr)
 		if isDone(ctx, upf) {
 			break
 		}
 	}
 }
 
-func ReleaseAllResourcesOfUPF(upf *smf_context.UPF, processor *processor.Processor) {
+func (p *Processor) ReleaseAllResourcesOfUPF(upf *smf_context.UPF) {
 	var upfStr string
 	if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
 		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.NodeID.ResolveNodeIdToIp().String())
 	} else {
 		upfStr = fmt.Sprintf("[%s]", upf.NodeID.ResolveNodeIdToIp().String())
 	}
-	releaseAllResourcesOfUPF(upf, upfStr, processor)
+	p.releaseAllResourcesOfUPF(upf, upfStr)
 }
 
 func isDone(ctx context.Context, upf *smf_context.UPF) bool {
@@ -187,7 +186,7 @@ func doPfcpHeartbeat(upf *smf_context.UPF, upfStr string) error {
 	return nil
 }
 
-func releaseAllResourcesOfUPF(upf *smf_context.UPF, upfStr string, processor *processor.Processor) {
+func (p *Processor) releaseAllResourcesOfUPF(upf *smf_context.UPF, upfStr string) {
 	logger.MainLog.Infof("Release all resources of UPF %s", upfStr)
 
 	upf.ProcEachSMContext(func(smContext *smf_context.SMContext) {
@@ -195,19 +194,19 @@ func releaseAllResourcesOfUPF(upf *smf_context.UPF, upfStr string, processor *pr
 		defer smContext.SMLock.Unlock()
 		switch smContext.State() {
 		case smf_context.Active, smf_context.ModificationPending, smf_context.PFCPModification:
-			needToSendNotify, removeContext := requestAMFToReleasePDUResources(smContext)
+			needToSendNotify, removeContext := p.requestAMFToReleasePDUResources(smContext)
 			if needToSendNotify {
-				processor.SendReleaseNotification(smContext)
+				p.SendReleaseNotification(smContext)
 			}
 			if removeContext {
 				// Notification has already been sent, if it is needed
-				processor.RemoveSMContextFromAllNF(smContext, false)
+				p.RemoveSMContextFromAllNF(smContext, false)
 			}
 		}
 	})
 }
 
-func requestAMFToReleasePDUResources(smContext *smf_context.SMContext) (sendNotify bool, releaseContext bool) {
+func (p *Processor) requestAMFToReleasePDUResources(smContext *smf_context.SMContext) (sendNotify bool, releaseContext bool) {
 	n1n2Request := models.N1N2MessageTransferRequest{}
 	// TS 23.502 4.3.4.2 3b. Send Namf_Communication_N1N2MessageTransfer Request, SMF->AMF
 	n1n2Request.JsonData = &models.N1N2MessageTransferReqData{
@@ -245,23 +244,18 @@ func requestAMFToReleasePDUResources(smContext *smf_context.SMContext) (sendNoti
 		}
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
-	if err != nil {
+	ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+	if errToken != nil {
 		return false, false
 	}
 
-	rspData, res, err := smContext.CommunicationClient.
-		N1N2MessageCollectionDocumentApi.
-		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request)
+	rspData, statusCode, err := p.Consumer().
+		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 	if err != nil {
-		logger.MainLog.Warnf("Send N1N2Transfer failed: %+v", err)
+		logger.ConsumerLog.Warnf("N1N2MessageTransfer for RequestAMFToReleasePDUResources failed: %+v", err)
 	}
-	defer func() {
-		if resCloseErr := res.Body.Close(); resCloseErr != nil {
-			logger.PduSessLog.Errorf("N1N2MessageTransfer response body cannot close: %+v", resCloseErr)
-		}
-	}()
-	switch res.StatusCode {
+
+	switch *statusCode {
 	case http.StatusOK:
 		if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 			// the PDU Session Release Command was not transferred to the UE since it is in CM-IDLE state.
