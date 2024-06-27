@@ -15,6 +15,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
 	"github.com/free5gc/openapi/Nnrf_NFManagement"
+	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
@@ -292,15 +293,15 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 	if localErr == nil {
 		smfContext.UDMProfile = result.NfInstances[0]
 
+		var client *Nudm_SubscriberDataManagement.APIClient
 		for _, service := range *smfContext.UDMProfile.NfServices {
 			if service.ServiceName == models.ServiceName_NUDM_SDM {
-				smfContext.SubscriberDataManagementClient = s.consumer.nudmService.
-					getSubscribeDataManagementClient(service.ApiPrefix)
+				client = s.consumer.nudmService.getSubscribeDataManagementClient(service.ApiPrefix)
 			}
 		}
-
-		if smfContext.SubscriberDataManagementClient == nil {
-			logger.ConsumerLog.Warnln("sdm client failed")
+		if client == nil {
+			logger.ConsumerLog.Traceln("Get Subscribe Data Management Client Failed")
+			return nil, fmt.Errorf("Get Subscribe Data Management Client Failed")
 		}
 	} else if httpResp != nil {
 		defer func() {
@@ -386,4 +387,109 @@ func (s *nnrfService) SendNFDiscoveryServingAMF(smContext *smf_context.SMContext
 	}
 
 	return nil, nil
+}
+
+// CHFSelection will select CHF for this SM Context
+func (s *nnrfService) CHFSelection(smContext *smf_context.SMContext) error {
+	// Send NFDiscovery for find CHF
+	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{
+		// Supi: optional.NewString(smContext.Supi),
+	}
+
+	ctx, _, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
+	if err != nil {
+		return err
+	}
+
+	client := s.getNFDiscoveryClient(s.consumer.Context().NrfUri)
+	// Check data
+	rsp, res, err := client.NFInstancesStoreApi.
+		SearchNFInstances(ctx, models.NfType_CHF, models.NfType_SMF, &localVarOptionals)
+	if err != nil {
+		logger.ConsumerLog.Errorf("SearchNFInstances failed: %+v", err)
+		return err
+	}
+	defer func() {
+		if rspCloseErr := res.Body.Close(); rspCloseErr != nil {
+			logger.PduSessLog.Errorf("SmfEventExposureNotification response body cannot close: %+v", rspCloseErr)
+		}
+	}()
+
+	if res != nil {
+		if status := res.StatusCode; status != http.StatusOK {
+			apiError := err.(openapi.GenericOpenAPIError)
+			problemDetails := apiError.Model().(models.ProblemDetails)
+
+			logger.CtxLog.Warningf("NFDiscovery return status: %d\n", status)
+			logger.CtxLog.Warningf("Detail: %v\n", problemDetails.Title)
+		}
+	}
+
+	// Select CHF from available CHF
+	smContext.SelectedCHFProfile = rsp.NfInstances[0]
+
+	return nil
+}
+
+// PCFSelection will select PCF for this SM Context
+func (s *nnrfService) PCFSelection(smContext *smf_context.SMContext) error {
+	ctx, _, errToken := s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_DISC, "NRF")
+	if errToken != nil {
+		return errToken
+	}
+	// Send NFDiscovery for find PCF
+	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
+
+	if s.consumer.Context().Locality != "" {
+		localVarOptionals.PreferredLocality = optional.NewString(s.consumer.Context().Locality)
+	}
+
+	client := s.getNFDiscoveryClient(s.consumer.Context().NrfUri)
+	// Check data
+	rsp, res, err := client.NFInstancesStoreApi.
+		SearchNFInstances(ctx, models.NfType_PCF, models.NfType_SMF, &localVarOptionals)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if rspCloseErr := res.Body.Close(); rspCloseErr != nil {
+			logger.PduSessLog.Errorf("SmfEventExposureNotification response body cannot close: %+v", rspCloseErr)
+		}
+	}()
+
+	if res != nil {
+		if status := res.StatusCode; status != http.StatusOK {
+			apiError := err.(openapi.GenericOpenAPIError)
+			problemDetails := apiError.Model().(models.ProblemDetails)
+
+			logger.CtxLog.Warningf("NFDiscovery PCF return status: %d\n", status)
+			logger.CtxLog.Warningf("Detail: %v\n", problemDetails.Title)
+		}
+	}
+
+	// Select PCF from available PCF
+
+	smContext.SelectedPCFProfile = rsp.NfInstances[0]
+
+	return nil
+}
+
+func (s *nnrfService) SearchNFInstances(ctx context.Context, targetNfType models.NfType, requesterNfType models.NfType,
+	localVarOptionals *Nnrf_NFDiscovery.SearchNFInstancesParamOpts,
+) (*models.SearchResult, *http.Response, error) {
+	client := s.getNFDiscoveryClient(s.consumer.Context().NrfUri)
+
+	rsp, res, err := client.NFInstancesStoreApi.
+		SearchNFInstances(ctx, models.NfType_CHF, models.NfType_SMF, localVarOptionals)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	defer func() {
+		if rspCloseErr := res.Body.Close(); rspCloseErr != nil {
+			logger.PduSessLog.Errorf("SmfEventExposureNotification response body cannot close: %+v", rspCloseErr)
+		}
+	}()
+
+	return &rsp, res, err
 }

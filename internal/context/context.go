@@ -11,9 +11,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
-	"github.com/free5gc/openapi/Nnrf_NFManagement"
-	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/oauth"
 	"github.com/free5gc/pfcp/pfcpType"
@@ -57,15 +54,12 @@ type SMFContext struct {
 
 	SnssaiInfos []*SnssaiSmfInfo
 
-	NrfUri                         string
-	NrfCertPem                     string
-	NFManagementClient             *Nnrf_NFManagement.APIClient
-	NFDiscoveryClient              *Nnrf_NFDiscovery.APIClient
-	SubscriberDataManagementClient *Nudm_SubscriberDataManagement.APIClient
-	Locality                       string
-	AssocFailAlertInterval         time.Duration
-	AssocFailRetryInterval         time.Duration
-	OAuth2Required                 bool
+	NrfUri                 string
+	NrfCertPem             string
+	Locality               string
+	AssocFailAlertInterval time.Duration
+	AssocFailRetryInterval time.Duration
+	OAuth2Required         bool
 
 	UserPlaneInformation  *UserPlaneInformation
 	Ctx                   context.Context
@@ -240,15 +234,6 @@ func InitSmfContext(config *factory.Config) {
 		}
 		smfContext.SnssaiInfos = append(smfContext.SnssaiInfos, &snssaiInfo)
 	}
-
-	// Set client and set url
-	ManagementConfig := Nnrf_NFManagement.NewConfiguration()
-	ManagementConfig.SetBasePath(GetSelf().NrfUri)
-	smfContext.NFManagementClient = Nnrf_NFManagement.NewAPIClient(ManagementConfig)
-
-	NFDiscovryConfig := Nnrf_NFDiscovery.NewConfiguration()
-	NFDiscovryConfig.SetBasePath(GetSelf().NrfUri)
-	smfContext.NFDiscoveryClient = Nnrf_NFDiscovery.NewAPIClient(NFDiscovryConfig)
 
 	smfContext.ULCLSupport = configuration.ULCL
 

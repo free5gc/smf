@@ -4,21 +4,17 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/antihax/optional"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
 	"github.com/free5gc/nas/nasConvert"
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/ngap/ngapType"
-	"github.com/free5gc/openapi"
-	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
@@ -466,90 +462,6 @@ func (smContext *SMContext) PDUAddressToNAS() ([12]byte, uint8) {
 		addrLen = addrLenBuf
 	}
 	return addr, addrLen
-}
-
-// CHFSelection will select CHF for this SM Context
-func (smContext *SMContext) CHFSelection() error {
-	// Send NFDiscovery for find CHF
-	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{
-		// Supi: optional.NewString(smContext.Supi),
-	}
-
-	ctx, _, err := smfContext.GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
-	if err != nil {
-		return err
-	}
-
-	rsp, res, err := GetSelf().
-		NFDiscoveryClient.
-		NFInstancesStoreApi.
-		SearchNFInstances(ctx, models.NfType_CHF, models.NfType_SMF, &localVarOptionals)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if rspCloseErr := res.Body.Close(); rspCloseErr != nil {
-			logger.PduSessLog.Errorf("SmfEventExposureNotification response body cannot close: %+v", rspCloseErr)
-		}
-	}()
-
-	if res != nil {
-		if status := res.StatusCode; status != http.StatusOK {
-			apiError := err.(openapi.GenericOpenAPIError)
-			problemDetails := apiError.Model().(models.ProblemDetails)
-
-			logger.CtxLog.Warningf("NFDiscovery SMF return status: %d\n", status)
-			logger.CtxLog.Warningf("Detail: %v\n", problemDetails.Title)
-		}
-	}
-
-	// Select CHF from available CHF
-	smContext.SelectedCHFProfile = rsp.NfInstances[0]
-
-	return nil
-}
-
-// PCFSelection will select PCF for this SM Context
-func (smContext *SMContext) PCFSelection() error {
-	ctx, _, err := GetSelf().GetTokenCtx(models.ServiceName_NNRF_DISC, "NRF")
-	if err != nil {
-		return err
-	}
-	// Send NFDiscovery for find PCF
-	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
-
-	if GetSelf().Locality != "" {
-		localVarOptionals.PreferredLocality = optional.NewString(GetSelf().Locality)
-	}
-
-	rsp, res, err := GetSelf().
-		NFDiscoveryClient.
-		NFInstancesStoreApi.
-		SearchNFInstances(ctx, models.NfType_PCF, models.NfType_SMF, &localVarOptionals)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if rspCloseErr := res.Body.Close(); rspCloseErr != nil {
-			logger.PduSessLog.Errorf("SmfEventExposureNotification response body cannot close: %+v", rspCloseErr)
-		}
-	}()
-
-	if res != nil {
-		if status := res.StatusCode; status != http.StatusOK {
-			apiError := err.(openapi.GenericOpenAPIError)
-			problemDetails := apiError.Model().(models.ProblemDetails)
-
-			logger.CtxLog.Warningf("NFDiscovery PCF return status: %d\n", status)
-			logger.CtxLog.Warningf("Detail: %v\n", problemDetails.Title)
-		}
-	}
-
-	// Select PCF from available PCF
-
-	smContext.SelectedPCFProfile = rsp.NfInstances[0]
-
-	return nil
 }
 
 func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) pfcpType.NodeID {

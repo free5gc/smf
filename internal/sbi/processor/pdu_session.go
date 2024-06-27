@@ -95,16 +95,13 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		SingleNssai: optional.NewInterface(openapi.MarshToJsonString(smContext.SNssai)),
 	}
 
-	SubscriberDataManagementClient := smf_context.GetSelf().SubscriberDataManagementClient
-
 	ctx, _, oauthErr := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_SDM, models.NfType_UDM)
 	if oauthErr != nil {
 		smContext.Log.Errorf("Get Token Context Error[%v]", oauthErr)
 		return
 	}
 
-	if sessSubData, rsp, err := SubscriberDataManagementClient.
-		SessionManagementSubscriptionDataRetrievalApi.
+	if sessSubData, rsp, err := p.Consumer().
 		GetSmData(ctx, smContext.Supi, smDataParams); err != nil {
 		smContext.Log.Errorln("Get SessionManagementSubscriptionData error:", err)
 	} else {
@@ -164,7 +161,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		return
 	}
 
-	if err := smContext.PCFSelection(); err != nil {
+	if err := p.consumer.PCFSelection(smContext); err != nil {
 		smContext.Log.Errorln("pcf selection error:", err)
 	}
 
@@ -191,7 +188,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	// PDU　session create is a charging event
 	logger.PduSessLog.Infof("CHF Selection for SMContext SUPI[%s] PDUSessionID[%d]\n",
 		smContext.Supi, smContext.PDUSessionID)
-	if err = smContext.CHFSelection(); err != nil {
+	if err = p.consumer.CHFSelection(smContext); err != nil {
 		logger.PduSessLog.Errorln("chf selection error:", err)
 	} else {
 		p.CreateChargingSession(smContext)

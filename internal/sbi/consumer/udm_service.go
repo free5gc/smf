@@ -1,6 +1,9 @@
 package consumer
 
 import (
+	"context"
+	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -164,4 +167,35 @@ func (s *nudmService) UeCmDeregistration(smCtx *smf_context.SMContext) (*models.
 	} else {
 		return nil, openapi.ReportError("server no response")
 	}
+}
+
+func (s *nudmService) GetSmData(ctx context.Context, supi string,
+	localVarOptionals *Nudm_SubscriberDataManagement.GetSmDataParamOpts) (
+	[]models.SessionManagementSubscriptionData, *http.Response, error,
+) {
+	var client *Nudm_SubscriberDataManagement.APIClient
+	for _, service := range *s.consumer.Context().UDMProfile.NfServices {
+		if service.ServiceName == models.ServiceName_NUDM_SDM {
+			SDMConf := Nudm_SubscriberDataManagement.NewConfiguration()
+			SDMConf.SetBasePath(service.ApiPrefix)
+			client = s.getSubscribeDataManagementClient(service.ApiPrefix)
+		}
+	}
+
+	if client == nil {
+		return nil, nil, fmt.Errorf("sdm client failed")
+	}
+
+	sessSubData, rsp, err := client.SessionManagementSubscriptionDataRetrievalApi.GetSmData(ctx, supi, localVarOptionals)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	defer func() {
+		if rspCloseErr := rsp.Body.Close(); rspCloseErr != nil {
+			logger.ConsumerLog.Errorf("GetSmData response body cannot close: %+v", rspCloseErr)
+		}
+	}()
+
+	return sessSubData, rsp, err
 }
