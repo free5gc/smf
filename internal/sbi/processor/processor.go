@@ -11,22 +11,17 @@ const (
 
 type ProcessorSmf interface {
 	app.App
+
+	Consumer() *consumer.Consumer
 }
 
 type Processor struct {
 	ProcessorSmf
-
-	consumer *consumer.Consumer
 }
 
-func NewProcessor(smf ProcessorSmf, consumer *consumer.Consumer) (*Processor, error) {
+func NewProcessor(smf ProcessorSmf) (*Processor, error) {
 	p := &Processor{
 		ProcessorSmf: smf,
-		consumer:     consumer,
 	}
 	return p, nil
-}
-
-func (p *Processor) Consumer() *consumer.Consumer {
-	return p.consumer
 }

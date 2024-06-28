@@ -72,7 +72,7 @@ func NewApp(
 	smf.consumer = consumer
 
 	// Initialize processor
-	processor, err := processor.NewProcessor(smf, consumer)
+	processor, err := processor.NewProcessor(smf)
 	if err != nil {
 		return nil, err
 	}

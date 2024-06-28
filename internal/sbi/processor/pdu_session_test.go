@@ -589,7 +589,8 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create consumer: %+v", err)
 	}
-	processor, err := processor.NewProcessor(mockSmf, consumer)
+
+	processor, err := processor.NewProcessor(mockSmf)
 	if err != nil {
 		t.Fatalf("Failed to create processor: %+v", err)
 	}
@@ -597,6 +598,7 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 	service.SMF = mockSmf
 
 	mockSmf.EXPECT().Context().Return(smf_context.GetSelf()).AnyTimes()
+	mockSmf.EXPECT().Consumer().Return(consumer).AnyTimes()
 
 	for _, tc := range testCases {
 		t.Run(tc.paramStr, func(t *testing.T) {
