@@ -161,7 +161,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		return
 	}
 
-	if err := p.consumer.PCFSelection(smContext); err != nil {
+	if err := p.Consumer().PCFSelection(smContext); err != nil {
 		smContext.Log.Errorln("pcf selection error:", err)
 	}
 
@@ -188,7 +188,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	// PDU　session create is a charging event
 	logger.PduSessLog.Infof("CHF Selection for SMContext SUPI[%s] PDUSessionID[%d]\n",
 		smContext.Supi, smContext.PDUSessionID)
-	if err = p.consumer.CHFSelection(smContext); err != nil {
+	if err = p.Consumer().CHFSelection(smContext); err != nil {
 		logger.PduSessLog.Errorln("chf selection error:", err)
 	} else {
 		p.CreateChargingSession(smContext)
