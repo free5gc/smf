@@ -127,8 +127,9 @@ func (node *DataPathNode) Prev() *DataPathNode {
 }
 
 func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) error {
-	var err error
 	logger.CtxLog.Traceln("In ActivateUpLinkTunnel")
+
+	var err error
 	node.UpLinkTunnel.SrcEndPoint = node.Prev()
 	node.UpLinkTunnel.DestEndPoint = node
 
@@ -150,6 +151,8 @@ func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) error {
 }
 
 func (node *DataPathNode) ActivateDownLinkTunnel(smContext *SMContext) error {
+	logger.CtxLog.Traceln("In ActivateDownLinkTunnel")
+
 	var err error
 	node.DownLinkTunnel.SrcEndPoint = node.Next()
 	node.DownLinkTunnel.DestEndPoint = node
@@ -420,7 +423,8 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 	// Note: This should be after Activate Tunnels
 	if smContext.UrrReportTime != 0 || smContext.UrrReportThreshold != 0 {
 		dataPath.addUrrToPath(smContext)
-		logger.PduSessLog.Trace("Create URR")
+		logger.PduSessLog.Tracef("Create URR: UrrReportTime [%v],  UrrReportThreshold: [%v]",
+			smContext.UrrReportTime, smContext.UrrReportThreshold)
 	} else {
 		logger.PduSessLog.Warn("No Create URR")
 	}
