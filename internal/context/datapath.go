@@ -548,11 +548,6 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				},
 			}
 
-			if curDataPathNode.IsAnchorUPF() {
-				ULFAR.ForwardingParameters.
-					DestinationInterface.InterfaceValue = pfcpType.DestinationInterfaceSgiLanN6Lan
-			}
-
 			if nextULDest := curDataPathNode.Next(); nextULDest != nil {
 				nextULTunnel := nextULDest.UpLinkTunnel
 				iface = nextULTunnel.DestEndPoint.UPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
@@ -584,7 +579,6 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 
 			DLPDR.Precedence = precedence
 
-			// TODO: Should delete this after FR5GC-1029 is solved
 			if curDataPathNode.IsAnchorUPF() {
 				DLPDR.PDI = PDI{
 					SourceInterface: pfcpType.SourceInterface{
