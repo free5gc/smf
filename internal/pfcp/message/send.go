@@ -369,7 +369,7 @@ func SendPfcpSessionDeletionResponse(addr *net.UDPAddr) {
 	udp.SendPfcpResponse(message, addr)
 }
 
-func SendPfcpSessionReportResponse(addr *net.UDPAddr, cause pfcpType.Cause, seqFromUPF uint32, SEID uint64) {
+func SendPfcpSessionReportResponse(addr *net.UDPAddr, cause pfcpType.Cause, seqFromUPF uint32, seid uint64) {
 	pfcpMsg, err := BuildPfcpSessionReportResponse(cause)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Report Response failed: %v", err)
@@ -383,7 +383,7 @@ func SendPfcpSessionReportResponse(addr *net.UDPAddr, cause pfcpType.Cause, seqF
 			S:              pfcp.SEID_PRESENT,
 			MessageType:    pfcp.PFCP_SESSION_REPORT_RESPONSE,
 			SequenceNumber: seqFromUPF,
-			SEID:           SEID,
+			SEID:           seid,
 		},
 		Body: pfcpMsg,
 	}

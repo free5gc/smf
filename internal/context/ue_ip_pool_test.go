@@ -1,4 +1,4 @@
-package context
+package context_test
 
 import (
 	"fmt"
@@ -8,11 +8,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
 func TestUeIPPool(t *testing.T) {
-	ueIPPool := NewUEIPPool(&factory.UEIPPool{
+	ueIPPool := context.NewUEIPPool(&factory.UEIPPool{
 		Cidr: "10.10.0.0/24",
 	})
 
@@ -29,52 +30,52 @@ func TestUeIPPool(t *testing.T) {
 
 	// allocate
 	for i := 0; i < 256; i += 1 {
-		allocIP = ueIPPool.allocate(nil)
+		allocIP = ueIPPool.Allocate(nil)
 		require.Contains(t, ipPoolList, allocIP)
 	}
 
 	// ip pool is empty
-	allocIP = ueIPPool.allocate(nil)
+	allocIP = ueIPPool.Allocate(nil)
 	require.Nil(t, allocIP)
 
 	// release IP
 	for _, i := range rand.Perm(256) {
-		ueIPPool.release(ipPoolList[i])
+		ueIPPool.Release(ipPoolList[i])
 	}
 
 	// allocate specify ip
 	for _, ip := range ipPoolList {
-		allocIP = ueIPPool.allocate(ip)
+		allocIP = ueIPPool.Allocate(ip)
 		require.Equal(t, ip, allocIP)
 	}
 }
 
 func TestUeIPPool_ExcludeRange(t *testing.T) {
-	ueIPPool := NewUEIPPool(&factory.UEIPPool{
+	ueIPPool := context.NewUEIPPool(&factory.UEIPPool{
 		Cidr: "10.10.0.0/24",
 	})
 
-	require.Equal(t, 0x0a0a0000, ueIPPool.pool.Min())
-	require.Equal(t, 0x0a0a00FF, ueIPPool.pool.Max())
-	require.Equal(t, 256, ueIPPool.pool.Remain())
+	require.Equal(t, 0x0a0a0000, ueIPPool.Pool().Min())
+	require.Equal(t, 0x0a0a00FF, ueIPPool.Pool().Max())
+	require.Equal(t, 256, ueIPPool.Pool().Remain())
 
-	excludeUeIPPool := NewUEIPPool(&factory.UEIPPool{
+	excludeUeIPPool := context.NewUEIPPool(&factory.UEIPPool{
 		Cidr: "10.10.0.0/28",
 	})
 
-	require.Equal(t, 0x0a0a0000, excludeUeIPPool.pool.Min())
-	require.Equal(t, 0x0a0a000F, excludeUeIPPool.pool.Max())
+	require.Equal(t, 0x0a0a0000, excludeUeIPPool.Pool().Min())
+	require.Equal(t, 0x0a0a000F, excludeUeIPPool.Pool().Max())
 
-	require.Equal(t, 16, excludeUeIPPool.pool.Remain())
+	require.Equal(t, 16, excludeUeIPPool.Pool().Remain())
 
-	err := ueIPPool.exclude(excludeUeIPPool)
+	err := ueIPPool.Exclude(excludeUeIPPool)
 	require.NoError(t, err)
-	require.Equal(t, 240, ueIPPool.pool.Remain())
+	require.Equal(t, 240, ueIPPool.Pool().Remain())
 
 	for i := 16; i <= 255; i++ {
-		allocate := ueIPPool.allocate(nil)
+		allocate := ueIPPool.Allocate(nil)
 		require.Equal(t, net.ParseIP(fmt.Sprintf("10.10.0.%d", i)).To4(), allocate)
 
-		ueIPPool.release(allocate)
+		ueIPPool.Release(allocate)
 	}
 }

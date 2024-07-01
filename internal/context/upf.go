@@ -352,11 +352,11 @@ func RemoveUPFNodeByNodeID(nodeID pfcpType.NodeID) bool {
 	return false
 }
 
-func SelectUPFByDnn(Dnn string) *UPF {
+func SelectUPFByDnn(dnn string) *UPF {
 	var upf *UPF
 	upfPool.Range(func(key, value interface{}) bool {
 		upf = value.(*UPF)
-		if upf.UPIPInfo.Assoni && upf.UPIPInfo.NetworkInstance.NetworkInstance == Dnn {
+		if upf.UPIPInfo.Assoni && upf.UPIPInfo.NetworkInstance.NetworkInstance == dnn {
 			return false
 		}
 		upf = nil
@@ -565,7 +565,7 @@ func (upf *UPF) GetQERById(qerId uint32) *QER {
 // *** add unit test ***//
 func (upf *UPF) RemovePDR(pdr *PDR) (err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
 		return err
 	}
 
@@ -577,7 +577,7 @@ func (upf *UPF) RemovePDR(pdr *PDR) (err error) {
 // *** add unit test ***//
 func (upf *UPF) RemoveFAR(far *FAR) (err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
 		return err
 	}
 
@@ -589,7 +589,7 @@ func (upf *UPF) RemoveFAR(far *FAR) (err error) {
 // *** add unit test ***//
 func (upf *UPF) RemoveBAR(bar *BAR) (err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
 		return err
 	}
 
@@ -601,7 +601,7 @@ func (upf *UPF) RemoveBAR(bar *BAR) (err error) {
 // *** add unit test ***//
 func (upf *UPF) RemoveQER(qer *QER) (err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
 		return err
 	}
 

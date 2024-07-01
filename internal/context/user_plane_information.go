@@ -156,7 +156,7 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 							staticUeIPPools = append(staticUeIPPools, staticUeIPPool)
 							for _, dynamicUePool := range ueIPPools {
 								if dynamicUePool.ueSubNet.Contains(staticUeIPPool.ueSubNet.IP) {
-									if err := dynamicUePool.exclude(staticUeIPPool); err != nil {
+									if err := dynamicUePool.Exclude(staticUeIPPool); err != nil {
 										logger.InitLog.Fatalf("exclude static Pool[%s] failed: %v",
 											staticUeIPPool.ueSubNet, err)
 									}
@@ -426,7 +426,7 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 							staticUeIPPools = append(staticUeIPPools, ueIPPool)
 							for _, dynamicUePool := range ueIPPools {
 								if dynamicUePool.ueSubNet.Contains(ueIPPool.ueSubNet.IP) {
-									if err := dynamicUePool.exclude(ueIPPool); err != nil {
+									if err := dynamicUePool.Exclude(ueIPPool); err != nil {
 										logger.InitLog.Fatalf("exclude static Pool[%s] failed: %v",
 											ueIPPool.ueSubNet, err)
 									}
@@ -773,8 +773,8 @@ func getPathBetween(cur *UPNode, dest *UPNode, visited map[*UPNode]bool,
 				continue
 			}
 
-			path_tail, pathExist := getPathBetween(node, dest, visited, selection)
-
+			path_tail, pathExistBuf := getPathBetween(node, dest, visited, selection)
+			pathExist = pathExistBuf
 			if pathExist {
 				path = make([]*UPNode, 0)
 				path = append(path, cur)
@@ -885,7 +885,7 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionPa
 		sortedPoolList := createPoolListForSelection(pools)
 		for _, pool := range sortedPoolList {
 			logger.CtxLog.Debugf("check start UEIPPool(%+v)", pool.ueSubNet)
-			addr := pool.allocate(selection.PDUAddress)
+			addr := pool.Allocate(selection.PDUAddress)
 			if addr != nil {
 				logger.CtxLog.Infof("Selected UPF: %s",
 					upi.GetUPFNameByIp(upf.NodeID.ResolveNodeIdToIp().String()))
@@ -963,7 +963,7 @@ func (upi *UserPlaneInformation) ReleaseUEIP(upf *UPNode, addr net.IP, static bo
 			upi.GetUPFNameByIp(upf.NodeID.ResolveNodeIdToIp().String()), addr)
 		return
 	}
-	pool.release(addr)
+	pool.Release(addr)
 }
 
 func findPoolByAddr(upf *UPNode, addr net.IP, static bool) *UeIPPool {

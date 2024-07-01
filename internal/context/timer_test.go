@@ -1,14 +1,16 @@
-package context
+package context_test
 
 import (
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/free5gc/smf/internal/context"
 )
 
 func TestTimerNewTimer(t *testing.T) {
-	timer := NewTimer(100*time.Millisecond, 3, func(expireTimes int32) {
+	timer := context.NewTimer(100*time.Millisecond, 3, func(expireTimes int32) {
 		t.Logf("expire %d times", expireTimes)
 	}, func() {
 		t.Log("exceed max retry times (3)")
@@ -17,7 +19,7 @@ func TestTimerNewTimer(t *testing.T) {
 }
 
 func TestTimerStartAndStop(t *testing.T) {
-	timer := NewTimer(100*time.Millisecond, 3,
+	timer := context.NewTimer(100*time.Millisecond, 3,
 		func(expireTimes int32) {
 			t.Logf("expire %d times", expireTimes)
 		},
@@ -32,7 +34,7 @@ func TestTimerStartAndStop(t *testing.T) {
 }
 
 func TestTimerExceedMaxRetryTimes(t *testing.T) {
-	timer := NewTimer(100*time.Millisecond, 3,
+	timer := context.NewTimer(100*time.Millisecond, 3,
 		func(expireTimes int32) {
 			t.Logf("expire %d times", expireTimes)
 		},

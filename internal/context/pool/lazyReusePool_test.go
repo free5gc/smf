@@ -1,4 +1,4 @@
-package pool
+package pool_test
 
 import (
 	"fmt"
@@ -10,32 +10,34 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/free5gc/smf/internal/context/pool"
 )
 
 func TestNewLazyReusePool(t *testing.T) {
 	// OK : first < last
-	lrp, err := NewLazyReusePool(10, 100)
+	lrp, err := pool.NewLazyReusePool(10, 100)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, lrp)
 	assert.Equal(t, 91, lrp.Total())
 	assert.Equal(t, 91, lrp.Remain())
 
 	// OK : first == last
-	lrp, err = NewLazyReusePool(100, 100)
+	lrp, err = pool.NewLazyReusePool(100, 100)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, lrp)
 	assert.Equal(t, 1, lrp.Total())
 	assert.Equal(t, 1, lrp.Remain())
 
 	// NG : first > last
-	lrp, err = NewLazyReusePool(10, 0)
+	lrp, err = pool.NewLazyReusePool(10, 0)
 	assert.Empty(t, lrp)
 	assert.Error(t, err)
 }
 
 func TestLazyReusePool_SingleSegment(t *testing.T) {
 	// Allocation OK
-	p, err := NewLazyReusePool(1, 2)
+	p, err := pool.NewLazyReusePool(1, 2)
 	assert.NoError(t, err)
 	a, ok := p.Allocate()
 	assert.Equal(t, 1, a)
@@ -54,9 +56,10 @@ func TestLazyReusePool_SingleSegment(t *testing.T) {
 	// free 1
 	ok = p.Free(1)
 	assert.True(t, ok)
-	assert.Equal(t, 1, p.head.first)
-	assert.Equal(t, 1, p.head.last)
-	assert.Empty(t, p.head.next)
+
+	assert.Equal(t, 1, p.GetHead().First())
+	assert.Equal(t, 1, p.GetHead().Last())
+	assert.Empty(t, p.GetHead().Next())
 	assert.Equal(t, 1, p.Remain())
 
 	// out of range
@@ -122,7 +125,7 @@ func TestLazyReusePool_SingleSegment(t *testing.T) {
 }
 
 func TestLazyReusePool_ManySegment(t *testing.T) {
-	p, err := NewLazyReusePool(1, 100)
+	p, err := pool.NewLazyReusePool(1, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, 100, p.Remain())
 
@@ -137,18 +140,18 @@ func TestLazyReusePool_ManySegment(t *testing.T) {
 	assert.Equal(t, 1, p.Remain())
 
 	p.Free(3) // -> 100-100 -> 3-3
-	assert.Equal(t, 3, p.head.next.first)
-	assert.Equal(t, 3, p.head.next.last)
+	assert.Equal(t, 3, p.GetHead().Next().First())
+	assert.Equal(t, 3, p.GetHead().Next().Last())
 
 	p.Free(6) // -> 100-100 -> 3-3 -> 6-6
-	assert.Equal(t, 6, p.head.next.next.first)
-	assert.Equal(t, 6, p.head.next.next.last)
+	assert.Equal(t, 6, p.GetHead().Next().Next().First())
+	assert.Equal(t, 6, p.GetHead().Next().Next().Last())
 	assert.Equal(t, 3, p.Remain())
 
 	// adjacent to the front
 	p.Free(2) // -> 100-100 -> 2-3 -> 6-6
-	assert.Equal(t, 2, p.head.next.first)
-	assert.Equal(t, 3, p.head.next.last)
+	assert.Equal(t, 2, p.GetHead().Next().First())
+	assert.Equal(t, 3, p.GetHead().Next().Last())
 	assert.Equal(t, 4, p.Remain())
 
 	// duplicate
@@ -157,112 +160,112 @@ func TestLazyReusePool_ManySegment(t *testing.T) {
 
 	// adjacent to the back
 	p.Free(4) // -> 100-100 -> 2-4 -> 6-6
-	assert.Equal(t, 2, p.head.next.first)
-	assert.Equal(t, 4, p.head.next.last)
+	assert.Equal(t, 2, p.GetHead().Next().First())
+	assert.Equal(t, 4, p.GetHead().Next().Last())
 	assert.Equal(t, 5, p.Remain())
 
 	// 3rd segment
 	p.Free(7) // -> 100-100 -> 2-4 -> 6-7
-	assert.Equal(t, 6, p.head.next.next.first)
-	assert.Equal(t, 7, p.head.next.next.last)
+	assert.Equal(t, 6, p.GetHead().Next().Next().First())
+	assert.Equal(t, 7, p.GetHead().Next().Next().Last())
 	assert.Equal(t, 6, p.Remain())
 
 	// concatenate
 	p.Free(5) // -> 100-100 -> 2-7
-	assert.Equal(t, 2, p.head.next.first)
-	assert.Equal(t, 7, p.head.next.last)
-	assert.Empty(t, p.head.next.next)
+	assert.Equal(t, 2, p.GetHead().Next().First())
+	assert.Equal(t, 7, p.GetHead().Next().Last())
+	assert.Empty(t, p.GetHead().Next().Next())
 	assert.Equal(t, 7, p.Remain())
 
 	// new head
 	a, ok := p.Allocate() // -> 2-7
 	assert.Equal(t, a, 100)
 	assert.True(t, ok)
-	assert.Equal(t, 2, p.head.first)
-	assert.Equal(t, 7, p.head.last)
+	assert.Equal(t, 2, p.GetHead().First())
+	assert.Equal(t, 7, p.GetHead().Last())
 	assert.Equal(t, 6, p.Remain())
 
 	// reuse
 	a, ok = p.Allocate() // -> 3-7
 	assert.Equal(t, a, 2)
 	assert.True(t, ok)
-	assert.Equal(t, 3, p.head.first)
-	assert.Equal(t, 7, p.head.last)
-	assert.Empty(t, p.head.next)
+	assert.Equal(t, 3, p.GetHead().First())
+	assert.Equal(t, 7, p.GetHead().Last())
+	assert.Empty(t, p.GetHead().Next())
 	assert.Equal(t, 5, p.Remain())
 
 	// return to head
 	p.Free(100) // -> 3-7 -> 100-100
 	p.Free(8)   // -> 3-8 -> 100-100
-	assert.Equal(t, 3, p.head.first)
-	assert.Equal(t, 8, p.head.last)
-	assert.Equal(t, 100, p.head.next.first)
-	assert.Equal(t, 100, p.head.next.last)
+	assert.Equal(t, 3, p.GetHead().First())
+	assert.Equal(t, 8, p.GetHead().Last())
+	assert.Equal(t, 100, p.GetHead().Next().First())
+	assert.Equal(t, 100, p.GetHead().Next().Last())
 	assert.Equal(t, 7, p.Remain())
 
 	// return into between head and 2nd
 	p.Free(10) // -> 3-8 -> 10-10 -> 100-100
-	assert.Equal(t, 3, p.head.first)
-	assert.Equal(t, 8, p.head.last)
-	assert.Equal(t, 10, p.head.next.first)
-	assert.Equal(t, 10, p.head.next.last)
-	assert.Equal(t, 100, p.head.next.next.first)
-	assert.Equal(t, 100, p.head.next.next.last)
+	assert.Equal(t, 3, p.GetHead().First())
+	assert.Equal(t, 8, p.GetHead().Last())
+	assert.Equal(t, 10, p.GetHead().Next().First())
+	assert.Equal(t, 10, p.GetHead().Next().Last())
+	assert.Equal(t, 100, p.GetHead().Next().Next().First())
+	assert.Equal(t, 100, p.GetHead().Next().Next().Last())
 	assert.Equal(t, 8, p.Remain())
 
 	// concatenate head and 2nd
 	p.Free(9) // -> 3-10 -> 100-100
-	assert.Equal(t, 3, p.head.first)
-	assert.Equal(t, 10, p.head.last)
-	assert.Equal(t, 100, p.head.next.first)
-	assert.Equal(t, 100, p.head.next.last)
-	assert.Empty(t, p.head.next.next)
+	assert.Equal(t, 3, p.GetHead().First())
+	assert.Equal(t, 10, p.GetHead().Last())
+	assert.Equal(t, 100, p.GetHead().Next().First())
+	assert.Equal(t, 100, p.GetHead().Next().Last())
+	assert.Empty(t, p.GetHead().Next().Next())
 	assert.Equal(t, 9, p.Remain())
 
 	ok = p.Use(100) // 3-10
 	assert.True(t, ok)
-	assert.Equal(t, 3, p.head.first)
-	assert.Equal(t, 10, p.head.last)
-	assert.Nil(t, p.head.next)
+	assert.Equal(t, 3, p.GetHead().First())
+	assert.Equal(t, 10, p.GetHead().Last())
+	assert.Nil(t, p.GetHead().Next())
 	assert.Equal(t, 8, p.Remain())
 
 	ok = p.Use(3) // 4-10
 	assert.True(t, ok)
-	assert.Equal(t, 4, p.head.first)
-	assert.Equal(t, 10, p.head.last)
-	assert.Nil(t, p.head.next)
+	assert.Equal(t, 4, p.GetHead().First())
+	assert.Equal(t, 10, p.GetHead().Last())
+	assert.Nil(t, p.GetHead().Next())
 	assert.Equal(t, 7, p.Remain())
 
 	ok = p.Use(7) // 4-6 -> 8-10
 	assert.True(t, ok)
-	assert.Equal(t, 4, p.head.first)
-	assert.Equal(t, 6, p.head.last)
-	assert.Equal(t, 8, p.head.next.first)
-	assert.Equal(t, 10, p.head.next.last)
+	assert.Equal(t, 4, p.GetHead().First())
+	assert.Equal(t, 6, p.GetHead().Last())
+	assert.Equal(t, 8, p.GetHead().Next().First())
+	assert.Equal(t, 10, p.GetHead().Next().Last())
 	assert.Equal(t, 6, p.Remain())
 
 	p.Free(7) // 4-10
-	assert.Equal(t, 4, p.head.first)
-	assert.Equal(t, 10, p.head.last)
-	assert.Nil(t, p.head.next)
+	assert.Equal(t, 4, p.GetHead().First())
+	assert.Equal(t, 10, p.GetHead().Last())
+	assert.Nil(t, p.GetHead().Next())
 
 	p.Free(3) // 4-10 -> 3
-	assert.Equal(t, 4, p.head.first)
-	assert.Equal(t, 10, p.head.last)
-	assert.Equal(t, 3, p.head.next.first)
-	assert.Equal(t, 3, p.head.next.last)
+	assert.Equal(t, 4, p.GetHead().First())
+	assert.Equal(t, 10, p.GetHead().Last())
+	assert.Equal(t, 3, p.GetHead().Next().First())
+	assert.Equal(t, 3, p.GetHead().Next().Last())
 
 	p.Free(100) // 4-10 -> 3 -> 100
-	assert.Equal(t, 4, p.head.first)
-	assert.Equal(t, 10, p.head.last)
-	assert.Equal(t, 3, p.head.next.first)
-	assert.Equal(t, 3, p.head.next.last)
-	assert.Equal(t, 100, p.head.next.next.first)
-	assert.Equal(t, 100, p.head.next.next.last)
+	assert.Equal(t, 4, p.GetHead().First())
+	assert.Equal(t, 10, p.GetHead().Last())
+	assert.Equal(t, 3, p.GetHead().Next().First())
+	assert.Equal(t, 3, p.GetHead().Next().Last())
+	assert.Equal(t, 100, p.GetHead().Next().Next().First())
+	assert.Equal(t, 100, p.GetHead().Next().Next().Last())
 }
 
 func TestLazyReusePool_ReserveSection(t *testing.T) {
-	p, err := NewLazyReusePool(1, 100)
+	p, err := pool.NewLazyReusePool(1, 100)
 	require.NoError(t, err)
 	require.Equal(t, 100, p.Remain())
 
@@ -291,10 +294,12 @@ func TestLazyReusePool_ReserveSection(t *testing.T) {
 }
 
 func TestLazyReusePool_ReserveSection2(t *testing.T) {
-	p, err := NewLazyReusePool(10, 100)
+	p, err := pool.NewLazyReusePool(10, 100)
 	require.NoError(t, err)
 	assert.Equal(t, (100 - 10 + 1), p.Remain())
-	require.Equal(t, &segment{first: 10, last: 100}, p.head)
+
+	assert.Equal(t, p.GetHead().First(), 10)
+	assert.Equal(t, p.GetHead().Last(), 100)
 
 	// try reserve outside range
 	err = p.Reserve(0, 5)
@@ -304,86 +309,115 @@ func TestLazyReusePool_ReserveSection2(t *testing.T) {
 	err = p.Reserve(10, 20)
 	require.NoError(t, err)
 	assert.Equal(t, (100 - 21 + 1), p.Remain())
-	assert.Equal(t, &segment{first: 21, last: 100}, p.head)
+
+	assert.Equal(t, p.GetHead().First(), 21)
+	assert.Equal(t, p.GetHead().Last(), 100)
 
 	// reserve entries on tail
 	err = p.Reserve(90, 100)
 	require.NoError(t, err)
 	assert.Equal(t, (89 - 21 + 1), p.Remain())
-	assert.Equal(t, &segment{first: 21, last: 89}, p.head)
+	assert.Equal(t, p.GetHead().First(), 21)
+	assert.Equal(t, p.GetHead().Last(), 89)
 
 	// reserve entries on center
 	err = p.Reserve(40, 50)
 	require.NoError(t, err)
 	assert.Equal(t, (39 - 21 + 1 + 89 - 51 + 1), p.Remain())
-	assert.Equal(t, &segment{first: 21, last: 39, next: &segment{first: 51, last: 89}}, p.head)
+	assert.Equal(t, p.GetHead().First(), 21)
+	assert.Equal(t, p.GetHead().Last(), 39)
+	assert.Equal(t, p.GetHead().Next().First(), 51)
+	assert.Equal(t, p.GetHead().Next().Last(), 89)
 
 	// try reserve range was already reserved
 	err = p.Reserve(10, 20)
 	require.NoError(t, err)
 	assert.Equal(t, (39 - 21 + 1 + 89 - 51 + 1), p.Remain())
-	assert.Equal(t, &segment{first: 21, last: 39, next: &segment{first: 51, last: 89}}, p.head)
+	assert.Equal(t, p.GetHead().First(), 21)
+	assert.Equal(t, p.GetHead().Last(), 39)
+	assert.Equal(t, p.GetHead().Next().First(), 51)
+	assert.Equal(t, p.GetHead().Next().Last(), 89)
 
 	err = p.Reserve(40, 50)
 	require.NoError(t, err)
 	assert.Equal(t, (39 - 21 + 1 + 89 - 51 + 1), p.Remain())
-	assert.Equal(t, &segment{first: 21, last: 39, next: &segment{first: 51, last: 89}}, p.head)
+	assert.Equal(t, p.GetHead().First(), 21)
+	assert.Equal(t, p.GetHead().Last(), 39)
+	assert.Equal(t, p.GetHead().Next().First(), 51)
+	assert.Equal(t, p.GetHead().Next().Last(), 89)
 
 	err = p.Reserve(90, 100)
 	require.NoError(t, err)
 	assert.Equal(t, (39 - 21 + 1 + 89 - 51 + 1), p.Remain())
-	assert.Equal(t, &segment{first: 21, last: 39, next: &segment{first: 51, last: 89}}, p.head)
+	assert.Equal(t, p.GetHead().First(), 21)
+	assert.Equal(t, p.GetHead().Last(), 39)
+	assert.Equal(t, p.GetHead().Next().First(), 51)
+	assert.Equal(t, p.GetHead().Next().Last(), 89)
 
 	// reserve range includes reserved and non-reserved addresses
 	err = p.Reserve(36, 55)
 	require.NoError(t, err)
 	assert.Equal(t, (35 - 21 + 1 + 89 - 56 + 1), p.Remain())
-	assert.Equal(t, &segment{first: 21, last: 35, next: &segment{first: 56, last: 89}}, p.head)
+	assert.Equal(t, p.GetHead().First(), 21)
+	assert.Equal(t, p.GetHead().Last(), 35)
+	assert.Equal(t, p.GetHead().Next().First(), 56)
+	assert.Equal(t, p.GetHead().Next().Last(), 89)
 
 	// remove entire segment
 	err = p.Reserve(21, 35)
 	require.NoError(t, err)
 	assert.Equal(t, (89 - 56 + 1), p.Remain())
-	assert.Equal(t, &segment{first: 56, last: 89}, p.head)
+	assert.Equal(t, p.GetHead().First(), 56)
+	assert.Equal(t, p.GetHead().Last(), 89)
 
 	// generate 3 segments
 	err = p.Reserve(70, 75)
 	require.NoError(t, err)
 	assert.Equal(t, (69 - 56 + 1 + 89 - 76 + 1), p.Remain())
-	assert.Equal(t, &segment{first: 56, last: 69, next: &segment{first: 76, last: 89}}, p.head)
+	assert.Equal(t, p.GetHead().First(), 56)
+	assert.Equal(t, p.GetHead().Last(), 69)
+	assert.Equal(t, p.GetHead().Next().First(), 76)
+	assert.Equal(t, p.GetHead().Next().Last(), 89)
 
 	err = p.Reserve(60, 65)
 	require.NoError(t, err)
 	assert.Equal(t, (59 - 56 + 1 + 69 - 66 + 1 + 89 - 76 + 1), p.Remain())
-	assert.Equal(t, &segment{first: 56, last: 59, next: &segment{
-		first: 66, last: 69,
-		next: &segment{first: 76, last: 89},
-	}}, p.head)
+	assert.Equal(t, p.GetHead().First(), 56)
+	assert.Equal(t, p.GetHead().Last(), 59)
+	assert.Equal(t, p.GetHead().Next().First(), 66)
+	assert.Equal(t, p.GetHead().Next().Last(), 69)
+	assert.Equal(t, p.GetHead().Next().Next().First(), 76)
+	assert.Equal(t, p.GetHead().Next().Next().Last(), 89)
 
 	// remove center segment
 	err = p.Reserve(60, 75)
 	require.NoError(t, err)
 	assert.Equal(t, (59 - 56 + 1 + 89 - 76 + 1), p.Remain())
-	assert.Equal(t, &segment{first: 56, last: 59, next: &segment{first: 76, last: 89}}, p.head)
+	assert.Equal(t, p.GetHead().First(), 56)
+	assert.Equal(t, p.GetHead().Last(), 59)
+	assert.Equal(t, p.GetHead().Next().First(), 76)
+	assert.Equal(t, p.GetHead().Next().Last(), 89)
 
 	// remove tail segment
 	err = p.Reserve(70, 90)
 	require.NoError(t, err)
 	assert.Equal(t, (59 - 56 + 1), p.Remain())
-	assert.Equal(t, &segment{first: 56, last: 59}, p.head)
+	assert.Equal(t, p.GetHead().First(), 56)
+	assert.Equal(t, p.GetHead().Last(), 59)
 
 	// remove last segment
 	err = p.Reserve(50, 60)
 	require.NoError(t, err)
 	assert.Equal(t, 0, p.Remain())
-	assert.Nil(t, p.head)
+	assert.Nil(t, p.GetHead())
 }
 
 func TestLazyReusePool_ReserveSection3(t *testing.T) {
-	p, err := NewLazyReusePool(10, 99)
+	p, err := pool.NewLazyReusePool(10, 99)
 	require.NoError(t, err)
 	assert.Equal(t, (99 - 10 + 1), p.Remain())
-	require.Equal(t, &segment{first: 10, last: 99}, p.head)
+	assert.Equal(t, p.GetHead().First(), 10)
+	assert.Equal(t, p.GetHead().Last(), 99)
 
 	// generate 4 segments
 	err = p.Reserve(20, 29)
@@ -393,20 +427,27 @@ func TestLazyReusePool_ReserveSection3(t *testing.T) {
 	err = p.Reserve(60, 69)
 	require.NoError(t, err)
 	require.Equal(t, (19 - 10 + 1 + 39 - 30 + 1 + 59 - 50 + 1 + 99 - 70 + 1), p.Remain())
-	require.Equal(t, &segment{first: 10, last: 19, next: &segment{
-		first: 30, last: 39,
-		next: &segment{first: 50, last: 59, next: &segment{first: 70, last: 99}},
-	}}, p.head)
+	assert.Equal(t, p.GetHead().First(), 10)
+	assert.Equal(t, p.GetHead().Last(), 19)
+	assert.Equal(t, p.GetHead().Next().First(), 30)
+	assert.Equal(t, p.GetHead().Next().Last(), 39)
+	assert.Equal(t, p.GetHead().Next().Next().First(), 50)
+	assert.Equal(t, p.GetHead().Next().Next().Last(), 59)
+	assert.Equal(t, p.GetHead().Next().Next().Next().First(), 70)
+	assert.Equal(t, p.GetHead().Next().Next().Next().Last(), 99)
 
 	// remove two segments
 	err = p.Reserve(30, 59)
 	require.NoError(t, err)
 	require.Equal(t, (19 - 10 + 1 + 99 - 70 + 1), p.Remain())
-	require.Equal(t, &segment{first: 10, last: 19, next: &segment{first: 70, last: 99}}, p.head)
+	assert.Equal(t, p.GetHead().First(), 10)
+	assert.Equal(t, p.GetHead().Last(), 19)
+	assert.Equal(t, p.GetHead().Next().First(), 70)
+	assert.Equal(t, p.GetHead().Next().Last(), 99)
 }
 
 func TestLazyReusePool_ManyGoroutine(t *testing.T) {
-	p, err := NewLazyReusePool(101, 1000)
+	p, err := pool.NewLazyReusePool(101, 1000)
 	assert.NoError(t, err)
 	assert.Equal(t, 900, p.Remain())
 	ch := make(chan int)
@@ -449,13 +490,13 @@ func TestLazyReusePool_ManyGoroutine(t *testing.T) {
 
 	expected := make([]int, numOfThreads*2)
 	for i := 0; i < numOfThreads*2; i++ {
-		expected[i] = p.first + i
+		expected[i] = p.Min() + i
 	}
 	assert.Equal(t, expected, allocated)
 	assert.Equal(t, 900-numOfThreads, p.Remain())
 
 	a, ok := p.Allocate()
-	assert.Equal(t, p.first+numOfThreads*2, a)
+	assert.Equal(t, p.Min()+numOfThreads*2, a)
 	assert.True(t, ok)
 	assert.Equal(t, 900-numOfThreads-1, p.Remain())
 }

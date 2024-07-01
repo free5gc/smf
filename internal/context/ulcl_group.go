@@ -1,10 +1,10 @@
 package context
 
-func GetULCLGroupNameFromSUPI(SUPI string) string {
+func GetULCLGroupNameFromSUPI(supi string) string {
 	ulclGroups := smfContext.ULCLGroups
 	for name, group := range ulclGroups {
 		for _, member := range group {
-			if member == SUPI {
+			if member == supi {
 				return name
 			}
 		}

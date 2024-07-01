@@ -10,7 +10,7 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	pfcp_message "github.com/free5gc/smf/internal/pfcp/message"
-	"github.com/free5gc/smf/internal/sbi/producer"
+	"github.com/free5gc/smf/pkg/service"
 )
 
 func HandlePfcpHeartbeatRequest(msg *pfcpUdp.Message) {
@@ -173,18 +173,18 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 				},
 			}
 
-			ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+			ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+			if errToken != nil {
+				logger.PfcpLog.Warnf("Get NAMF_COMM context failed: %s", errToken)
+				return
+			}
+			rspData, _, err := service.GetApp().Consumer().
+				N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 			if err != nil {
-				logger.PfcpLog.Warnf("Get NAMF_COMM context failed: %s", err)
+				logger.ConsumerLog.Warnf("Send N1N2Transfer failed: %s", err)
 				return
 			}
 
-			rspData, _, err := smContext.CommunicationClient.
-				N1N2MessageCollectionDocumentApi.
-				N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request)
-			if err != nil {
-				logger.PfcpLog.Warnf("Send N1N2Transfer failed: %s", err)
-			}
 			if rspData.Cause == models.N1N2MessageTransferCause_ATTEMPTING_TO_REACH_UE {
 				logger.PfcpLog.Infof("Receive %v, AMF is able to page the UE", rspData.Cause)
 			}
@@ -200,7 +200,7 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 		// After receiving the Usage Report, it should send charging request to the CHF
 		// and update the URR with the quota or other charging information according to
 		// the charging response
-		producer.ReportUsageAndUpdateQuota(smContext)
+		service.GetApp().Processor().ReportUsageAndUpdateQuota(smContext)
 	}
 
 	// TS 23.502 4.2.3.3 2b. Send Data Notification Ack, SMF->UPF

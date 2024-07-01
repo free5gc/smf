@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"math/rand"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime/debug"
+	"syscall"
 	"time"
 
 	"github.com/urfave/cli"
@@ -12,6 +15,7 @@ import (
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/smf/pkg/service"
+	"github.com/free5gc/smf/pkg/utils"
 	logger_util "github.com/free5gc/util/logger"
 	"github.com/free5gc/util/version"
 )
@@ -59,25 +63,38 @@ func action(cliCtx *cli.Context) error {
 
 	logger.MainLog.Infoln("SMF version: ", version.GetVersion())
 
+	ctx, cancel := context.WithCancel(context.Background())
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-sigCh  // Wait for interrupt signal to gracefully shutdown
+		cancel() // Notify each goroutine and wait them stopped
+	}()
+
 	cfg, err := factory.ReadConfig(cliCtx.String("config"))
 	if err != nil {
+		sigCh <- nil
 		return err
 	}
 	factory.SmfConfig = cfg
 
 	ueRoutingCfg, err := factory.ReadUERoutingConfig(cliCtx.String("uerouting"))
 	if err != nil {
+		sigCh <- nil
 		return err
 	}
 	factory.UERoutingConfig = ueRoutingCfg
 
-	smf, err := service.NewApp(cfg)
+	pfcpStart, pfcpTerminate := utils.InitPFCPFunc()
+	smf, err := service.NewApp(ctx, cfg, tlsKeyLogPath, pfcpStart, pfcpTerminate)
 	if err != nil {
+		sigCh <- nil
 		return err
 	}
 	SMF = smf
 
-	smf.Start(tlsKeyLogPath)
+	smf.Start()
 
 	return nil
 }

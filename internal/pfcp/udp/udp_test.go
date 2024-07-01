@@ -1,6 +1,7 @@
 package udp_test
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -10,7 +11,7 @@ import (
 	"github.com/free5gc/pfcp"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/pfcp/pfcpUdp"
-	"github.com/free5gc/smf/internal/context"
+	smf_context "github.com/free5gc/smf/internal/context"
 	smf_pfcp "github.com/free5gc/smf/internal/pfcp"
 	"github.com/free5gc/smf/internal/pfcp/udp"
 )
@@ -20,13 +21,16 @@ const testPfcpClientPort = 12345
 func TestRun(t *testing.T) {
 	// Set SMF Node ID
 
-	context.GetSelf().CPNodeID = pfcpType.NodeID{
+	smf_context.GetSelf().CPNodeID = pfcpType.NodeID{
 		NodeIdType: pfcpType.NodeIdTypeIpv4Address,
 		IP:         net.ParseIP("127.0.0.1").To4(),
 	}
-	context.GetSelf().ExternalAddr = "127.0.0.1"
-	context.GetSelf().ListenAddr = "127.0.0.1"
+	smf_context.GetSelf().ExternalAddr = "127.0.0.1"
+	smf_context.GetSelf().ListenAddr = "127.0.0.1"
 
+	ctx, cancel := context.WithCancel(context.Background())
+	smf_context.GetSelf().Ctx = ctx
+	smf_context.GetSelf().PFCPCancelFunc = cancel
 	udp.Run(smf_pfcp.Dispatch)
 
 	testPfcpReq := pfcp.Message{
@@ -60,7 +64,7 @@ func TestRun(t *testing.T) {
 	err := pfcpUdp.SendPfcpMessage(testPfcpReq, srcAddr, dstAddr)
 	require.Nil(t, err)
 
-	err = udp.Server.Close()
+	err = udp.ClosePfcp()
 	require.NoError(t, err)
 
 	time.Sleep(300 * time.Millisecond)

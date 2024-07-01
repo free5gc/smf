@@ -4,24 +4,17 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/antihax/optional"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
 	"github.com/free5gc/nas/nasConvert"
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/ngap/ngapType"
-	"github.com/free5gc/openapi"
-	"github.com/free5gc/openapi/Namf_Communication"
-	"github.com/free5gc/openapi/Nchf_ConvergedCharging"
-	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
-	"github.com/free5gc/openapi/Npcf_SMPolicyControl"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
@@ -159,9 +152,7 @@ type SMContext struct {
 	UpSecurityFromPathSwitchRequestSameAsLocalStored bool
 
 	// Client
-	SMPolicyClient      *Npcf_SMPolicyControl.APIClient
-	CommunicationClient *Namf_Communication.APIClient
-	ChargingClient      *Nchf_ConvergedCharging.APIClient
+	CommunicationClientApiPrefix string
 
 	AMFProfile         models.NfProfile
 	SelectedPCFProfile models.NfProfile
@@ -402,8 +393,8 @@ func RemoveSMContext(ref string) {
 }
 
 // *** add unit test ***//
-func GetSMContextBySEID(SEID uint64) *SMContext {
-	if value, ok := seidSMContextMap.Load(SEID); ok {
+func GetSMContextBySEID(seid uint64) *SMContext {
+	if value, ok := seidSMContextMap.Load(seid); ok {
 		smContext := value.(*SMContext)
 		return smContext
 	}
@@ -463,115 +454,14 @@ func (smContext *SMContext) PDUAddressToNAS() ([12]byte, uint8) {
 	copy(addr[:], smContext.PDUAddress)
 	switch smContext.SelectedPDUSessionType {
 	case nasMessage.PDUSessionTypeIPv4:
-		addrLen = 4 + 1
+		var addrLenBuf uint8 = 4 + 1
+		addrLen = addrLenBuf
 	case nasMessage.PDUSessionTypeIPv6:
 	case nasMessage.PDUSessionTypeIPv4IPv6:
-		addrLen = 12 + 1
+		var addrLenBuf uint8 = 12 + 1
+		addrLen = addrLenBuf
 	}
 	return addr, addrLen
-}
-
-// CHFSelection will select CHF for this SM Context
-func (smContext *SMContext) CHFSelection() error {
-	// Send NFDiscovery for find CHF
-	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{
-		// Supi: optional.NewString(smContext.Supi),
-	}
-
-	ctx, _, err := smfContext.GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
-	if err != nil {
-		return err
-	}
-
-	rsp, res, err := GetSelf().
-		NFDiscoveryClient.
-		NFInstancesStoreApi.
-		SearchNFInstances(ctx, models.NfType_CHF, models.NfType_SMF, &localVarOptionals)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if rspCloseErr := res.Body.Close(); rspCloseErr != nil {
-			logger.PduSessLog.Errorf("SmfEventExposureNotification response body cannot close: %+v", rspCloseErr)
-		}
-	}()
-
-	if res != nil {
-		if status := res.StatusCode; status != http.StatusOK {
-			apiError := err.(openapi.GenericOpenAPIError)
-			problemDetails := apiError.Model().(models.ProblemDetails)
-
-			logger.CtxLog.Warningf("NFDiscovery SMF return status: %d\n", status)
-			logger.CtxLog.Warningf("Detail: %v\n", problemDetails.Title)
-		}
-	}
-
-	// Select CHF from available CHF
-
-	smContext.SelectedCHFProfile = rsp.NfInstances[0]
-
-	// Create Converged Charging Client for this SM Context
-	for _, service := range *smContext.SelectedCHFProfile.NfServices {
-		if service.ServiceName == models.ServiceName_NCHF_CONVERGEDCHARGING {
-			ConvergedChargingConf := Nchf_ConvergedCharging.NewConfiguration()
-			ConvergedChargingConf.SetBasePath(service.ApiPrefix)
-			smContext.ChargingClient = Nchf_ConvergedCharging.NewAPIClient(ConvergedChargingConf)
-		}
-	}
-
-	return nil
-}
-
-// PCFSelection will select PCF for this SM Context
-func (smContext *SMContext) PCFSelection() error {
-	ctx, _, err := GetSelf().GetTokenCtx(models.ServiceName_NNRF_DISC, "NRF")
-	if err != nil {
-		return err
-	}
-	// Send NFDiscovery for find PCF
-	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
-
-	if GetSelf().Locality != "" {
-		localVarOptionals.PreferredLocality = optional.NewString(GetSelf().Locality)
-	}
-
-	rsp, res, err := GetSelf().
-		NFDiscoveryClient.
-		NFInstancesStoreApi.
-		SearchNFInstances(ctx, models.NfType_PCF, models.NfType_SMF, &localVarOptionals)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if rspCloseErr := res.Body.Close(); rspCloseErr != nil {
-			logger.PduSessLog.Errorf("SmfEventExposureNotification response body cannot close: %+v", rspCloseErr)
-		}
-	}()
-
-	if res != nil {
-		if status := res.StatusCode; status != http.StatusOK {
-			apiError := err.(openapi.GenericOpenAPIError)
-			problemDetails := apiError.Model().(models.ProblemDetails)
-
-			logger.CtxLog.Warningf("NFDiscovery PCF return status: %d\n", status)
-			logger.CtxLog.Warningf("Detail: %v\n", problemDetails.Title)
-		}
-	}
-
-	// Select PCF from available PCF
-
-	smContext.SelectedPCFProfile = rsp.NfInstances[0]
-
-	// Create SMPolicyControl Client for this SM Context
-	for _, service := range *smContext.SelectedPCFProfile.NfServices {
-		if service.ServiceName == models.ServiceName_NPCF_SMPOLICYCONTROL {
-			SmPolicyControlConf := Npcf_SMPolicyControl.NewConfiguration()
-			SmPolicyControlConf.SetBasePath(service.ApiPrefix)
-			smContext.SMPolicyClient = Npcf_SMPolicyControl.NewAPIClient(SmPolicyControlConf)
-		}
-	}
-
-	return nil
 }
 
 func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) pfcpType.NodeID {
