@@ -19,6 +19,8 @@ type UEDefaultPaths struct {
 type DefaultPathPool map[string]*DataPath // key: UPF name
 
 func NewUEDefaultPaths(upi *UserPlaneInformation, topology []factory.UPLink) (*UEDefaultPaths, error) {
+	logger.MainLog.Traceln("In NewUEDefaultPaths")
+
 	defaultPathPool := make(map[string]*DataPath)
 	source, err := findSourceInTopology(upi, topology)
 	if err != nil {

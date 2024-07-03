@@ -127,8 +127,9 @@ func (node *DataPathNode) Prev() *DataPathNode {
 }
 
 func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) error {
-	var err error
 	logger.CtxLog.Traceln("In ActivateUpLinkTunnel")
+
+	var err error
 	node.UpLinkTunnel.SrcEndPoint = node.Prev()
 	node.UpLinkTunnel.DestEndPoint = node
 
@@ -150,6 +151,8 @@ func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) error {
 }
 
 func (node *DataPathNode) ActivateDownLinkTunnel(smContext *SMContext) error {
+	logger.CtxLog.Traceln("In ActivateDownLinkTunnel")
+
 	var err error
 	node.DownLinkTunnel.SrcEndPoint = node.Next()
 	node.DownLinkTunnel.DestEndPoint = node
@@ -316,14 +319,17 @@ func (dataPath *DataPath) String() string {
 	for curDPNode := firstDPNode; curDPNode != nil; curDPNode = curDPNode.Next() {
 		str += strconv.Itoa(index) + "th Node in the Path\n"
 		str += "Current UPF IP: " + curDPNode.GetNodeIP() + "\n"
+		str += "Current UPF ID: " + curDPNode.UPF.GetUPFID() + "\n"
 		if curDPNode.Prev() != nil {
 			str += "Previous UPF IP: " + curDPNode.Prev().GetNodeIP() + "\n"
+			str += "Previous UPF ID: " + curDPNode.Prev().UPF.GetUPFID() + "\n"
 		} else {
 			str += "Previous UPF IP: None\n"
 		}
 
 		if curDPNode.Next() != nil {
 			str += "Next UPF IP: " + curDPNode.Next().GetNodeIP() + "\n"
+			str += "Next UPF ID: " + curDPNode.Next().UPF.GetUPFID() + "\n"
 		} else {
 			str += "Next UPF IP: None\n"
 		}
@@ -420,7 +426,8 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 	// Note: This should be after Activate Tunnels
 	if smContext.UrrReportTime != 0 || smContext.UrrReportThreshold != 0 {
 		dataPath.addUrrToPath(smContext)
-		logger.PduSessLog.Trace("Create URR")
+		logger.PduSessLog.Tracef("Create URR: UrrReportTime [%v],  UrrReportThreshold: [%v]",
+			smContext.UrrReportTime, smContext.UrrReportThreshold)
 	} else {
 		logger.PduSessLog.Warn("No Create URR")
 	}
@@ -548,11 +555,6 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				},
 			}
 
-			if curDataPathNode.IsAnchorUPF() {
-				ULFAR.ForwardingParameters.
-					DestinationInterface.InterfaceValue = pfcpType.DestinationInterfaceSgiLanN6Lan
-			}
-
 			if nextULDest := curDataPathNode.Next(); nextULDest != nil {
 				nextULTunnel := nextULDest.UpLinkTunnel
 				iface = nextULTunnel.DestEndPoint.UPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
@@ -584,7 +586,6 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 
 			DLPDR.Precedence = precedence
 
-			// TODO: Should delete this after FR5GC-1029 is solved
 			if curDataPathNode.IsAnchorUPF() {
 				DLPDR.PDI = PDI{
 					SourceInterface: pfcpType.SourceInterface{
@@ -741,6 +742,7 @@ func (p *DataPath) GetChargingUrr(smContext *SMContext) []*URR {
 }
 
 func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel, chgData *models.ChargingData) {
+	logger.ChargingLog.Tracef("AddChargingRules: type[%v], data:[%+v]", chgLevel, chgData)
 	if chgData == nil {
 		return
 	}
@@ -803,11 +805,19 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 				if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
 					if !isUrrExist(node.UpLinkTunnel.PDR.URR, urr) {
 						node.UpLinkTunnel.PDR.AppendURRs([]*URR{urr})
+						// nolint
+						nodeId, _ := node.GetUPFID()
+						logger.PduSessLog.Tracef("UpLinkTunnel add URR for node %s %+v",
+							nodeId, node.UpLinkTunnel.PDR)
 					}
 				}
 				if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
 					if !isUrrExist(node.DownLinkTunnel.PDR.URR, urr) {
 						node.DownLinkTunnel.PDR.AppendURRs([]*URR{urr})
+						// nolint
+						nodeId, _ := node.GetUPFID()
+						logger.PduSessLog.Tracef("DownLinkTunnel add URR for node %s %+v",
+							nodeId, node.UpLinkTunnel.PDR)
 					}
 				}
 			}

@@ -512,6 +512,7 @@ func (smContext *SMContext) AllocateLocalSEIDForDataPath(dataPath *DataPath) {
 func (smContext *SMContext) PutPDRtoPFCPSession(nodeID pfcpType.NodeID, pdr *PDR) error {
 	NodeIDtoIP := nodeID.ResolveNodeIdToIp().String()
 	if pfcpSessCtx, exist := smContext.PFCPContext[NodeIDtoIP]; exist {
+		smContext.Log.Tracef("PutPDRtoPFCPSession [%+v]", pdr)
 		pfcpSessCtx.PDRs[pdr.PDRID] = pdr
 	} else {
 		return fmt.Errorf("Can't find PFCPContext[%s] to put PDR(%d)", NodeIDtoIP, pdr.PDRID)
@@ -630,6 +631,7 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	if createdDataPath == nil {
 		return fmt.Errorf("fail to create data path for pcc rule[%s]", pccRule.PccRuleId)
 	}
+	c.Log.Tracef("CreatePccRuleDataPath: pcc rule: %+v", pccRule)
 
 	// Try to use a default pcc rule as default data path
 	if c.Tunnel.DataPathPool.GetDefaultPath() == nil &&
