@@ -14,6 +14,7 @@ import (
 )
 
 func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
+	smContext.Log.Infoln("In AddPDUSessionAnchorAndULCL")
 	bpMGR := smContext.BPManager
 
 	switch bpMGR.AddingPSAState {

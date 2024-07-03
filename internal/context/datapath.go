@@ -319,14 +319,17 @@ func (dataPath *DataPath) String() string {
 	for curDPNode := firstDPNode; curDPNode != nil; curDPNode = curDPNode.Next() {
 		str += strconv.Itoa(index) + "th Node in the Path\n"
 		str += "Current UPF IP: " + curDPNode.GetNodeIP() + "\n"
+		str += "Current UPF ID: " + curDPNode.UPF.GetUPFID() + "\n"
 		if curDPNode.Prev() != nil {
 			str += "Previous UPF IP: " + curDPNode.Prev().GetNodeIP() + "\n"
+			str += "Previous UPF ID: " + curDPNode.Prev().UPF.GetUPFID() + "\n"
 		} else {
 			str += "Previous UPF IP: None\n"
 		}
 
 		if curDPNode.Next() != nil {
 			str += "Next UPF IP: " + curDPNode.Next().GetNodeIP() + "\n"
+			str += "Next UPF ID: " + curDPNode.Next().UPF.GetUPFID() + "\n"
 		} else {
 			str += "Next UPF IP: None\n"
 		}
@@ -739,6 +742,7 @@ func (p *DataPath) GetChargingUrr(smContext *SMContext) []*URR {
 }
 
 func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel, chgData *models.ChargingData) {
+	logger.ChargingLog.Tracef("AddChargingRules: type[%v], data:[%+v]", chgLevel, chgData)
 	if chgData == nil {
 		return
 	}
@@ -801,11 +805,19 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 				if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
 					if !isUrrExist(node.UpLinkTunnel.PDR.URR, urr) {
 						node.UpLinkTunnel.PDR.AppendURRs([]*URR{urr})
+						// nolint
+						nodeId, _ := node.GetUPFID()
+						logger.PduSessLog.Tracef("UpLinkTunnel add URR for node %s %+v",
+							nodeId, node.UpLinkTunnel.PDR)
 					}
 				}
 				if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
 					if !isUrrExist(node.DownLinkTunnel.PDR.URR, urr) {
 						node.DownLinkTunnel.PDR.AppendURRs([]*URR{urr})
+						// nolint
+						nodeId, _ := node.GetUPFID()
+						logger.PduSessLog.Tracef("DownLinkTunnel add URR for node %s %+v",
+							nodeId, node.UpLinkTunnel.PDR)
 					}
 				}
 			}

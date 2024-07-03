@@ -35,6 +35,8 @@ func ActivateUPFSession(
 	smContext *smf_context.SMContext,
 	notifyUeHander func(*smf_context.SMContext, bool),
 ) {
+	smContext.Log.Traceln("In ActivateUPFSession")
+
 	pfcpPool := make(map[string]*PFCPState)
 
 	for _, dataPath := range smContext.Tunnel.DataPathPool {
@@ -60,6 +62,7 @@ func ActivateUPFSession(
 			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
 				pdrList = append(pdrList, node.DownLinkTunnel.PDR)
 				farList = append(farList, node.DownLinkTunnel.PDR.FAR)
+				urrList = append(urrList, node.DownLinkTunnel.PDR.URR...)
 				// skip send QER because uplink and downlink shared one QER
 			}
 

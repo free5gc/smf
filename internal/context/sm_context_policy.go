@@ -324,6 +324,7 @@ func applyFlowInfoOrPFD(pcc *PCCRule) error {
 		}
 		return nil
 	}
+	logger.CfgLog.Tracef("applyFlowInfoOrPFD %+v", pcc.FlowDescription())
 
 	// Find PFD with AppID if no flow description presents
 	// TODO: Get PFD from NEF (not from config)
