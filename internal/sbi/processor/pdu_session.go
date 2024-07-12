@@ -42,7 +42,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 				Error: &Nsmf_PDUSession.N1SmError,
 			},
 		}
-		c.JSON(http.StatusForbidden, postSmContextsError)
+		c.Render(http.StatusForbidden, openapi.MultipartRelatedRender{Data: postSmContextsError})
 		return
 	}
 
@@ -239,7 +239,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 
 	response.JsonData = smContext.BuildCreatedData()
 	c.Header("Location", smContext.Ref)
-	c.JSON(http.StatusCreated, response)
+	c.Render(http.StatusCreated, openapi.MultipartRelatedRender{Data: response})
 }
 
 func (p *Processor) HandlePDUSessionSMContextUpdate(
@@ -403,7 +403,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			}
 
 			response.JsonData.N1SmMsg = &models.RefToBinaryData{ContentId: "PDUSessionModificationReject"}
-			c.JSON(http.StatusOK, response)
+			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 			return
 		case nas.MsgTypePDUSessionModificationComplete:
 			smContext.StopT3591()
@@ -449,7 +449,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			logger.CtxLog.Infof("Skip sending PFCP Session Modification Request of PDUSessionID:%d of SUPI:%s",
 				smContext.PDUSessionID, smContext.Supi)
 			response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
-			c.JSON(http.StatusOK, response)
+			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 			return
 		}
 		smContext.SetState(smf_context.ModificationPending)
@@ -775,7 +775,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		case smf_context.SessionUpdateSuccess:
 			smContext.Log.Traceln("In case SessionUpdateSuccess")
 			smContext.SetState(smf_context.Active)
-			c.JSON(http.StatusOK, response)
+			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 		case smf_context.SessionUpdateFailed:
 			smContext.Log.Traceln("In case SessionUpdateFailed")
 			smContext.SetState(smf_context.Active)
@@ -792,7 +792,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 			smContext.Log.Traceln("In case SessionReleaseSuccess")
 			smContext.SetState(smf_context.InActivePending)
-			c.JSON(http.StatusOK, response)
+			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 
 		case smf_context.SessionReleaseFailed:
 			// Update SmContext Request(N1 PDU Session Release Request)
@@ -822,12 +822,12 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	case smf_context.ModificationPending:
 		smContext.Log.Traceln("In case ModificationPending")
 		smContext.SetState(smf_context.Active)
-		c.JSON(http.StatusOK, response)
+		c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 	case smf_context.InActive, smf_context.InActivePending:
 		smContext.Log.Traceln("In case InActive, InActivePending")
-		c.JSON(http.StatusOK, response)
+		c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 	default:
-		c.JSON(http.StatusOK, response)
+		c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 	}
 
 	if smContext.PDUSessionRelease_DUE_TO_DUP_PDU_ID {
@@ -1046,7 +1046,7 @@ func (p *Processor) makeEstRejectResAndReleaseSMContext(
 				N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
 			},
 		}
-		c.JSON(int(sbiError.Status), postSmContextsError)
+		p.nasErrorResponse(c, int(sbiError.Status), postSmContextsError)
 	} else {
 		postSmContextsError := models.PostSmContextsErrorResponse{
 			JsonData: &models.SmContextCreateError{
@@ -1055,7 +1055,7 @@ func (p *Processor) makeEstRejectResAndReleaseSMContext(
 			},
 			BinaryDataN1SmMessage: buf,
 		}
-		c.JSON(int(sbiError.Status), postSmContextsError)
+		p.nasErrorResponse(c, int(sbiError.Status), postSmContextsError)
 	}
 	p.RemoveSMContextFromAllNF(smContext, false)
 }
@@ -1152,5 +1152,21 @@ func (p *Processor) sendGSMPDUSessionModificationCommand(smContext *smf_context.
 			defer smContext.SMLock.Unlock()
 			smContext.T3591 = nil
 		})
+	}
+}
+
+func (p *Processor) nasErrorResponse(
+	c *gin.Context,
+	status int,
+	errBody models.PostSmContextsErrorResponse,
+) {
+	switch status {
+	case http.StatusForbidden,
+		// http.StatusNotFound,
+		http.StatusInternalServerError,
+		http.StatusGatewayTimeout:
+		c.Render(status, openapi.MultipartRelatedRender{Data: errBody})
+	default:
+		c.JSON(status, errBody)
 	}
 }
