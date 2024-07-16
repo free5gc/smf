@@ -457,6 +457,7 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 		request         models.PostSmContextsRequest
 		paramStr        string
 		resultStr       string
+		responseBody    any
 		expectedHTTPRsp *httpwrapper.Response
 	}{
 		{
@@ -464,8 +465,9 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 			request: models.PostSmContextsRequest{
 				BinaryDataN1SmMessage: buildPDUSessionModificationRequest(10, 1),
 			},
-			paramStr:  "input wrong GSM Message type\n",
-			resultStr: "PDUSessionSMContextCreate should fail due to wrong GSM type\n",
+			paramStr:     "input wrong GSM Message type\n",
+			resultStr:    "PDUSessionSMContextCreate should fail due to wrong GSM type\n",
+			responseBody: &models.PostSmContextsErrorResponse{},
 			expectedHTTPRsp: &httpwrapper.Response{
 				Header: nil,
 				Status: http.StatusForbidden,
@@ -508,8 +510,9 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 				},
 				BinaryDataN1SmMessage: buildPDUSessionEstablishmentRequest(10, 2, nasMessage.PDUSessionTypeIPv6),
 			},
-			paramStr:  "try request the IPv6 PDU session\n",
-			resultStr: "Reject IPv6 PDU Session and respond error\n",
+			paramStr:     "try request the IPv6 PDU session\n",
+			resultStr:    "Reject IPv6 PDU Session and respond error\n",
+			responseBody: &models.PostSmContextsErrorResponse{},
 			expectedHTTPRsp: &httpwrapper.Response{
 				Header: nil,
 				Status: http.StatusForbidden,
@@ -560,8 +563,9 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 				},
 				BinaryDataN1SmMessage: buildPDUSessionEstablishmentRequest(10, 3, nasMessage.PDUSessionTypeIPv4),
 			},
-			paramStr:  "input correct PostSmContexts Request\n",
-			resultStr: "PDUSessionSMContextCreate should pass\n",
+			paramStr:     "input correct PostSmContexts Request\n",
+			resultStr:    "PDUSessionSMContextCreate should pass\n",
+			responseBody: &models.PostSmContextsResponse{},
 			expectedHTTPRsp: &httpwrapper.Response{
 				Header: nil,
 				Status: http.StatusCreated,
@@ -612,9 +616,19 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 				t.Fatalf("Failed to close response body: %+v", errClose)
 			}
 
-			respBytes, errReadAll := io.ReadAll(httpResp.Body)
+			rawBytes, errReadAll := io.ReadAll(httpResp.Body)
 			if errReadAll != nil {
 				t.Fatalf("Failed to read response body: %+v", errReadAll)
+			}
+
+			err = openapi.Deserialize(tc.responseBody, rawBytes, httpResp.Header.Get("Content-Type"))
+			if err != nil {
+				t.Fatalf("Failed to deserialize response body: %+v", err)
+			}
+
+			respBytes, errMarshal := json.Marshal(tc.responseBody)
+			if errMarshal != nil {
+				t.Fatalf("Failed to marshal actual response body: %+v", errMarshal)
 			}
 
 			expectedBytes, errMarshal := json.Marshal(tc.expectedHTTPRsp.Body)
