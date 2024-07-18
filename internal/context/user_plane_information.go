@@ -741,10 +741,14 @@ func (upi *UserPlaneInformation) selectMatchUPF(selection *UPFSelectionParams) [
 
 			if currentSnssai.Equal(targetSnssai) {
 				for _, dnnInfo := range snssaiInfo.DnnList {
-					if dnnInfo.Dnn == selection.Dnn && dnnInfo.ContainsDNAI(selection.Dnai) {
-						upList = append(upList, upNode)
-						break
+					if dnnInfo.Dnn != selection.Dnn {
+						continue
 					}
+					if selection.Dnai != "" && !dnnInfo.ContainsDNAI(selection.Dnai) {
+						continue
+					}
+					upList = append(upList, upNode)
+					break
 				}
 			}
 		}
