@@ -144,8 +144,10 @@ func (s *nchfService) SendConvergedChargingRequest(
 	switch requestType {
 	case smf_context.CHARGING_INIT:
 		rsp, httpResponse, err = client.DefaultApi.ChargingdataPost(ctx, *req)
-		chargingDataRef := strings.Split(httpResponse.Header.Get("Location"), "/")
-		smContext.ChargingDataRef = chargingDataRef[len(chargingDataRef)-1]
+		if httpResponse != nil {
+			chargingDataRef := strings.Split(httpResponse.Header.Get("Location"), "/")
+			smContext.ChargingDataRef = chargingDataRef[len(chargingDataRef)-1]
+		}
 	case smf_context.CHARGING_UPDATE:
 		rsp, httpResponse, err = client.DefaultApi.ChargingdataChargingDataRefUpdatePost(
 			ctx, smContext.ChargingDataRef, *req)
@@ -155,8 +157,10 @@ func (s *nchfService) SendConvergedChargingRequest(
 	}
 
 	defer func() {
-		if resCloseErr := httpResponse.Body.Close(); resCloseErr != nil {
-			logger.ChargingLog.Errorf("RegisterNFInstance response body cannot close: %+v", resCloseErr)
+		if httpResponse != nil {
+			if resCloseErr := httpResponse.Body.Close(); resCloseErr != nil {
+				logger.ChargingLog.Errorf("RegisterNFInstance response body cannot close: %+v", resCloseErr)
+			}
 		}
 	}()
 
