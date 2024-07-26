@@ -426,9 +426,11 @@ func (s *nnrfService) CHFSelection(smContext *smf_context.SMContext) error {
 	}
 
 	// Select CHF from available CHF
-	smContext.SelectedCHFProfile = rsp.NfInstances[0]
-
-	return nil
+	if len(rsp.NfInstances) > 0 {
+		smContext.SelectedCHFProfile = rsp.NfInstances[0]
+		return nil
+	}
+	return fmt.Errorf("No CHF found in CHFSelection")
 }
 
 // PCFSelection will select PCF for this SM Context
