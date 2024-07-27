@@ -103,9 +103,13 @@ func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMCon
 	return req
 }
 
-func (s *nchfService) SendConvergedChargingRequest(smContext *smf_context.SMContext,
-	requestType smf_context.RequestType, multipleUnitUsage []models.MultipleUnitUsage,
-) (*models.ChargingDataResponse, *models.ProblemDetails, error) {
+func (s *nchfService) SendConvergedChargingRequest(
+	smContext *smf_context.SMContext,
+	requestType smf_context.RequestType,
+	multipleUnitUsage []models.MultipleUnitUsage,
+) (
+	*models.ChargingDataResponse, *models.ProblemDetails, error,
+) {
 	logger.ChargingLog.Info("Handle SendConvergedChargingRequest")
 
 	req := s.buildConvergedChargingRequest(smContext, multipleUnitUsage)
@@ -119,12 +123,21 @@ func (s *nchfService) SendConvergedChargingRequest(smContext *smf_context.SMCont
 		return nil, pd, err
 	}
 
+	if smContext.SelectedCHFProfile.NfServices == nil {
+		errMsg := "No CHF found"
+		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf(errMsg)
+	}
+
 	var client *Nchf_ConvergedCharging.APIClient
 	// Create Converged Charging Client for this SM Context
 	for _, service := range *smContext.SelectedCHFProfile.NfServices {
 		if service.ServiceName == models.ServiceName_NCHF_CONVERGEDCHARGING {
 			client = s.getConvergedChargingClient(service.ApiPrefix)
 		}
+	}
+	if client == nil {
+		errMsg := "No CONVERGEDCHARGING-CHF found"
+		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf(errMsg)
 	}
 
 	// select the appropriate converged charging service based on trigger type
