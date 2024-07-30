@@ -21,7 +21,7 @@ func BitRateTokbps(bitrate string) (uint64, error) {
 	}
 
 	if len(s) == 1 {
-		return 0, errors.New("cannot get the unit of ULMBR/DLMBR/ULGBR/DLGBR, please check the settings in web console")
+		return uint64(digit * 1000), errors.New("cannot get the unit of ULMBR/DLMBR/ULGBR/DLGBR, we use Mbps for default unit, please check the settings in web console")
 	}
 
 	switch s[1] {
