@@ -434,6 +434,18 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 
 	sessionRule := smContext.SelectedSessionRule()
 
+	bitRateKbpsULMBR, err := util.BitRateTokbps(sessionRule.AuthSessAmbr.Uplink)
+
+	if err != nil {
+		logger.PduSessLog.Error("Cannot get the unit of ULMBR, please check the settings in web console")
+	}
+
+	bitRateKbpsDLMBR, err := util.BitRateTokbps(sessionRule.AuthSessAmbr.Downlink)
+
+	if err != nil {
+		logger.PduSessLog.Error("Cannot get the unit of DLMBR, please check the settings in web console")
+	}
+
 	// Activate PDR
 	for curDataPathNode := firstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
 		var defaultQER *QER
@@ -449,8 +461,8 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 					DLGate: pfcpType.GateOpen,
 				}
 				newQER.MBR = &pfcpType.MBR{
-					ULMBR: util.BitRateTokbps(sessionRule.AuthSessAmbr.Uplink),
-					DLMBR: util.BitRateTokbps(sessionRule.AuthSessAmbr.Downlink),
+					ULMBR: bitRateKbpsULMBR,
+					DLMBR: bitRateKbpsDLMBR,
 				}
 				ambrQER = newQER
 			}
@@ -836,6 +848,42 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 		currentUUID := node.UPF.GetUUID()
 		id := getQosIdKey(currentUUID, qfi)
 
+		bitRateKbpsQoSGBRUL, err := util.BitRateTokbps(qos.GbrUl)
+
+		if err != nil {
+			logger.PduSessLog.Error("Cannot get the unit of GBRUL, please check the settings in web console")
+		}
+
+		bitRateKbpsQoSGBRDL, err := util.BitRateTokbps(qos.GbrDl)
+
+		if err != nil {
+			logger.PduSessLog.Error("Cannot get the unit of GBRDL, please check the settings in web console")
+		}
+
+		bitRateKbpsQoSMBRUL, err := util.BitRateTokbps(qos.MaxbrUl)
+
+		if err != nil {
+			logger.PduSessLog.Error("Cannot get the unit of MBRUL, please check the settings in web console")
+		}
+
+		bitRateKbpsQoSMBRDL, err := util.BitRateTokbps(qos.MaxbrDl)
+
+		if err != nil {
+			logger.PduSessLog.Error("Cannot get the unit of MBRDL, please check the settings in web console")
+		}
+
+		bitRateKbpsSessionAmbrMBRUL, err := util.BitRateTokbps(qos.MaxbrUl)
+
+		if err != nil {
+			logger.PduSessLog.Error("Cannot get the unit of MBRUL, please check the settings in web console")
+		}
+
+		bitRateKbpsSessionAmbrMBRDL, err := util.BitRateTokbps(qos.MaxbrDl)
+
+		if err != nil {
+			logger.PduSessLog.Error("Cannot get the unit of MBRDL, please check the settings in web console")
+		}
+
 		if qerId, ok := smContext.QerUpfMap[id]; !ok {
 			if newQER, err := node.UPF.AddQER(); err != nil {
 				logger.PduSessLog.Errorln("new QER failed")
@@ -850,18 +898,18 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 				}
 				if isGBRFlow(qos) {
 					newQER.GBR = &pfcpType.GBR{
-						ULGBR: util.BitRateTokbps(qos.GbrUl),
-						DLGBR: util.BitRateTokbps(qos.GbrDl),
+						ULGBR: bitRateKbpsQoSGBRUL,
+						DLGBR: bitRateKbpsQoSGBRDL,
 					}
 					newQER.MBR = &pfcpType.MBR{
-						ULMBR: util.BitRateTokbps(qos.MaxbrUl),
-						DLMBR: util.BitRateTokbps(qos.MaxbrDl),
+						ULMBR: bitRateKbpsQoSMBRUL,
+						DLMBR: bitRateKbpsQoSMBRDL,
 					}
 				} else {
 					// Non-GBR flow should follows session-AMBR
 					newQER.MBR = &pfcpType.MBR{
-						ULMBR: util.BitRateTokbps(smContext.DnnConfiguration.SessionAmbr.Uplink),
-						DLMBR: util.BitRateTokbps(smContext.DnnConfiguration.SessionAmbr.Downlink),
+						ULMBR: bitRateKbpsSessionAmbrMBRUL,
+						DLMBR: bitRateKbpsSessionAmbrMBRDL,
 					}
 				}
 				qer = newQER
