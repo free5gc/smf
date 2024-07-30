@@ -43,7 +43,7 @@ func TestSendSMPolicyAssociationUpdateByUERequestModification(t *testing.T) {
 		responseErr      error
 	}{
 		{
-			name:             "QosRules is nil",
+			name:             "QoSRules is nil",
 			smContext:        smf_context.NewSMContext("imsi-208930000000001", 10),
 			qosRules:         nasType.QoSRules{},
 			qosFlowDescs:     nasType.QoSFlowDescs{nasType.QoSFlowDesc{}},
@@ -51,7 +51,7 @@ func TestSendSMPolicyAssociationUpdateByUERequestModification(t *testing.T) {
 			responseErr:      fmt.Errorf("QoS Rule not found"),
 		},
 		{
-			name:             "QosRules is nil",
+			name:             "QoSFlowDescs is nil",
 			smContext:        smf_context.NewSMContext("imsi-208930000000001", 10),
 			qosRules:         nasType.QoSRules{nasType.QoSRule{}},
 			qosFlowDescs:     nasType.QoSFlowDescs{},
