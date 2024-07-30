@@ -9,95 +9,11 @@ import (
 
 	"github.com/free5gc/nas/nasType"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/smf/internal/context"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/sbi/consumer"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/smf/pkg/service"
 )
-
-var userPlaneConfig = factory.UserPlaneInformation{
-	UPNodes: map[string]*factory.UPNode{
-		"GNodeB": {
-			Type: "AN",
-		},
-		"UPF1": {
-			Type:   "UPF",
-			NodeID: "10.4.0.11",
-			Addr:   "10.4.0.11",
-			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
-				{
-					SNssai: &models.Snssai{
-						Sst: 1,
-						Sd:  "010203",
-					},
-					DnnUpfInfoList: []*factory.DnnUpfInfoItem{
-						{
-							Dnn:      "internet",
-							DnaiList: []string{"mec"},
-						},
-					},
-				},
-			},
-			InterfaceUpfInfoList: []*factory.InterfaceUpfInfoItem{
-				{
-					InterfaceType: "N3",
-					Endpoints: []string{
-						"10.3.0.11",
-					},
-					NetworkInstances: []string{"internet"},
-				},
-				{
-					InterfaceType: "N9",
-					Endpoints: []string{
-						"10.3.0.11",
-					},
-					NetworkInstances: []string{"internet"},
-				},
-			},
-		},
-		"UPF2": {
-			Type:   "UPF",
-			NodeID: "10.4.0.12",
-			Addr:   "10.4.0.12",
-			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
-				{
-					SNssai: &models.Snssai{
-						Sst: 1,
-						Sd:  "010203",
-					},
-					DnnUpfInfoList: []*factory.DnnUpfInfoItem{
-						{
-							Dnn: "internet",
-							Pools: []*factory.UEIPPool{
-								{Cidr: "10.60.0.0/16"},
-							},
-						},
-					},
-				},
-			},
-			InterfaceUpfInfoList: []*factory.InterfaceUpfInfoItem{
-				{
-					InterfaceType: "N9",
-					Endpoints: []string{
-						"10.3.0.12",
-					},
-					NetworkInstances: []string{"internet"},
-				},
-			},
-		},
-	},
-	Links: []*factory.UPLink{
-		{
-			A: "GNodeB",
-			B: "UPF1",
-		},
-		{
-			A: "UPF1",
-			B: "UPF2",
-		},
-	},
-}
 
 var testConfig = factory.Config{
 	Info: &factory.Info{
@@ -111,12 +27,11 @@ var testConfig = factory.Config{
 			BindingIPv4:  "127.0.0.1",
 			Port:         8000,
 		},
-		UserPlaneInformation: userPlaneConfig,
 	},
 }
 
 func TestSendSMPolicyAssociationUpdateByUERequestModification(t *testing.T) {
-	context.InitSmfContext(&testConfig)
+	smf_context.InitSmfContext(&testConfig)
 
 	testCases := []struct {
 		name         string
