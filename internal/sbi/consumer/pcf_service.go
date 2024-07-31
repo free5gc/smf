@@ -140,6 +140,13 @@ func (s *npcfService) SendSMPolicyAssociationUpdateByUERequestModification(
 	}
 
 	// UE SHOULD only create ONE QoS Flow in a request (TS 24.501 6.4.2.2)
+	if len(qosRules) == 0 {
+		return nil, errors.New("QoS Rule not found")
+	}
+	if len(qosFlowDescs) == 0 {
+		return nil, errors.New("QoS Flow Description not found")
+	}
+
 	rule := qosRules[0]
 	flowDesc := qosFlowDescs[0]
 
