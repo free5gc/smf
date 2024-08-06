@@ -444,13 +444,16 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				logger.PduSessLog.Errorln("new QER failed")
 				return
 			} else {
-				bitRateKbpsULMBR, err := util.BitRateTokbps(sessionRule.AuthSessAmbr.Uplink)
-				if err != nil {
+				var bitRateKbpsULMBR uint64
+				var bitRateKbpsDLMBR uint64
+				var bitRateConvertErr error
+				bitRateKbpsULMBR, bitRateConvertErr = util.BitRateTokbps(sessionRule.AuthSessAmbr.Uplink)
+				if bitRateConvertErr != nil {
 					logger.PduSessLog.Errorln("Cannot get the unit of ULMBR, please check the settings in web console")
 					return
 				}
-				bitRateKbpsDLMBR, err := util.BitRateTokbps(sessionRule.AuthSessAmbr.Downlink)
-				if err != nil {
+				bitRateKbpsDLMBR, bitRateConvertErr = util.BitRateTokbps(sessionRule.AuthSessAmbr.Downlink)
+				if bitRateConvertErr != nil {
 					logger.PduSessLog.Errorln("Cannot get the unit of DLMBR, please check the settings in web console")
 					return
 				}
@@ -859,26 +862,31 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 					DLGate: pfcpType.GateOpen,
 				}
 				if isGBRFlow(qos) {
-					bitRateKbpsQoSGBRUL, err := util.BitRateTokbps(qos.GbrUl)
-					if err != nil {
+					var bitRateKbpsQoSGBRUL uint64
+					var bitRateKbpsQoSGBRDL uint64
+					var bitRateKbpsQoSMBRUL uint64
+					var bitRateKbpsQoSMBRDL uint64
+					var bitRateConvertErr error
+					bitRateKbpsQoSGBRUL, bitRateConvertErr = util.BitRateTokbps(qos.GbrUl)
+					if bitRateConvertErr != nil {
 						logger.PduSessLog.Panicln("Cannot get the unit of GBRUL, please check the settings in web console")
 						return
 					}
 
-					bitRateKbpsQoSGBRDL, err := util.BitRateTokbps(qos.GbrDl)
-					if err != nil {
+					bitRateKbpsQoSGBRDL, bitRateConvertErr = util.BitRateTokbps(qos.GbrDl)
+					if bitRateConvertErr != nil {
 						logger.PduSessLog.Panicln("Cannot get the unit of GBRDL, please check the settings in web console")
 						return
 					}
 
-					bitRateKbpsQoSMBRUL, err := util.BitRateTokbps(qos.MaxbrUl)
-					if err != nil {
+					bitRateKbpsQoSMBRUL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrUl)
+					if bitRateConvertErr != nil {
 						logger.PduSessLog.Panicln("Cannot get the unit of MBRUL, please check the settings in web console")
 						return
 					}
 
-					bitRateKbpsQoSMBRDL, err := util.BitRateTokbps(qos.MaxbrDl)
-					if err != nil {
+					bitRateKbpsQoSMBRDL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrDl)
+					if bitRateConvertErr != nil {
 						logger.PduSessLog.Panicln("Cannot get the unit of MBRDL, please check the settings in web console")
 						return
 					}
@@ -892,14 +900,17 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 						DLMBR: bitRateKbpsQoSMBRDL,
 					}
 				} else {
-					bitRateKbpsSessionAmbrMBRUL, err := util.BitRateTokbps(qos.MaxbrUl)
-					if err != nil {
+					var bitRateKbpsSessionAmbrMBRUL uint64
+					var bitRateKbpsSessionAmbrMBRDL uint64
+					var bitRateConvertErr error
+					bitRateKbpsSessionAmbrMBRUL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrUl)
+					if bitRateConvertErr != nil {
 						logger.PduSessLog.Error("Cannot get the unit of MBRUL, please check the settings in web console")
 						return
 					}
-					bitRateKbpsSessionAmbrMBRDL, err := util.BitRateTokbps(qos.MaxbrDl)
+					bitRateKbpsSessionAmbrMBRDL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrDl)
 
-					if err != nil {
+					if bitRateConvertErr != nil {
 						logger.PduSessLog.Error("Cannot get the unit of MBRDL, please check the settings in web console")
 						return
 					}
