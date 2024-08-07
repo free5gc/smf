@@ -1,22 +1,27 @@
 package util
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
 	"github.com/free5gc/ngap/ngapType"
 )
 
-func BitRateTokbps(bitrate string) uint64 {
+func BitRateTokbps(bitrate string) (uint64, error) {
 	s := strings.Split(bitrate, " ")
 	var kbps uint64
 
 	var digit int
 
 	if n, err := strconv.Atoi(s[0]); err != nil {
-		return 0
+		return 0, nil
 	} else {
 		digit = n
+	}
+
+	if len(s) == 1 {
+		return 0, errors.New("cannot get the unit of ULMBR/DLMBR/ULGBR/DLGBR, please check the settings in web console")
 	}
 
 	switch s[1] {
@@ -31,7 +36,7 @@ func BitRateTokbps(bitrate string) uint64 {
 	case "Tbps":
 		kbps = uint64(digit * 1000000000)
 	}
-	return kbps
+	return kbps, nil
 }
 
 func BitRateTombps(bitrate string) uint16 {
