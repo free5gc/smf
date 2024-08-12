@@ -378,7 +378,7 @@ func TestApplyPccRules(t *testing.T) {
 				TraffContDecs: map[string]*models.TrafficControlData{
 					"TcId-1": {
 						TcId: "TcId-1",
-						RouteToLocs: []models.RouteToLocation{
+						RouteToLocs: []*models.RouteToLocation{
 							{
 								Dnai: "mec",
 							},
@@ -410,7 +410,7 @@ func TestApplyPccRules(t *testing.T) {
 				"TcId-1": {
 					TrafficControlData: &models.TrafficControlData{
 						TcId: "TcId-1",
-						RouteToLocs: []models.RouteToLocation{
+						RouteToLocs: []*models.RouteToLocation{
 							{
 								Dnai: "mec",
 							},
@@ -482,7 +482,7 @@ func TestApplyPccRules(t *testing.T) {
 				"TcId-1": {
 					TrafficControlData: &models.TrafficControlData{
 						TcId: "TcId-1",
-						RouteToLocs: []models.RouteToLocation{
+						RouteToLocs: []*models.RouteToLocation{
 							{
 								Dnai: "mec",
 							},
@@ -554,7 +554,7 @@ func TestApplyPccRules(t *testing.T) {
 				"TcId-1": {
 					TrafficControlData: &models.TrafficControlData{
 						TcId: "TcId-1",
-						RouteToLocs: []models.RouteToLocation{
+						RouteToLocs: []*models.RouteToLocation{
 							{
 								Dnai: "mec",
 							},
@@ -595,7 +595,7 @@ func TestApplyPccRules(t *testing.T) {
 				"TcId-1": {
 					TrafficControlData: &models.TrafficControlData{
 						TcId: "TcId-1",
-						RouteToLocs: []models.RouteToLocation{
+						RouteToLocs: []*models.RouteToLocation{
 							{
 								Dnai: "mec",
 							},
@@ -630,7 +630,7 @@ func TestApplyPccRules(t *testing.T) {
 	smctx.SMLock.Lock()
 	defer smctx.SMLock.Unlock()
 
-	smctx.SmContextCreateData = &models.SmContextCreateData{
+	smctx.SmfPduSessionSmContextCreateData = &models.SmfPduSessionSmContextCreateData{
 		Supi:         "imsi-208930000000002",
 		Pei:          "imeisv-1110000000000000",
 		Gpsi:         "msisdn-0900000000",
@@ -642,14 +642,14 @@ func TestApplyPccRules(t *testing.T) {
 		},
 		ServingNfId: "c8d0ee65-f466-48aa-a42f-235ec771cb52",
 		Guami: &models.Guami{
-			PlmnId: &models.PlmnId{
+			PlmnId: &models.PlmnIdNid{
 				Mcc: "208",
 				Mnc: "93",
 			},
 			AmfId: "cafe00",
 		},
 		AnType: "3GPP_ACCESS",
-		ServingNetwork: &models.PlmnId{
+		ServingNetwork: &models.PlmnIdNid{
 			Mcc: "208",
 			Mnc: "93",
 		},

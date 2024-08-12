@@ -29,7 +29,7 @@ func TestBuildNASPacketFilterFromPacketFilterInfo(t *testing.T) {
 				},
 			},
 			flowInfo: models.FlowInformation{
-				FlowDirection:   models.FlowDirectionRm_BIDIRECTIONAL,
+				FlowDirection:   models.FlowDirection_BIDIRECTIONAL,
 				FlowDescription: "permit out ip from any to assigned",
 			},
 		},
@@ -47,7 +47,7 @@ func TestBuildNASPacketFilterFromPacketFilterInfo(t *testing.T) {
 				},
 			},
 			flowInfo: models.FlowInformation{
-				FlowDirection:   models.FlowDirectionRm_UPLINK,
+				FlowDirection:   models.FlowDirection_UPLINK,
 				FlowDescription: "permit out ip from any to 192.168.0.0/16",
 			},
 		},
@@ -69,7 +69,7 @@ func TestBuildNASPacketFilterFromPacketFilterInfo(t *testing.T) {
 				},
 			},
 			flowInfo: models.FlowInformation{
-				FlowDirection:   models.FlowDirectionRm_BIDIRECTIONAL,
+				FlowDirection:   models.FlowDirection_BIDIRECTIONAL,
 				FlowDescription: "permit out ip from 10.160.20.0/24 to 192.168.0.0/16",
 			},
 		},
@@ -94,7 +94,7 @@ func TestBuildNASPacketFilterFromPacketFilterInfo(t *testing.T) {
 				},
 			},
 			flowInfo: models.FlowInformation{
-				FlowDirection:   models.FlowDirectionRm_BIDIRECTIONAL,
+				FlowDirection:   models.FlowDirection_BIDIRECTIONAL,
 				FlowDescription: "permit out ip from 10.160.20.0/24 to 192.168.0.0/16 8000",
 			},
 		},
@@ -120,7 +120,7 @@ func TestBuildNASPacketFilterFromPacketFilterInfo(t *testing.T) {
 				},
 			},
 			flowInfo: models.FlowInformation{
-				FlowDirection:   models.FlowDirectionRm_DOWNLINK,
+				FlowDirection:   models.FlowDirection_DOWNLINK,
 				FlowDescription: "permit out ip from 10.160.20.0/24 to 192.168.0.0/16 3000-8000",
 			},
 		},
@@ -150,7 +150,7 @@ func TestBuildNASPacketFilterFromPacketFilterInfo(t *testing.T) {
 				},
 			},
 			flowInfo: models.FlowInformation{
-				FlowDirection:   models.FlowDirectionRm_DOWNLINK,
+				FlowDirection:   models.FlowDirection_DOWNLINK,
 				FlowDescription: "permit out ip from 10.160.20.0/24 3000-4000 to 192.168.0.0/16 6000-8000",
 			},
 		},
@@ -200,7 +200,7 @@ func TestBuildNASPacketFilterFromPacketFilterInfo(t *testing.T) {
 				},
 			},
 			flowInfo: models.FlowInformation{
-				FlowDirection:   models.FlowDirectionRm_DOWNLINK,
+				FlowDirection:   models.FlowDirection_DOWNLINK,
 				FlowDescription: "permit out ip from 10.160.20.0/24 3000-4000 to 192.168.0.0/16 6000-7000,8000",
 			},
 		},
@@ -250,7 +250,7 @@ func TestBuildNASPacketFilterFromPacketFilterInfo(t *testing.T) {
 				},
 			},
 			flowInfo: models.FlowInformation{
-				FlowDirection:   models.FlowDirectionRm_DOWNLINK,
+				FlowDirection:   models.FlowDirection_DOWNLINK,
 				FlowDescription: "permit out ip from 10.160.20.0/24 3000-4000,5000 to 192.168.0.0/16 6000-7000",
 			},
 		},

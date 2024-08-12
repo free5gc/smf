@@ -3,7 +3,6 @@ package processor
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/free5gc/nas/nasMessage"
@@ -235,7 +234,7 @@ func (p *Processor) requestAMFToReleasePDUResources(
 				SmInfo: &models.N2SmInformation{
 					PduSessionId: smContext.PDUSessionID,
 					N2InfoContent: &models.N2InfoContent{
-						NgapIeType: models.NgapIeType_PDU_RES_REL_CMD,
+						NgapIeType: models.AmfCommunicationNgapIeType_PDU_RES_REL_CMD,
 						NgapData: &models.RefToBinaryData{
 							ContentId: "N2SmInformation",
 						},
@@ -246,19 +245,19 @@ func (p *Processor) requestAMFToReleasePDUResources(
 		}
 	}
 
-	ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+	ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF)
 	if errToken != nil {
 		return false, false
 	}
 
-	rspData, statusCode, err := p.Consumer().
+	rspData, err := p.Consumer().
 		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
+
 	if err != nil {
 		logger.ConsumerLog.Warnf("N1N2MessageTransfer for RequestAMFToReleasePDUResources failed: %+v", err)
-	}
-
-	switch *statusCode {
-	case http.StatusOK:
+		// keep SM Context to avoid inconsistency with AMF
+		smContext.SetState(smf_context.InActive)
+	} else {
 		if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 			// the PDU Session Release Command was not transferred to the UE since it is in CM-IDLE state.
 			//   ref. step3b of "4.3.4.2 UE or network requested PDU Session Release for Non-Roaming and
@@ -274,13 +273,6 @@ func (p *Processor) requestAMFToReleasePDUResources(
 			// keep SM Context to avoid inconsistency with AMF
 			smContext.SetState(smf_context.InActive)
 		}
-	case http.StatusNotFound:
-		// it is not needed to notify AMF, but needed to remove SM Context in SMF immediately
-		smContext.SetState(smf_context.InActive)
-		return false, true
-	default:
-		// keep SM Context to avoid inconsistency with AMF
-		smContext.SetState(smf_context.InActive)
 	}
 	return false, false
 }

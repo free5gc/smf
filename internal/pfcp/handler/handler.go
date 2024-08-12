@@ -163,7 +163,7 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 					SmInfo: &models.N2SmInformation{
 						PduSessionId: smContext.PDUSessionID,
 						N2InfoContent: &models.N2InfoContent{
-							NgapIeType: models.NgapIeType_PDU_RES_SETUP_REQ,
+							NgapIeType: models.AmfCommunicationNgapIeType_PDU_RES_SETUP_REQ,
 							NgapData: &models.RefToBinaryData{
 								ContentId: "N2SmInformation",
 							},
@@ -173,12 +173,12 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 				},
 			}
 
-			ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+			ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF)
 			if errToken != nil {
 				logger.PfcpLog.Warnf("Get NAMF_COMM context failed: %s", errToken)
 				return
 			}
-			rspData, _, err := service.GetApp().Consumer().
+			rspData, err := service.GetApp().Consumer().
 				N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 			if err != nil {
 				logger.ConsumerLog.Warnf("Send N1N2Transfer failed: %s", err)

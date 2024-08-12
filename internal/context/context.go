@@ -45,7 +45,7 @@ type SMFContext struct {
 	ExternalAddr string
 	ListenAddr   string
 
-	UDMProfile models.NfProfile
+	UDMProfile models.NrfNfDiscoveryNfProfile
 	NfProfile  NFProfile
 
 	Key    string
@@ -298,13 +298,13 @@ func GetUEDefaultPathPool(groupName string) *UEDefaultPaths {
 	return smfContext.UEDefaultPathPool[groupName]
 }
 
-func (c *SMFContext) GetTokenCtx(serviceName models.ServiceName, targetNF models.NfType) (
+func (c *SMFContext) GetTokenCtx(serviceName models.ServiceName, targetNF models.NrfNfManagementNfType) (
 	context.Context, *models.ProblemDetails, error,
 ) {
 	if !c.OAuth2Required {
 		return context.TODO(), nil, nil
 	}
-	return oauth.GetTokenCtx(models.NfType_SMF, targetNF,
+	return oauth.GetTokenCtx(models.NrfNfManagementNfType_SMF, targetNF,
 		c.NfInstanceID, c.NrfUri, string(serviceName))
 }
 
