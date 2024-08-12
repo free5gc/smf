@@ -121,7 +121,7 @@ func (s *nchfService) SendConvergedChargingRequest(
 	}
 
 	if smContext.SelectedCHFProfile.NfServices == nil {
-		errMsg := "No CHF found"
+		errMsg := "no CHF found"
 		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf(errMsg)
 	}
 
@@ -133,7 +133,7 @@ func (s *nchfService) SendConvergedChargingRequest(
 		}
 	}
 	if client == nil {
-		errMsg := "No CONVERGEDCHARGING-CHF found"
+		errMsg := "no CONVERGEDCHARGING-CHF found"
 		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf(errMsg)
 	}
 
