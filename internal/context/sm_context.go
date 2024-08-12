@@ -16,6 +16,7 @@ import (
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/ngap/ngapType"
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/openapi/smf/EventExposure"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
@@ -104,13 +105,13 @@ type UsageReport struct {
 	UplinkPktNum   uint64
 	DownlinkPktNum uint64
 
-	ReportTpye models.TriggerType
+	ReportTpye models.ChfConvergedChargingTriggerType
 }
 
 var TeidGenerator *idgenerator.IDGenerator
 
 type SMContext struct {
-	*models.SmContextCreateData
+	*models.SmfPduSessionSmContextCreateData
 
 	Ref string
 
@@ -154,9 +155,9 @@ type SMContext struct {
 	// Client
 	CommunicationClientApiPrefix string
 
-	AMFProfile         models.NfProfile
-	SelectedPCFProfile models.NfProfile
-	SelectedCHFProfile models.NfProfile
+	AMFProfile         models.NrfNfDiscoveryNfProfile
+	SelectedPCFProfile models.NrfNfDiscoveryNfProfile
+	SelectedCHFProfile models.NrfNfDiscoveryNfProfile
 	SmStatusNotifyUri  string
 
 	Tunnel      *UPTunnel
@@ -429,8 +430,8 @@ func (smContext *SMContext) GenerateUrrId() {
 	}
 }
 
-func (smContext *SMContext) BuildCreatedData() *models.SmContextCreatedData {
-	return &models.SmContextCreatedData{
+func (smContext *SMContext) BuildCreatedData() *models.SmfPduSessionSmContextCreatedData {
+	return &models.SmfPduSessionSmContextCreatedData{
 		SNssai: smContext.SNssai,
 	}
 }
@@ -626,7 +627,7 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 ) error {
 	var targetRoute models.RouteToLocation
 	if tcData != nil && len(tcData.RouteToLocs) > 0 {
-		targetRoute = tcData.RouteToLocs[0]
+		targetRoute = *tcData.RouteToLocs[0]
 	}
 	param := &UPFSelectionParams{
 		Dnn: c.Dnn,
@@ -680,7 +681,7 @@ func (c *SMContext) BuildUpPathChgEventExposureNotification(
 		return
 	}
 
-	en := models.EventNotification{
+	en := models.SmfEventExposureEventNotification{
 		Event:            models.SmfEvent_UP_PATH_CH,
 		SourceTraRouting: srcRoute,
 		TargetTraRouting: tgtRoute,
@@ -699,7 +700,7 @@ func (c *SMContext) BuildUpPathChgEventExposureNotification(
 			v.EventNotifs = append(v.EventNotifs, en)
 		} else {
 			c.UpPathChgEarlyNotification[k] = newEventExposureNotification(
-				chgEvent.NotificationUri, chgEvent.NotifCorreId, en)
+				chgEvent.NotificationUri, chgEvent.NotifCorreId, &en)
 		}
 	}
 	if strings.Contains(string(chgEvent.DnaiChgType), "LATE") {
@@ -709,26 +710,26 @@ func (c *SMContext) BuildUpPathChgEventExposureNotification(
 			v.EventNotifs = append(v.EventNotifs, en)
 		} else {
 			c.UpPathChgLateNotification[k] = newEventExposureNotification(
-				chgEvent.NotificationUri, chgEvent.NotifCorreId, en)
+				chgEvent.NotificationUri, chgEvent.NotifCorreId, &en)
 		}
 	}
 }
 
 func newEventExposureNotification(
 	uri, id string,
-	en models.EventNotification,
+	en *models.SmfEventExposureEventNotification,
 ) *EventExposureNotification {
 	return &EventExposureNotification{
 		NsmfEventExposureNotification: &models.NsmfEventExposureNotification{
 			NotifId:     id,
-			EventNotifs: []models.EventNotification{en},
+			EventNotifs: []models.SmfEventExposureEventNotification{*en},
 		},
 		Uri: uri,
 	}
 }
 
 type NotifCallback func(uri string,
-	notification *models.NsmfEventExposureNotification)
+	notification *EventExposure.CreateIndividualSubcriptionMyNotificationPostRequest)
 
 func (c *SMContext) SendUpPathChgNotification(chgType string, notifCb NotifCallback) {
 	var notifications map[string]*EventExposureNotification
@@ -741,7 +742,10 @@ func (c *SMContext) SendUpPathChgNotification(chgType string, notifCb NotifCallb
 	}
 	for k, n := range notifications {
 		c.Log.Infof("Send UpPathChg Event Exposure Notification [%s][%s] to NEF/AF", chgType, n.NotifId)
-		go notifCb(n.Uri, n.NsmfEventExposureNotification)
+		notification := &EventExposure.CreateIndividualSubcriptionMyNotificationPostRequest{
+			NsmfEventExposureNotification: n.NsmfEventExposureNotification,
+		}
+		go notifCb(n.Uri, notification)
 		delete(notifications, k)
 	}
 }

@@ -3,7 +3,6 @@ package processor
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/free5gc/nas/nasMessage"
@@ -15,7 +14,7 @@ import (
 	"github.com/free5gc/smf/internal/pfcp/message"
 )
 
-func (p *Processor) ToBeAssociatedWithUPF(smfPfcpContext context.Context, upf *smf_context.UPF) {
+func (p *Processor) ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF) {
 	var upfStr string
 	if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
 		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.NodeID.ResolveNodeIdToIp().String())
@@ -24,21 +23,24 @@ func (p *Processor) ToBeAssociatedWithUPF(smfPfcpContext context.Context, upf *s
 	}
 
 	for {
-		// check if SMF PFCP context (parent) was canceled
-		// note: UPF AssociationContexts are children of smfPfcpContext
-		select {
-		case <-smfPfcpContext.Done():
-			logger.MainLog.Infoln("Canceled SMF PFCP context")
-			return
-		default:
-			ensureSetupPfcpAssociation(smfPfcpContext, upf, upfStr)
-			if smf_context.GetSelf().PfcpHeartbeatInterval == 0 {
-				return
-			}
-			keepHeartbeatTo(upf, upfStr)
-			// returns when UPF heartbeat loss is detected or association is canceled
+		ensureSetupPfcpAssociation(ctx, upf, upfStr)
+		if isDone(ctx, upf) {
+			break
+		}
 
-			p.releaseAllResourcesOfUPF(upf, upfStr)
+		if smf_context.GetSelf().PfcpHeartbeatInterval == 0 {
+			return
+		}
+
+		keepHeartbeatTo(ctx, upf, upfStr)
+		// return when UPF heartbeat lost is detected or association is canceled
+		if isDone(ctx, upf) {
+			break
+		}
+
+		p.releaseAllResourcesOfUPF(upf, upfStr)
+		if isDone(ctx, upf) {
+			break
 		}
 	}
 }
@@ -53,30 +55,41 @@ func (p *Processor) ReleaseAllResourcesOfUPF(upf *smf_context.UPF) {
 	p.releaseAllResourcesOfUPF(upf, upfStr)
 }
 
-func ensureSetupPfcpAssociation(parentContext context.Context, upf *smf_context.UPF, upfStr string) {
+func isDone(ctx context.Context, upf *smf_context.UPF) bool {
+	select {
+	case <-ctx.Done():
+		return true
+	case <-upf.Ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
+func ensureSetupPfcpAssociation(ctx context.Context, upf *smf_context.UPF, upfStr string) {
 	alertTime := time.Now()
 	alertInterval := smf_context.GetSelf().AssocFailAlertInterval
 	retryInterval := smf_context.GetSelf().AssocFailRetryInterval
 	for {
+		timer := time.After(retryInterval)
 		err := setupPfcpAssociation(upf, upfStr)
 		if err == nil {
-			// success
-			// assign UPF an AssociationContext, with SMF PFCP Context as parent
-			upf.AssociationContext, upf.CancelAssociation = context.WithCancel(parentContext)
 			return
 		}
-		logger.MainLog.Warnf("Failed to setup an association with UPF[%s], error:%+v", upfStr, err)
+		logger.MainLog.Warnf("Failed to setup an association with UPF%s, error:%+v", upfStr, err)
 		now := time.Now()
 		logger.MainLog.Debugf("now %+v, alertTime %+v", now, alertTime)
 		if now.After(alertTime.Add(alertInterval)) {
-			logger.MainLog.Errorf("ALERT for UPF[%s]", upfStr)
+			logger.MainLog.Errorf("ALERT for UPF%s", upfStr)
 			alertTime = now
 		}
-		logger.MainLog.Debugf("Wait %+v until next retry attempt", retryInterval)
-		timer := time.After(retryInterval)
-		select { // no default case, either case needs to be true to continue
-		case <-parentContext.Done():
-			logger.MainLog.Infoln("Canceled SMF PFCP context")
+		logger.MainLog.Debugf("Wait %+v (or less) until next retry attempt", retryInterval)
+		select {
+		case <-ctx.Done():
+			logger.MainLog.Infof("Canceled association request to UPF%s", upfStr)
+			return
+		case <-upf.Ctx.Done():
+			logger.MainLog.Infof("Canceled association request to this UPF%s only", upfStr)
 			return
 		case <-timer:
 			continue
@@ -104,12 +117,20 @@ func setupPfcpAssociation(upf *smf_context.UPF, upfStr string) error {
 	}
 
 	logger.MainLog.Infof("Received PFCP Association Setup Accepted Response from UPF%s", upfStr)
-	logger.MainLog.Infof("UPF(%s) setup association", upf.NodeID.ResolveNodeIdToIp().String())
+
+	upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+
+	if rsp.UserPlaneIPResourceInformation != nil {
+		upf.UPIPInfo = *rsp.UserPlaneIPResourceInformation
+
+		logger.MainLog.Infof("UPF(%s)[%s] setup association",
+			upf.NodeID.ResolveNodeIdToIp().String(), upf.UPIPInfo.NetworkInstance.NetworkInstance)
+	}
 
 	return nil
 }
 
-func keepHeartbeatTo(upf *smf_context.UPF, upfStr string) {
+func keepHeartbeatTo(ctx context.Context, upf *smf_context.UPF, upfStr string) {
 	for {
 		err := doPfcpHeartbeat(upf, upfStr)
 		if err != nil {
@@ -119,8 +140,11 @@ func keepHeartbeatTo(upf *smf_context.UPF, upfStr string) {
 
 		timer := time.After(smf_context.GetSelf().PfcpHeartbeatInterval)
 		select {
-		case <-upf.AssociationContext.Done():
-			logger.MainLog.Infof("Canceled association to UPF[%s]", upfStr)
+		case <-ctx.Done():
+			logger.MainLog.Infof("Canceled Heartbeat with UPF%s", upfStr)
+			return
+		case <-upf.Ctx.Done():
+			logger.MainLog.Infof("Canceled Heartbeat to this UPF%s only", upfStr)
 			return
 		case <-timer:
 			continue
@@ -129,15 +153,15 @@ func keepHeartbeatTo(upf *smf_context.UPF, upfStr string) {
 }
 
 func doPfcpHeartbeat(upf *smf_context.UPF, upfStr string) error {
-	if err := upf.IsAssociated(); err != nil {
-		return fmt.Errorf("Cancel heartbeat: %+v", err)
+	if upf.UPFStatus != smf_context.AssociatedSetUpSuccess {
+		return fmt.Errorf("invalid status of UPF%s: %d", upfStr, upf.UPFStatus)
 	}
 
 	logger.MainLog.Debugf("Sending PFCP Heartbeat Request to UPF%s", upfStr)
 
 	resMsg, err := message.SendPfcpHeartbeatRequest(upf)
 	if err != nil {
-		upf.CancelAssociation()
+		upf.UPFStatus = smf_context.NotAssociated
 		upf.RecoveryTimeStamp = time.Time{}
 		return fmt.Errorf("SendPfcpHeartbeatRequest error: %w", err)
 	}
@@ -154,7 +178,7 @@ func doPfcpHeartbeat(upf *smf_context.UPF, upfStr string) error {
 		upf.RecoveryTimeStamp = rsp.RecoveryTimeStamp.RecoveryTimeStamp
 	} else if upf.RecoveryTimeStamp.Before(rsp.RecoveryTimeStamp.RecoveryTimeStamp) {
 		// received a newer recovery timestamp
-		upf.CancelAssociation()
+		upf.UPFStatus = smf_context.NotAssociated
 		upf.RecoveryTimeStamp = time.Time{}
 		return fmt.Errorf("received PFCP Heartbeat Response RecoveryTimeStamp has been updated")
 	}
@@ -210,7 +234,7 @@ func (p *Processor) requestAMFToReleasePDUResources(
 				SmInfo: &models.N2SmInformation{
 					PduSessionId: smContext.PDUSessionID,
 					N2InfoContent: &models.N2InfoContent{
-						NgapIeType: models.NgapIeType_PDU_RES_REL_CMD,
+						NgapIeType: models.AmfCommunicationNgapIeType_PDU_RES_REL_CMD,
 						NgapData: &models.RefToBinaryData{
 							ContentId: "N2SmInformation",
 						},
@@ -221,20 +245,19 @@ func (p *Processor) requestAMFToReleasePDUResources(
 		}
 	}
 
-	ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+	ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF)
 	if errToken != nil {
 		return false, false
 	}
 
-	rspData, statusCode, err := p.Consumer().
+	rspData, err := p.Consumer().
 		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
+
 	if err != nil {
 		logger.ConsumerLog.Warnf("N1N2MessageTransfer for RequestAMFToReleasePDUResources failed: %+v", err)
-		return false, true
-	}
-
-	switch *statusCode {
-	case http.StatusOK:
+		// keep SM Context to avoid inconsistency with AMF
+		smContext.SetState(smf_context.InActive)
+	} else {
 		if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 			// the PDU Session Release Command was not transferred to the UE since it is in CM-IDLE state.
 			//   ref. step3b of "4.3.4.2 UE or network requested PDU Session Release for Non-Roaming and
@@ -250,13 +273,6 @@ func (p *Processor) requestAMFToReleasePDUResources(
 			// keep SM Context to avoid inconsistency with AMF
 			smContext.SetState(smf_context.InActive)
 		}
-	case http.StatusNotFound:
-		// it is not needed to notify AMF, but needed to remove SM Context in SMF immediately
-		smContext.SetState(smf_context.InActive)
-		return false, true
-	default:
-		// keep SM Context to avoid inconsistency with AMF
-		smContext.SetState(smf_context.InActive)
 	}
 	return false, false
 }

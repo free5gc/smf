@@ -18,13 +18,13 @@ import (
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/nas/nasType"
 	"github.com/free5gc/openapi"
-	"github.com/free5gc/openapi/Nsmf_PDUSession"
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/pfcp"
 	"github.com/free5gc/smf/internal/pfcp/udp"
 	"github.com/free5gc/smf/internal/sbi/consumer"
 	"github.com/free5gc/smf/internal/sbi/processor"
+	PDUSession_errors "github.com/free5gc/smf/pkg/errors"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/smf/pkg/service"
 	"github.com/free5gc/util/httpwrapper"
@@ -126,12 +126,12 @@ func initConfig() {
 func initDiscUDMStubNRF() {
 	searchResult := &models.SearchResult{
 		ValidityPeriod: 100,
-		NfInstances: []models.NfProfile{
+		NfInstances: []models.NrfNfDiscoveryNfProfile{
 			{
 				NfInstanceId: "smf-unit-testing",
 				NfType:       "UDM",
 				NfStatus:     "REGISTERED",
-				PlmnList: &[]models.PlmnId{
+				PlmnList: []models.PlmnId{
 					{
 						Mcc: "208",
 						Mnc: "93",
@@ -140,11 +140,11 @@ func initDiscUDMStubNRF() {
 				Ipv4Addresses: []string{
 					"127.0.0.3",
 				},
-				NfServices: &[]models.NfService{
+				NfServices: []models.NrfNfDiscoveryNfService{
 					{
 						ServiceInstanceId: "0",
 						ServiceName:       "nudm-sdm",
-						Versions: &[]models.NfServiceVersion{
+						Versions: []models.NfServiceVersion{
 							{
 								ApiVersionInUri: "v1",
 								ApiFullVersion:  "1.0.0",
@@ -152,7 +152,7 @@ func initDiscUDMStubNRF() {
 						},
 						Scheme:          "http",
 						NfServiceStatus: "REGISTERED",
-						IpEndPoints: &[]models.IpEndPoint{
+						IpEndPoints: []models.IpEndPoint{
 							{
 								Ipv4Address: "127.0.0.3",
 								Transport:   "TCP",
@@ -177,12 +177,12 @@ func initDiscUDMStubNRF() {
 func initDiscPCFStubNRF() {
 	searchResult := &models.SearchResult{
 		ValidityPeriod: 100,
-		NfInstances: []models.NfProfile{
+		NfInstances: []models.NrfNfDiscoveryNfProfile{
 			{
 				NfInstanceId: "smf-unit-testing",
 				NfType:       "PCF",
 				NfStatus:     "REGISTERED",
-				PlmnList: &[]models.PlmnId{
+				PlmnList: []models.PlmnId{
 					{
 						Mcc: "208",
 						Mnc: "93",
@@ -197,11 +197,11 @@ func initDiscPCFStubNRF() {
 						"internet",
 					},
 				},
-				NfServices: &[]models.NfService{
+				NfServices: []models.NrfNfDiscoveryNfService{
 					{
 						ServiceInstanceId: "1",
 						ServiceName:       "npcf-smpolicycontrol",
-						Versions: &[]models.NfServiceVersion{
+						Versions: []models.NfServiceVersion{
 							{
 								ApiVersionInUri: "v1",
 								ApiFullVersion:  "1.0.0",
@@ -209,7 +209,7 @@ func initDiscPCFStubNRF() {
 						},
 						Scheme:          "http",
 						NfServiceStatus: "REGISTERED",
-						IpEndPoints: &[]models.IpEndPoint{
+						IpEndPoints: []models.IpEndPoint{
 							{
 								Ipv4Address: "127.0.0.7",
 								Transport:   "TCP",
@@ -313,12 +313,12 @@ func initSMPoliciesPostStubPCF() {
 func initDiscAMFStubNRF() {
 	searchResult := &models.SearchResult{
 		ValidityPeriod: 100,
-		NfInstances: []models.NfProfile{
+		NfInstances: []models.NrfNfDiscoveryNfProfile{
 			{
 				NfInstanceId: "smf-unit-testing",
 				NfType:       "AMF",
 				NfStatus:     "REGISTERED",
-				PlmnList: &[]models.PlmnId{
+				PlmnList: []models.PlmnId{
 					{
 						Mcc: "208",
 						Mnc: "93",
@@ -327,15 +327,15 @@ func initDiscAMFStubNRF() {
 				Ipv4Addresses: []string{
 					"127.0.0.18",
 				},
-				AmfInfo: &models.AmfInfo{
+				AmfInfo: &models.NrfNfManagementAmfInfo{
 					AmfSetId:    "3f8",
 					AmfRegionId: "ca",
 				},
-				NfServices: &[]models.NfService{
+				NfServices: []models.NrfNfDiscoveryNfService{
 					{
 						ServiceInstanceId: "0",
 						ServiceName:       "namf-comm",
-						Versions: &[]models.NfServiceVersion{
+						Versions: []models.NfServiceVersion{
 							{
 								ApiVersionInUri: "v1",
 								ApiFullVersion:  "1.0.0",
@@ -343,7 +343,7 @@ func initDiscAMFStubNRF() {
 						},
 						Scheme:          "http",
 						NfServiceStatus: "REGISTERED",
-						IpEndPoints: &[]models.IpEndPoint{
+						IpEndPoints: []models.IpEndPoint{
 							{
 								Ipv4Address: "127.0.0.18",
 								Transport:   "TCP",
@@ -466,13 +466,13 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 			},
 			paramStr:     "input wrong GSM Message type\n",
 			resultStr:    "PDUSessionSMContextCreate should fail due to wrong GSM type\n",
-			responseBody: &models.PostSmContextsErrorResponse{},
+			responseBody: &models.PostSmContextsResponse400{},
 			expectedHTTPRsp: &httpwrapper.Response{
 				Header: nil,
 				Status: http.StatusForbidden,
-				Body: models.PostSmContextsErrorResponse{
+				Body: models.PostSmContextsResponse400{
 					JsonData: &models.SmContextCreateError{
-						Error: &Nsmf_PDUSession.N1SmError,
+						Error: &PDUSession_errors.N1SmError,
 					},
 				},
 			},
@@ -483,7 +483,7 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 				initGetSMDataStubUDM, initSMPoliciesPostStubPCF, initDiscAMFStubNRF,
 			},
 			request: models.PostSmContextsRequest{
-				JsonData: &models.SmContextCreateData{
+				JsonData: &models.SmfPduSessionSmContextCreateData{
 					Supi:         "imsi-208930000007487",
 					Pei:          "imeisv-1110000000000000",
 					Gpsi:         "msisdn-0900000000",
@@ -495,14 +495,14 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 					},
 					ServingNfId: "c8d0ee65-f466-48aa-a42f-235ec771cb52",
 					Guami: &models.Guami{
-						PlmnId: &models.PlmnId{
+						PlmnId: &models.PlmnIdNid{
 							Mcc: "208",
 							Mnc: "93",
 						},
 						AmfId: "cafe00",
 					},
 					AnType: "3GPP_ACCESS",
-					ServingNetwork: &models.PlmnId{
+					ServingNetwork: &models.PlmnIdNid{
 						Mcc: "208",
 						Mnc: "93",
 					},
@@ -511,13 +511,13 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 			},
 			paramStr:     "try request the IPv6 PDU session\n",
 			resultStr:    "Reject IPv6 PDU Session and respond error\n",
-			responseBody: &models.PostSmContextsErrorResponse{},
+			responseBody: &models.PostSmContextsResponse400{},
 			expectedHTTPRsp: &httpwrapper.Response{
 				Header: nil,
 				Status: http.StatusForbidden,
-				Body: models.PostSmContextsErrorResponse{
+				Body: models.PostSmContextsResponse400{
 					JsonData: &models.SmContextCreateError{
-						Error: &models.ProblemDetails{
+						Error: &models.SmfPduSessionExtProblemDetails{
 							Title:  "Invalid N1 Message",
 							Status: http.StatusForbidden,
 							Detail: "N1 Message Error",
@@ -536,7 +536,7 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 				initGetSMDataStubUDM, initSMPoliciesPostStubPCF, initDiscAMFStubNRF,
 			},
 			request: models.PostSmContextsRequest{
-				JsonData: &models.SmContextCreateData{
+				JsonData: &models.SmfPduSessionSmContextCreateData{
 					Supi:         "imsi-208930000007487",
 					Pei:          "imeisv-1110000000000000",
 					Gpsi:         "msisdn-0900000000",
@@ -548,14 +548,14 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 					},
 					ServingNfId: "c8d0ee65-f466-48aa-a42f-235ec771cb52",
 					Guami: &models.Guami{
-						PlmnId: &models.PlmnId{
+						PlmnId: &models.PlmnIdNid{
 							Mcc: "208",
 							Mnc: "93",
 						},
 						AmfId: "cafe00",
 					},
 					AnType: "3GPP_ACCESS",
-					ServingNetwork: &models.PlmnId{
+					ServingNetwork: &models.PlmnIdNid{
 						Mcc: "208",
 						Mnc: "93",
 					},
@@ -564,12 +564,12 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 			},
 			paramStr:     "input correct PostSmContexts Request\n",
 			resultStr:    "PDUSessionSMContextCreate should pass\n",
-			responseBody: &models.PostSmContextsResponse{},
+			responseBody: &models.PostSmContextsResponse201{},
 			expectedHTTPRsp: &httpwrapper.Response{
 				Header: nil,
 				Status: http.StatusCreated,
-				Body: models.PostSmContextsResponse{
-					JsonData: &models.SmContextCreatedData{
+				Body: models.PostSmContextsResponse201{
+					JsonData: &models.SmfPduSessionSmContextCreatedData{
 						SNssai: &models.Snssai{
 							Sst: 1,
 							Sd:  "112232",

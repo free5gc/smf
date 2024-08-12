@@ -102,7 +102,7 @@ func ActivateUPFSession(
 }
 
 func QueryReport(smContext *smf_context.SMContext, upf *smf_context.UPF,
-	urrs []*smf_context.URR, reportResaon models.TriggerType,
+	urrs []*smf_context.URR, reportResaon models.ChfConvergedChargingTriggerType,
 ) {
 	for _, urr := range urrs {
 		urr.State = smf_context.RULE_QUERY
@@ -166,7 +166,7 @@ func modifyExistingPfcpSession(
 	smContext *smf_context.SMContext,
 	state *PFCPState,
 	resCh chan<- SendPfcpResult,
-	reportResaon models.TriggerType,
+	reportResaon models.ChfConvergedChargingTriggerType,
 ) {
 	logger.PduSessLog.Infoln("Sending PFCP Session Modification Request")
 
@@ -267,12 +267,12 @@ func (p *Processor) sendPDUSessionEstablishmentReject(
 
 	smContext.SetState(smf_context.InActive)
 
-	ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+	ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF)
 	if errToken != nil {
 		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", errToken)
 		return
 	}
-	rspData, _, err := p.Consumer().
+	rspData, err := p.Consumer().
 		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 	if err != nil {
 		logger.ConsumerLog.Warnf("N1N2MessageTransfer for SendPDUSessionEstablishmentReject failed: %+v", err)
@@ -314,7 +314,7 @@ func (p *Processor) sendPDUSessionEstablishmentAccept(
 				SmInfo: &models.N2SmInformation{
 					PduSessionId: smContext.PDUSessionID,
 					N2InfoContent: &models.N2InfoContent{
-						NgapIeType: models.NgapIeType_PDU_RES_SETUP_REQ,
+						NgapIeType: models.AmfCommunicationNgapIeType_PDU_RES_SETUP_REQ,
 						NgapData: &models.RefToBinaryData{
 							ContentId: "N2SmInformation",
 						},
@@ -325,13 +325,13 @@ func (p *Processor) sendPDUSessionEstablishmentAccept(
 		},
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF)
 	if err != nil {
 		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", err)
 		return
 	}
 
-	rspData, _, err := p.Consumer().
+	rspData, err := p.Consumer().
 		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 	if err != nil {
 		logger.ConsumerLog.Warnf("N1N2MessageTransfer for sendPDUSessionEstablishmentAccept failed: %+v", err)

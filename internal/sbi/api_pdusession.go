@@ -73,7 +73,7 @@ func (s *Server) UpdatePduSession(c *gin.Context) {
 func (s *Server) HTTPReleaseSmContext(c *gin.Context) {
 	logger.PduSessLog.Info("Receive Release SM Context Request")
 	var request models.ReleaseSmContextRequest
-	request.JsonData = new(models.SmContextReleaseData)
+	request.JsonData = new(models.SmfPduSessionSmContextReleaseData)
 
 	contentType := strings.Split(c.GetHeader("Content-Type"), ";")
 	var err error
@@ -101,7 +101,7 @@ func (s *Server) RetrieveSmContext(c *gin.Context) {
 func (s *Server) HTTPUpdateSmContext(c *gin.Context) {
 	logger.PduSessLog.Info("Receive Update SM Context Request")
 	var request models.UpdateSmContextRequest
-	request.JsonData = new(models.SmContextUpdateData)
+	request.JsonData = new(models.SmfPduSessionSmContextUpdateData)
 
 	contentType := strings.Split(c.GetHeader("Content-Type"), ";")
 	var err error
@@ -130,7 +130,7 @@ func (s *Server) HTTPPostSmContexts(c *gin.Context) {
 	logger.PduSessLog.Info("Receive Create SM Context Request")
 	var request models.PostSmContextsRequest
 
-	request.JsonData = new(models.SmContextCreateData)
+	request.JsonData = new(models.SmfPduSessionSmContextCreateData)
 
 	contentType := strings.Split(c.GetHeader("Content-Type"), ";")
 	var err error

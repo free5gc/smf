@@ -6,11 +6,11 @@ import (
 	"github.com/free5gc/openapi/models"
 )
 
-func SearchNFServiceUri(nfProfile models.NfProfile, serviceName models.ServiceName,
+func SearchNFServiceUri(nfProfile *models.NrfNfDiscoveryNfProfile, serviceName models.ServiceName,
 	nfServiceStatus models.NfServiceStatus,
 ) (nfUri string) {
 	if nfProfile.NfServices != nil {
-		for _, service := range *nfProfile.NfServices {
+		for _, service := range nfProfile.NfServices {
 			if service.ServiceName == serviceName && service.NfServiceStatus == nfServiceStatus {
 				if nfProfile.Fqdn != "" {
 					nfUri = nfProfile.Fqdn
@@ -19,7 +19,7 @@ func SearchNFServiceUri(nfProfile models.NfProfile, serviceName models.ServiceNa
 				} else if service.ApiPrefix != "" {
 					nfUri = service.ApiPrefix
 				} else if service.IpEndPoints != nil {
-					point := (*service.IpEndPoints)[0]
+					point := (service.IpEndPoints)[0]
 					if point.Ipv4Address != "" {
 						nfUri = getSbiUri(service.Scheme, point.Ipv4Address, point.Port)
 					} else if len(nfProfile.Ipv4Addresses) != 0 {

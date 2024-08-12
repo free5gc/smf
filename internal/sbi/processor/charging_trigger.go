@@ -23,9 +23,9 @@ func (p *Processor) CreateChargingSession(smContext *smf_context.SMContext) {
 }
 
 func (p *Processor) UpdateChargingSession(
-	smContext *smf_context.SMContext, urrList []*smf_context.URR, trigger models.Trigger,
+	smContext *smf_context.SMContext, urrList []*smf_context.URR, trigger models.ChfConvergedChargingTrigger,
 ) {
-	var multipleUnitUsage []models.MultipleUnitUsage
+	var multipleUnitUsage []models.ChfConvergedChargingMultipleUnitUsage
 
 	for _, urr := range urrList {
 		if chgInfo := smContext.ChargingInfo[urr.URRID]; chgInfo != nil {
@@ -34,16 +34,16 @@ func (p *Processor) UpdateChargingSession(
 				urr.URRID, rg, chgInfo.ChargingMethod)
 			triggerTime := time.Now()
 
-			uu := models.UsedUnitContainer{
+			uu := models.ChfConvergedChargingUsedUnitContainer{
 				QuotaManagementIndicator: chgInfo.ChargingMethod,
-				Triggers:                 []models.Trigger{trigger},
+				Triggers:                 []models.ChfConvergedChargingTrigger{trigger},
 				TriggerTimestamp:         &triggerTime,
 			}
 
-			muu := models.MultipleUnitUsage{
+			muu := models.ChfConvergedChargingMultipleUnitUsage{
 				RatingGroup:       rg,
 				UPFID:             chgInfo.UpfId,
-				UsedUnitContainer: []models.UsedUnitContainer{uu},
+				UsedUnitContainer: []models.ChfConvergedChargingUsedUnitContainer{uu},
 			}
 
 			multipleUnitUsage = append(multipleUnitUsage, muu)
@@ -148,16 +148,18 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 	}
 }
 
-func buildMultiUnitUsageFromUsageReport(smContext *smf_context.SMContext) []models.MultipleUnitUsage {
+func buildMultiUnitUsageFromUsageReport(
+	smContext *smf_context.SMContext,
+) []models.ChfConvergedChargingMultipleUnitUsage {
 	logger.ChargingLog.Infof("build MultiUnitUsageFromUsageReport")
 
-	var ratingGroupUnitUsagesMap map[int32]models.MultipleUnitUsage
-	var multipleUnitUsage []models.MultipleUnitUsage
+	var ratingGroupUnitUsagesMap map[int32]models.ChfConvergedChargingMultipleUnitUsage
+	var multipleUnitUsage []models.ChfConvergedChargingMultipleUnitUsage
 
-	ratingGroupUnitUsagesMap = make(map[int32]models.MultipleUnitUsage)
+	ratingGroupUnitUsagesMap = make(map[int32]models.ChfConvergedChargingMultipleUnitUsage)
 	for _, ur := range smContext.UrrReports {
 		if ur.ReportTpye != "" {
-			var triggers []models.Trigger
+			var triggers []models.ChfConvergedChargingTrigger
 
 			chgInfo := smContext.ChargingInfo[ur.UrrId]
 			if chgInfo == nil {
@@ -165,15 +167,16 @@ func buildMultiUnitUsageFromUsageReport(smContext *smf_context.SMContext) []mode
 				continue
 			}
 
-			if chgInfo.ChargingLevel == smf_context.FlowCharging && ur.ReportTpye == models.TriggerType_VOLUME_LIMIT {
-				triggers = []models.Trigger{
+			if chgInfo.ChargingLevel == smf_context.FlowCharging &&
+				ur.ReportTpye == models.ChfConvergedChargingTriggerType_VOLUME_LIMIT {
+				triggers = []models.ChfConvergedChargingTrigger{
 					{
 						TriggerType:     ur.ReportTpye,
 						TriggerCategory: models.TriggerCategory_DEFERRED_REPORT,
 					},
 				}
 			} else {
-				triggers = []models.Trigger{
+				triggers = []models.ChfConvergedChargingTrigger{
 					{
 						TriggerType:     ur.ReportTpye,
 						TriggerCategory: models.TriggerCategory_IMMEDIATE_REPORT,
@@ -186,7 +189,7 @@ func buildMultiUnitUsageFromUsageReport(smContext *smf_context.SMContext) []mode
 				ur.UrrId, rg, chgInfo.ChargingMethod)
 			triggerTime := time.Now()
 
-			uu := models.UsedUnitContainer{
+			uu := models.ChfConvergedChargingUsedUnitContainer{
 				QuotaManagementIndicator: chgInfo.ChargingMethod,
 				Triggers:                 triggers,
 				TriggerTimestamp:         &triggerTime,
@@ -207,10 +210,10 @@ func buildMultiUnitUsageFromUsageReport(smContext *smf_context.SMContext) []mode
 					}
 				}
 
-				ratingGroupUnitUsagesMap[rg] = models.MultipleUnitUsage{
+				ratingGroupUnitUsagesMap[rg] = models.ChfConvergedChargingMultipleUnitUsage{
 					RatingGroup:       rg,
 					UPFID:             ur.UpfId,
-					UsedUnitContainer: []models.UsedUnitContainer{uu},
+					UsedUnitContainer: []models.ChfConvergedChargingUsedUnitContainer{uu},
 					RequestedUnit:     requestUnit,
 				}
 			} else {
@@ -259,7 +262,7 @@ func (p *Processor) updateGrantedQuota(
 
 			for _, t := range ui.Triggers {
 				switch t.TriggerType {
-				case models.TriggerType_VOLUME_LIMIT:
+				case models.ChfConvergedChargingTriggerType_VOLUME_LIMIT:
 					// According to 32.255, the for the trigger "Expirt of datavolume limit" have two reporting level
 					// In the Pdu sesion level, the report should be "Immediate report",
 					// that is this report should send to CHF immediately
@@ -287,7 +290,7 @@ func (p *Processor) updateGrantedQuota(
 									urrList := []*smf_context.URR{urr}
 									upf := smf_context.GetUpfById(ui.UPFID)
 									if upf != nil {
-										QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
+										QueryReport(smContext, upf, urrList, models.ChfConvergedChargingTriggerType_VOLUME_LIMIT)
 										p.ReportUsageAndUpdateQuota(smContext)
 									}
 								},
@@ -313,7 +316,7 @@ func (p *Processor) updateGrantedQuota(
 									urrList := []*smf_context.URR{urr}
 									upf := smf_context.GetUpfById(ui.UPFID)
 									if upf != nil {
-										QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
+										QueryReport(smContext, upf, urrList, models.ChfConvergedChargingTriggerType_VOLUME_LIMIT)
 									}
 								},
 								func() {
@@ -323,7 +326,7 @@ func (p *Processor) updateGrantedQuota(
 								})
 						}
 					}
-				case models.TriggerType_MAX_NUMBER_OF_CHANGES_IN_CHARGING_CONDITIONS:
+				case models.ChfConvergedChargingTriggerType_MAX_NUMBER_OF_CHANGES_IN_CHARGING_CONDITIONS:
 					switch chgInfo.ChargingLevel {
 					case smf_context.PduSessionCharging:
 						chgInfo.EventLimitExpiryTimer = smf_context.NewTimer(time.Duration(t.EventLimit)*time.Second, 1,
@@ -333,7 +336,7 @@ func (p *Processor) updateGrantedQuota(
 								urrList := []*smf_context.URR{urr}
 								upf := smf_context.GetUpfById(ui.UPFID)
 								if upf != nil {
-									QueryReport(smContext, upf, urrList, models.TriggerType_VOLUME_LIMIT)
+									QueryReport(smContext, upf, urrList, models.ChfConvergedChargingTriggerType_VOLUME_LIMIT)
 									p.ReportUsageAndUpdateQuota(smContext)
 								}
 							},
@@ -345,19 +348,19 @@ func (p *Processor) updateGrantedQuota(
 						smContext.Log.Tracef("MAX_NUMBER_OF_CHANGES_IN_CHARGING_CONDITIONS" +
 							"should only be applied to PDU session level charging")
 					}
-				case models.TriggerType_QUOTA_THRESHOLD:
+				case models.ChfConvergedChargingTriggerType_QUOTA_THRESHOLD:
 					if ui.VolumeQuotaThreshold != 0 {
 						trigger.Volth = true
 						urr.VolumeThreshold = uint64(ui.VolumeQuotaThreshold)
 					}
 				// The difference between the quota validity time and the volume limit is
 				// that the validity time is counted by the UPF, the volume limit is counted by the SMF
-				case models.TriggerType_VALIDITY_TIME:
+				case models.ChfConvergedChargingTriggerType_VALIDITY_TIME:
 					if ui.ValidityTime != 0 {
 						urr.ReportingTrigger.Quvti = true
 						urr.QuotaValidityTime = time.Now().Add(time.Second * time.Duration(ui.ValidityTime))
 					}
-				case models.TriggerType_QUOTA_EXHAUSTED:
+				case models.ChfConvergedChargingTriggerType_QUOTA_EXHAUSTED:
 					if chgInfo.ChargingMethod == models.QuotaManagementIndicator_ONLINE_CHARGING {
 						if ui.GrantedUnit != nil {
 							trigger.Volqu = true
