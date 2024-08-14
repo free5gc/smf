@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/h2non/gock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"gopkg.in/h2non/gock.v1"
 
 	"github.com/free5gc/nas"
 	"github.com/free5gc/nas/nasMessage"
@@ -274,7 +274,9 @@ func initGetSMDataStubUDM() {
 		Get("/sm-data").
 		MatchParam("dnn", "internet").
 		Reply(http.StatusOK).
-		JSON(SMSubscriptionData)
+		JSON(models.SmSubsData{
+			IndividualSmSubsData: SMSubscriptionData,
+		})
 }
 
 func initSMPoliciesPostStubPCF() {
@@ -467,11 +469,11 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 			},
 			paramStr:     "input wrong GSM Message type\n",
 			resultStr:    "PDUSessionSMContextCreate should fail due to wrong GSM type\n",
-			responseBody: &models.PostSmContextsResponse400{},
+			responseBody: &models.PostSmContextsError{},
 			expectedHTTPRsp: &httpwrapper.Response{
 				Header: nil,
 				Status: http.StatusForbidden,
-				Body: models.PostSmContextsResponse400{
+				Body: models.PostSmContextsError{
 					JsonData: &models.SmContextCreateError{
 						Error: &PDUSession_errors.N1SmError,
 					},
@@ -512,11 +514,11 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 			},
 			paramStr:     "try request the IPv6 PDU session\n",
 			resultStr:    "Reject IPv6 PDU Session and respond error\n",
-			responseBody: &models.PostSmContextsResponse400{},
+			responseBody: &models.PostSmContextsError{},
 			expectedHTTPRsp: &httpwrapper.Response{
 				Header: nil,
 				Status: http.StatusForbidden,
-				Body: models.PostSmContextsResponse400{
+				Body: models.PostSmContextsError{
 					JsonData: &models.SmContextCreateError{
 						Error: &models.SmfPduSessionExtProblemDetails{
 							Title:  "Invalid N1 Message",
@@ -581,13 +583,6 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 		},
 	}
 
-	// init all stubs for all TCs first to prevent gock race condition
-	for _, tc := range testCases {
-		for _, initFunc := range tc.initFuncs {
-			initFunc()
-		}
-	}
-
 	mockSmf := service.NewMockSmfAppInterface(gomock.NewController(t))
 	consumer, err := consumer.NewConsumer(mockSmf)
 	if err != nil {
@@ -605,6 +600,9 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 	mockSmf.EXPECT().Consumer().Return(consumer).AnyTimes()
 
 	for _, tc := range testCases {
+		for _, initFunc := range tc.initFuncs {
+			initFunc()
+		}
 		t.Run(tc.paramStr, func(t *testing.T) {
 			httpRecorder := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(httpRecorder)

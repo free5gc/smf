@@ -36,12 +36,12 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	if err := m.GsmMessageDecode(&request.BinaryDataN1SmMessage); err != nil ||
 		m.GsmHeader.GetMessageType() != nas.MsgTypePDUSessionEstablishmentRequest {
 		logger.PduSessLog.Warnln("GsmMessageDecode Error: ", err)
-		postSmContextsError := models.PostSmContextsResponse400{
+		postSmContextsError := models.PostSmContextsError{
 			JsonData: &models.SmContextCreateError{
 				Error: &PDUSession_errors.N1SmError,
 			},
 		}
-		c.Render(http.StatusForbidden, openapi.MultipartRelatedRender{Data: postSmContextsError})
+		c.JSON(http.StatusForbidden, postSmContextsError)
 		return
 	}
 
@@ -236,7 +236,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 
 	response.JsonData = smContext.BuildCreatedData()
 	c.Header("Location", smContext.Ref)
-	c.Render(http.StatusCreated, openapi.MultipartRelatedRender{Data: response})
+	c.JSON(http.StatusCreated, response)
 }
 
 func (p *Processor) HandlePDUSessionSMContextUpdate(
@@ -1033,27 +1033,21 @@ func (p *Processor) makeEstRejectResAndReleaseSMContext(
 	nasErrorCause uint8,
 	sbiError *models.SmfPduSessionExtProblemDetails,
 ) {
+	postSmContextsError := models.PostSmContextsError{
+		JsonData: &models.SmContextCreateError{
+			Error:   sbiError,
+			N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
+		},
+	}
 	if buf, err := smf_context.
 		BuildGSMPDUSessionEstablishmentReject(
 			smContext,
 			nasErrorCause); err != nil {
-		postSmContextsError := models.PostSmContextsResponse400{
-			JsonData: &models.SmContextCreateError{
-				Error:   sbiError,
-				N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
-			},
-		}
-		p.nasErrorResponse(c, int(sbiError.Status), postSmContextsError)
+		logger.PduSessLog.Errorf("Build GSM PDUSessionEstablishmentReject failed: %+v", err)
 	} else {
-		postSmContextsError := models.PostSmContextsResponse400{
-			JsonData: &models.SmContextCreateError{
-				Error:   sbiError,
-				N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
-			},
-			BinaryDataN1SmMessage: buf,
-		}
-		p.nasErrorResponse(c, int(sbiError.Status), postSmContextsError)
+		postSmContextsError.BinaryDataN1SmMessage = buf
 	}
+	p.nasErrorResponse(c, int(sbiError.Status), postSmContextsError)
 	p.RemoveSMContextFromAllNF(smContext, false)
 }
 
@@ -1155,15 +1149,25 @@ func (p *Processor) sendGSMPDUSessionModificationCommand(smContext *smf_context.
 func (p *Processor) nasErrorResponse(
 	c *gin.Context,
 	status int,
-	errBody models.PostSmContextsResponse400,
+	errBody models.PostSmContextsError,
 ) {
 	switch status {
 	case http.StatusForbidden,
-		// http.StatusNotFound,
+		http.StatusNotFound,
 		http.StatusInternalServerError,
 		http.StatusGatewayTimeout:
-		c.Render(status, openapi.MultipartRelatedRender{Data: errBody})
-	default:
-		c.JSON(status, errBody)
+		logger.SBILog.Warnf("NAS Error Response: %v", errBody)
+		if errBody.BinaryDataN1SmMessage != nil ||
+			errBody.BinaryDataN2SmMessage != nil {
+			rspBody, contentType, err := openapi.MultipartSerialize(errBody)
+			if err != nil {
+				logger.SBILog.Infof("MultipartSerialize error: %v", err)
+				c.JSON(http.StatusInternalServerError, openapi.ProblemDetailsSystemFailure(err.Error()))
+			} else {
+				c.Data(status, contentType, rspBody)
+			}
+			return
+		}
 	}
+	c.JSON(status, errBody)
 }
