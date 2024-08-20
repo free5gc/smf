@@ -525,28 +525,30 @@ func TestGetUEIPPool(t *testing.T) {
 	Convey("Given UE IP address to allocate and UPFSelectionParams, should return error if pool is exhausted or allocate UE IP", t, func() {
 		for _, testcase := range testCases {
 			Convey(testcase.name, func() {
-				Convey(testcase.param, func() {
-					for times := 1; times <= testcase.allocateTimes; times++ {
-						upf, allocatedIP, useStatic, err := userplaneInformation.SelectUPFAndAllocUEIP(testcase.param, "imsi-208930000000001")
-						So(useStatic, ShouldEqual, testcase.useStaticIP)
-						// TODO: assert selected UPF
-						So(allocatedIP, ShouldEqual, testcase.expectedIP)
-						So(err, ShouldEqual, testcase.expectedError)
-
-						// case 0 will not allocate IP
-						// case 2 and 4 which allocateTimes is 2 are used to test scenario which pool IP is exhausted
-						if allocatedIP != nil {
-							var expectedIPPool []net.IP
-							for i := 0; i <= 255; i++ {
-								for j := 1; j <= 255; j++ {
-									expectedIPPool = append(expectedIPPool, net.ParseIP(fmt.Sprintf("10.%d.%d.%d", testcase.subnet, i, j)).To4())
-								}
-							}
-							So(allocatedIP, ShouldContain, expectedIPPool)
-							userplaneInformation.ReleaseUEIP(upf, allocatedIP, testcase.useStaticIP)
-						}
+				for times := 1; times <= testcase.allocateTimes; times++ {
+					upf, allocatedIP, useStatic, err := userplaneInformation.SelectUPFAndAllocUEIP(testcase.param, "imsi-208930000000001")
+					So(useStatic, ShouldEqual, testcase.useStaticIP)
+					// TODO: assert selected UPF
+					So(allocatedIP, ShouldEqual, testcase.expectedIP)
+					if err != nil {
+						So(err.Error(), ShouldEqual, testcase.expectedError.Error())
+					} else {
+						So(testcase.expectedError, ShouldBeNil)
 					}
-				})
+
+					// case 0 will not allocate IP
+					// case 2 and 4 which allocateTimes is 2 are used to test scenario which pool IP is exhausted
+					if allocatedIP != nil {
+						var expectedIPPool []net.IP
+						for i := 0; i <= 255; i++ {
+							for j := 1; j <= 255; j++ {
+								expectedIPPool = append(expectedIPPool, net.ParseIP(fmt.Sprintf("10.%d.%d.%d", testcase.subnet, i, j)).To4())
+							}
+						}
+						So(allocatedIP, ShouldContain, expectedIPPool)
+						userplaneInformation.ReleaseUEIP(upf, allocatedIP, testcase.useStaticIP)
+					}
+				}
 			})
 		}
 	})
