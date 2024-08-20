@@ -436,13 +436,26 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				logger.PduSessLog.Errorln("new QER failed")
 				return
 			} else {
+				var bitRateKbpsULMBR uint64
+				var bitRateKbpsDLMBR uint64
+				var bitRateConvertErr error
+				bitRateKbpsULMBR, bitRateConvertErr = util.BitRateTokbps(sessionRule.AuthSessAmbr.Uplink)
+				if bitRateConvertErr != nil {
+					logger.PduSessLog.Errorln("Cannot get the unit of ULMBR, please check the settings in web console")
+					return
+				}
+				bitRateKbpsDLMBR, bitRateConvertErr = util.BitRateTokbps(sessionRule.AuthSessAmbr.Downlink)
+				if bitRateConvertErr != nil {
+					logger.PduSessLog.Errorln("Cannot get the unit of DLMBR, please check the settings in web console")
+					return
+				}
 				newQER.GateStatus = &pfcpType.GateStatus{
 					ULGate: pfcpType.GateOpen,
 					DLGate: pfcpType.GateOpen,
 				}
 				newQER.MBR = &pfcpType.MBR{
-					ULMBR: util.BitRateTokbps(sessionRule.AuthSessAmbr.Uplink),
-					DLMBR: util.BitRateTokbps(sessionRule.AuthSessAmbr.Downlink),
+					ULMBR: bitRateKbpsULMBR,
+					DLMBR: bitRateKbpsDLMBR,
 				}
 				ambrQER = newQER
 			}
@@ -844,19 +857,62 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 					DLGate: pfcpType.GateOpen,
 				}
 				if isGBRFlow(qos) {
+					var bitRateKbpsQoSGBRUL uint64
+					var bitRateKbpsQoSGBRDL uint64
+					var bitRateKbpsQoSMBRUL uint64
+					var bitRateKbpsQoSMBRDL uint64
+					var bitRateConvertErr error
+					bitRateKbpsQoSGBRUL, bitRateConvertErr = util.BitRateTokbps(qos.GbrUl)
+					if bitRateConvertErr != nil {
+						logger.PduSessLog.Panicln("Cannot get the unit of GBRUL, please check the settings in web console")
+						return
+					}
+
+					bitRateKbpsQoSGBRDL, bitRateConvertErr = util.BitRateTokbps(qos.GbrDl)
+					if bitRateConvertErr != nil {
+						logger.PduSessLog.Panicln("Cannot get the unit of GBRDL, please check the settings in web console")
+						return
+					}
+
+					bitRateKbpsQoSMBRUL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrUl)
+					if bitRateConvertErr != nil {
+						logger.PduSessLog.Panicln("Cannot get the unit of MBRUL, please check the settings in web console")
+						return
+					}
+
+					bitRateKbpsQoSMBRDL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrDl)
+					if bitRateConvertErr != nil {
+						logger.PduSessLog.Panicln("Cannot get the unit of MBRDL, please check the settings in web console")
+						return
+					}
+
 					newQER.GBR = &pfcpType.GBR{
-						ULGBR: util.BitRateTokbps(qos.GbrUl),
-						DLGBR: util.BitRateTokbps(qos.GbrDl),
+						ULGBR: bitRateKbpsQoSGBRUL,
+						DLGBR: bitRateKbpsQoSGBRDL,
 					}
 					newQER.MBR = &pfcpType.MBR{
-						ULMBR: util.BitRateTokbps(qos.MaxbrUl),
-						DLMBR: util.BitRateTokbps(qos.MaxbrDl),
+						ULMBR: bitRateKbpsQoSMBRUL,
+						DLMBR: bitRateKbpsQoSMBRDL,
 					}
 				} else {
+					var bitRateKbpsSessionAmbrMBRUL uint64
+					var bitRateKbpsSessionAmbrMBRDL uint64
+					var bitRateConvertErr error
+					bitRateKbpsSessionAmbrMBRUL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrUl)
+					if bitRateConvertErr != nil {
+						logger.PduSessLog.Error("Cannot get the unit of MBRUL, please check the settings in web console")
+						return
+					}
+					bitRateKbpsSessionAmbrMBRDL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrDl)
+
+					if bitRateConvertErr != nil {
+						logger.PduSessLog.Error("Cannot get the unit of MBRDL, please check the settings in web console")
+						return
+					}
 					// Non-GBR flow should follows session-AMBR
 					newQER.MBR = &pfcpType.MBR{
-						ULMBR: util.BitRateTokbps(smContext.DnnConfiguration.SessionAmbr.Uplink),
-						DLMBR: util.BitRateTokbps(smContext.DnnConfiguration.SessionAmbr.Downlink),
+						ULMBR: bitRateKbpsSessionAmbrMBRUL,
+						DLMBR: bitRateKbpsSessionAmbrMBRDL,
 					}
 				}
 				qer = newQER

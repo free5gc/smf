@@ -132,7 +132,7 @@ func (c *Configuration) validate() (bool, error) {
 	}
 
 	for _, snssaiInfo := range c.SNssaiInfo {
-		if result, err := snssaiInfo.validate(); err != nil {
+		if result, err := snssaiInfo.Validate(); err != nil {
 			return result, err
 		}
 	}
@@ -166,17 +166,19 @@ type SnssaiInfoItem struct {
 	DnnInfos []*SnssaiDnnInfoItem `yaml:"dnnInfos" valid:"required"`
 }
 
-func (s *SnssaiInfoItem) validate() (bool, error) {
+func (s *SnssaiInfoItem) Validate() (bool, error) {
 	if snssai := s.SNssai; snssai != nil {
 		if result := (snssai.Sst >= 0 && snssai.Sst <= 255); !result {
 			err := errors.New("Invalid sNssai.Sst: " + strconv.Itoa(int(snssai.Sst)) + ", should be in range 0~255.")
 			return false, err
 		}
 
-		if result := govalidator.StringMatches(snssai.Sd, "^[0-9A-Fa-f]{6}$"); !result {
-			err := errors.New("Invalid sNssai.Sd: " + snssai.Sd +
-				", should be 3 bytes hex string and in range 000000~FFFFFF.")
-			return false, err
+		if snssai.Sd != "" {
+			if result := govalidator.StringMatches(snssai.Sd, "^[0-9A-Fa-f]{6}$"); !result {
+				err := errors.New("Invalid sNssai.Sd: " + snssai.Sd +
+					", should be 3 bytes hex string and in range 000000~FFFFFF.")
+				return false, err
+			}
 		}
 	}
 
@@ -487,7 +489,7 @@ func (u *UPNode) validate() (bool, error) {
 	})
 
 	for _, snssaiInfo := range u.SNssaiInfos {
-		if result, err := snssaiInfo.validate(); err != nil {
+		if result, err := snssaiInfo.Validate(); err != nil {
 			return result, err
 		}
 	}
@@ -545,17 +547,19 @@ type SnssaiUpfInfoItem struct {
 	DnnUpfInfoList []*DnnUpfInfoItem `json:"dnnUpfInfoList" yaml:"dnnUpfInfoList" valid:"required"`
 }
 
-func (s *SnssaiUpfInfoItem) validate() (bool, error) {
+func (s *SnssaiUpfInfoItem) Validate() (bool, error) {
 	if s.SNssai != nil {
 		if result := (s.SNssai.Sst >= 0 && s.SNssai.Sst <= 255); !result {
 			err := errors.New("Invalid sNssai.Sst: " + strconv.Itoa(int(s.SNssai.Sst)) + ", should be in range 0~255.")
 			return false, err
 		}
 
-		if result := govalidator.StringMatches(s.SNssai.Sd, "^[0-9A-Fa-f]{6}$"); !result {
-			err := errors.New("Invalid sNssai.Sd: " + s.SNssai.Sd +
-				", should be 3 bytes hex string and in range 000000~FFFFFF.")
-			return false, err
+		if s.SNssai.Sd != "" {
+			if result := govalidator.StringMatches(s.SNssai.Sd, "^[0-9A-Fa-f]{6}$"); !result {
+				err := errors.New("Invalid sNssai.Sd: " + s.SNssai.Sd +
+					", should be 3 bytes hex string and in range 000000~FFFFFF.")
+				return false, err
+			}
 		}
 	}
 
