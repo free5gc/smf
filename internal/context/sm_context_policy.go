@@ -12,14 +12,34 @@ import (
 // SM Policy related operation
 
 // SelectedSessionRule - return the SMF selected session rule for this SM Context
-func (c *SMContext) SelectedSessionRule() *SessionRule {
-	if c.SelectedSessionRuleID == "" {
+func (smContext *SMContext) SelectedSessionRule() *SessionRule {
+	if smContext.SelectedSessionRuleID == "" {
 		return nil
 	}
-	return c.SessionRules[c.SelectedSessionRuleID]
+	return smContext.SessionRules[smContext.SelectedSessionRuleID]
 }
 
-func (c *SMContext) ApplySessionRules(
+func AuthDefQosToString(a *models.AuthorizedDefaultQos) string {
+	str := "AuthorizedDefaultQos: {"
+	str += fmt.Sprintf("Var5qi: %d ", a.Var5qi)
+	str += fmt.Sprintf("Arp: %+v ", a.Arp)
+	str += fmt.Sprintf("PriorityLevel: %d ", a.PriorityLevel)
+	str += "} "
+	return str
+}
+
+func SessRuleToString(rule *models.SessionRule, prefix string) string {
+	str := prefix + "SessionRule {"
+	str += fmt.Sprintf("AuthSessAmbr: { %+v } ", rule.AuthSessAmbr)
+	str += fmt.Sprint(AuthDefQosToString(rule.AuthDefQos))
+	str += fmt.Sprintf("SessRuleId: %s ", rule.SessRuleId)
+	str += fmt.Sprintf("RefUmData: %s ", rule.RefUmData)
+	str += fmt.Sprintf("RefCondData: %s ", rule.RefCondData)
+	str += prefix + "}"
+	return str
+}
+
+func (smContext *SMContext) ApplySessionRules(
 	decision *models.SmPolicyDecision,
 ) error {
 	if decision == nil {
@@ -28,28 +48,28 @@ func (c *SMContext) ApplySessionRules(
 
 	for id, r := range decision.SessRules {
 		if r == nil {
-			c.Log.Debugf("Delete SessionRule[%s]", id)
-			delete(c.SessionRules, id)
+			smContext.Log.Debugf("Delete SessionRule[%s]", id)
+			delete(smContext.SessionRules, id)
 		} else {
-			if origRule, ok := c.SessionRules[id]; ok {
-				c.Log.Debugf("Modify SessionRule[%s]: %+v", id, r)
+			if origRule, ok := smContext.SessionRules[id]; ok {
+				smContext.Log.Debugf("Modify SessionRule[%s]: %+v", id, r)
 				origRule.SessionRule = r
 			} else {
-				c.Log.Debugf("Install SessionRule[%s]: %+v", id, r)
-				c.SessionRules[id] = NewSessionRule(r)
+				smContext.Log.Debugf("Install SessionRule[%s]: %s", id, SessRuleToString(r, ""))
+				smContext.SessionRules[id] = NewSessionRule(r)
 			}
 		}
 	}
 
-	if len(c.SessionRules) == 0 {
+	if len(smContext.SessionRules) == 0 {
 		return fmt.Errorf("ApplySessionRules: no session rule")
 	}
 
-	if c.SelectedSessionRuleID == "" ||
-		c.SessionRules[c.SelectedSessionRuleID] == nil {
+	if smContext.SelectedSessionRuleID == "" ||
+		smContext.SessionRules[smContext.SelectedSessionRuleID] == nil {
 		// No active session rule, randomly choose a session rule to activate
-		for id := range c.SessionRules {
-			c.SelectedSessionRuleID = id
+		for id := range smContext.SessionRules {
+			smContext.SelectedSessionRuleID = id
 			break
 		}
 	}
@@ -58,19 +78,19 @@ func (c *SMContext) ApplySessionRules(
 	return nil
 }
 
-func (c *SMContext) AddQosFlow(qfi uint8, qos *models.QosData) {
+func (smContext *SMContext) AddQosFlow(qfi uint8, qos *models.QosData) {
 	qosFlow := NewQoSFlow(qfi, qos)
 	if qosFlow != nil {
-		c.AdditonalQosFlows[qfi] = qosFlow
+		smContext.AdditonalQosFlows[qfi] = qosFlow
 	}
 }
 
-func (c *SMContext) RemoveQosFlow(qfi uint8) {
-	delete(c.AdditonalQosFlows, qfi)
+func (smContext *SMContext) RemoveQosFlow(qfi uint8) {
+	delete(smContext.AdditonalQosFlows, qfi)
 }
 
 // For urr that created for Pdu session level charging, it shall be applied to all data path
-func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) {
+func (smContext *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) {
 	var pduLevelChargingUrrs []*URR
 
 	// First, select charging URRs from pcc rule, which charging level is PDU Session level
@@ -79,7 +99,7 @@ func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) 
 			continue
 		} else if chargingLevel == PduSessionCharging {
 			pduPcc := pccRules[id]
-			pduLevelChargingUrrs = pduPcc.Datapath.GetChargingUrr(c)
+			pduLevelChargingUrrs = pduPcc.Datapath.GetChargingUrr(smContext)
 			break
 		}
 	}
@@ -102,7 +122,7 @@ func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) 
 		}
 	}
 
-	defaultPath := c.Tunnel.DataPathPool.GetDefaultPath()
+	defaultPath := smContext.Tunnel.DataPathPool.GetDefaultPath()
 	if defaultPath == nil {
 		logger.CtxLog.Errorln("No default data path")
 		return
@@ -120,7 +140,7 @@ func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) 
 	}
 }
 
-func (c *SMContext) ApplyPccRules(
+func (smContext *SMContext) ApplyPccRules(
 	decision *models.SmPolicyDecision,
 ) error {
 	if decision == nil {
@@ -135,46 +155,46 @@ func (c *SMContext) ApplyPccRules(
 	for id, qos := range decision.QosDecs {
 		if qos == nil {
 			// If QoS Data is nil should remove QFI
-			c.RemoveQFI(id)
+			smContext.RemoveQFI(id)
 		}
 	}
 
 	// Handle PccRules in decision first
 	for id, pccModel := range decision.PccRules {
 		var srcTcData, tgtTcData *TrafficControlData
-		srcPcc := c.PCCRules[id]
+		srcPcc := smContext.PCCRules[id]
 		if pccModel == nil {
-			c.Log.Infof("Remove PCCRule[%s]", id)
+			smContext.Log.Infof("Remove PCCRule[%s]", id)
 			if srcPcc == nil {
-				c.Log.Warnf("PCCRule[%s] not exist", id)
+				smContext.Log.Warnf("PCCRule[%s] not exist", id)
 				continue
 			}
 
-			srcTcData = c.TrafficControlDatas[srcPcc.RefTcDataID()]
-			c.PreRemoveDataPath(srcPcc.Datapath)
+			srcTcData = smContext.TrafficControlDatas[srcPcc.RefTcDataID()]
+			smContext.PreRemoveDataPath(srcPcc.Datapath)
 		} else {
 			tgtPcc := NewPCCRule(pccModel)
 
 			tgtTcID := tgtPcc.RefTcDataID()
-			_, tgtTcData = c.getSrcTgtTcData(decision.TraffContDecs, tgtTcID)
+			_, tgtTcData = smContext.getSrcTgtTcData(decision.TraffContDecs, tgtTcID)
 
 			tgtChgID := tgtPcc.RefChgDataID()
-			_, tgtChgData := c.getSrcTgtChgData(decision.ChgDecs, tgtChgID)
+			_, tgtChgData := smContext.getSrcTgtChgData(decision.ChgDecs, tgtChgID)
 
 			tgtQosID := tgtPcc.RefQosDataID()
-			_, tgtQosData := c.getSrcTgtQosData(decision.QosDecs, tgtQosID)
-			tgtPcc.SetQFI(c.AssignQFI(tgtQosID))
+			_, tgtQosData := smContext.getSrcTgtQosData(decision.QosDecs, tgtQosID)
+			tgtPcc.SetQFI(smContext.AssignQFI(tgtQosID))
 
 			// Create Data path for targetPccRule
-			if err := c.CreatePccRuleDataPath(tgtPcc, tgtTcData, tgtQosData, tgtChgData); err != nil {
+			if err := smContext.CreatePccRuleDataPath(tgtPcc, tgtTcData, tgtQosData, tgtChgData); err != nil {
 				return err
 			}
 			if srcPcc != nil {
-				c.Log.Infof("Modify PCCRule[%s]", id)
-				srcTcData = c.TrafficControlDatas[srcPcc.RefTcDataID()]
-				c.PreRemoveDataPath(srcPcc.Datapath)
+				smContext.Log.Infof("Modify PCCRule[%s]", id)
+				srcTcData = smContext.TrafficControlDatas[srcPcc.RefTcDataID()]
+				smContext.PreRemoveDataPath(srcPcc.Datapath)
 			} else {
-				c.Log.Infof("Install PCCRule[%s]", id)
+				smContext.Log.Infof("Install PCCRule[%s]", id)
 			}
 
 			if err := applyFlowInfoOrPFD(tgtPcc); err != nil {
@@ -188,35 +208,35 @@ func (c *SMContext) ApplyPccRules(
 				finalQosDatas[tgtQosID] = tgtQosData
 			}
 		}
-		if err := checkUpPathChangeEvt(c, srcTcData, tgtTcData); err != nil {
-			c.Log.Warnf("Check UpPathChgEvent err: %v", err)
+		if err := checkUpPathChangeEvt(smContext, srcTcData, tgtTcData); err != nil {
+			smContext.Log.Warnf("Check UpPathChgEvent err: %v", err)
 		}
 		// Remove handled pcc rule
-		delete(c.PCCRules, id)
+		delete(smContext.PCCRules, id)
 	}
 
 	// Handle PccRules not in decision
-	for id, pcc := range c.PCCRules {
+	for id, pcc := range smContext.PCCRules {
 		tcID := pcc.RefTcDataID()
-		srcTcData, tgtTcData := c.getSrcTgtTcData(decision.TraffContDecs, tcID)
+		srcTcData, tgtTcData := smContext.getSrcTgtTcData(decision.TraffContDecs, tcID)
 
 		chgID := pcc.RefChgDataID()
-		srcChgData, tgtChgData := c.getSrcTgtChgData(decision.ChgDecs, chgID)
+		srcChgData, tgtChgData := smContext.getSrcTgtChgData(decision.ChgDecs, chgID)
 
 		qosID := pcc.RefQosDataID()
-		srcQosData, tgtQosData := c.getSrcTgtQosData(decision.QosDecs, qosID)
+		srcQosData, tgtQosData := smContext.getSrcTgtQosData(decision.QosDecs, qosID)
 
 		if !reflect.DeepEqual(srcTcData, tgtTcData) ||
 			!reflect.DeepEqual(srcQosData, tgtQosData) ||
 			!reflect.DeepEqual(srcChgData, tgtChgData) {
 			// Remove old Data path
-			c.PreRemoveDataPath(pcc.Datapath)
+			smContext.PreRemoveDataPath(pcc.Datapath)
 			// Create new Data path
-			if err := c.CreatePccRuleDataPath(pcc, tgtTcData, tgtQosData, tgtChgData); err != nil {
+			if err := smContext.CreatePccRuleDataPath(pcc, tgtTcData, tgtQosData, tgtChgData); err != nil {
 				return err
 			}
-			if err := checkUpPathChangeEvt(c, srcTcData, tgtTcData); err != nil {
-				c.Log.Warnf("Check UpPathChgEvent err: %v", err)
+			if err := checkUpPathChangeEvt(smContext, srcTcData, tgtTcData); err != nil {
+				smContext.Log.Warnf("Check UpPathChgEvent err: %v", err)
 			}
 		}
 		finalPccRules[id] = pcc
@@ -232,16 +252,16 @@ func (c *SMContext) ApplyPccRules(
 	}
 	// For PCC rule that is for Pdu session level charging, add the created session rules to all other flow
 	// so that all volume in the Pdu session could be recorded and charged for the Pdu session
-	c.addPduLevelChargingRuleToFlow(finalPccRules)
+	smContext.addPduLevelChargingRuleToFlow(finalPccRules)
 
-	c.PCCRules = finalPccRules
-	c.TrafficControlDatas = finalTcDatas
-	c.QosDatas = finalQosDatas
-	c.ChargingData = finalChgDatas
+	smContext.PCCRules = finalPccRules
+	smContext.TrafficControlDatas = finalTcDatas
+	smContext.QosDatas = finalQosDatas
+	smContext.ChargingData = finalChgDatas
 	return nil
 }
 
-func (c *SMContext) getSrcTgtTcData(
+func (smContext *SMContext) getSrcTgtTcData(
 	decisionTcDecs map[string]*models.TrafficControlData,
 	tcID string,
 ) (*TrafficControlData, *TrafficControlData) {
@@ -249,7 +269,7 @@ func (c *SMContext) getSrcTgtTcData(
 		return nil, nil
 	}
 
-	srcTcData := c.TrafficControlDatas[tcID]
+	srcTcData := smContext.TrafficControlDatas[tcID]
 	tgtTcData := NewTrafficControlData(decisionTcDecs[tcID])
 	if tgtTcData == nil {
 		// no TcData in decision, use source TcData as target TcData
@@ -258,7 +278,7 @@ func (c *SMContext) getSrcTgtTcData(
 	return srcTcData, tgtTcData
 }
 
-func (c *SMContext) getSrcTgtChgData(
+func (smContext *SMContext) getSrcTgtChgData(
 	decisionChgDecs map[string]*models.ChargingData,
 	chgID string,
 ) (*models.ChargingData, *models.ChargingData) {
@@ -266,7 +286,7 @@ func (c *SMContext) getSrcTgtChgData(
 		return nil, nil
 	}
 
-	srcChgData := c.ChargingData[chgID]
+	srcChgData := smContext.ChargingData[chgID]
 	tgtChgData := decisionChgDecs[chgID]
 	if tgtChgData == nil {
 		// no TcData in decision, use source TcData as target TcData
@@ -275,7 +295,7 @@ func (c *SMContext) getSrcTgtChgData(
 	return srcChgData, tgtChgData
 }
 
-func (c *SMContext) getSrcTgtQosData(
+func (smContext *SMContext) getSrcTgtQosData(
 	decisionQosDecs map[string]*models.QosData,
 	qosID string,
 ) (*models.QosData, *models.QosData) {
@@ -283,7 +303,7 @@ func (c *SMContext) getSrcTgtQosData(
 		return nil, nil
 	}
 
-	srcQosData := c.QosDatas[qosID]
+	srcQosData := smContext.QosDatas[qosID]
 	tgtQosData := decisionQosDecs[qosID]
 	if tgtQosData == nil {
 		// no TcData in decision, use source TcData as target TcData
@@ -293,20 +313,20 @@ func (c *SMContext) getSrcTgtQosData(
 }
 
 // Set data path PDR to REMOVE beofre sending PFCP req
-func (c *SMContext) PreRemoveDataPath(dp *DataPath) {
+func (smContext *SMContext) PreRemoveDataPath(dp *DataPath) {
 	if dp == nil {
 		return
 	}
-	dp.RemovePDR()
-	c.DataPathToBeRemoved[dp.PathID] = dp
+	smContext.MarkPDRsAsRemove(dp)
+	smContext.DataPathToBeRemoved[dp.PathID] = dp
 }
 
 // Remove data path after receiving PFCP rsp
-func (c *SMContext) PostRemoveDataPath() {
-	for id, dp := range c.DataPathToBeRemoved {
-		dp.DeactivateTunnelAndPDR(c)
-		c.Tunnel.RemoveDataPath(id)
-		delete(c.DataPathToBeRemoved, id)
+func (smContext *SMContext) PostRemoveDataPath() {
+	for id, dp := range smContext.DataPathToBeRemoved {
+		dp.DeactivateTunnelAndPDR(smContext)
+		smContext.Tunnel.RemoveDataPath(id)
+		delete(smContext.DataPathToBeRemoved, id)
 	}
 }
 
@@ -350,14 +370,14 @@ func applyFlowInfoOrPFD(pcc *PCCRule) error {
 	return nil
 }
 
-func checkUpPathChangeEvt(c *SMContext,
+func checkUpPathChangeEvt(smContext *SMContext,
 	srcTcData, tgtTcData *TrafficControlData,
 ) error {
 	var srcRoute, tgtRoute models.RouteToLocation
 	var upPathChgEvt *models.UpPathChgEvent
 
 	if srcTcData == nil && tgtTcData == nil {
-		c.Log.Infof("No srcTcData and tgtTcData. Nothing to do")
+		smContext.Log.Traceln("No srcTcData and tgtTcData. Nothing to do")
 		return nil
 	}
 
@@ -393,7 +413,7 @@ func checkUpPathChangeEvt(c *SMContext,
 	}
 
 	if !reflect.DeepEqual(srcRoute, tgtRoute) {
-		c.BuildUpPathChgEventExposureNotification(upPathChgEvt, &srcRoute, &tgtRoute)
+		smContext.BuildUpPathChgEventExposureNotification(upPathChgEvt, &srcRoute, &tgtRoute)
 	}
 
 	return nil

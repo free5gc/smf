@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/antihax/optional"
-	"github.com/mohae/deepcopy"
 	"github.com/pkg/errors"
 
 	"github.com/free5gc/openapi"
@@ -264,12 +263,12 @@ func (s *nnrfService) NFDiscoveryPCF(ctx context.Context) (
 	return result, httpResp, localErr
 }
 
-func (s *nnrfService) NFDiscoveryAMF(smContext *smf_context.SMContext, ctx context.Context) (
+func (s *nnrfService) NFDiscoveryAMF(servingNfId string, ctx context.Context) (
 	result models.SearchResult, httpResp *http.Response, localErr error,
 ) {
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
 
-	localVarOptionals.TargetNfInstanceId = optional.NewInterface(smContext.ServingNfId)
+	localVarOptionals.TargetNfInstanceId = optional.NewInterface(servingNfId)
 
 	smfContext := s.consumer.Context()
 
@@ -321,10 +320,11 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 	return nil, nil
 }
 
-func (s *nnrfService) SendNFDiscoveryPCF() (problemDetails *models.ProblemDetails, err error) {
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
+/*
+func (s *nnrfService) SendNFDiscoveryPCF() (profile *models.NfProfile, problemDetails *models.ProblemDetails, err error) {
+	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
 	if err != nil {
-		return pd, err
+		return
 	}
 
 	// Check data
@@ -337,29 +337,33 @@ func (s *nnrfService) SendNFDiscoveryPCF() (problemDetails *models.ProblemDetail
 			if resCloseErr := httpResp.Body.Close(); resCloseErr != nil {
 				logger.ConsumerLog.Errorf("SearchNFInstances response body cannot close: %+v", resCloseErr)
 			}
+			return
 		}()
 		logger.ConsumerLog.Warnln("handler returned wrong status code ", httpResp.Status)
 		if httpResp.Status != localErr.Error() {
 			err = localErr
-			return problemDetails, err
+			return
 		}
-		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-		problemDetails = &problem
+		problemDetails = localErr.(openapi.GenericOpenAPIError).Model().(*models.ProblemDetails)
+		return
 	} else {
 		err = openapi.ReportError("server no response")
+		return
 	}
 
-	return problemDetails, err
+	profile = deepcopy.Copy(result.NfInstances[0]).(*models.NfProfile)
+	return
 }
+*/
 
-func (s *nnrfService) SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.ProblemDetails, error) {
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
+func (s *nnrfService) SendNFDiscoveryServingAMF(servingNfId string) (profile *models.NfProfile, problemDetails *models.ProblemDetails, err error) {
+	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
 	if err != nil {
-		return pd, err
+		return
 	}
 
 	// Check data
-	result, httpResp, localErr := s.NFDiscoveryAMF(smContext, ctx)
+	result, httpResp, localErr := s.NFDiscoveryAMF(servingNfId, ctx)
 
 	if localErr == nil {
 		if result.NfInstances == nil {
@@ -367,10 +371,10 @@ func (s *nnrfService) SendNFDiscoveryServingAMF(smContext *smf_context.SMContext
 				logger.ConsumerLog.Warnln("handler returned wrong status code", status)
 			}
 			logger.ConsumerLog.Warnln("NfInstances is nil")
-			return nil, openapi.ReportError("NfInstances is nil")
+			err = openapi.ReportError("NfInstances is nil")
+			return
 		}
 		logger.ConsumerLog.Info("SendNFDiscoveryServingAMF ok")
-		smContext.AMFProfile = deepcopy.Copy(result.NfInstances[0]).(models.NfProfile)
 	} else if httpResp != nil {
 		defer func() {
 			if resCloseErr := httpResp; resCloseErr != nil {
@@ -378,19 +382,27 @@ func (s *nnrfService) SendNFDiscoveryServingAMF(smContext *smf_context.SMContext
 			}
 		}()
 		if httpResp.Status != localErr.Error() {
-			return nil, localErr
+			err = localErr
+			return
 		}
-		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-		return &problem, nil
+		problemDetails = localErr.(openapi.GenericOpenAPIError).Model().(*models.ProblemDetails)
+		return
 	} else {
-		return nil, openapi.ReportError("server no response")
+		err = openapi.ReportError("server no response")
+		return
 	}
 
-	return nil, nil
+	// Select AMF from available CHF
+	if len(result.NfInstances) > 0 {
+		profile = &result.NfInstances[0]
+		return profile, nil, nil
+	}
+
+	return nil, nil, fmt.Errorf("No AMF found in AMFSelection")
 }
 
 // CHFSelection will select CHF for this SM Context
-func (s *nnrfService) CHFSelection(smContext *smf_context.SMContext) error {
+func (s *nnrfService) CHFSelection() (profile *models.NfProfile, err error) {
 	// Send NFDiscovery for find CHF
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{
 		// Supi: optional.NewString(smContext.Supi),
@@ -398,7 +410,7 @@ func (s *nnrfService) CHFSelection(smContext *smf_context.SMContext) error {
 
 	ctx, _, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NfType_NRF)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	client := s.getNFDiscoveryClient(s.consumer.Context().NrfUri)
@@ -407,7 +419,7 @@ func (s *nnrfService) CHFSelection(smContext *smf_context.SMContext) error {
 		SearchNFInstances(ctx, models.NfType_CHF, models.NfType_SMF, &localVarOptionals)
 	if err != nil {
 		logger.ConsumerLog.Errorf("SearchNFInstances failed: %+v", err)
-		return err
+		return nil, err
 	}
 	defer func() {
 		if rspCloseErr := res.Body.Close(); rspCloseErr != nil {
@@ -427,17 +439,17 @@ func (s *nnrfService) CHFSelection(smContext *smf_context.SMContext) error {
 
 	// Select CHF from available CHF
 	if len(rsp.NfInstances) > 0 {
-		smContext.SelectedCHFProfile = rsp.NfInstances[0]
-		return nil
+		profile = &rsp.NfInstances[0]
+		return profile, nil
 	}
-	return fmt.Errorf("No CHF found in CHFSelection")
+	return nil, fmt.Errorf("No CHF found in CHFSelection")
 }
 
 // PCFSelection will select PCF for this SM Context
-func (s *nnrfService) PCFSelection(smContext *smf_context.SMContext) error {
-	ctx, _, errToken := s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_DISC, "NRF")
-	if errToken != nil {
-		return errToken
+func (s *nnrfService) PCFSelection() (profile *models.NfProfile, err error) {
+	ctx, _, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_DISC, "NRF")
+	if err != nil {
+		return
 	}
 	// Send NFDiscovery for find PCF
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
@@ -451,7 +463,7 @@ func (s *nnrfService) PCFSelection(smContext *smf_context.SMContext) error {
 	rsp, res, err := client.NFInstancesStoreApi.
 		SearchNFInstances(ctx, models.NfType_PCF, models.NfType_SMF, &localVarOptionals)
 	if err != nil {
-		return err
+		return
 	}
 	defer func() {
 		if rspCloseErr := res.Body.Close(); rspCloseErr != nil {
@@ -470,10 +482,11 @@ func (s *nnrfService) PCFSelection(smContext *smf_context.SMContext) error {
 	}
 
 	// Select PCF from available PCF
-
-	smContext.SelectedPCFProfile = rsp.NfInstances[0]
-
-	return nil
+	if len(rsp.NfInstances) > 0 {
+		profile = &rsp.NfInstances[0]
+		return profile, nil
+	}
+	return nil, fmt.Errorf("No PCF found in PCFSelection")
 }
 
 func (s *nnrfService) SearchNFInstances(ctx context.Context, targetNfType models.NfType, requesterNfType models.NfType,

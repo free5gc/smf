@@ -6,14 +6,14 @@ import (
 
 	"github.com/free5gc/pfcp"
 	"github.com/free5gc/pfcp/pfcpType"
-	"github.com/free5gc/smf/internal/context"
+	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/pfcp/udp"
 )
 
 func BuildPfcpAssociationSetupRequest() (pfcp.PFCPAssociationSetupRequest, error) {
 	msg := pfcp.PFCPAssociationSetupRequest{}
 
-	msg.NodeID = &context.GetSelf().CPNodeID
+	msg.NodeID = &smf_context.GetSelf().CPNodeID
 
 	msg.RecoveryTimeStamp = &pfcpType.RecoveryTimeStamp{
 		RecoveryTimeStamp: udp.ServerStartTime,
@@ -29,7 +29,7 @@ func BuildPfcpAssociationSetupRequest() (pfcp.PFCPAssociationSetupRequest, error
 func BuildPfcpAssociationSetupResponse(cause pfcpType.Cause) (pfcp.PFCPAssociationSetupResponse, error) {
 	msg := pfcp.PFCPAssociationSetupResponse{}
 
-	msg.NodeID = &context.GetSelf().CPNodeID
+	msg.NodeID = &smf_context.GetSelf().CPNodeID
 
 	msg.Cause = &cause
 
@@ -47,7 +47,7 @@ func BuildPfcpAssociationSetupResponse(cause pfcpType.Cause) (pfcp.PFCPAssociati
 func BuildPfcpAssociationReleaseRequest() (pfcp.PFCPAssociationReleaseRequest, error) {
 	msg := pfcp.PFCPAssociationReleaseRequest{}
 
-	msg.NodeID = &context.GetSelf().CPNodeID
+	msg.NodeID = &smf_context.GetSelf().CPNodeID
 
 	return msg, nil
 }
@@ -55,27 +55,31 @@ func BuildPfcpAssociationReleaseRequest() (pfcp.PFCPAssociationReleaseRequest, e
 func BuildPfcpAssociationReleaseResponse(cause pfcpType.Cause) (pfcp.PFCPAssociationReleaseResponse, error) {
 	msg := pfcp.PFCPAssociationReleaseResponse{}
 
-	msg.NodeID = &context.GetSelf().CPNodeID
+	msg.NodeID = &smf_context.GetSelf().CPNodeID
 
 	msg.Cause = &cause
 
 	return msg, nil
 }
 
-func pdrToCreatePDR(pdr *context.PDR) *pfcp.CreatePDR {
-	createPDR := new(pfcp.CreatePDR)
-
-	createPDR.PDRID = new(pfcpType.PacketDetectionRuleID)
-	createPDR.PDRID.RuleId = pdr.PDRID
-
-	createPDR.Precedence = new(pfcpType.Precedence)
-	createPDR.Precedence.PrecedenceValue = pdr.Precedence
-
-	createPDR.PDI = &pfcp.PDI{
-		SourceInterface: &pdr.PDI.SourceInterface,
-		LocalFTEID:      pdr.PDI.LocalFTeid,
-		NetworkInstance: pdr.PDI.NetworkInstance,
-		UEIPAddress:     pdr.PDI.UEIPAddress,
+func pdrToCreatePDR(pdr *smf_context.PDR) *pfcp.CreatePDR {
+	createPDR := &pfcp.CreatePDR{
+		PDRID: &pfcpType.PacketDetectionRuleID{
+			RuleId: pdr.PDRID,
+		},
+		Precedence: &pfcpType.Precedence{
+			PrecedenceValue: pdr.Precedence,
+		},
+		PDI: &pfcp.PDI{
+			SourceInterface: &pdr.PDI.SourceInterface,
+			LocalFTEID:      pdr.PDI.LocalFTeid,
+			NetworkInstance: pdr.PDI.NetworkInstance,
+			UEIPAddress:     pdr.PDI.UEIPAddress,
+		},
+		OuterHeaderRemoval: pdr.OuterHeaderRemoval,
+		FARID: &pfcpType.FARID{
+			FarIdValue: pdr.FAR.FARID,
+		},
 	}
 
 	if pdr.PDI.ApplicationID != "" {
@@ -86,12 +90,6 @@ func pdrToCreatePDR(pdr *context.PDR) *pfcp.CreatePDR {
 
 	if pdr.PDI.SDFFilter != nil {
 		createPDR.PDI.SDFFilter = pdr.PDI.SDFFilter
-	}
-
-	createPDR.OuterHeaderRemoval = pdr.OuterHeaderRemoval
-
-	createPDR.FARID = &pfcpType.FARID{
-		FarIdValue: pdr.FAR.FARID,
 	}
 
 	for _, qer := range pdr.QER {
@@ -113,7 +111,7 @@ func pdrToCreatePDR(pdr *context.PDR) *pfcp.CreatePDR {
 	return createPDR
 }
 
-func farToCreateFAR(far *context.FAR) *pfcp.CreateFAR {
+func farToCreateFAR(far *smf_context.FAR) *pfcp.CreateFAR {
 	createFAR := new(pfcp.CreateFAR)
 
 	createFAR.FARID = new(pfcpType.FARID)
@@ -154,7 +152,7 @@ func farToCreateFAR(far *context.FAR) *pfcp.CreateFAR {
 	return createFAR
 }
 
-func barToCreateBAR(bar *context.BAR) *pfcp.CreateBAR {
+func barToCreateBAR(bar *smf_context.BAR) *pfcp.CreateBAR {
 	createBAR := new(pfcp.CreateBAR)
 
 	createBAR.BARID = new(pfcpType.BARID)
@@ -167,7 +165,7 @@ func barToCreateBAR(bar *context.BAR) *pfcp.CreateBAR {
 	return createBAR
 }
 
-func qerToCreateQER(qer *context.QER) *pfcp.CreateQER {
+func qerToCreateQER(qer *smf_context.QER) *pfcp.CreateQER {
 	createQER := new(pfcp.CreateQER)
 
 	createQER.QERID = new(pfcpType.QERID)
@@ -181,7 +179,7 @@ func qerToCreateQER(qer *context.QER) *pfcp.CreateQER {
 	return createQER
 }
 
-func urrToCreateURR(urr *context.URR) *pfcp.CreateURR {
+func urrToCreateURR(urr *smf_context.URR) *pfcp.CreateURR {
 	createURR := new(pfcp.CreateURR)
 
 	createURR.URRID = &pfcpType.URRID{
@@ -189,9 +187,9 @@ func urrToCreateURR(urr *context.URR) *pfcp.CreateURR {
 	}
 	createURR.MeasurementMethod = &pfcpType.MeasurementMethod{}
 	switch urr.MeasureMethod {
-	case context.MesureMethodVol:
+	case smf_context.MesureMethodVol:
 		createURR.MeasurementMethod.Volum = true
-	case context.MesureMethodTime:
+	case smf_context.MesureMethodTime:
 		createURR.MeasurementMethod.Durat = true
 	}
 	createURR.ReportingTriggers = &urr.ReportingTrigger
@@ -231,7 +229,7 @@ func urrToCreateURR(urr *context.URR) *pfcp.CreateURR {
 	return createURR
 }
 
-func pdrToUpdatePDR(pdr *context.PDR) *pfcp.UpdatePDR {
+func pdrToUpdatePDR(pdr *smf_context.PDR) *pfcp.UpdatePDR {
 	updatePDR := new(pfcp.UpdatePDR)
 
 	updatePDR.PDRID = new(pfcpType.PacketDetectionRuleID)
@@ -278,7 +276,7 @@ func pdrToUpdatePDR(pdr *context.PDR) *pfcp.UpdatePDR {
 	return updatePDR
 }
 
-func farToUpdateFAR(far *context.FAR) *pfcp.UpdateFAR {
+func farToUpdateFAR(far *smf_context.FAR) *pfcp.UpdateFAR {
 	updateFAR := new(pfcp.UpdateFAR)
 
 	updateFAR.FARID = new(pfcpType.FARID)
@@ -316,7 +314,7 @@ func farToUpdateFAR(far *context.FAR) *pfcp.UpdateFAR {
 	return updateFAR
 }
 
-func urrToUpdateURR(urr *context.URR) *pfcp.UpdateURR {
+func urrToUpdateURR(urr *smf_context.URR) *pfcp.UpdateURR {
 	updateURR := new(pfcp.UpdateURR)
 
 	updateURR.URRID = &pfcpType.URRID{
@@ -324,9 +322,9 @@ func urrToUpdateURR(urr *context.URR) *pfcp.UpdateURR {
 	}
 	updateURR.MeasurementMethod = &pfcpType.MeasurementMethod{}
 	switch urr.MeasureMethod {
-	case context.MesureMethodVol:
+	case smf_context.MesureMethodVol:
 		updateURR.MeasurementMethod.Volum = true
-	case context.MesureMethodTime:
+	case smf_context.MesureMethodTime:
 		updateURR.MeasurementMethod.Durat = true
 	}
 	updateURR.ReportingTriggers = &urr.ReportingTrigger
@@ -368,121 +366,100 @@ func urrToUpdateURR(urr *context.URR) *pfcp.UpdateURR {
 }
 
 func BuildPfcpSessionEstablishmentRequest(
-	upNodeID pfcpType.NodeID,
-	upN4Addr string,
-	smContext *context.SMContext,
-	pdrList []*context.PDR,
-	farList []*context.FAR,
-	barList []*context.BAR,
-	qerList []*context.QER,
-	urrList []*context.URR,
+	pfcpContext *smf_context.PFCPSessionContext,
 ) (pfcp.PFCPSessionEstablishmentRequest, error) {
-	msg := pfcp.PFCPSessionEstablishmentRequest{}
+	localSEID := pfcpContext.LocalSEID
 
-	msg.NodeID = &context.GetSelf().CPNodeID
-
-	isv4 := context.GetSelf().ExternalIP().To4() != nil
-	nodeIDtoIP := upNodeID.ResolveNodeIdToIp().String()
-
-	localSEID := smContext.PFCPContext[nodeIDtoIP].LocalSEID
-
-	msg.CPFSEID = &pfcpType.FSEID{
-		V4:          isv4,
-		V6:          !isv4,
-		Seid:        localSEID,
-		Ipv4Address: context.GetSelf().ExternalIP().To4(),
+	msg := pfcp.PFCPSessionEstablishmentRequest{
+		NodeID: &smf_context.GetSelf().CPNodeID,
+		CPFSEID: &pfcpType.FSEID{
+			V4:          smf_context.GetSelf().ExternalIP().To4() != nil,
+			V6:          smf_context.GetSelf().ExternalIP().To4() == nil,
+			Seid:        localSEID,
+			Ipv4Address: smf_context.GetSelf().ExternalIP().To4(),
+		},
+		PDNType: &pfcpType.PDNType{
+			PdnType: pfcpType.PDNTypeIpv4,
+		},
+		CreatePDR: make([]*pfcp.CreatePDR, 0, 2),
+		CreateFAR: make([]*pfcp.CreateFAR, 0, 2),
 	}
 
-	msg.CreatePDR = make([]*pfcp.CreatePDR, 0)
-	msg.CreateFAR = make([]*pfcp.CreateFAR, 0)
+	// QER and URR may appear in multiple PDRs, so we need to process them only once
+	qerMap := make(map[uint32]*smf_context.QER)
+	urrMap := make(map[uint32]*smf_context.URR)
 
-	for _, pdr := range pdrList {
-		if pdr.State == context.RULE_INITIAL {
+	for _, pdr := range pfcpContext.PDRs {
+		if pdr.CheckState(smf_context.RULE_INITIAL) {
 			msg.CreatePDR = append(msg.CreatePDR, pdrToCreatePDR(pdr))
+			pdr.SetState(smf_context.RULE_CREATE)
 		}
-		pdr.State = context.RULE_CREATE
-	}
 
-	for _, far := range farList {
-		if far.State == context.RULE_INITIAL {
-			msg.CreateFAR = append(msg.CreateFAR, farToCreateFAR(far))
+		if far := pdr.FAR; far != nil {
+			if far.CheckState(smf_context.RULE_INITIAL) {
+				msg.CreateFAR = append(msg.CreateFAR, farToCreateFAR(far))
+				far.SetState(smf_context.RULE_CREATE)
+			}
+
+			if bar := far.BAR; bar != nil {
+				if bar.CheckState(smf_context.RULE_INITIAL) {
+					msg.CreateBAR = append(msg.CreateBAR, barToCreateBAR(bar))
+					bar.SetState(smf_context.RULE_CREATE)
+				}
+			}
 		}
-		far.State = context.RULE_CREATE
-	}
 
-	for _, bar := range barList {
-		if bar.State == context.RULE_INITIAL {
-			msg.CreateBAR = append(msg.CreateBAR, barToCreateBAR(bar))
+		for _, qer := range pdr.QER {
+			if _, exists := qerMap[qer.QERID]; !exists {
+				qerMap[qer.QERID] = qer
+				if qer.CheckState(smf_context.RULE_INITIAL) {
+					msg.CreateQER = append(msg.CreateQER, qerToCreateQER(qer))
+					qer.SetState(smf_context.RULE_CREATE)
+				}
+			}
 		}
-		bar.State = context.RULE_CREATE
-	}
 
-	// QER maybe redundant, so we needs properly needs
-
-	qerMap := make(map[uint32]*context.QER)
-	for _, qer := range qerList {
-		qerMap[qer.QERID] = qer
-	}
-	for _, filteredQER := range qerMap {
-		if filteredQER.State == context.RULE_INITIAL {
-			msg.CreateQER = append(msg.CreateQER, qerToCreateQER(filteredQER))
+		for _, urr := range pdr.URR {
+			if _, exists := urrMap[urr.URRID]; !exists {
+				urrMap[urr.URRID] = urr
+				if urr.CheckState(smf_context.RULE_INITIAL) {
+					msg.CreateURR = append(msg.CreateURR, urrToCreateURR(urr))
+					urr.SetState(smf_context.RULE_CREATE)
+				}
+			}
 		}
-		filteredQER.State = context.RULE_CREATE
 	}
-
-	urrMap := make(map[uint32]*context.URR)
-	for _, urr := range urrList {
-		urrMap[urr.URRID] = urr
-	}
-	for _, filteredURR := range urrMap {
-		if filteredURR.State == context.RULE_INITIAL {
-			msg.CreateURR = append(msg.CreateURR, urrToCreateURR(filteredURR))
-		}
-		filteredURR.State = context.RULE_CREATE
-	}
-
-	msg.PDNType = &pfcpType.PDNType{
-		PdnType: pfcpType.PDNTypeIpv4,
-	}
-
-	// for _, far := range msg.CreateFAR {
-	// 	printCreateFAR(far)
-	// }
 
 	return msg, nil
 }
 
 func BuildPfcpSessionEstablishmentResponse() (pfcp.PFCPSessionEstablishmentResponse, error) {
-	msg := pfcp.PFCPSessionEstablishmentResponse{}
-
-	msg.NodeID = &context.GetSelf().CPNodeID
-
-	msg.Cause = &pfcpType.Cause{
-		CauseValue: pfcpType.CauseRequestAccepted,
-	}
-
-	msg.OffendingIE = &pfcpType.OffendingIE{
-		TypeOfOffendingIe: 12345,
-	}
-
-	msg.UPFSEID = &pfcpType.FSEID{
-		V4:          true,
-		V6:          false, //;
-		Seid:        123456789123456789,
-		Ipv4Address: net.ParseIP("192.168.1.1").To4(),
-	}
-
-	msg.CreatedPDR = &pfcp.CreatedPDR{
-		PDRID: &pfcpType.PacketDetectionRuleID{
-			RuleId: 256,
+	msg := pfcp.PFCPSessionEstablishmentResponse{
+		NodeID: &smf_context.GetSelf().CPNodeID,
+		Cause: &pfcpType.Cause{
+			CauseValue: pfcpType.CauseRequestAccepted,
 		},
-		LocalFTEID: &pfcpType.FTEID{
-			Chid:        false,
-			Ch:          false,
-			V6:          false,
+		OffendingIE: &pfcpType.OffendingIE{
+			TypeOfOffendingIe: 12345,
+		},
+		UPFSEID: &pfcpType.FSEID{
 			V4:          true,
-			Teid:        12345,
+			V6:          false, //;
+			Seid:        123456789123456789,
 			Ipv4Address: net.ParseIP("192.168.1.1").To4(),
+		},
+		CreatedPDR: &pfcp.CreatedPDR{
+			PDRID: &pfcpType.PacketDetectionRuleID{
+				RuleId: 256,
+			},
+			LocalFTEID: &pfcpType.FTEID{
+				Chid:        false,
+				Ch:          false,
+				V6:          false,
+				V4:          true,
+				Teid:        12345,
+				Ipv4Address: net.ParseIP("192.168.1.1").To4(),
+			},
 		},
 	}
 
@@ -491,97 +468,173 @@ func BuildPfcpSessionEstablishmentResponse() (pfcp.PFCPSessionEstablishmentRespo
 
 // TODO: Replace dummy value in PFCP message
 func BuildPfcpSessionModificationRequest(
-	upNodeID pfcpType.NodeID,
-	upN4Addr string,
-	smContext *context.SMContext,
-	pdrList []*context.PDR,
-	farList []*context.FAR,
-	barList []*context.BAR,
-	qerList []*context.QER,
-	urrList []*context.URR,
+	pfcpContext *smf_context.PFCPSessionContext,
 ) (pfcp.PFCPSessionModificationRequest, error) {
-	msg := pfcp.PFCPSessionModificationRequest{}
+	localSEID := pfcpContext.LocalSEID
 
-	msg.UpdatePDR = make([]*pfcp.UpdatePDR, 0, 2)
-	msg.UpdateFAR = make([]*pfcp.UpdateFAR, 0, 2)
-	msg.UpdateURR = make([]*pfcp.UpdateURR, 0, 12)
-
-	nodeIDtoIP := upNodeID.ResolveNodeIdToIp().String()
-
-	localSEID := smContext.PFCPContext[nodeIDtoIP].LocalSEID
-
-	msg.CPFSEID = &pfcpType.FSEID{
-		V4:          true,
-		V6:          false,
-		Seid:        localSEID,
-		Ipv4Address: context.GetSelf().ExternalIP().To4(),
+	msg := pfcp.PFCPSessionModificationRequest{
+		CPFSEID: &pfcpType.FSEID{
+			V4:          smf_context.GetSelf().ExternalIP().To4() != nil,
+			V6:          smf_context.GetSelf().ExternalIP().To4() == nil,
+			Seid:        localSEID,
+			Ipv4Address: smf_context.GetSelf().ExternalIP().To4(),
+		},
+		UpdatePDR: make([]*pfcp.UpdatePDR, 0, 2),
+		UpdateFAR: make([]*pfcp.UpdateFAR, 0, 2),
+		UpdateURR: make([]*pfcp.UpdateURR, 0, 12),
 	}
 
-	for _, pdr := range pdrList {
-		switch pdr.State {
-		case context.RULE_INITIAL:
+	for _, pdr := range pfcpContext.PDRs {
+		switch pdr.GetState() {
+		case smf_context.RULE_INITIAL:
 			msg.CreatePDR = append(msg.CreatePDR, pdrToCreatePDR(pdr))
-		case context.RULE_UPDATE:
+			pdr.SetState(smf_context.RULE_CREATE)
+		case smf_context.RULE_UPDATE:
 			msg.UpdatePDR = append(msg.UpdatePDR, pdrToUpdatePDR(pdr))
-		case context.RULE_REMOVE:
+			pdr.SetState(smf_context.RULE_CREATE)
+		case smf_context.RULE_REMOVE:
 			msg.RemovePDR = append(msg.RemovePDR, &pfcp.RemovePDR{
 				PDRID: &pfcpType.PacketDetectionRuleID{
 					RuleId: pdr.PDRID,
 				},
 			})
+			// do NOT set rule to CREATE
+		case smf_context.RULE_SYNCED:
+			// skip, already transferred to this UPF
 		}
-		pdr.State = context.RULE_CREATE
+
+		if far := pdr.FAR; far != nil {
+			switch far.GetState() {
+			case smf_context.RULE_INITIAL:
+				msg.CreateFAR = append(msg.CreateFAR, farToCreateFAR(far))
+				far.SetState(smf_context.RULE_CREATE)
+			case smf_context.RULE_UPDATE:
+				msg.UpdateFAR = append(msg.UpdateFAR, farToUpdateFAR(far))
+				far.SetState(smf_context.RULE_CREATE)
+			case smf_context.RULE_REMOVE:
+				msg.RemoveFAR = append(msg.RemoveFAR, &pfcp.RemoveFAR{
+					FARID: &pfcpType.FARID{
+						FarIdValue: far.FARID,
+					},
+				})
+				// do NOT set rule to CREATE
+			case smf_context.RULE_SYNCED:
+				// skip, already transferred to this UPF
+			}
+
+			if bar := far.BAR; bar != nil {
+				switch bar.GetState() {
+				case smf_context.RULE_INITIAL:
+					msg.CreateBAR = append(msg.CreateBAR, barToCreateBAR(bar))
+					bar.SetState(smf_context.RULE_CREATE)
+				case smf_context.RULE_SYNCED:
+					// skip, already transferred to this UPF
+				}
+			}
+		}
+
+		for _, qer := range pdr.QER {
+			switch qer.GetState() {
+			case smf_context.RULE_INITIAL:
+				msg.CreateQER = append(msg.CreateQER, qerToCreateQER(qer))
+				qer.SetState(smf_context.RULE_CREATE)
+			case smf_context.RULE_SYNCED:
+				// skip, already transferred to this UPF
+			}
+		}
+
+		for _, urr := range pdr.URR {
+			switch urr.GetState() {
+			case smf_context.RULE_INITIAL:
+				msg.CreateURR = append(msg.CreateURR, urrToCreateURR(urr))
+				urr.SetState(smf_context.RULE_CREATE)
+			case smf_context.RULE_UPDATE:
+				msg.UpdateURR = append(msg.UpdateURR, urrToUpdateURR(urr))
+				urr.SetState(smf_context.RULE_CREATE)
+			case smf_context.RULE_REMOVE:
+				msg.RemoveURR = append(msg.RemoveURR, &pfcp.RemoveURR{
+					URRID: &pfcpType.URRID{
+						UrrIdValue: urr.URRID,
+					},
+				})
+			case smf_context.RULE_QUERY:
+				msg.QueryURR = append(msg.QueryURR, &pfcp.QueryURR{
+					URRID: &pfcpType.URRID{
+						UrrIdValue: urr.URRID,
+					},
+				})
+			case smf_context.RULE_SYNCED:
+				// skip, already transferred to this UPF
+			}
+		}
 	}
 
-	for _, far := range farList {
-		switch far.State {
-		case context.RULE_INITIAL:
-			msg.CreateFAR = append(msg.CreateFAR, farToCreateFAR(far))
-		case context.RULE_UPDATE:
-			msg.UpdateFAR = append(msg.UpdateFAR, farToUpdateFAR(far))
-		case context.RULE_REMOVE:
-			msg.RemoveFAR = append(msg.RemoveFAR, &pfcp.RemoveFAR{
-				FARID: &pfcpType.FARID{
-					FarIdValue: far.FARID,
-				},
-			})
-		}
-		far.State = context.RULE_CREATE
+	return msg, nil
+}
+
+func BuildPfcpSessionRecoveryRequest(
+	pfcpContext *smf_context.PFCPSessionContext,
+) (pfcp.PFCPSessionEstablishmentRequest, error) {
+	localSEID := pfcpContext.LocalSEID
+
+	// recovery is a session establishment request that creates all PDRs
+	// except for the ones in REMOVE state
+	msg := pfcp.PFCPSessionEstablishmentRequest{
+		NodeID: &smf_context.GetSelf().CPNodeID,
+		CPFSEID: &pfcpType.FSEID{
+			V4:          smf_context.GetSelf().ExternalIP().To4() != nil,
+			V6:          smf_context.GetSelf().ExternalIP().To4() == nil,
+			Seid:        localSEID,
+			Ipv4Address: smf_context.GetSelf().ExternalIP().To4(),
+		},
+		PDNType: &pfcpType.PDNType{
+			PdnType: pfcpType.PDNTypeIpv4,
+		},
 	}
 
-	for _, bar := range barList {
-		if bar.State == context.RULE_INITIAL {
-			msg.CreateBAR = append(msg.CreateBAR, barToCreateBAR(bar))
-		}
-	}
+	// QER and URR may appear in multiple PDRs, so we need to process them only once
+	qerMap := make(map[uint32]*smf_context.QER)
+	urrMap := make(map[uint32]*smf_context.URR)
 
-	for _, qer := range qerList {
-		if qer.State == context.RULE_INITIAL {
-			msg.CreateQER = append(msg.CreateQER, qerToCreateQER(qer))
-		}
-		qer.State = context.RULE_CREATE
-	}
+	for _, pdr := range pfcpContext.PDRs {
+		if !pdr.CheckState(smf_context.RULE_REMOVE) {
+			msg.CreatePDR = append(msg.CreatePDR, pdrToCreatePDR(pdr))
+			pdr.SetState(smf_context.RULE_CREATE)
+		} // PDR is marked for removal, do not restore it
 
-	for _, urr := range urrList {
-		switch urr.State {
-		case context.RULE_INITIAL:
-			msg.CreateURR = append(msg.CreateURR, urrToCreateURR(urr))
-		case context.RULE_UPDATE:
-			msg.UpdateURR = append(msg.UpdateURR, urrToUpdateURR(urr))
-		case context.RULE_REMOVE:
-			msg.RemoveURR = append(msg.RemoveURR, &pfcp.RemoveURR{
-				URRID: &pfcpType.URRID{
-					UrrIdValue: urr.URRID,
-				},
-			})
-		case context.RULE_QUERY:
-			msg.QueryURR = append(msg.QueryURR, &pfcp.QueryURR{
-				URRID: &pfcpType.URRID{
-					UrrIdValue: urr.URRID,
-				},
-			})
+		if far := pdr.FAR; far != nil {
+			if !far.CheckState(smf_context.RULE_REMOVE) {
+				msg.CreateFAR = append(msg.CreateFAR, farToCreateFAR(far))
+				far.SetState(smf_context.RULE_CREATE)
+			} // FAR is marked for removal, do not restore it
+
+			if bar := far.BAR; bar != nil {
+				if !bar.CheckState(smf_context.RULE_REMOVE) {
+					msg.CreateBAR = append(msg.CreateBAR, barToCreateBAR(bar))
+					bar.SetState(smf_context.RULE_CREATE)
+				} // BAR is marked for removal, do not restore it
+			}
 		}
-		urr.State = context.RULE_CREATE
+
+		for _, qer := range pdr.QER {
+			if !qer.CheckState(smf_context.RULE_REMOVE) {
+				if _, exists := qerMap[qer.QERID]; !exists {
+					qerMap[qer.QERID] = qer
+					msg.CreateQER = append(msg.CreateQER, qerToCreateQER(qer))
+					qer.SetState(smf_context.RULE_CREATE)
+				}
+			} // QER is marked for removal, do not restore it
+		}
+
+		for _, urr := range pdr.URR {
+			if !urr.CheckState(smf_context.RULE_REMOVE) {
+				if _, exists := urrMap[urr.URRID]; !exists {
+					urrMap[urr.URRID] = urr
+					msg.CreateURR = append(msg.CreateURR, urrToCreateURR(urr))
+					urr.SetState(smf_context.RULE_CREATE)
+				}
+			} // URR is marked for removal, do not restore it
+		}
 	}
 
 	return msg, nil
@@ -646,10 +699,10 @@ func BuildPfcpSessionReportResponse(cause pfcpType.Cause) (pfcp.PFCPSessionRepor
 }
 
 func BuildPfcpHeartbeatRequest() (pfcp.HeartbeatRequest, error) {
-	msg := pfcp.HeartbeatRequest{}
-
-	msg.RecoveryTimeStamp = &pfcpType.RecoveryTimeStamp{
-		RecoveryTimeStamp: udp.ServerStartTime,
+	msg := pfcp.HeartbeatRequest{
+		RecoveryTimeStamp: &pfcpType.RecoveryTimeStamp{
+			RecoveryTimeStamp: udp.ServerStartTime,
+		},
 	}
 
 	return msg, nil

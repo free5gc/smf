@@ -1,6 +1,7 @@
 package context_test
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -8,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/smf/internal/context"
+	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
@@ -149,20 +150,32 @@ var configuration = &factory.UserPlaneInformation{
 }
 
 func TestNewUserPlaneInformation(t *testing.T) {
-	userplaneInformation := context.NewUserPlaneInformation(configuration)
+	userplaneInformation := smf_context.NewUserPlaneInformation(configuration)
+	for _, upf := range userplaneInformation.UPFs {
+		upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+		upf.Association, upf.AssociationCancelFunc = context.WithCancel(context.Background())
+	}
 
 	require.NotNil(t, userplaneInformation.AccessNetwork["GNodeB"])
 
-	require.NotNil(t, userplaneInformation.UPFs["UPF1"])
-	require.NotNil(t, userplaneInformation.UPFs["UPF2"])
-	require.NotNil(t, userplaneInformation.UPFs["UPF3"])
-	require.NotNil(t, userplaneInformation.UPFs["UPF4"])
+	// check UUIDs have been created
+	// check UPFs are in other UP maps as well
+	for uuid, upf := range userplaneInformation.UPFs {
+		require.NotNil(t, uuid)
+		require.NotNil(t, userplaneInformation.NodeIDToName[upf.GetNodeIDString()])
+		require.NotNil(t, userplaneInformation.NodeIDToUPF[upf.GetNodeIDString()])
+	}
+
+	require.NotNil(t, userplaneInformation.NameToUPNode["UPF1"])
+	require.NotNil(t, userplaneInformation.NameToUPNode["UPF2"])
+	require.NotNil(t, userplaneInformation.NameToUPNode["UPF3"])
+	require.NotNil(t, userplaneInformation.NameToUPNode["UPF4"])
 
 	// check links
-	require.Contains(t, userplaneInformation.AccessNetwork["GNodeB"].Links, userplaneInformation.UPFs["UPF1"])
-	require.Contains(t, userplaneInformation.UPFs["UPF1"].Links, userplaneInformation.UPFs["UPF2"])
-	require.Contains(t, userplaneInformation.UPFs["UPF2"].Links, userplaneInformation.UPFs["UPF3"])
-	require.Contains(t, userplaneInformation.UPFs["UPF3"].Links, userplaneInformation.UPFs["UPF4"])
+	require.Contains(t, userplaneInformation.AccessNetwork["GNodeB"].GetLinks(), userplaneInformation.NameToUPNode["UPF1"])
+	require.Contains(t, userplaneInformation.NameToUPNode["UPF1"].GetLinks(), userplaneInformation.NameToUPNode["UPF2"])
+	require.Contains(t, userplaneInformation.NameToUPNode["UPF2"].GetLinks(), userplaneInformation.NameToUPNode["UPF3"])
+	require.Contains(t, userplaneInformation.NameToUPNode["UPF3"].GetLinks(), userplaneInformation.NameToUPNode["UPF4"])
 }
 
 func TestGenerateDefaultPath(t *testing.T) {
@@ -188,13 +201,13 @@ func TestGenerateDefaultPath(t *testing.T) {
 
 	testCases := []struct {
 		name     string
-		param    *context.UPFSelectionParams
+		param    *smf_context.UPFSelectionParams
 		expected bool
 	}{
 		{
 			"S-NSSAI 01112232 and DNN internet ok",
-			&context.UPFSelectionParams{
-				SNssai: &context.SNssai{
+			&smf_context.UPFSelectionParams{
+				SNssai: &smf_context.SNssai{
 					Sst: 1,
 					Sd:  "112232",
 				},
@@ -204,8 +217,8 @@ func TestGenerateDefaultPath(t *testing.T) {
 		},
 		{
 			"S-NSSAI 02112233 and DNN internet ok",
-			&context.UPFSelectionParams{
-				SNssai: &context.SNssai{
+			&smf_context.UPFSelectionParams{
+				SNssai: &smf_context.SNssai{
 					Sst: 2,
 					Sd:  "112233",
 				},
@@ -215,8 +228,8 @@ func TestGenerateDefaultPath(t *testing.T) {
 		},
 		{
 			"S-NSSAI 03112234 and DNN internet ok",
-			&context.UPFSelectionParams{
-				SNssai: &context.SNssai{
+			&smf_context.UPFSelectionParams{
+				SNssai: &smf_context.SNssai{
 					Sst: 3,
 					Sd:  "112234",
 				},
@@ -226,8 +239,8 @@ func TestGenerateDefaultPath(t *testing.T) {
 		},
 		{
 			"S-NSSAI 01112235 and DNN internet ok",
-			&context.UPFSelectionParams{
-				SNssai: &context.SNssai{
+			&smf_context.UPFSelectionParams{
+				SNssai: &smf_context.SNssai{
 					Sst: 1,
 					Sd:  "112235",
 				},
@@ -237,8 +250,8 @@ func TestGenerateDefaultPath(t *testing.T) {
 		},
 		{
 			"S-NSSAI 01010203 and DNN internet fail",
-			&context.UPFSelectionParams{
-				SNssai: &context.SNssai{
+			&smf_context.UPFSelectionParams{
+				SNssai: &smf_context.SNssai{
 					Sst: 1,
 					Sd:  "010203",
 				},
@@ -248,7 +261,7 @@ func TestGenerateDefaultPath(t *testing.T) {
 		},
 	}
 
-	userplaneInformation := context.NewUserPlaneInformation(&config1)
+	userplaneInformation := smf_context.NewUserPlaneInformation(&config1)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			pathExist := userplaneInformation.GenerateDefaultPath(tc.param)
@@ -267,20 +280,24 @@ func TestSelectUPFAndAllocUEIP(t *testing.T) {
 		expectedIPPool = append(expectedIPPool, net.ParseIP(fmt.Sprintf("10.60.0.%d", i)).To4())
 	}
 
-	userplaneInformation := context.NewUserPlaneInformation(configuration)
+	userplaneInformation := smf_context.NewUserPlaneInformation(configuration)
 	for _, upf := range userplaneInformation.UPFs {
-		upf.UPF.UPFStatus = context.AssociatedSetUpSuccess
+		upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+		upf.Association, upf.AssociationCancelFunc = context.WithCancel(context.Background())
 	}
 
 	for i := 0; i <= 100; i++ {
-		upf, allocatedIP, _ := userplaneInformation.SelectUPFAndAllocUEIP(&context.UPFSelectionParams{
-			Dnn: "internet",
-			SNssai: &context.SNssai{
-				Sst: 1,
-				Sd:  "112232",
+		upf, allocatedIP, _, err := userplaneInformation.SelectUPFAndAllocUEIP(
+			&smf_context.UPFSelectionParams{
+				Dnn: "internet",
+				SNssai: &smf_context.SNssai{
+					Sst: 1,
+					Sd:  "112232",
+				},
 			},
-		})
+			"imsi-208930000000001")
 
+		require.Nil(t, err)
 		require.Contains(t, expectedIPPool, allocatedIP)
 		userplaneInformation.ReleaseUEIP(upf, allocatedIP, false)
 	}
@@ -393,16 +410,16 @@ var configForIPPoolAllocate = &factory.UserPlaneInformation{
 var testCasesOfGetUEIPPool = []struct {
 	name          string
 	allocateTimes int
-	param         *context.UPFSelectionParams
+	param         *smf_context.UPFSelectionParams
 	subnet        uint8
 	useStaticIP   bool
 }{
 	{
 		name:          "static IP not in dynamic pool or static pool",
 		allocateTimes: 1,
-		param: &context.UPFSelectionParams{
+		param: &smf_context.UPFSelectionParams{
 			Dnn: "internet",
-			SNssai: &context.SNssai{
+			SNssai: &smf_context.SNssai{
 				Sst: 1,
 				Sd:  "111111",
 			},
@@ -414,9 +431,9 @@ var testCasesOfGetUEIPPool = []struct {
 	{
 		name:          "static IP not in static pool but in dynamic pool",
 		allocateTimes: 1,
-		param: &context.UPFSelectionParams{
+		param: &smf_context.UPFSelectionParams{
 			Dnn: "internet",
-			SNssai: &context.SNssai{
+			SNssai: &smf_context.SNssai{
 				Sst: 2,
 				Sd:  "222222",
 			},
@@ -428,9 +445,9 @@ var testCasesOfGetUEIPPool = []struct {
 	{
 		name:          "dynamic pool is exhausted",
 		allocateTimes: 2,
-		param: &context.UPFSelectionParams{
+		param: &smf_context.UPFSelectionParams{
 			Dnn: "internet",
-			SNssai: &context.SNssai{
+			SNssai: &smf_context.SNssai{
 				Sst: 2,
 				Sd:  "222222",
 			},
@@ -442,9 +459,9 @@ var testCasesOfGetUEIPPool = []struct {
 	{
 		name:          "static IP is in static pool",
 		allocateTimes: 1,
-		param: &context.UPFSelectionParams{
+		param: &smf_context.UPFSelectionParams{
 			Dnn: "internet",
-			SNssai: &context.SNssai{
+			SNssai: &smf_context.SNssai{
 				Sst: 3,
 				Sd:  "333333",
 			},
@@ -456,9 +473,9 @@ var testCasesOfGetUEIPPool = []struct {
 	{
 		name:          "static pool is exhausted",
 		allocateTimes: 2,
-		param: &context.UPFSelectionParams{
+		param: &smf_context.UPFSelectionParams{
 			Dnn: "internet",
-			SNssai: &context.SNssai{
+			SNssai: &smf_context.SNssai{
 				Sst: 3,
 				Sd:  "333333",
 			},
@@ -470,9 +487,9 @@ var testCasesOfGetUEIPPool = []struct {
 	{
 		name:          "static IP is in static pool, and dynamic pool is exhaust(allocate twice and not release)",
 		allocateTimes: 2,
-		param: &context.UPFSelectionParams{
+		param: &smf_context.UPFSelectionParams{
 			Dnn: "internet",
-			SNssai: &context.SNssai{
+			SNssai: &smf_context.SNssai{
 				Sst: 3,
 				Sd:  "333333",
 			},
@@ -484,9 +501,9 @@ var testCasesOfGetUEIPPool = []struct {
 }
 
 func TestGetUEIPPool(t *testing.T) {
-	userplaneInformation := context.NewUserPlaneInformation(configForIPPoolAllocate)
+	userplaneInformation := smf_context.NewUserPlaneInformation(configForIPPoolAllocate)
 	for _, upf := range userplaneInformation.UPFs {
-		upf.UPF.UPFStatus = context.AssociatedSetUpSuccess
+		upf.UPFStatus = smf_context.AssociatedSetUpSuccess
 	}
 
 	for ci, tc := range testCasesOfGetUEIPPool {
@@ -498,13 +515,15 @@ func TestGetUEIPPool(t *testing.T) {
 				}
 			}
 
-			var upf *context.UPNode
+			var upf *smf_context.UPF
 			var allocatedIP net.IP
 			var useStatic bool
+			var err error
 			for times := 1; times <= tc.allocateTimes; times++ {
-				upf, allocatedIP, useStatic = userplaneInformation.SelectUPFAndAllocUEIP(tc.param)
+				upf, allocatedIP, useStatic, err = userplaneInformation.SelectUPFAndAllocUEIP(tc.param, "imsi-208930000000001")
 			}
 
+			require.Nil(t, err)
 			require.Equal(t, tc.useStaticIP, useStatic)
 			// case 0 will not allocate IP
 			// case 2 and 4 which allocateTimes is 2 are used to test scenario which pool IP is exhausted

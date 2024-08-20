@@ -30,12 +30,11 @@ func HandlePfcpAssociationSetupRequest(msg *pfcpUdp.Message) {
 		logger.PfcpLog.Errorln("pfcp association needs NodeID")
 		return
 	}
-	logger.PfcpLog.Infof("Handle PFCP Association Setup Request with NodeID[%s]",
-		nodeID.ResolveNodeIdToIp().String())
+	logger.PfcpLog.Debugf("Handle PFCP Association Setup Request with NodeID[%v]", nodeID)
 
-	upf := smf_context.RetrieveUPFNodeByNodeID(*nodeID)
+	upf := smf_context.GetUserPlaneInformation().GetUPFNodeByNodeID(*nodeID)
 	if upf == nil {
-		logger.PfcpLog.Errorf("can't find UPF[%s]", nodeID.ResolveNodeIdToIp().String())
+		logger.PfcpLog.Errorf("can't find UPF with NodeID %v", nodeID)
 		return
 	}
 
@@ -56,10 +55,10 @@ func HandlePfcpAssociationReleaseRequest(msg *pfcpUdp.Message) {
 	pfcpMsg := msg.PfcpMessage.Body.(pfcp.PFCPAssociationReleaseRequest)
 
 	var cause pfcpType.Cause
-	upf := smf_context.RetrieveUPFNodeByNodeID(*pfcpMsg.NodeID)
+	upf := smf_context.GetUserPlaneInformation().GetUPFNodeByNodeID(*pfcpMsg.NodeID)
 
 	if upf != nil {
-		smf_context.RemoveUPFNodeByNodeID(*pfcpMsg.NodeID)
+		smf_context.GetUserPlaneInformation().RemoveUPFNodeByNodeID(*pfcpMsg.NodeID)
 		cause.CauseValue = pfcpType.CauseRequestAccepted
 	} else {
 		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
@@ -85,7 +84,7 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 
 	req := msg.PfcpMessage.Body.(pfcp.PFCPSessionReportRequest)
 	SEID := msg.PfcpMessage.Header.SEID
-	smContext := smf_context.GetSMContextBySEID(SEID)
+	smContext := smf_context.GetSelf().GetSMContextBySEID(SEID)
 	seqFromUPF := msg.PfcpMessage.Header.SequenceNumber
 
 	if smContext == nil {
@@ -95,41 +94,38 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 		return
 	}
 
-	smContext.SMLock.Lock()
-	defer smContext.SMLock.Unlock()
-
 	upfNodeID := smContext.GetNodeIDByLocalSEID(SEID)
-	upfNodeIDtoIP := upfNodeID.ResolveNodeIdToIp()
-	if upfNodeIDtoIP.IsUnspecified() {
+	if upfNodeID.ResolveNodeIdToIp().IsUnspecified() {
 		logger.PduSessLog.Errorf("Invalid PFCP Session Report Request : no PFCP session found with SEID %d", SEID)
 		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
 		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
 		return
 	}
-	upfNodeIDtoIPStr := upfNodeIDtoIP.String()
+	upf := smf_context.GetSelf().UserPlaneInformation.GetUPFNodeByNodeID(upfNodeID)
+	if upf == nil {
+		logger.PfcpLog.Errorf("can't find UPF with NodeID %v", upfNodeID)
+		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
+		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
+		return
+	}
+	uuid := upf.GetID()
 
-	pfcpCtx := smContext.PFCPContext[upfNodeIDtoIPStr]
+	pfcpCtx := smContext.PFCPSessionContexts[uuid]
 	if pfcpCtx == nil {
 		logger.PfcpLog.Errorf("pfcpCtx [nodeId: %v, seid:%d] not found", upfNodeID, SEID)
 		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
 		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
 		return
 	}
-	remoteSEID := pfcpCtx.RemoteSEID
 
-	upf := smf_context.RetrieveUPFNodeByNodeID(upfNodeID)
-	if upf == nil {
-		logger.PfcpLog.Errorf("can't find UPF[%s]", upfNodeIDtoIPStr)
+	remoteSEID := pfcpCtx.RemoteSEID
+	select {
+	case <-upf.Association.Done():
+		logger.PfcpLog.Warnf("UPF[%s] is not associated, reject SessionReportRequest", upf.GetNodeIDString())
 		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
 		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
 		return
-	}
-	if upf.UPFStatus != smf_context.AssociatedSetUpSuccess {
-		logger.PfcpLog.Warnf("PFCP Session Report Request : Not Associated with UPF[%s], Request Rejected",
-			upfNodeIDtoIPStr)
-		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
-		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
-		return
+	default:
 	}
 
 	if smContext.UpCnxState == models.UpCnxState_DEACTIVATED {

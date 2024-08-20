@@ -14,8 +14,8 @@ func (smContext *SMContext) HandleReports(
 	nodeId pfcpType.NodeID, reportTpye models.TriggerType,
 ) {
 	var usageReport UsageReport
-	upf := RetrieveUPFNodeByNodeID(nodeId)
-	upfId := upf.UUID()
+	upf := GetUserPlaneInformation().GetUPFNodeByNodeID(nodeId)
+	upfId := upf.GetID()
 
 	for _, report := range usageReportRequest {
 		usageReport.UrrId = report.URRID.UrrIdValue
