@@ -154,7 +154,7 @@ func (smfContext *SMFContext) RemoveSMContext(smContext *SMContext) {
 
 	// TODO: what about PFCP session rules?
 
-	//TODO: still required or done elsewhere?
+	// TODO: still required or done elsewhere?
 	for _, pfcpSessionContext := range smContext.PFCPSessionContexts {
 		smfContext.SeidSMContextMap.Delete(pfcpSessionContext.LocalSEID)
 	}
@@ -168,8 +168,8 @@ func (smfContext *SMFContext) RemoveSMContext(smContext *SMContext) {
 }
 
 // *** add unit test ***//
-func (smfContext *SMFContext) GetSMContextBySEID(SEID uint64) *SMContext {
-	if value, ok := smfContext.SeidSMContextMap.Load(SEID); ok {
+func (smfContext *SMFContext) GetSMContextBySEID(seid uint64) *SMContext {
+	if value, ok := smfContext.SeidSMContextMap.Load(seid); ok {
 		smContext := value.(*SMContext)
 		return smContext
 	}

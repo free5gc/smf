@@ -37,7 +37,7 @@ type UPF struct {
 	UPFStatus         UPFStatus
 	RecoveryTimeStamp time.Time
 
-	PFCPSessionContexts map[uint64]*PFCPSessionContext //localSEID to PFCPSessionContext
+	PFCPSessionContexts map[uint64]*PFCPSessionContext // localSEID to PFCPSessionContext
 
 	RestoresSessions           context.Context
 	RestoresSessionsCancelFunc context.CancelFunc

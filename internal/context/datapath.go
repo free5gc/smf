@@ -232,7 +232,7 @@ func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 	}
 
 	// TODO: free TEID?
-	//teid := node.UpLinkTunnel.TEID
+	// teid := node.UpLinkTunnel.TEID
 }
 
 func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
@@ -244,7 +244,7 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 		}
 	}
 	// TODO: free TEID?
-	//teid := node.DownLinkTunnel.TEID
+	// teid := node.DownLinkTunnel.TEID
 }
 
 func (node *DataPathNode) ID() string {

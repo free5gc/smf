@@ -3,13 +3,14 @@ package processor
 import (
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp"
 	"github.com/free5gc/pfcp/pfcpType"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	pfcp_message "github.com/free5gc/smf/internal/pfcp/message"
-	"github.com/google/uuid"
 )
 
 // It returns after all PFCP response have been returned or timed out,

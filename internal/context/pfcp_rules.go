@@ -72,7 +72,7 @@ func (pdr *PDR) SetStateRecursive(state RuleState) {
 			pdr.FAR.BAR.State = state
 		}
 	}
-	//TODO: really set urr and qer states as well?
+	// TODO: really set urr and qer states as well?
 	for _, urr := range pdr.URR {
 		urr.State = state
 	}
