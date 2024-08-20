@@ -504,6 +504,7 @@ func TestGetUEIPPool(t *testing.T) {
 	userplaneInformation := smf_context.NewUserPlaneInformation(configForIPPoolAllocate)
 	for _, upf := range userplaneInformation.UPFs {
 		upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+		upf.Association, upf.AssociationCancelFunc = context.WithCancel(context.Background())
 	}
 
 	for ci, tc := range testCasesOfGetUEIPPool {
