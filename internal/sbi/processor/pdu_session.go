@@ -804,9 +804,14 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			c.JSON(http.StatusForbidden, updateSmContextError)
 
 		case smf_context.SessionReleaseSuccess:
+			smContext.Log.Traceln("In case SessionReleaseSuccess")
+
 			p.ReleaseChargingSession(smContext)
 
-			smContext.Log.Traceln("In case SessionReleaseSuccess")
+			// release all tunnel resources and PFCP contexts of this SM context
+			// TODO: is this correct?
+			smf_context.GetSelf().RemoveSMContext(smContext)
+
 			smContext.SetState(smf_context.InActivePending)
 			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 
@@ -849,6 +854,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			} // Depends on the reason why N4 fail
 			c.JSON(http.StatusForbidden, updateSmContextError)
 		}
+
+		// TODO: required if we do: smf_context.GetSelf().RemoveSMContext(smContext)?
 		smContext.PostRemoveDataPath()
 	case smf_context.ModificationPending:
 		smContext.Log.Traceln("In case ModificationPending")

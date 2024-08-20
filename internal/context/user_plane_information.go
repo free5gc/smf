@@ -68,6 +68,7 @@ type UPNodeInterface interface {
 	GetLinks() UPPath
 	AddLink(link UPNodeInterface) bool
 	RemoveLink(link UPNodeInterface) bool
+	GetNodeID() pfcpType.NodeID
 	GetNodeIDString() string
 }
 
@@ -114,6 +115,10 @@ func (gNB *GNB) GetNodeIDString() string {
 		logger.CtxLog.Errorf("nodeID has unknown type %d", gNB.NodeID.NodeIdType)
 		return ""
 	}
+}
+
+func (gNB *GNB) GetNodeID() pfcpType.NodeID {
+	return gNB.NodeID
 }
 
 func (gNB *GNB) GetLinks() UPPath {
@@ -469,7 +474,6 @@ func (upi *UserPlaneInformation) GetUPFNodeByNodeID(nodeID pfcpType.NodeID) *UPF
 	return nil
 }
 
-// *** add unit test ***//
 func (upi *UserPlaneInformation) RemoveUPFNodeByNodeID(nodeID pfcpType.NodeID) bool {
 	id := nodeID.ResolveNodeIdToIp().String()
 	uuid := upi.NodeIDToUPF[id].ID
@@ -489,31 +493,33 @@ func (upi *UserPlaneInformation) GetUpfById(uuid uuid.UUID) *UPF {
 
 func (upi *UserPlaneInformation) UpNodeDelete(name string) {
 	if toDelete := upi.NameToUPNode[name]; toDelete != nil {
-		logger.InitLog.Infof("UPNode [%s] found. Deleting it.\n", name)
+		logger.InitLog.Infof("UPNode [%s] found, deleting it", name)
 		id := toDelete.GetNodeIDString()
 		delete(upi.NodeIDToName, id)
 		delete(upi.NameToUPNode, name)
 
 		if toDelete.GetType() == UPNODE_AN {
+			logger.InitLog.Tracef("Delete AN[%s] using its NodeID", id)
 			delete(upi.AccessNetwork, name)
 		}
 		if toDelete.GetType() == UPNODE_UPF {
-			uuid := toDelete.(*UPF).ID
+			logger.InitLog.Tracef("Delete UPF[%s] using its NodeID", id)
+			uuid := upi.NodeIDToUPF[id].ID
 			delete(upi.NodeIDToUPF, id)
 			delete(upi.UPFs, uuid)
-		}
-		for dnn, destMap := range upi.DefaultUserPlanePathToUPF {
-			for uuid, path := range destMap {
-				if path.NodeInPath(toDelete) != -1 {
-					logger.InitLog.Infof("Invalidate cache entry: DefaultUserPlanePathToUPF[%s][%s].\n", dnn, uuid)
-					delete(upi.DefaultUserPlanePathToUPF[dnn], uuid)
+			for dnn, destMap := range upi.DefaultUserPlanePathToUPF {
+				for uuid, path := range destMap {
+					if path.NodeInPath(toDelete) != -1 {
+						logger.InitLog.Infof("Invalidate cache entry: DefaultUserPlanePathToUPF[%s][%s].\n", dnn, uuid)
+						delete(upi.DefaultUserPlanePathToUPF[dnn], uuid)
+					}
 				}
 			}
-		}
-		for dnn, path := range upi.DefaultUserPlanePath {
-			if path.NodeInPath(toDelete) != -1 {
-				logger.InitLog.Infof("Invalidate cache entry: DefaultUserPlanePath[%s].\n", dnn)
-				delete(upi.DefaultUserPlanePath, dnn)
+			for dnn, path := range upi.DefaultUserPlanePath {
+				if path.NodeInPath(toDelete) != -1 {
+					logger.InitLog.Infof("Invalidate cache entry: DefaultUserPlanePath[%s].\n", dnn)
+					delete(upi.DefaultUserPlanePath, dnn)
+				}
 			}
 		}
 		// update links
@@ -521,48 +527,9 @@ func (upi *UserPlaneInformation) UpNodeDelete(name string) {
 			node.RemoveLink(toDelete)
 		}
 	} else {
-		logger.CtxLog.Infof("UPNode [%s] NOT found.\n", name)
+		logger.CtxLog.Infof("UPNode[%s] NOT found.\n", name)
 	}
 }
-
-/* LaumiH TODO: check if this does the same as above function
-func (upi *UserPlaneInformation) UpNodeDelete(upNodeName string) {
-	upNode, ok := upi.UPNodes[upNodeName]
-	if ok {
-		logger.InitLog.Infof("UPNode [%s] found. Deleting it.\n", upNodeName)
-		if upNode.Type == UPNODE_UPF {
-			logger.InitLog.Tracef("Delete UPF [%s] from its NodeID.\n", upNodeName)
-			RemoveUPFNodeByNodeID(upNode.UPF.NodeID)
-			if _, ok = upi.UPFs[upNodeName]; ok {
-				logger.InitLog.Tracef("Delete UPF [%s] from upi.UPFs.\n", upNodeName)
-				delete(upi.UPFs, upNodeName)
-			}
-			for selectionStr, destMap := range upi.DefaultUserPlanePathToUPF {
-				for destIp, path := range destMap {
-					if nodeInPath(upNode, path) != -1 {
-						logger.InitLog.Infof("Invalidate cache entry: DefaultUserPlanePathToUPF[%s][%s].\n", selectionStr, destIp)
-						delete(upi.DefaultUserPlanePathToUPF[selectionStr], destIp)
-					}
-				}
-			}
-		}
-		if upNode.Type == UPNODE_AN {
-			logger.InitLog.Tracef("Delete AN [%s] from upi.AccessNetwork.\n", upNodeName)
-			delete(upi.AccessNetwork, upNodeName)
-		}
-		logger.InitLog.Tracef("Delete UPNode [%s] from upi.UPNodes.\n", upNodeName)
-		delete(upi.UPNodes, upNodeName)
-
-		// update links
-		for name, n := range upi.UPNodes {
-			if index := nodeInLink(upNode, n.Links); index != -1 {
-				logger.InitLog.Infof("Delete UPLink [%s] <=> [%s].\n", name, upNodeName)
-				n.Links = removeNodeFromLink(n.Links, index)
-			}
-		}
-	}
-}
-*/
 
 func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNN(selection *UPFSelectionParams) (path UPPath) {
 	path, pathExist := upi.DefaultUserPlanePath[selection.String()]

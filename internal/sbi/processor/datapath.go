@@ -116,6 +116,9 @@ func (p *Processor) ReleaseSessionAtUPFs(
 
 	waitForReply := 0
 
+	// note: do NOT remove datapath and tunnel in SM context before UPF(s) returned SessionReleaseSuccess!
+	// cleanup happens in pdu_session.go after receiving all PFCP responses
+
 	for _, pfcpSessionContext := range smContext.PFCPSessionContexts {
 		upf := pfcpSessionContext.UPF
 		nodeID := upf.GetNodeIDString()
@@ -526,72 +529,3 @@ func waitAllPfcpRsp(
 	// at this point all went well and the pfcpState is success
 	return pfcpState
 }
-
-/* LaumiH is this function properly moved to another place?
-func ReleaseTunnel(smContext *smf_context.SMContext) []SendPfcpResult {
-	resChan := make(chan SendPfcpResult)
-
-	deletedPFCPNode := make(map[string]bool)
-	for _, dataPath := range smContext.Tunnel.DataPathPool {
-		var targetNodes []*smf_context.DataPathNode
-		for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
-			targetNodes = append(targetNodes, node)
-		}
-		dataPath.DeactivateTunnelAndPDR(smContext)
-		for _, node := range targetNodes {
-			curUPFID, err := node.GetUPFID()
-			if err != nil {
-				logger.PduSessLog.Error(err)
-				continue
-			}
-			if _, exist := deletedPFCPNode[curUPFID]; !exist {
-				go deletePfcpSession(node.UPF, smContext, resChan)
-				deletedPFCPNode[curUPFID] = true
-			}
-		}
-	}
-
-	// collect all responses
-	resList := make([]SendPfcpResult, 0, len(deletedPFCPNode))
-	for i := 0; i < len(deletedPFCPNode); i++ {
-		resList = append(resList, <-resChan)
-	}
-
-	return resList
-}
-*/
-
-/* LaumiH is this function properly moved to another place?
-func deletePfcpSession(upf *smf_context.UPF, ctx *smf_context.SMContext, resCh chan<- SendPfcpResult) {
-	logger.PduSessLog.Infoln("Sending PFCP Session Deletion Request")
-
-	rcvMsg, err := pfcp_message.SendPfcpSessionDeletionRequest(upf, ctx)
-	if err != nil {
-		logger.PduSessLog.Warnf("Sending PFCP Session Deletion Request error: %+v", err)
-		resCh <- SendPfcpResult{
-			Status: smf_context.SessionReleaseFailed,
-			Err:    err,
-		}
-		return
-	}
-
-	rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionDeletionResponse)
-	if rsp.Cause != nil && rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
-		logger.PduSessLog.Info("Received PFCP Session Deletion Accepted Response")
-		resCh <- SendPfcpResult{
-			Status: smf_context.SessionReleaseSuccess,
-		}
-		if rsp.UsageReport != nil {
-			SEID := rcvMsg.PfcpMessage.Header.SEID
-			upfNodeID := ctx.GetNodeIDByLocalSEID(SEID)
-			ctx.HandleReports(nil, nil, rsp.UsageReport, upfNodeID, "")
-		}
-	} else {
-		logger.PduSessLog.Warn("Received PFCP Session Deletion Not Accepted Response")
-		resCh <- SendPfcpResult{
-			Status: smf_context.SessionReleaseFailed,
-			Err:    fmt.Errorf("cause[%d] if not request accepted", rsp.Cause.CauseValue),
-		}
-	}
-}
-*/

@@ -138,8 +138,8 @@ func (smfContext *SMFContext) GetSMContextById(id string, pduSessID int32) *SMCo
 func (smfContext *SMFContext) RemoveSMContext(smContext *SMContext) {
 	logger.CtxLog.Traceln("In RemoveSMContext")
 
-	// TODO: free TEIDs and PDR IDs
 	for _, dataPath := range smContext.Tunnel.DataPathPool {
+		// TODO: free PDR IDs?
 		dataPath.DeactivateTunnelAndPDR(smContext)
 	}
 

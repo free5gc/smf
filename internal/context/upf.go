@@ -22,43 +22,6 @@ import (
 
 var upfPool sync.Map
 
-/* LaumiH moved to datapath.go
-type UPTunnel struct {
-	PathIDGenerator *idgenerator.IDGenerator
-	DataPathPool    DataPathPool
-	ANInformation   struct {
-		IPAddress net.IP
-		TEID      uint32
-	}
-}
-*/
-
-/* LaumiH moved to datapath.go
-func (t *UPTunnel) UpdateANInformation(ip net.IP, teid uint32) {
-	t.ANInformation.IPAddress = ip
-	t.ANInformation.TEID = teid
-
-	for _, dataPath := range t.DataPathPool {
-		if dataPath.Activated {
-			ANUPF := dataPath.FirstDPNode
-			DLPDR := ANUPF.DownLinkTunnel.PDR
-
-			if DLPDR.FAR.ForwardingParameters.OuterHeaderCreation != nil {
-				// Old AN tunnel exists
-				DLPDR.FAR.ForwardingParameters.SendEndMarker = true
-			}
-
-			DLPDR.FAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
-			dlOuterHeaderCreation := DLPDR.FAR.ForwardingParameters.OuterHeaderCreation
-			dlOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-			dlOuterHeaderCreation.Teid = t.ANInformation.TEID
-			dlOuterHeaderCreation.Ipv4Address = t.ANInformation.IPAddress.To4()
-			DLPDR.FAR.State = RULE_UPDATE
-		}
-	}
-}
-*/
-
 type UPFStatus int
 
 const (
@@ -126,6 +89,10 @@ func (upf *UPF) GetNodeIDString() string {
 		logger.CtxLog.Errorf("nodeID has unknown type %d", upf.NodeID.NodeIdType)
 		return ""
 	}
+}
+
+func (upf *UPF) GetNodeID() pfcpType.NodeID {
+	return upf.NodeID
 }
 
 func (upf *UPF) GetName() string {
@@ -412,86 +379,6 @@ func (upf *UPF) PFCPAddr() *net.UDPAddr {
 		Port: pfcpUdp.PFCP_PORT,
 	}
 }
-
-/* LaumiH moved to user_plane_infromation.go */
-// *** add unit test ***//
-/*
-func RetrieveUPFNodeByNodeID(nodeID pfcpType.NodeID) *UPF {
-	var targetUPF *UPF = nil
-	upfPool.Range(func(key, value interface{}) bool {
-		curUPF := value.(*UPF)
-		if curUPF.NodeID.NodeIdType != nodeID.NodeIdType &&
-			(curUPF.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn || nodeID.NodeIdType == pfcpType.NodeIdTypeFqdn) {
-			curUPFNodeIdIP := curUPF.NodeID.ResolveNodeIdToIp().To4()
-			nodeIdIP := nodeID.ResolveNodeIdToIp().To4()
-			logger.CtxLog.Tracef("RetrieveUPF - upfNodeIdIP:[%+v], nodeIdIP:[%+v]", curUPFNodeIdIP, nodeIdIP)
-			if reflect.DeepEqual(curUPFNodeIdIP, nodeIdIP) {
-				targetUPF = curUPF
-				return false
-			}
-		} else if reflect.DeepEqual(curUPF.NodeID, nodeID) {
-			targetUPF = curUPF
-			return false
-		}
-		return true
-	})
-
-	return targetUPF
-}
-*/
-// *** add unit test ***//
-/*
-func RemoveUPFNodeByNodeID(nodeID pfcpType.NodeID) bool {
-	upfID := ""
-	upfPool.Range(func(key, value interface{}) bool {
-		upfID = key.(string)
-		upf := value.(*UPF)
-		if upf.NodeID.NodeIdType != nodeID.NodeIdType &&
-			(upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn || nodeID.NodeIdType == pfcpType.NodeIdTypeFqdn) {
-			upfNodeIdIP := upf.NodeID.ResolveNodeIdToIp().To4()
-			nodeIdIP := nodeID.ResolveNodeIdToIp().To4()
-			logger.CtxLog.Tracef("RemoveUPF - upfNodeIdIP:[%+v], nodeIdIP:[%+v]", upfNodeIdIP, nodeIdIP)
-			if reflect.DeepEqual(upfNodeIdIP, nodeIdIP) {
-				return false
-			}
-		} else if reflect.DeepEqual(upf.NodeID, nodeID) {
-			return false
-		}
-		upfID = ""
-		return true
-	})
-
-	if upfID != "" {
-		upfPool.Delete(upfID)
-		return true
-	}
-	return false
-}
-
-func SelectUPFByDnn(dnn string) *UPF {
-	var upf *UPF
-	upfPool.Range(func(key, value interface{}) bool {
-		upf = value.(*UPF)
-		if upf.UPIPInfo.Assoni && upf.UPIPInfo.NetworkInstance.NetworkInstance == dnn {
-			return false
-		}
-		upf = nil
-		return true
-	})
-	return upf
-}
-
-func (upf *UPF) GetUPFIP() string {
-	upfIP := upf.GetNodeIDString()
-	return upfIP
-}
-
-func (upf *UPF) GetUPFID() string {
-	upInfo := GetUserPlaneInformation()
-	upfIP := upf.GetNodeIDString()
-	return upInfo.GetUPFIDByIP(upfIP)
-}
-*/
 
 func (upf *UPF) generatePDRID() (uint16, error) {
 	select {
