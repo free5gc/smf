@@ -466,6 +466,11 @@ func (upi *UserPlaneInformation) LinksFromConfiguration(upTopology *factory.User
 
 // *** add unit test ***//
 func (upi *UserPlaneInformation) GetUPFNodeByNodeID(nodeID pfcpType.NodeID) *UPF {
+	ip := nodeID.ResolveNodeIdToIp()
+	if ip == nil || ip.IsUnspecified() {
+		logger.CtxLog.Errorln("Given NodeID is unspecified, cannot find UPF")
+		return nil
+	}
 	for id, upf := range upi.NodeIDToUPF {
 		if id == nodeID.ResolveNodeIdToIp().String() {
 			return upf
