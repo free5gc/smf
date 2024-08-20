@@ -1,6 +1,7 @@
 package context_test
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -179,13 +180,12 @@ func TestAddPDR(t *testing.T) {
 		{
 			upf:           smf_context.NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddPDR should fail",
-			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
+			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
 	}
 
-	//TODO: start association context in all tests!!
-
 	testCases[0].upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+	testCases[0].upf.Association, testCases[0].upf.AssociationCancelFunc = context.WithCancel(context.Background())
 
 	Convey("AddPDR should indeed add PDR and report error appropiately", t, func() {
 		for i, testcase := range testCases {
@@ -224,11 +224,12 @@ func TestAddFAR(t *testing.T) {
 		{
 			upf:           smf_context.NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddFAR should fail",
-			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
+			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
 	}
 
 	testCases[0].upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+	testCases[0].upf.Association, testCases[0].upf.AssociationCancelFunc = context.WithCancel(context.Background())
 
 	Convey("AddFAR should indeed add FAR and report error appropiately", t, func() {
 		for i, testcase := range testCases {
@@ -267,11 +268,12 @@ func TestAddQER(t *testing.T) {
 		{
 			upf:           smf_context.NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddQER should fail",
-			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
+			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
 	}
 
 	testCases[0].upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+	testCases[0].upf.Association, testCases[0].upf.AssociationCancelFunc = context.WithCancel(context.Background())
 
 	Convey("AddQER should indeed add QER and report error appropiately", t, func() {
 		for i, testcase := range testCases {
@@ -310,11 +312,12 @@ func TestAddBAR(t *testing.T) {
 		{
 			upf:           smf_context.NewUPF(mockUPNode, mockIfaces, mockUpfSNssaiInfos),
 			resultStr:     "AddBAR should fail",
-			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
+			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
 	}
 
 	testCases[0].upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+	testCases[0].upf.Association, testCases[0].upf.AssociationCancelFunc = context.WithCancel(context.Background())
 
 	Convey("AddBAR should indeed add BAR and report error appropiately", t, func() {
 		for i, testcase := range testCases {
