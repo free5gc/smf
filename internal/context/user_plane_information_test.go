@@ -6,6 +6,7 @@ import (
 	"net"
 	"testing"
 
+	. "github.com/smartystreets/goconvey/convey"
 	"github.com/stretchr/testify/require"
 
 	"github.com/free5gc/openapi/models"
@@ -407,133 +408,146 @@ var configForIPPoolAllocate = &factory.UserPlaneInformation{
 	},
 }
 
-var testCasesOfGetUEIPPool = []struct {
-	name          string
-	allocateTimes int
-	param         *smf_context.UPFSelectionParams
-	subnet        uint8
-	useStaticIP   bool
-}{
-	{
-		name:          "static IP not in dynamic pool or static pool",
-		allocateTimes: 1,
-		param: &smf_context.UPFSelectionParams{
-			Dnn: "internet",
-			SNssai: &smf_context.SNssai{
-				Sst: 1,
-				Sd:  "111111",
-			},
-			PDUAddress: net.ParseIP("10.61.0.10"),
-		},
-		subnet:      61,
-		useStaticIP: false,
-	},
-	{
-		name:          "static IP not in static pool but in dynamic pool",
-		allocateTimes: 1,
-		param: &smf_context.UPFSelectionParams{
-			Dnn: "internet",
-			SNssai: &smf_context.SNssai{
-				Sst: 2,
-				Sd:  "222222",
-			},
-			PDUAddress: net.ParseIP("10.62.0.10").To4(),
-		},
-		subnet:      62,
-		useStaticIP: false,
-	},
-	{
-		name:          "dynamic pool is exhausted",
-		allocateTimes: 2,
-		param: &smf_context.UPFSelectionParams{
-			Dnn: "internet",
-			SNssai: &smf_context.SNssai{
-				Sst: 2,
-				Sd:  "222222",
-			},
-			PDUAddress: net.ParseIP("10.62.0.10").To4(),
-		},
-		subnet:      62,
-		useStaticIP: false,
-	},
-	{
-		name:          "static IP is in static pool",
-		allocateTimes: 1,
-		param: &smf_context.UPFSelectionParams{
-			Dnn: "internet",
-			SNssai: &smf_context.SNssai{
-				Sst: 3,
-				Sd:  "333333",
-			},
-			PDUAddress: net.ParseIP("10.63.0.10").To4(),
-		},
-		subnet:      63,
-		useStaticIP: true,
-	},
-	{
-		name:          "static pool is exhausted",
-		allocateTimes: 2,
-		param: &smf_context.UPFSelectionParams{
-			Dnn: "internet",
-			SNssai: &smf_context.SNssai{
-				Sst: 3,
-				Sd:  "333333",
-			},
-			PDUAddress: net.ParseIP("10.63.0.10").To4(),
-		},
-		subnet:      63,
-		useStaticIP: false,
-	},
-	{
-		name:          "static IP is in static pool, and dynamic pool is exhaust(allocate twice and not release)",
-		allocateTimes: 2,
-		param: &smf_context.UPFSelectionParams{
-			Dnn: "internet",
-			SNssai: &smf_context.SNssai{
-				Sst: 3,
-				Sd:  "333333",
-			},
-			PDUAddress: net.ParseIP("10.63.0.10").To4(),
-		},
-		subnet:      63,
-		useStaticIP: false,
-	},
-}
-
 func TestGetUEIPPool(t *testing.T) {
+	testCases := []struct {
+		name          string
+		allocateTimes int
+		param         *smf_context.UPFSelectionParams
+		subnet        int
+		useStaticIP   bool
+		expectedIP    net.IP
+		expectedError error
+	}{
+		{
+			name:          "static IP not in dynamic pool or static pool",
+			allocateTimes: 1,
+			param: &smf_context.UPFSelectionParams{
+				Dnn: "internet",
+				SNssai: &smf_context.SNssai{
+					Sst: 1,
+					Sd:  "111111",
+				},
+				PDUAddress: net.ParseIP("10.61.0.10"),
+			},
+			subnet:        61,
+			useStaticIP:   false,
+			expectedIP:    nil,
+			expectedError: fmt.Errorf("all PSA UPF IP pools exhausted for selection params"),
+		},
+		{
+			name:          "static IP not in static pool but in dynamic pool",
+			allocateTimes: 1,
+			param: &smf_context.UPFSelectionParams{
+				Dnn: "internet",
+				SNssai: &smf_context.SNssai{
+					Sst: 2,
+					Sd:  "222222",
+				},
+				PDUAddress: net.ParseIP("10.62.0.10").To4(),
+			},
+			subnet:        62,
+			useStaticIP:   false,
+			expectedIP:    net.ParseIP("10.62.0.10"),
+			expectedError: nil,
+		},
+		{
+			name:          "dynamic pool is exhausted",
+			allocateTimes: 2,
+			param: &smf_context.UPFSelectionParams{
+				Dnn: "internet",
+				SNssai: &smf_context.SNssai{
+					Sst: 2,
+					Sd:  "222222",
+				},
+				PDUAddress: net.ParseIP("10.62.0.10").To4(),
+			},
+			subnet:        62,
+			useStaticIP:   false,
+			expectedIP:    nil,
+			expectedError: fmt.Errorf("all PSA UPF IP pools exhausted for selection params"),
+		},
+		{
+			name:          "static IP is in static pool",
+			allocateTimes: 1,
+			param: &smf_context.UPFSelectionParams{
+				Dnn: "internet",
+				SNssai: &smf_context.SNssai{
+					Sst: 3,
+					Sd:  "333333",
+				},
+				PDUAddress: net.ParseIP("10.63.0.10").To4(),
+			},
+			subnet:        63,
+			useStaticIP:   true,
+			expectedIP:    net.ParseIP("10.63.0.10"),
+			expectedError: nil,
+		},
+		{
+			name:          "static pool is exhausted",
+			allocateTimes: 2,
+			param: &smf_context.UPFSelectionParams{
+				Dnn: "internet",
+				SNssai: &smf_context.SNssai{
+					Sst: 3,
+					Sd:  "333333",
+				},
+				PDUAddress: net.ParseIP("10.63.0.10").To4(),
+			},
+			subnet:        63,
+			useStaticIP:   false,
+			expectedIP:    nil,
+			expectedError: fmt.Errorf("all PSA UPF IP pools exhausted for selection params"),
+		},
+		{
+			name:          "static IP is in static pool, and dynamic pool is exhaust (allocate twice and not release)",
+			allocateTimes: 2,
+			param: &smf_context.UPFSelectionParams{
+				Dnn: "internet",
+				SNssai: &smf_context.SNssai{
+					Sst: 3,
+					Sd:  "333333",
+				},
+				PDUAddress: net.ParseIP("10.63.0.10").To4(),
+			},
+			subnet:        63,
+			useStaticIP:   false,
+			expectedIP:    nil,
+			expectedError: fmt.Errorf("all PSA UPF IP pools exhausted for selection params"),
+		},
+	}
+
 	userplaneInformation := smf_context.NewUserPlaneInformation(configForIPPoolAllocate)
 	for _, upf := range userplaneInformation.UPFs {
 		upf.UPFStatus = smf_context.AssociatedSetUpSuccess
 		upf.Association, upf.AssociationCancelFunc = context.WithCancel(context.Background())
 	}
 
-	for ci, tc := range testCasesOfGetUEIPPool {
-		t.Run(tc.name, func(t *testing.T) {
-			var expectedIPPool []net.IP
-			for i := 0; i <= 255; i++ {
-				for j := 1; j <= 255; j++ {
-					expectedIPPool = append(expectedIPPool, net.ParseIP(fmt.Sprintf("10.%d.%d.%d", tc.subnet, i, j)).To4())
-				}
-			}
+	Convey("Given UE IP address to allocate and UPFSelectionParams, should return error if pool is exhausted or allocate UE IP", t, func() {
+		for _, testcase := range testCases {
+			Convey(testcase.name, func() {
+				Convey(testcase.param, func() {
+					for times := 1; times <= testcase.allocateTimes; times++ {
+						upf, allocatedIP, useStatic, err := userplaneInformation.SelectUPFAndAllocUEIP(testcase.param, "imsi-208930000000001")
+						So(useStatic, ShouldEqual, testcase.useStaticIP)
+						// TODO: assert selected UPF
+						So(allocatedIP, ShouldEqual, testcase.expectedIP)
+						So(err, ShouldEqual, testcase.expectedError)
 
-			var upf *smf_context.UPF
-			var allocatedIP net.IP
-			var useStatic bool
-			var err error
-			for times := 1; times <= tc.allocateTimes; times++ {
-				upf, allocatedIP, useStatic, err = userplaneInformation.SelectUPFAndAllocUEIP(tc.param, "imsi-208930000000001")
-			}
-
-			require.Nil(t, err)
-			require.Equal(t, tc.useStaticIP, useStatic)
-			// case 0 will not allocate IP
-			// case 2 and 4 which allocateTimes is 2 are used to test scenario which pool IP is exhausted
-			if ci == 0 || tc.allocateTimes > 1 {
-				require.Nil(t, allocatedIP)
-			} else {
-				require.Contains(t, expectedIPPool, allocatedIP)
-				userplaneInformation.ReleaseUEIP(upf, allocatedIP, tc.useStaticIP)
-			}
-		})
-	}
+						// case 0 will not allocate IP
+						// case 2 and 4 which allocateTimes is 2 are used to test scenario which pool IP is exhausted
+						if allocatedIP != nil {
+							var expectedIPPool []net.IP
+							for i := 0; i <= 255; i++ {
+								for j := 1; j <= 255; j++ {
+									expectedIPPool = append(expectedIPPool, net.ParseIP(fmt.Sprintf("10.%d.%d.%d", testcase.subnet, i, j)).To4())
+								}
+							}
+							So(allocatedIP, ShouldContain, expectedIPPool)
+							userplaneInformation.ReleaseUEIP(upf, allocatedIP, testcase.useStaticIP)
+						}
+					}
+				})
+			})
+		}
+	})
 }

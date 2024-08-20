@@ -863,9 +863,9 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(
 			selectedPSA = upf
 		}
 
-		IPPools, useStaticIPPool := getUEIPPool(upf, selection)
+		IPPools, useStaticIPPool := getUEIPPools(upf, selection)
 		if len(IPPools) == 0 {
-			logger.CtxLog.Warnf("IP pool exhausted for candidate UPF[%s]", selectedPSA.GetNodeIDString())
+			logger.CtxLog.Warnf("IP pools exhausted for candidate UPF[%s]", selectedPSA.GetNodeIDString())
 			continue
 		}
 		sortedIPPoolList := createPoolListForSelection(IPPools)
@@ -883,7 +883,7 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(
 		logger.CtxLog.Debug("check next UPF")
 	}
 	// checked all UPFs
-	return nil, nil, false, fmt.Errorf("all PSA UPF IP pools exhausted for selection params %+v", selection)
+	return nil, nil, false, fmt.Errorf("all PSA UPF IP pools exhausted for selection params")
 }
 
 func createUPFListForSelection(inputList []*UPF) (outputList []*UPF) {
@@ -896,8 +896,8 @@ func createPoolListForSelection(inputList []*UeIPPool) (outputList []*UeIPPool) 
 	return append(inputList[offset:], inputList[:offset]...)
 }
 
-// getUEIPPool will return IP pools and use/not use static IP pool
-func getUEIPPool(upf *UPF, selection *UPFSelectionParams) ([]*UeIPPool, bool) {
+// getUEIPPools will return IP pools and use/not use static IP pool
+func getUEIPPools(upf *UPF, selection *UPFSelectionParams) ([]*UeIPPool, bool) {
 	for _, snssaiInfo := range upf.SNssaiInfos {
 		currentSnssai := snssaiInfo.SNssai
 		targetSnssai := selection.SNssai
@@ -909,27 +909,34 @@ func getUEIPPool(upf *UPF, selection *UPFSelectionParams) ([]*UeIPPool, bool) {
 						continue
 					}
 					if selection.PDUAddress != nil {
-						// return static ue ip pool
+						logger.CfgLog.Debugf("Try to allocate static UE IP [%s] in static pool", selection.PDUAddress)
 						for _, ueIPPool := range dnnInfo.StaticIPPools {
 							if ueIPPool.ueSubNet.Contains(selection.PDUAddress) {
-								// return match IPPools
+								// return matched IPPool
+								logger.CfgLog.Infof("Going to allocate static UE IP [%s] in static pool [%s]",
+									selection.PDUAddress, ueIPPool.ueSubNet.IP)
 								return []*UeIPPool{ueIPPool}, true
 							}
 						}
+						logger.CfgLog.Infof("Cannot allocate static UE IP in static pool, try dynamic pool")
 
-						// return dynamic ue ip pool
+						logger.CfgLog.Debugf("Try to allocate static UE IP [%s] in dynamic pool", selection.PDUAddress)
 						for _, ueIPPool := range dnnInfo.UeIPPools {
 							if ueIPPool.ueSubNet.Contains(selection.PDUAddress) {
-								logger.CfgLog.Infof("cannot find selected IP in static pool[%v], use dynamic pool[%+v]",
-									dnnInfo.StaticIPPools, dnnInfo.UeIPPools)
+								// return matched IPPool
+								logger.CfgLog.Infof("Going to allocate static UE IP [%s] in dynamic pool [%s]",
+									selection.PDUAddress, ueIPPool.ueSubNet.IP)
 								return []*UeIPPool{ueIPPool}, false
 							}
 						}
 
+						logger.CfgLog.Warnf("Could not allocate UE IP [%s] in static or dynamic pool!",
+							selection.PDUAddress)
 						return nil, false
 					}
 
 					// if no specify static PDU Address
+					logger.CfgLog.Debugf("No static UE IP specified, allocate in any free IP pool")
 					return dnnInfo.UeIPPools, false
 				}
 			}
