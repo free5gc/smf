@@ -101,7 +101,7 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 		logger.ChargingLog.Infof("Send Charging Data Request[Update] successfully")
 		smContext.SetState(smf_context.PFCPModification)
 
-		//URRs in PFCPSessionContexts of UPF are already set to RULE_UPDATE
+		// URRs in PFCPSessionContexts of UPF are already set to RULE_UPDATE
 
 		p.updateGrantedQuota(smContext, rsp.MultipleUnitInformation)
 

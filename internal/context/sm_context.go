@@ -539,7 +539,6 @@ func (smContext *SMContext) FindPSAandAllocUeIP() error {
 
 	var err error
 	smContext.SelectedUPF, smContext.PDUAddress, smContext.UseStaticIP, err = GetUserPlaneInformation().SelectUPFAndAllocUEIP(smContext.SelectionParam, smContext.Supi)
-
 	if err != nil {
 		return fmt.Errorf("failed to find PSA and allocate PDU address: %v", err)
 	}

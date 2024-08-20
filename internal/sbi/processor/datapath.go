@@ -59,7 +59,6 @@ func (p *Processor) ActivatePDUSessionAtUPFs(
 func (p *Processor) UpdatePDUSessionAtANUPF(
 	smContext *smf_context.SMContext,
 ) smf_context.PFCPSessionResponseStatus {
-
 	defaultPath := smContext.Tunnel.DataPathPool.GetDefaultPath()
 	anUPF := defaultPath.FirstDPNode.UPF
 	nodeID := anUPF.GetNodeIDString()
@@ -95,7 +94,7 @@ func (p *Processor) UpdatePDUSessionAtANUPF(
 		}
 	}
 
-	//TODO: can we integrate the functionality in this code partly in session establishment?
+	// TODO: can we integrate the functionality in this code partly in session establishment?
 	if smf_context.GetSelf().ULCLSupport && smContext.BPManager != nil {
 		if smContext.BPManager.BPStatus == smf_context.UnInitialized {
 			logger.PfcpLog.Infoln("Add PSAAndULCL")
@@ -111,7 +110,6 @@ func (p *Processor) UpdatePDUSessionAtANUPF(
 func (p *Processor) ReleaseSessionAtUPFs(
 	smContext *smf_context.SMContext,
 ) smf_context.PFCPSessionResponseStatus {
-
 	resChan := make(chan smf_context.SendPfcpResult)
 	defer close(resChan)
 
@@ -152,7 +150,6 @@ func (p *Processor) ReleaseSessionAtUPFs(
 func RestorePDUSessionAtUPF(
 	pfcpSessionContext *smf_context.PFCPSessionContext,
 ) smf_context.PFCPSessionResponseStatus {
-
 	// pfcpSessionContext.Restoring is locked by caller
 	// unlock happens in restorePfcpSession
 
@@ -507,7 +504,6 @@ func waitAllPfcpRsp(
 			// one of the UPFs failed, report failure
 			logger.PfcpLog.Errorf("Session management process failed due to at least one UPF reporting %s",
 				res.Status)
-
 		} else if res.Status == smf_context.SessionReleaseFailed {
 			// one of the UPFs failed, report failure
 			logger.PfcpLog.Errorf("Session management process failed due to at least one UPF reporting %s",

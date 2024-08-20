@@ -104,7 +104,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 
 	// TODO: from here on, RELEASE sm context after error before returning!
 
-	if err := HandlePDUSessionEstablishmentRequest(smContext, m.PDUSessionEstablishmentRequest); err != nil {
+	if err = HandlePDUSessionEstablishmentRequest(smContext, m.PDUSessionEstablishmentRequest); err != nil {
 		smContext.Log.Errorf("PDU Session Establishment fail by %s", err)
 		gsmError := &GSMError{}
 		if errors.As(err, &gsmError) {
@@ -134,7 +134,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 
 	// choose PSA and allocate UE IP address (or configure static IP)
 	// also selects PSA in ULCL scenarios
-	if err := smContext.FindPSAandAllocUeIP(); err != nil {
+	if err = smContext.FindPSAandAllocUeIP(); err != nil {
 		smContext.SetState(smf_context.InActive)
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
 		p.makeEstRejectResAndReleaseSMContext(c, smContext,
@@ -276,7 +276,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		case smf_context.SessionEstablishSuccess:
 			p.sendPDUSessionEstablishmentAccept(smContext)
 		case smf_context.SessionEstablishFailed:
-			p.sendPDUSessionEstablishmentReject(smContext, nasMessage.Cause5GSMNetworkFailure)
+			p.sendPDUSessionEstablishmentReject(smContext)
 		}
 
 		smContext.SendUpPathChgNotification("LATE", SendUpPathChgEventExposureNotification)
@@ -1083,7 +1083,6 @@ func (p *Processor) makeEstRejectResAndReleaseSMContext(
 
 func (p *Processor) sendPDUSessionEstablishmentReject(
 	smContext *smf_context.SMContext,
-	nasErrorCause uint8,
 ) {
 	smNasBuf, err := smf_context.BuildGSMPDUSessionEstablishmentReject(
 		smContext, nasMessage.Cause5GSMNetworkFailure)

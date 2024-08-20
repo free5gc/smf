@@ -549,7 +549,7 @@ func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNN(selection *UPFSele
 func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNNAndUPF(
 	selection *UPFSelectionParams,
 	upf *UPF,
-) (path UPPath) {
+) UPPath {
 	uuid := upf.ID
 
 	if upi.DefaultUserPlanePathToUPF[selection.String()] != nil {
@@ -841,7 +841,7 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(
 		if err != nil {
 			return nil, nil, false, err
 		}
-		sortedUPFList, err = upi.selectAnchorUPF(source, selection) //select candidates for the PSA UPF
+		sortedUPFList, err = upi.selectAnchorUPF(source, selection) // select candidates for the PSA UPF
 		if err != nil {
 			return nil, nil, false, err
 		}
