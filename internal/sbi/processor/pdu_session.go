@@ -16,7 +16,7 @@ import (
 	"github.com/free5gc/pfcp/pfcpType"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
-	PDUSession_errors "github.com/free5gc/smf/pkg/errors"
+	smf_errors "github.com/free5gc/smf/pkg/errors"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
@@ -38,7 +38,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		logger.PduSessLog.Warnln("GsmMessageDecode Error: ", err)
 		postSmContextsError := models.PostSmContextsError{
 			JsonData: &models.SmContextCreateError{
-				Error: &PDUSession_errors.N1SmError,
+				Error: &smf_errors.N1SmError,
 			},
 		}
 		c.JSON(http.StatusForbidden, postSmContextsError)
@@ -125,12 +125,12 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		if errors.As(err, &gsmError) {
 			p.makeEstRejectResAndReleaseSMContext(c, smContext,
 				gsmError.GSMCause,
-				&PDUSession_errors.N1SmError)
+				&smf_errors.N1SmError)
 			return
 		}
 		p.makeEstRejectResAndReleaseSMContext(c, smContext,
 			nasMessage.Cause5GSMRequestRejectedUnspecified,
-			&PDUSession_errors.N1SmError)
+			&smf_errors.N1SmError)
 		return
 	}
 
@@ -154,7 +154,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
 		p.makeEstRejectResAndReleaseSMContext(c, smContext,
 			nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN,
-			&PDUSession_errors.InsufficientResourceSliceDnn)
+			&smf_errors.InsufficientResourceSliceDnn)
 		return
 	}
 
@@ -171,13 +171,13 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 			if problemDetails.Cause == "USER_UNKNOWN" {
 				p.makeEstRejectResAndReleaseSMContext(c, smContext,
 					nasMessage.Cause5GSMRequestRejectedUnspecified,
-					&PDUSession_errors.SubscriptionDenied)
+					&smf_errors.SubscriptionDenied)
 				return
 			}
 		}
 		p.makeEstRejectResAndReleaseSMContext(c, smContext,
 			nasMessage.Cause5GSMNetworkFailure,
-			&PDUSession_errors.NetworkFailure)
+			&smf_errors.NetworkFailure)
 		return
 	}
 	smContext.SMPolicyID = smPolicyID
@@ -196,7 +196,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
 		p.makeEstRejectResAndReleaseSMContext(c, smContext,
 			nasMessage.Cause5GSMRequestRejectedUnspecified,
-			&PDUSession_errors.SubscriptionDenied)
+			&smf_errors.SubscriptionDenied)
 		return
 	}
 
@@ -211,7 +211,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
 		p.makeEstRejectResAndReleaseSMContext(c, smContext,
 			nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN,
-			&PDUSession_errors.InsufficientResourceSliceDnn)
+			&smf_errors.InsufficientResourceSliceDnn)
 		return
 	}
 
@@ -292,7 +292,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			smContext.Log.Errorf("N1 Message parse failed: %v", err)
 			updateSmContextError := models.UpdateSmContextResponse400{
 				JsonData: &models.SmContextUpdateError{
-					Error: &PDUSession_errors.N1SmError,
+					Error: &smf_errors.N1SmError,
 				},
 			} // Depends on the reason why N4 fail
 			c.JSON(http.StatusForbidden, updateSmContextError)
@@ -779,7 +779,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			// It is just a template
 			updateSmContextError := models.UpdateSmContextResponse400{
 				JsonData: &models.SmContextUpdateError{
-					Error: &PDUSession_errors.N1SmError,
+					Error: &smf_errors.N1SmError,
 				},
 			} // Depends on the reason why N4 fail
 			c.JSON(http.StatusForbidden, updateSmContextError)
