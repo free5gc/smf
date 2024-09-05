@@ -610,6 +610,17 @@ func (upf *UPF) RemoveQER(qer *QER) (err error) {
 	return nil
 }
 
+func (upf *UPF) RemoveURR(urr *URR) (err error) {
+	if upf.UPFStatus != AssociatedSetUpSuccess {
+		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		return err
+	}
+
+	upf.urrIDGenerator.FreeID(int64(urr.URRID))
+	upf.urrPool.Delete(urr.URRID)
+	return nil
+}
+
 func (upf *UPF) isSupportSnssai(snssai *SNssai) bool {
 	for _, snssaiInfo := range upf.SNssaiInfos {
 		if snssaiInfo.SNssai.Equal(snssai) {
