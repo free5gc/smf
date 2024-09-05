@@ -18,11 +18,13 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/urfave/cli v1.22.5
 	go.uber.org/mock v0.4.0
-	gopkg.in/h2non/gock.v1 v1.1.2
 	gopkg.in/yaml.v2 v2.4.0
 )
 
-require github.com/free5gc/ngap v1.0.8
+require (
+	github.com/free5gc/ngap v1.0.8
+	github.com/h2non/gock v1.2.0
+)
 
 require (
 	github.com/antonfisher/nested-logrus-formatter v1.3.1 // indirect
@@ -42,7 +44,6 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
 	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20181017120253-0766667cb4d1 // indirect
-	github.com/h2non/gock v1.2.0 // indirect
 	github.com/h2non/parth v0.0.0-20190131123155-b4df798d6542 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
@@ -78,3 +79,5 @@ require (
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/free5gc/openapi => github.com/pf-lin/openapi v0.0.0-20240821105234-41439a466841

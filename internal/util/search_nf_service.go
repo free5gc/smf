@@ -19,7 +19,7 @@ func SearchNFServiceUri(nfProfile *models.NrfNfDiscoveryNfProfile, serviceName m
 				} else if service.ApiPrefix != "" {
 					nfUri = service.ApiPrefix
 				} else if service.IpEndPoints != nil {
-					point := (service.IpEndPoints)[0]
+					point := service.IpEndPoints[0]
 					if point.Ipv4Address != "" {
 						nfUri = getSbiUri(service.Scheme, point.Ipv4Address, point.Port)
 					} else if len(nfProfile.Ipv4Addresses) != 0 {
