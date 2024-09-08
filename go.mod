@@ -7,7 +7,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/free5gc/aper v1.0.5
 	github.com/free5gc/nas v1.1.4-0.20240801045646-998afcbf3811
-	github.com/free5gc/openapi v1.0.9-0.20240814095650-9f8e95a5b6b3
+	github.com/free5gc/openapi v1.0.9-0.20240823100026-6a9f667e914f
 	github.com/free5gc/pfcp v1.0.7
 	github.com/free5gc/util v1.0.6
 	github.com/gin-gonic/gin v1.9.1
@@ -79,5 +79,3 @@ require (
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/free5gc/openapi => github.com/pf-lin/openapi v0.0.0-20240821105234-41439a466841
