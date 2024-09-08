@@ -3,7 +3,6 @@ package consumer
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -293,12 +292,7 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 		errorModel := err.Model().(NFDiscovery.SearchNFInstancesError)
 		return &errorModel.ProblemDetails, nil
 	case error:
-		problemDetail := models.ProblemDetails{
-			Title:  "Internal Error",
-			Status: http.StatusInternalServerError,
-			Detail: err.Error(),
-		}
-		return &problemDetail, nil
+		return openapi.ProblemDetailsSystemFailure(err.Error()), nil
 	case nil:
 		smfContext.UDMProfile = result.NfInstances[0]
 
@@ -333,12 +327,7 @@ func (s *nnrfService) SendNFDiscoveryPCF() (*models.ProblemDetails, error) {
 		errorModel := err.Model().(NFDiscovery.SearchNFInstancesError)
 		return &errorModel.ProblemDetails, nil
 	case error:
-		problemDetail := models.ProblemDetails{
-			Title:  "Internal Error",
-			Status: http.StatusInternalServerError,
-			Detail: err.Error(),
-		}
-		return &problemDetail, nil
+		return openapi.ProblemDetailsSystemFailure(err.Error()), nil
 	case nil:
 		logger.ConsumerLog.Traceln(result.NfInstances)
 	default:
@@ -362,12 +351,7 @@ func (s *nnrfService) SendNFDiscoveryServingAMF(smContext *smf_context.SMContext
 		errorModel := err.Model().(NFDiscovery.SearchNFInstancesError)
 		return &errorModel.ProblemDetails, nil
 	case error:
-		problemDetail := models.ProblemDetails{
-			Title:  "Internal Error",
-			Status: http.StatusInternalServerError,
-			Detail: err.Error(),
-		}
-		return &problemDetail, nil
+		return openapi.ProblemDetailsSystemFailure(err.Error()), nil
 	case nil:
 		if result.NfInstances == nil {
 			logger.ConsumerLog.Warnln("NfInstances is nil")

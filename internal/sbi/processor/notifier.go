@@ -61,12 +61,8 @@ func (p *Processor) chargingNotificationProcedure(
 		}
 		p.ReportUsageAndUpdateQuota(smContext)
 	} else {
-		problemDetails := &models.ProblemDetails{
-			Status: http.StatusNotFound,
-			Cause:  CONTEXT_NOT_FOUND,
-			Detail: fmt.Sprintf("SM Context [%s] Not Found ", smContextRef),
-		}
-		return problemDetails
+		detail := fmt.Sprintf("SM Context [%s] Not Found ", smContextRef)
+		return openapi.ProblemDetailsDataNotFound(detail)
 	}
 
 	return nil

@@ -2,7 +2,6 @@ package consumer
 
 import (
 	"fmt"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -152,12 +151,7 @@ func (s *nchfService) SendConvergedChargingRequest(
 			smContext.ChargingDataRef = chargingDataRef[len(chargingDataRef)-1]
 			return nil, &errorModel.ProblemDetails, nil
 		case error:
-			problemDetail := models.ProblemDetails{
-				Title:  "Internal Error",
-				Status: http.StatusInternalServerError,
-				Detail: err.Error(),
-			}
-			return nil, &problemDetail, nil
+			return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
 		case nil:
 			return &rspPost.ChfConvergedChargingChargingDataResponse, nil, nil
 		default:
@@ -175,12 +169,7 @@ func (s *nchfService) SendConvergedChargingRequest(
 			errorModel := err.Model().(ConvergedCharging.UpdateChargingDataError)
 			return nil, &errorModel.ProblemDetails, nil
 		case error:
-			problemDetail := models.ProblemDetails{
-				Title:  "Internal Error",
-				Status: http.StatusInternalServerError,
-				Detail: err.Error(),
-			}
-			return nil, &problemDetail, nil
+			return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
 		case nil:
 			return &rspUpdate.ChfConvergedChargingChargingDataResponse, nil, nil
 		default:
@@ -198,12 +187,7 @@ func (s *nchfService) SendConvergedChargingRequest(
 			errorModel := err.Model().(ConvergedCharging.ReleaseChargingDataError)
 			return nil, &errorModel.ProblemDetails, nil
 		case error:
-			problemDetail := models.ProblemDetails{
-				Title:  "Internal Error",
-				Status: http.StatusInternalServerError,
-				Detail: err.Error(),
-			}
-			return nil, &problemDetail, nil
+			return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
 		case nil:
 			return nil, nil, nil
 		default:

@@ -3,7 +3,6 @@ package consumer
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -122,12 +121,7 @@ func (s *nudmService) UeCmRegistration(smCtx *smf_context.SMContext) (
 		return &errorModel.ProblemDetails, nil
 
 	case error:
-		problemDetail := models.ProblemDetails{
-			Title:  "Internal Error",
-			Status: http.StatusInternalServerError,
-			Detail: err.Error(),
-		}
-		return &problemDetail, nil
+		return openapi.ProblemDetailsSystemFailure(err.Error()), nil
 
 	case nil:
 		logger.PduSessLog.Tracef("UECM Registration Success")
@@ -167,12 +161,7 @@ func (s *nudmService) UeCmDeregistration(smCtx *smf_context.SMContext) (*models.
 		return &errorModel.ProblemDetails, nil
 
 	case error:
-		problemDetail := models.ProblemDetails{
-			Title:  "Internal Error",
-			Status: http.StatusInternalServerError,
-			Detail: err.Error(),
-		}
-		return &problemDetail, nil
+		return openapi.ProblemDetailsSystemFailure(err.Error()), nil
 
 	case nil:
 		logger.PduSessLog.Tracef("UECM Deregistration Success")
