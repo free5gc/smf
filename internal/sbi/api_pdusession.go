@@ -103,13 +103,8 @@ func (s *Server) HTTPPostSmContexts(c *gin.Context) {
 
 	if err != nil {
 		problemDetail := "[Request Body] " + err.Error()
-		rsp := models.ProblemDetails{
-			Title:  "Malformed request syntax",
-			Status: http.StatusBadRequest,
-			Detail: problemDetail,
-		}
 		logger.PduSessLog.Errorln(problemDetail)
-		c.JSON(http.StatusBadRequest, rsp)
+		c.JSON(http.StatusBadRequest, openapi.ProblemDetailsMalformedReqSyntax(problemDetail))
 		return
 	}
 

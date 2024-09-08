@@ -2,7 +2,6 @@ package consumer
 
 import (
 	"context"
-	"net/http"
 	"sync"
 
 	"github.com/free5gc/openapi"
@@ -63,12 +62,7 @@ func (s *nsmfService) SendSMContextStatusNotification(uri string) (*models.Probl
 			return &errorModel.ProblemDetails, nil
 
 		case error:
-			problemDetail := models.ProblemDetails{
-				Title:  "Internal Error",
-				Status: http.StatusInternalServerError,
-				Detail: err.Error(),
-			}
-			return &problemDetail, nil
+			return openapi.ProblemDetailsSystemFailure(err.Error()), nil
 
 		case nil:
 			logger.PduSessLog.Tracef("Send SMContextStatus Notification Success")
