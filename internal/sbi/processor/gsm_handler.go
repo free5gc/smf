@@ -23,11 +23,12 @@ func (e *GSMError) Error() string {
 }
 
 func HandlePDUSessionEstablishmentRequest(
-	smCtx *smf_context.SMContext, req *nasMessage.PDUSessionEstablishmentRequest,
+	smCtx *smf_context.SMContext,
+	req *nasMessage.PDUSessionEstablishmentRequest,
 ) error {
 	// Retrieve PDUSessionID
 	smCtx.PDUSessionID = int32(req.PDUSessionID.GetPDUSessionID())
-	logger.GsmLog.Infoln("In HandlePDUSessionEstablishmentRequest")
+	logger.GsmLog.Traceln("In HandlePDUSessionEstablishmentRequest")
 
 	// Retrieve PTI (Procedure transaction identity)
 	smCtx.Pti = req.GetPTI()
@@ -81,8 +82,7 @@ func HandlePDUSessionEstablishmentRequest(
 		if unmarshalErr != nil {
 			logger.GsmLog.Errorf("Parsing PCO failed: %s", unmarshalErr)
 		}
-		logger.GsmLog.Infoln("Protocol Configuration Options")
-		logger.GsmLog.Infoln(protocolConfigurationOptions)
+		logger.GsmLog.Debugf("Protocol Configuration Options %+v", protocolConfigurationOptions)
 
 		for _, container := range protocolConfigurationOptions.ProtocolOrContainerList {
 			logger.GsmLog.Traceln("Container ID: ", container.ProtocolOrContainerID)
@@ -225,7 +225,7 @@ func (p *Processor) HandlePDUSessionModificationRequest(
 	}
 
 	if errApplyPccRules := smCtx.ApplyPccRules(smPolicyDecision); errApplyPccRules != nil {
-		smCtx.Log.Errorf("apply sm policy decision error: %+v", errApplyPccRules)
+		smCtx.Log.Errorf("[HandlePDUSessionModificationRequest] apply sm policy decision error: %+v", errApplyPccRules)
 	}
 
 	authQoSRules := nasType.QoSRules{}

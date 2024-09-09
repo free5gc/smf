@@ -57,7 +57,7 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) err
 
 	GTPTunnel := QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
 
-	ctx.Tunnel.UpdateANInformation(
+	ctx.UpdateANInformation(
 		GTPTunnel.TransportLayerAddress.Value.Bytes,
 		binary.BigEndian.Uint32(GTPTunnel.GTPTEID.Value))
 
@@ -79,7 +79,7 @@ func HandlePDUSessionResourceModifyResponseTransfer(b []byte, ctx *SMContext) er
 	if DLInfo := resourceModifyResponseTransfer.DLNGUUPTNLInformation; DLInfo != nil {
 		GTPTunnel := DLInfo.GTPTunnel
 
-		ctx.Tunnel.UpdateANInformation(
+		ctx.UpdateANInformation(
 			GTPTunnel.TransportLayerAddress.Value.Bytes,
 			binary.BigEndian.Uint32(GTPTunnel.GTPTEID.Value))
 	}
@@ -151,7 +151,7 @@ func HandlePathSwitchRequestTransfer(b []byte, ctx *SMContext) error {
 
 	GTPTunnel := pathSwitchRequestTransfer.DLNGUUPTNLInformation.GTPTunnel
 
-	ctx.Tunnel.UpdateANInformation(
+	ctx.UpdateANInformation(
 		GTPTunnel.TransportLayerAddress.Value.Bytes,
 		binary.BigEndian.Uint32(GTPTunnel.GTPTEID.Value))
 
@@ -232,7 +232,7 @@ func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) error {
 
 	DLNGUUPGTPTunnel := handoverRequestAcknowledgeTransfer.DLNGUUPTNLInformation.GTPTunnel
 
-	ctx.Tunnel.UpdateANInformation(
+	ctx.UpdateANInformation(
 		DLNGUUPGTPTunnel.TransportLayerAddress.Value.Bytes,
 		binary.BigEndian.Uint32(DLNGUUPGTPTunnel.GTPTEID.Value))
 

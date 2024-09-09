@@ -3,16 +3,13 @@ package context
 import (
 	"errors"
 	"fmt"
-	"math/rand"
-	"net"
-	"sort"
 
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
 type UEDefaultPaths struct {
-	AnchorUPFs      []string // list of UPF name
+	AnchorUPFs      []*UPF // list of UPF name
 	DefaultPathPool DefaultPathPool
 }
 
@@ -26,16 +23,16 @@ func NewUEDefaultPaths(upi *UserPlaneInformation, topology []factory.UPLink) (*U
 	if err != nil {
 		return nil, err
 	}
-	destinations, err := extractAnchorUPFForULCL(upi, source, topology)
+	destinations, err := extractAnchorUPFForULCL(source, topology)
 	if err != nil {
 		return nil, err
 	}
 	for _, destination := range destinations {
-		path, errgenerate := generateDefaultDataPath(source, destination, topology)
+		path, errgenerate := generateDefaultDataPath(source, destination.GetName(), topology)
 		if errgenerate != nil {
 			return nil, errgenerate
 		}
-		defaultPathPool[destination] = path
+		defaultPathPool[destination.GetName()] = path
 	}
 	defautlPaths := &UEDefaultPaths{
 		AnchorUPFs:      destinations,
@@ -47,7 +44,7 @@ func NewUEDefaultPaths(upi *UserPlaneInformation, topology []factory.UPLink) (*U
 func findSourceInTopology(upi *UserPlaneInformation, topology []factory.UPLink) (string, error) {
 	sourceList := make([]string, 0)
 	for key, node := range upi.AccessNetwork {
-		if node.Type == UPNODE_AN {
+		if node.GetType() == UPNODE_AN {
 			sourceList = append(sourceList, key)
 		}
 	}
@@ -60,11 +57,11 @@ func findSourceInTopology(upi *UserPlaneInformation, topology []factory.UPLink) 
 			}
 		}
 	}
-	return "", errors.New("Not found AN node in topology")
+	return "", errors.New("cannot find AN node in topology")
 }
 
-func extractAnchorUPFForULCL(upi *UserPlaneInformation, source string, topology []factory.UPLink) ([]string, error) {
-	upList := make([]string, 0)
+func extractAnchorUPFForULCL(source string, topology []factory.UPLink) ([]*UPF, error) {
+	upfList := make([]*UPF, 0)
 	visited := make(map[string]bool)
 	queue := make([]string, 0)
 
@@ -101,23 +98,29 @@ func extractAnchorUPFForULCL(upi *UserPlaneInformation, source string, topology 
 		visited[node] = true
 		if !findNewLink {
 			logger.InitLog.Debugf("%s is Anchor UPF", node)
-			upList = append(upList, node)
+			upf := GetUserPlaneInformation().NameToUPNode[node]
+			upfList = append(upfList, upf.(*UPF))
 		}
 		if len(queue) == 0 {
 			break
 		}
 	}
-	if len(upList) == 0 {
-		return nil, errors.New("Not found Anchor UPF in topology")
+	if len(upfList) == 0 {
+		return nil, fmt.Errorf("[extractAnchorUPFForULCL] no ULCL PSA candidates")
 	}
-	sort.Strings(upList)
-	return upList, nil
+
+	upfList = GetUserPlaneInformation().sortUPFListByName(upfList)
+
+	if len(upfList) == 0 {
+		return nil, fmt.Errorf("[extractAnchorUPFForULCL] ULCL PSA candidates are empty after sorting")
+	}
+	return upfList, nil
 }
 
 func generateDefaultDataPath(source string, destination string, topology []factory.UPLink) (*DataPath, error) {
 	allPaths, _ := getAllPathByNodeName(source, destination, topology)
 	if len(allPaths) == 0 {
-		return nil, fmt.Errorf("Path not exist: %s to %s", source, destination)
+		return nil, fmt.Errorf("path does not exist: %s to %s", source, destination)
 	}
 
 	dataPath := NewDataPath()
@@ -177,44 +180,6 @@ func getAllPathByNodeName(src, dest string, links []factory.UPLink) (map[int][]s
 
 	findPath(src, dest, links, []string{})
 	return allPaths, count
-}
-
-func createUPFListForSelectionULCL(inputList []string) (outputList []string) {
-	offset := rand.Intn(len(inputList))
-	return append(inputList[offset:], inputList[:offset]...)
-}
-
-func (dfp *UEDefaultPaths) SelectUPFAndAllocUEIPForULCL(upi *UserPlaneInformation,
-	selection *UPFSelectionParams,
-) (string, net.IP, bool) {
-	sortedUPFList := createUPFListForSelectionULCL(dfp.AnchorUPFs)
-
-	for _, upfName := range sortedUPFList {
-		logger.CtxLog.Debugf("check start UPF: %s", upfName)
-		upf := upi.UPFs[upfName]
-
-		pools, useStaticIPPool := getUEIPPool(upf, selection)
-		if len(pools) == 0 {
-			continue
-		}
-		sortedPoolList := createPoolListForSelection(pools)
-		for _, pool := range sortedPoolList {
-			logger.CtxLog.Debugf("check start UEIPPool(%+v)", pool.ueSubNet)
-			addr := pool.Allocate(selection.PDUAddress)
-			if addr != nil {
-				logger.CtxLog.Infof("Selected UPF: %s", upfName)
-				return upfName, addr, useStaticIPPool
-			}
-			// if all addresses in pool are used, search next pool
-			logger.CtxLog.Debug("check next pool")
-		}
-		// if all addresses in UPF are used, search next UPF
-		logger.CtxLog.Debug("check next upf")
-	}
-	// checked all UPFs
-	logger.CtxLog.Warnf("UE IP pool exhausted for DNN[%s] S-NSSAI[sst: %d sd: %s] DNAI[%s]\n", selection.Dnn,
-		selection.SNssai.Sst, selection.SNssai.Sd, selection.Dnai)
-	return "", nil, false
 }
 
 func (dfp *UEDefaultPaths) GetDefaultPath(upfName string) *DataPath {

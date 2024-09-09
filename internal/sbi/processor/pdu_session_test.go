@@ -449,7 +449,8 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 	// modify associate setup status
 	allUPFs := smf_context.GetSelf().UserPlaneInformation.UPFs
 	for _, upfNode := range allUPFs {
-		upfNode.UPF.UPFStatus = smf_context.AssociatedSetUpSuccess
+		upfNode.UPFStatus = smf_context.AssociatedSetUpSuccess
+		upfNode.Association, upfNode.AssociationCancelFunc = context.WithCancel(context.Background())
 	}
 
 	testCases := []struct {
@@ -644,10 +645,9 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 
 			createData := tc.request.JsonData
 			if createData != nil {
-				var ref string
-				if ref, err = smf_context.ResolveRef(createData.Supi,
-					createData.PduSessionId); err == nil {
-					smf_context.RemoveSMContext(ref)
+				if ref, err := smf_context.GetSelf().ResolveRef(createData.Supi, createData.PduSessionId); err == nil {
+					smContext := smf_context.GetSelf().GetSMContextByRef(ref)
+					smf_context.GetSelf().RemoveSMContext(smContext)
 				}
 			}
 		})

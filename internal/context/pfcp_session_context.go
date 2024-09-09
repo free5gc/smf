@@ -3,9 +3,26 @@ package context
 import (
 	"fmt"
 	"net"
+	"sync"
 
-	"github.com/free5gc/pfcp/pfcpType"
+	"github.com/free5gc/pfcp/pfcpUdp"
 )
+
+type PFCPState struct {
+	UPF     *UPF
+	PDRList []*PDR
+	FARList []*FAR
+	BARList []*BAR
+	QERList []*QER
+	URRList []*URR
+}
+
+type SendPfcpResult struct {
+	Status PFCPSessionResponseStatus
+	RcvMsg *pfcpUdp.Message
+	Err    error
+	Source string
+}
 
 type PFCPSessionResponseStatus int
 
@@ -23,26 +40,40 @@ type FSEID struct {
 	SEID uint64
 }
 
+// stores PDRs and SEIDs for the PFCP connection of one PDU session
+// mainly used for session establishment and restoration after UPF reboot
 type PFCPSessionContext struct {
-	PDRs       map[uint16]*PDR
-	NodeID     pfcpType.NodeID
-	LocalSEID  uint64
-	RemoteSEID uint64
+	// stores the PDRs that are modified during session management
+	PDRs         map[uint16]*PDR // map pdrId to PDR
+	UPF          *UPF
+	UeIP         net.IP
+	PDUSessionID int32
+	LocalSEID    uint64
+	RemoteSEID   uint64
+	Restoring    sync.Mutex
 }
 
 func (pfcpSessionContext *PFCPSessionContext) String() string {
 	str := "\n"
-	for pdrID, pdr := range pfcpSessionContext.PDRs {
-		str += fmt.Sprintln("PDR ID: ", pdrID)
-		str += fmt.Sprintf("PDR: %v\n", pdr)
+	str += fmt.Sprintf("PFCPSessionContext for UPF[%s]\n", pfcpSessionContext.UPF.GetNodeIDString())
+	for _, pdr := range pfcpSessionContext.PDRs {
+		str += pdr.String()
 	}
-
-	str += fmt.Sprintln("Node ID: ", pfcpSessionContext.NodeID.ResolveNodeIdToIp().String())
 	str += fmt.Sprintln("LocalSEID: ", pfcpSessionContext.LocalSEID)
 	str += fmt.Sprintln("RemoteSEID: ", pfcpSessionContext.RemoteSEID)
 	str += "\n"
 
 	return str
+}
+
+func (pfcpSessionContext *PFCPSessionContext) PDUSessionParams() string {
+	return fmt.Sprintf("PDU Session[ UEIP %s | ID %d ]", pfcpSessionContext.UeIP.String(), pfcpSessionContext.PDUSessionID)
+}
+
+func (pfcpSessionContext *PFCPSessionContext) MarkAsSyncedToUPFRecursive() {
+	for _, pdr := range pfcpSessionContext.PDRs {
+		pdr.SetStateRecursive(RULE_SYNCED)
+	}
 }
 
 func (pfcpSessionResponseStatus PFCPSessionResponseStatus) String() string {

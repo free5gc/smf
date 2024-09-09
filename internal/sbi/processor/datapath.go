@@ -3,371 +3,98 @@ package processor
 import (
 	"fmt"
 
-	"github.com/free5gc/nas/nasMessage"
+	"github.com/google/uuid"
+
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp"
 	"github.com/free5gc/pfcp/pfcpType"
-	"github.com/free5gc/pfcp/pfcpUdp"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	pfcp_message "github.com/free5gc/smf/internal/pfcp/message"
 )
 
-type PFCPState struct {
-	upf     *smf_context.UPF
-	pdrList []*smf_context.PDR
-	farList []*smf_context.FAR
-	barList []*smf_context.BAR
-	qerList []*smf_context.QER
-	urrList []*smf_context.URR
-}
-
-type SendPfcpResult struct {
-	Status smf_context.PFCPSessionResponseStatus
-	RcvMsg *pfcpUdp.Message
-	Err    error
-}
-
-// ActivateUPFSession send all datapaths to UPFs and send result to UE
 // It returns after all PFCP response have been returned or timed out,
-// and before sending N1N2MessageTransfer request if it is needed.
-func ActivateUPFSession(
+// and before sending the N1N2MessageTransfer request if it is needed.
+func (p *Processor) ActivatePDUSessionAtUPFs(
 	smContext *smf_context.SMContext,
-	notifyUeHander func(*smf_context.SMContext, bool),
-) {
-	smContext.Log.Traceln("In ActivateUPFSession")
+) smf_context.PFCPSessionResponseStatus {
+	// smContext has a map to all PFCPSessionContexts that need to be established,
+	// one for each involved UPF
+	smContext.Log.Traceln("In ActivatePDUSessionAtUPFs")
 
-	pfcpPool := make(map[string]*PFCPState)
+	resChan := make(chan smf_context.SendPfcpResult)
+	defer close(resChan)
 
-	for _, dataPath := range smContext.Tunnel.DataPathPool {
-		if !dataPath.Activated {
+	waitForReply := 0
+
+	// loop through all PFCP session contexts associated with this SM context
+	for _, pfcpSessionContext := range smContext.PFCPSessionContexts {
+		upf := pfcpSessionContext.UPF
+		nodeID := upf.GetNodeIDString()
+		select {
+		case <-upf.Association.Done():
+			logger.PduSessLog.Warnf("UPF[%s] not associated, skip session establishment for %s",
+				nodeID, pfcpSessionContext.PDUSessionParams())
 			continue
-		}
-		for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
-			pdrList := make([]*smf_context.PDR, 0, 2)
-			farList := make([]*smf_context.FAR, 0, 2)
-			qerList := make([]*smf_context.QER, 0, 2)
-			urrList := make([]*smf_context.URR, 0, 2)
-
-			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-				pdrList = append(pdrList, node.UpLinkTunnel.PDR)
-				farList = append(farList, node.UpLinkTunnel.PDR.FAR)
-				if node.UpLinkTunnel.PDR.QER != nil {
-					qerList = append(qerList, node.UpLinkTunnel.PDR.QER...)
-				}
-				if node.UpLinkTunnel.PDR.URR != nil {
-					urrList = append(urrList, node.UpLinkTunnel.PDR.URR...)
-				}
-			}
-			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-				pdrList = append(pdrList, node.DownLinkTunnel.PDR)
-				farList = append(farList, node.DownLinkTunnel.PDR.FAR)
-				urrList = append(urrList, node.DownLinkTunnel.PDR.URR...)
-				// skip send QER because uplink and downlink shared one QER
-			}
-
-			pfcpState := pfcpPool[node.GetNodeIP()]
-			if pfcpState == nil {
-				pfcpPool[node.GetNodeIP()] = &PFCPState{
-					upf:     node.UPF,
-					pdrList: pdrList,
-					farList: farList,
-					qerList: qerList,
-					urrList: urrList,
-				}
+		default:
+			logger.PduSessLog.Infof("Init session establishment on UPF[%s] for %s",
+				nodeID, pfcpSessionContext.PDUSessionParams())
+			waitForReply += 1
+			if pfcpSessionContext.RemoteSEID == 0 {
+				go establishPfcpSession(pfcpSessionContext, resChan)
 			} else {
-				pfcpState.pdrList = append(pfcpState.pdrList, pdrList...)
-				pfcpState.farList = append(pfcpState.farList, farList...)
-				pfcpState.qerList = append(pfcpState.qerList, qerList...)
-				pfcpState.urrList = append(pfcpState.urrList, urrList...)
+				go modifyExistingPfcpSession(smContext, pfcpSessionContext, resChan, "")
 			}
 		}
 	}
 
-	resChan := make(chan SendPfcpResult)
-
-	for ip, pfcp := range pfcpPool {
-		sessionContext, exist := smContext.PFCPContext[ip]
-		if !exist || sessionContext.RemoteSEID == 0 {
-			go establishPfcpSession(smContext, pfcp, resChan)
-		} else {
-			go modifyExistingPfcpSession(smContext, pfcp, resChan, "")
-		}
+	if waitForReply == 0 {
+		logger.PduSessLog.Warnln("No UPFs are associated to establish the session")
+		return smf_context.SessionEstablishFailed
 	}
 
-	waitAllPfcpRsp(smContext, len(pfcpPool), resChan, notifyUeHander)
-	close(resChan)
+	return waitAllPfcpRsp(waitForReply, smf_context.SessionEstablishSuccess, smf_context.SessionEstablishFailed, resChan)
 }
 
-func QueryReport(smContext *smf_context.SMContext, upf *smf_context.UPF,
-	urrs []*smf_context.URR, reportResaon models.TriggerType,
-) {
-	for _, urr := range urrs {
-		urr.State = smf_context.RULE_QUERY
-	}
-
-	pfcpState := &PFCPState{
-		upf:     upf,
-		urrList: urrs,
-	}
-
-	resChan := make(chan SendPfcpResult)
-	go modifyExistingPfcpSession(smContext, pfcpState, resChan, reportResaon)
-	pfcpResult := <-resChan
-
-	if pfcpResult.Err != nil {
-		logger.PduSessLog.Errorf("Query URR Report by PFCP Session Mod Request fail: %v", pfcpResult.Err)
-		return
-	}
-}
-
-func establishPfcpSession(smContext *smf_context.SMContext,
-	state *PFCPState,
-	resCh chan<- SendPfcpResult,
-) {
-	logger.PduSessLog.Infoln("Sending PFCP Session Establishment Request")
-
-	rcvMsg, err := pfcp_message.SendPfcpSessionEstablishmentRequest(
-		state.upf, smContext, state.pdrList, state.farList, state.barList, state.qerList, state.urrList)
-	if err != nil {
-		logger.PduSessLog.Warnf("Sending PFCP Session Establishment Request error: %+v", err)
-		resCh <- SendPfcpResult{
-			Status: smf_context.SessionEstablishFailed,
-			Err:    err,
-		}
-		return
-	}
-
-	rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionEstablishmentResponse)
-	if rsp.UPFSEID != nil {
-		NodeIDtoIP := rsp.NodeID.ResolveNodeIdToIp().String()
-		pfcpSessionCtx := smContext.PFCPContext[NodeIDtoIP]
-		pfcpSessionCtx.RemoteSEID = rsp.UPFSEID.Seid
-	}
-
-	if rsp.Cause != nil && rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
-		logger.PduSessLog.Infoln("Received PFCP Session Establishment Accepted Response")
-		resCh <- SendPfcpResult{
-			Status: smf_context.SessionEstablishSuccess,
-			RcvMsg: rcvMsg,
-		}
-	} else {
-		logger.PduSessLog.Infoln("Received PFCP Session Establishment Not Accepted Response")
-		resCh <- SendPfcpResult{
-			Status: smf_context.SessionEstablishFailed,
-			Err:    fmt.Errorf("cause[%d] if not request accepted", rsp.Cause.CauseValue),
-		}
-	}
-}
-
-func modifyExistingPfcpSession(
+func (p *Processor) UpdatePDUSessionAtANUPF(
 	smContext *smf_context.SMContext,
-	state *PFCPState,
-	resCh chan<- SendPfcpResult,
-	reportResaon models.TriggerType,
-) {
-	logger.PduSessLog.Infoln("Sending PFCP Session Modification Request")
-
-	rcvMsg, err := pfcp_message.SendPfcpSessionModificationRequest(
-		state.upf, smContext, state.pdrList, state.farList, state.barList, state.qerList, state.urrList)
-	if err != nil {
-		logger.PduSessLog.Warnf("Sending PFCP Session Modification Request error: %+v", err)
-		resCh <- SendPfcpResult{
-			Status: smf_context.SessionUpdateFailed,
-			Err:    err,
-		}
-		return
-	}
-
-	logger.PduSessLog.Infoln("Received PFCP Session Modification Response")
-
-	rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionModificationResponse)
-	if rsp.Cause != nil && rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
-		resCh <- SendPfcpResult{
-			Status: smf_context.SessionUpdateSuccess,
-			RcvMsg: rcvMsg,
-		}
-		if rsp.UsageReport != nil {
-			SEID := rcvMsg.PfcpMessage.Header.SEID
-			upfNodeID := smContext.GetNodeIDByLocalSEID(SEID)
-			smContext.HandleReports(nil, rsp.UsageReport, nil, upfNodeID, reportResaon)
-		}
-	} else {
-		resCh <- SendPfcpResult{
-			Status: smf_context.SessionUpdateFailed,
-			Err:    fmt.Errorf("cause[%d] if not request accepted", rsp.Cause.CauseValue),
-		}
-	}
-}
-
-func waitAllPfcpRsp(
-	smContext *smf_context.SMContext,
-	pfcpPoolLen int,
-	resChan <-chan SendPfcpResult,
-	notifyUeHander func(*smf_context.SMContext, bool),
-) {
-	success := true
-	for i := 0; i < pfcpPoolLen; i++ {
-		res := <-resChan
-		if notifyUeHander == nil {
-			continue
-		}
-
-		if res.Status == smf_context.SessionEstablishFailed ||
-			res.Status == smf_context.SessionUpdateFailed {
-			success = false
-		}
-	}
-	if notifyUeHander != nil {
-		notifyUeHander(smContext, success)
-	}
-}
-
-func (p *Processor) EstHandler(isDone <-chan struct{},
-	smContext *smf_context.SMContext, success bool,
-) {
-	// Waiting for Create SMContext Request completed
-	if isDone != nil {
-		<-isDone
-	}
-	if success {
-		p.sendPDUSessionEstablishmentAccept(smContext)
-	} else {
-		// TODO: set appropriate 5GSM cause according to PFCP cause value
-		p.sendPDUSessionEstablishmentReject(smContext, nasMessage.Cause5GSMNetworkFailure)
-	}
-}
-
-func ModHandler(smContext *smf_context.SMContext, success bool) {
-}
-
-func (p *Processor) sendPDUSessionEstablishmentReject(
-	smContext *smf_context.SMContext,
-	nasErrorCause uint8,
-) {
-	smNasBuf, err := smf_context.BuildGSMPDUSessionEstablishmentReject(
-		smContext, nasMessage.Cause5GSMNetworkFailure)
-	if err != nil {
-		logger.PduSessLog.Errorf("Build GSM PDUSessionEstablishmentReject failed: %s", err)
-		return
-	}
-
-	n1n2Request := models.N1N2MessageTransferRequest{
-		BinaryDataN1Message: smNasBuf,
-		JsonData: &models.N1N2MessageTransferReqData{
-			PduSessionId: smContext.PDUSessionID,
-			N1MessageContainer: &models.N1MessageContainer{
-				N1MessageClass:   "SM",
-				N1MessageContent: &models.RefToBinaryData{ContentId: "GSM_NAS"},
-			},
-		},
-	}
-
-	smContext.SetState(smf_context.InActive)
-
-	ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
-	if errToken != nil {
-		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", errToken)
-		return
-	}
-	rspData, _, err := p.Consumer().
-		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
-	if err != nil {
-		logger.ConsumerLog.Warnf("N1N2MessageTransfer for SendPDUSessionEstablishmentReject failed: %+v", err)
-		return
-	}
-
-	if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
-		logger.PduSessLog.Warnf("%v", rspData.Cause)
-	}
-	p.RemoveSMContextFromAllNF(smContext, true)
-}
-
-func (p *Processor) sendPDUSessionEstablishmentAccept(
-	smContext *smf_context.SMContext,
-) {
-	smNasBuf, err := smf_context.BuildGSMPDUSessionEstablishmentAccept(smContext)
-	if err != nil {
-		logger.PduSessLog.Errorf("Build GSM PDUSessionEstablishmentAccept failed: %s", err)
-		return
-	}
-
-	n2Pdu, err := smf_context.BuildPDUSessionResourceSetupRequestTransfer(smContext)
-	if err != nil {
-		logger.PduSessLog.Errorf("Build PDUSessionResourceSetupRequestTransfer failed: %s", err)
-		return
-	}
-
-	n1n2Request := models.N1N2MessageTransferRequest{
-		BinaryDataN1Message:     smNasBuf,
-		BinaryDataN2Information: n2Pdu,
-		JsonData: &models.N1N2MessageTransferReqData{
-			PduSessionId: smContext.PDUSessionID,
-			N1MessageContainer: &models.N1MessageContainer{
-				N1MessageClass:   "SM",
-				N1MessageContent: &models.RefToBinaryData{ContentId: "GSM_NAS"},
-			},
-			N2InfoContainer: &models.N2InfoContainer{
-				N2InformationClass: models.N2InformationClass_SM,
-				SmInfo: &models.N2SmInformation{
-					PduSessionId: smContext.PDUSessionID,
-					N2InfoContent: &models.N2InfoContent{
-						NgapIeType: models.NgapIeType_PDU_RES_SETUP_REQ,
-						NgapData: &models.RefToBinaryData{
-							ContentId: "N2SmInformation",
-						},
-					},
-					SNssai: smContext.SNssai,
-				},
-			},
-		},
-	}
-
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
-	if err != nil {
-		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", err)
-		return
-	}
-
-	rspData, _, err := p.Consumer().
-		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
-	if err != nil {
-		logger.ConsumerLog.Warnf("N1N2MessageTransfer for sendPDUSessionEstablishmentAccept failed: %+v", err)
-		return
-	}
-
-	smContext.SetState(smf_context.Active)
-
-	if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
-		logger.PduSessLog.Warnf("%v", rspData.Cause)
-	}
-}
-
-func (p *Processor) updateAnUpfPfcpSession(
-	smContext *smf_context.SMContext,
-	pdrList []*smf_context.PDR,
-	farList []*smf_context.FAR,
-	barList []*smf_context.BAR,
-	qerList []*smf_context.QER,
-	urrList []*smf_context.URR,
 ) smf_context.PFCPSessionResponseStatus {
 	defaultPath := smContext.Tunnel.DataPathPool.GetDefaultPath()
-	ANUPF := defaultPath.FirstDPNode
-	rcvMsg, err := pfcp_message.SendPfcpSessionModificationRequest(
-		ANUPF.UPF, smContext, pdrList, farList, barList, qerList, urrList)
-	if err != nil {
-		logger.PduSessLog.Warnf("Sending PFCP Session Modification Request to AN UPF error: %+v", err)
+	anUPF := defaultPath.FirstDPNode.UPF
+	nodeID := anUPF.GetNodeIDString()
+	pfcpSessionContext := smContext.PFCPSessionContexts[anUPF.ID]
+
+	resChan := make(chan smf_context.SendPfcpResult)
+	defer close(resChan)
+
+	select {
+	case <-anUPF.Association.Done():
+		logger.PduSessLog.Warnf("UPF[%s] not associated, skip session modification for %s",
+			nodeID, pfcpSessionContext.PDUSessionParams())
 		return smf_context.SessionUpdateFailed
+	default:
+		logger.PduSessLog.Infof("Init session modification on AN UPF[%s] for %s",
+			nodeID, pfcpSessionContext.PDUSessionParams())
+		select {
+		case <-anUPF.RestoresSessions.Done():
+			go modifyExistingPfcpSession(smContext, pfcpSessionContext, resChan, "")
+		default:
+			logger.PduSessLog.Warnf("UPF[%s] is currently restoring sessions", nodeID)
+			pfcpSessionContext.Restoring.Lock()
+			// unlock when restore is finished
+
+			if pfcpSessionContext.RemoteSEID == 0 {
+				// session has not been restored yet, establish pfcp session context as new PDRs
+				logger.PduSessLog.Warnf("Restore instead of modify session on UPF[%s]", nodeID)
+				go restorePfcpSession(pfcpSessionContext, resChan)
+			} else {
+				pfcpSessionContext.Restoring.Unlock()
+				go modifyExistingPfcpSession(smContext, pfcpSessionContext, resChan, "")
+			}
+		}
 	}
 
-	rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionModificationResponse)
-	if rsp.Cause == nil || rsp.Cause.CauseValue != pfcpType.CauseRequestAccepted {
-		logger.PduSessLog.Warn("Received PFCP Session Modification Not Accepted Response from AN UPF")
-		return smf_context.SessionUpdateFailed
-	}
-
-	logger.PduSessLog.Info("Received PFCP Session Modification Accepted Response from AN UPF")
-
+	// TODO: can we integrate the functionality in this code partly in session establishment?
 	if smf_context.GetSelf().ULCLSupport && smContext.BPManager != nil {
 		if smContext.BPManager.BPStatus == smf_context.UnInitialized {
 			logger.PfcpLog.Infoln("Add PSAAndULCL")
@@ -377,70 +104,425 @@ func (p *Processor) updateAnUpfPfcpSession(
 		}
 	}
 
-	return smf_context.SessionUpdateSuccess
+	return waitAllPfcpRsp(1, smf_context.SessionUpdateSuccess, smf_context.SessionUpdateFailed, resChan)
 }
 
-func ReleaseTunnel(smContext *smf_context.SMContext) []SendPfcpResult {
-	resChan := make(chan SendPfcpResult)
+func (p *Processor) ReleaseSessionAtUPFs(
+	smContext *smf_context.SMContext,
+) smf_context.PFCPSessionResponseStatus {
+	resChan := make(chan smf_context.SendPfcpResult)
+	defer close(resChan)
 
-	deletedPFCPNode := make(map[string]bool)
-	for _, dataPath := range smContext.Tunnel.DataPathPool {
-		var targetNodes []*smf_context.DataPathNode
-		for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
-			targetNodes = append(targetNodes, node)
-		}
-		dataPath.DeactivateTunnelAndPDR(smContext)
-		for _, node := range targetNodes {
-			curUPFID, err := node.GetUPFID()
-			if err != nil {
-				logger.PduSessLog.Error(err)
-				continue
-			}
-			if _, exist := deletedPFCPNode[curUPFID]; !exist {
-				go deletePfcpSession(node.UPF, smContext, resChan)
-				deletedPFCPNode[curUPFID] = true
+	waitForReply := 0
+
+	// note: do NOT remove datapath and tunnel in SM context before UPF(s) returned SessionReleaseSuccess!
+	// cleanup happens in pdu_session.go after receiving all PFCP responses
+
+	for _, pfcpSessionContext := range smContext.PFCPSessionContexts {
+		upf := pfcpSessionContext.UPF
+		nodeID := upf.GetNodeIDString()
+		select {
+		case <-upf.Association.Done():
+			logger.PduSessLog.Warnf("UPF[%s] not associated, skip session release for %s",
+				nodeID, pfcpSessionContext.PDUSessionParams())
+			continue
+		default:
+			logger.PduSessLog.Infof("Init session release on UPF[%s] for %s",
+				nodeID, pfcpSessionContext.PDUSessionParams())
+			if pfcpSessionContext.RemoteSEID == 0 {
+				logger.PduSessLog.Infof("%s not yet established on UPF[%s], do not release it",
+					pfcpSessionContext.PDUSessionParams(), nodeID)
+			} else {
+				waitForReply += 1
+				go releasePfcpSession(pfcpSessionContext, resChan)
 			}
 		}
 	}
 
-	// collect all responses
-	resList := make([]SendPfcpResult, 0, len(deletedPFCPNode))
-	for i := 0; i < len(deletedPFCPNode); i++ {
-		resList = append(resList, <-resChan)
+	if waitForReply == 0 {
+		logger.PduSessLog.Warnln("No UPFs are associated to release the session")
+		return smf_context.SessionReleaseFailed
 	}
 
-	return resList
+	return waitAllPfcpRsp(waitForReply, smf_context.SessionReleaseSuccess, smf_context.SessionReleaseFailed, resChan)
 }
 
-func deletePfcpSession(upf *smf_context.UPF, ctx *smf_context.SMContext, resCh chan<- SendPfcpResult) {
-	logger.PduSessLog.Infoln("Sending PFCP Session Deletion Request")
+func RestorePDUSessionAtUPF(
+	pfcpSessionContext *smf_context.PFCPSessionContext,
+) smf_context.PFCPSessionResponseStatus {
+	// pfcpSessionContext.Restoring is locked by caller
+	// unlock happens in restorePfcpSession
 
-	rcvMsg, err := pfcp_message.SendPfcpSessionDeletionRequest(upf, ctx)
+	upf := pfcpSessionContext.UPF
+	nodeID := upf.GetNodeIDString()
+
+	if pfcpSessionContext.RemoteSEID > 0 {
+		logger.CtxLog.Infof("Some other process already established %s on UPF[%s]",
+			pfcpSessionContext.PDUSessionParams(), nodeID)
+		return smf_context.SessionEstablishSuccess
+	}
+
+	select {
+	case <-upf.Association.Done():
+		logger.PduSessLog.Warnf("UPF[%s] not associated, skip session restoration for %s",
+			nodeID, pfcpSessionContext.PDUSessionParams())
+		return smf_context.SessionEstablishFailed
+	default:
+	}
+
+	logger.PduSessLog.Infof("Init session restoration on UPF[%s] for %s",
+		nodeID, pfcpSessionContext.PDUSessionParams())
+
+	resChan := make(chan smf_context.SendPfcpResult)
+	defer close(resChan)
+
+	if pfcpSessionContext.RemoteSEID > 0 {
+		logger.CtxLog.Infof("Some other process already established %s on UPF[%s]",
+			pfcpSessionContext.PDUSessionParams(), nodeID)
+		return smf_context.SessionEstablishSuccess
+	}
+
+	go restorePfcpSession(pfcpSessionContext, resChan)
+
+	return waitAllPfcpRsp(1, smf_context.SessionEstablishSuccess, smf_context.SessionEstablishFailed, resChan)
+}
+
+func (p *Processor) QueryReport(
+	smContext *smf_context.SMContext,
+	upf *smf_context.UPF,
+	urrs []*smf_context.URR,
+	reportResaon models.TriggerType,
+) smf_context.PFCPSessionResponseStatus {
+	for _, urr := range urrs {
+		urr.SetState(smf_context.RULE_QUERY)
+	}
+
+	resChan := make(chan smf_context.SendPfcpResult)
+	defer close(resChan)
+
+	pfcpSessionContext := smContext.PFCPSessionContexts[upf.ID]
+
+	go modifyExistingPfcpSession(smContext, pfcpSessionContext, resChan, reportResaon)
+
+	pfcpResponseState := waitAllPfcpRsp(1, smf_context.SessionReleaseSuccess, smf_context.SessionReleaseFailed, resChan)
+
+	return pfcpResponseState
+}
+
+func establishPfcpSession(
+	pfcpSessionContext *smf_context.PFCPSessionContext,
+	resCh chan<- smf_context.SendPfcpResult,
+) {
+	upf := pfcpSessionContext.UPF
+	nodeID := upf.GetNodeIDString()
+
+	select {
+	case <-upf.Association.Done():
+		logger.PduSessLog.Warnf("UPF[%s] no longer associated, do not establish %s",
+			nodeID, pfcpSessionContext.PDUSessionParams())
+		resCh <- smf_context.SendPfcpResult{
+			Status: smf_context.SessionEstablishFailed,
+			Source: nodeID,
+		}
+		return
+	default:
+	}
+
+	logger.PduSessLog.Infof("Sending SessionEstablishmentRequest for %s to UPF[%s]",
+		pfcpSessionContext.PDUSessionParams(), nodeID)
+	logger.PduSessLog.Tracef("Transfer the following PFCPSessionContext: %s", pfcpSessionContext)
+
+	rcvMsg, err := pfcp_message.SendPfcpSessionEstablishmentRequest(pfcpSessionContext)
 	if err != nil {
-		logger.PduSessLog.Warnf("Sending PFCP Session Deletion Request error: %+v", err)
-		resCh <- SendPfcpResult{
+		logger.PduSessLog.Errorf("SessionEstablishmentRequest for %s to UPF[%s] error: %+v",
+			pfcpSessionContext.PDUSessionParams(), nodeID, err)
+		resCh <- smf_context.SendPfcpResult{
+			Status: smf_context.SessionEstablishFailed,
+			Err:    err,
+			Source: nodeID,
+		}
+		return
+	}
+
+	rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionEstablishmentResponse)
+	if rsp.UPFSEID != nil {
+		pfcpSessionContext.RemoteSEID = rsp.UPFSEID.Seid
+		logger.PduSessLog.Infof("Received remote SEID %d for %s from UPF[%s]",
+			rsp.UPFSEID.Seid, pfcpSessionContext.PDUSessionParams(), nodeID)
+	}
+
+	if rsp.Cause != nil && rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
+		logger.PduSessLog.Infof("Received SessionEstablishmentAccept for %s from UPF[%s]",
+			pfcpSessionContext.PDUSessionParams(), nodeID)
+
+		// set all session rules in UPF's PFCPSessionContext to state RULE_SYNCED
+		pfcpSessionContext.MarkAsSyncedToUPFRecursive()
+
+		resCh <- smf_context.SendPfcpResult{
+			Status: smf_context.SessionEstablishSuccess,
+			RcvMsg: rcvMsg,
+			Source: nodeID,
+		}
+	} else {
+		logger.PduSessLog.Errorf("Received SessionEstablishmentReject for %s from UPF[%s]",
+			pfcpSessionContext.PDUSessionParams(), nodeID)
+		resCh <- smf_context.SendPfcpResult{
+			Status: smf_context.SessionEstablishFailed,
+			Err:    fmt.Errorf("cause[%d] if not request accepted", rsp.Cause.CauseValue),
+			RcvMsg: rcvMsg,
+			Source: nodeID,
+		}
+	}
+}
+
+func modifyExistingPfcpSession(
+	smContext *smf_context.SMContext,
+	pfcpSessionContext *smf_context.PFCPSessionContext,
+	resCh chan<- smf_context.SendPfcpResult,
+	reportResaon models.TriggerType,
+) {
+	upf := pfcpSessionContext.UPF
+	nodeID := upf.GetNodeIDString()
+
+	select {
+	case <-upf.Association.Done():
+		logger.PduSessLog.Warnf("UPF[%s] no longer associated, do not modify %s",
+			nodeID, pfcpSessionContext.PDUSessionParams())
+		resCh <- smf_context.SendPfcpResult{
+			Status: smf_context.SessionUpdateFailed,
+			Source: nodeID,
+		}
+		return
+	default:
+	}
+
+	logger.PduSessLog.Infof("Sending SessionModificationRequest for %s to UPF[%s]",
+		pfcpSessionContext.PDUSessionParams(), nodeID)
+	logger.PduSessLog.Tracef("Transfer the following PFCPSessionContext: %s", pfcpSessionContext)
+
+	rcvMsg, err := pfcp_message.SendPfcpSessionModificationRequest(pfcpSessionContext)
+	if err != nil {
+		logger.PduSessLog.Errorf("SessionModificationRequest for %s from UPF[%s] error: %+v",
+			pfcpSessionContext.PDUSessionParams(), nodeID, err)
+		resCh <- smf_context.SendPfcpResult{
+			Status: smf_context.SessionUpdateFailed,
+			Err:    err,
+			Source: nodeID,
+		}
+		return
+	}
+
+	rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionModificationResponse)
+	if rsp.Cause != nil && rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
+		logger.PduSessLog.Infof("Received SessionModificationAccept for %s from UPF[%s]",
+			pfcpSessionContext.PDUSessionParams(), nodeID)
+		resCh <- smf_context.SendPfcpResult{
+			Status: smf_context.SessionUpdateSuccess,
+			RcvMsg: rcvMsg,
+			Source: nodeID,
+		}
+		if rsp.UsageReport != nil {
+			smContext.HandleReports(nil, rsp.UsageReport, nil, upf.NodeID, reportResaon)
+		}
+
+		// set all session rules in UPF's PFCPSessionContext to state RULE_SYNCED
+		pfcpSessionContext.MarkAsSyncedToUPFRecursive()
+	} else {
+		logger.PduSessLog.Errorf("Received SessionModificationReject for %s from UPF[%s]",
+			pfcpSessionContext.PDUSessionParams(), nodeID)
+		resCh <- smf_context.SendPfcpResult{
+			Status: smf_context.SessionUpdateFailed,
+			Err:    fmt.Errorf("cause[%d] if not request accepted", rsp.Cause.CauseValue),
+			RcvMsg: rcvMsg,
+			Source: nodeID,
+		}
+	}
+}
+
+func restorePfcpSession(
+	pfcpSessionContext *smf_context.PFCPSessionContext,
+	resCh chan<- smf_context.SendPfcpResult,
+) {
+	defer pfcpSessionContext.Restoring.Unlock()
+
+	upf := pfcpSessionContext.UPF
+	nodeID := upf.GetNodeIDString()
+
+	select {
+	case <-upf.Association.Done():
+		logger.PduSessLog.Warnf("UPF[%s] not associated, do not restore %s",
+			nodeID, pfcpSessionContext.PDUSessionParams())
+		resCh <- smf_context.SendPfcpResult{
+			Status: smf_context.SessionEstablishFailed,
+			Source: nodeID,
+		}
+		return
+	default:
+	}
+
+	logger.PduSessLog.Infof("Sending SessionRecoveryRequest for %s to UPF[%s]",
+		pfcpSessionContext.PDUSessionParams(), nodeID)
+
+	rcvMsg, err := pfcp_message.SendPfcpSessionRecoveryRequest(pfcpSessionContext)
+	if err != nil {
+		logger.PduSessLog.Errorf("SessionRecoveryRequest for %s to [%s] error: %+v",
+			pfcpSessionContext.PDUSessionParams(), nodeID, err)
+		resCh <- smf_context.SendPfcpResult{
+			Status: smf_context.SessionEstablishFailed,
+			Err:    err,
+			Source: nodeID,
+		}
+		return
+	}
+
+	// the recovery request is a SessionEstablishmentRequest with all PDRs of the PFCPSessionContext
+	// therefore, a PFCPSessionEstablishmentResponse comes back
+	rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionEstablishmentResponse)
+	if rsp.UPFSEID != nil {
+		pfcpSessionContext.RemoteSEID = rsp.UPFSEID.Seid
+		logger.PduSessLog.Infof("Received UPFSEID: %+v", rsp.UPFSEID)
+	}
+
+	if rsp.Cause != nil && rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
+		logger.PduSessLog.Infof("Received SessionRecoveryAccept for %s from UPF[%s]",
+			pfcpSessionContext.PDUSessionParams(), nodeID)
+		resCh <- smf_context.SendPfcpResult{
+			Status: smf_context.SessionEstablishSuccess,
+			RcvMsg: rcvMsg,
+			Source: nodeID,
+		}
+
+		// set all session rules in UPF's PFCPSessionContext to state RULE_SYNCED
+		pfcpSessionContext.MarkAsSyncedToUPFRecursive()
+	} else {
+		logger.PduSessLog.Errorf("Received SessionRecoveryReject for %s from UPF[%s]",
+			pfcpSessionContext.PDUSessionParams(), nodeID)
+		resCh <- smf_context.SendPfcpResult{
+			Status: smf_context.SessionEstablishFailed,
+			Err:    fmt.Errorf("cause[%d] if not request accepted", rsp.Cause.CauseValue),
+			RcvMsg: rcvMsg,
+			Source: nodeID,
+		}
+	}
+}
+
+func releasePfcpSession(
+	pfcpSessionContext *smf_context.PFCPSessionContext,
+	resCh chan<- smf_context.SendPfcpResult,
+) {
+	upf := pfcpSessionContext.UPF
+	nodeID := upf.GetNodeIDString()
+
+	select {
+	case <-upf.Association.Done():
+		logger.PduSessLog.Warnf("UPF[%s] not associated, do not release %s",
+			nodeID, pfcpSessionContext.PDUSessionParams())
+		resCh <- smf_context.SendPfcpResult{
+			Status: smf_context.SessionReleaseFailed,
+			Source: nodeID,
+		}
+		return
+	default:
+	}
+
+	logger.PduSessLog.Infof("Sending SessionReleaseRequest for %s to UPF[%s]",
+		pfcpSessionContext.PDUSessionParams(), nodeID)
+
+	rcvMsg, err := pfcp_message.SendPfcpSessionReleaseRequest(pfcpSessionContext)
+	if err != nil {
+		logger.PduSessLog.Errorf("SessionReleaseRequest for %s to UPF[%s] error: %+v",
+			pfcpSessionContext.PDUSessionParams(), nodeID, err)
+		resCh <- smf_context.SendPfcpResult{
 			Status: smf_context.SessionReleaseFailed,
 			Err:    err,
+			Source: nodeID,
 		}
 		return
 	}
 
 	rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionDeletionResponse)
 	if rsp.Cause != nil && rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
-		logger.PduSessLog.Info("Received PFCP Session Deletion Accepted Response")
-		resCh <- SendPfcpResult{
+		logger.PduSessLog.Infof("Received SessionReleaseAccept for %s from UPF[%s]",
+			pfcpSessionContext.PDUSessionParams(), nodeID)
+		resCh <- smf_context.SendPfcpResult{
+			RcvMsg: rcvMsg,
 			Status: smf_context.SessionReleaseSuccess,
+			Source: nodeID,
 		}
-		if rsp.UsageReport != nil {
-			SEID := rcvMsg.PfcpMessage.Header.SEID
-			upfNodeID := ctx.GetNodeIDByLocalSEID(SEID)
-			ctx.HandleReports(nil, nil, rsp.UsageReport, upfNodeID, "")
-		}
+		// set all session rules in UPF's PFCPSessionContext to state RULE_SYNCED
+		pfcpSessionContext.MarkAsSyncedToUPFRecursive()
 	} else {
-		logger.PduSessLog.Warn("Received PFCP Session Deletion Not Accepted Response")
-		resCh <- SendPfcpResult{
+		logger.PduSessLog.Errorf("Received SessionReleaseReject for %s from UPF[%s]",
+			pfcpSessionContext.PDUSessionParams(), nodeID)
+		resCh <- smf_context.SendPfcpResult{
+			RcvMsg: rcvMsg,
 			Status: smf_context.SessionReleaseFailed,
 			Err:    fmt.Errorf("cause[%d] if not request accepted", rsp.Cause.CauseValue),
+			Source: nodeID,
 		}
 	}
+}
+
+// Collects the PFCP responses from all UPFs involved
+// in the data path(s) of the PDU session.
+// If one UPF failed, failure is reported.
+// If one UPF timed out, the status of its partner is reported.
+func waitAllPfcpRsp(
+	pfcpPoolLen int,
+	expectedState smf_context.PFCPSessionResponseStatus,
+	failedState smf_context.PFCPSessionResponseStatus,
+	resChan <-chan smf_context.SendPfcpResult,
+) smf_context.PFCPSessionResponseStatus {
+	pfcpState := expectedState
+	timedOutUPFs := make(map[uuid.UUID]*smf_context.UPF)
+
+	for i := 0; i < pfcpPoolLen; i++ {
+		res := <-resChan
+
+		ip := res.Source
+		logger.PfcpLog.Infof("Handle PFCP response from UPF[%s]", ip)
+		upf := smf_context.GetUserPlaneInformation().NodeIDToUPF[ip]
+
+		if upf == nil {
+			logger.PfcpLog.Errorf("Cannot find UPF Node ID %s in UserPlaneInformation", ip)
+			return failedState
+		}
+		// UPF can be disassociated at this point due to delayed heartbeat
+		// which detected a false-positive failure
+		// simply do not process such a response
+		select {
+		case <-upf.Association.Done():
+			logger.CtxLog.Warnf("UPF[%s] no longer associated, do not process late PFCP response",
+				upf.GetNodeIDString())
+			timedOutUPFs[upf.ID] = upf
+			continue
+		default:
+		}
+		// check if the PFCP update was received correctly
+		if res.Status == smf_context.SessionEstablishFailed ||
+			res.Status == smf_context.SessionUpdateFailed {
+			// one of the UPFs failed, report failure
+			logger.PfcpLog.Errorf("Session management process failed due to at least one UPF reporting %s",
+				res.Status)
+		} else if res.Status == smf_context.SessionReleaseFailed {
+			// one of the UPFs failed, report failure
+			logger.PfcpLog.Errorf("Session management process failed due to at least one UPF reporting %s",
+				res.Status)
+		}
+	}
+	// success or timeout
+
+	// check the timeouted UPFs
+	if len(timedOutUPFs) > 0 {
+		if len(timedOutUPFs) == pfcpPoolLen {
+			logger.PfcpLog.Errorln("All UPFs timed out")
+			return failedState
+		}
+		for _, upf := range timedOutUPFs {
+			logger.PfcpLog.Infof("UPF[%s] timed out", upf.GetNodeIDString())
+		}
+	}
+
+	// at this point all went well and the pfcpState is success
+	return pfcpState
 }

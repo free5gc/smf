@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/free5gc/openapi/Nsmf_EventExposure"
 	"github.com/free5gc/openapi/models"
@@ -31,12 +32,11 @@ func (p *Processor) HandleChargingNotification(
 // While receive Charging Notification from CHF, SMF will send Charging Information to CHF and update UPF
 // The Charging Notification will be sent when CHF found the changes of the quota file.
 func (p *Processor) chargingNotificationProcedure(
-	req models.ChargingNotifyRequest, smContextRef string,
+	req models.ChargingNotifyRequest,
+	smContextRef string,
 ) *models.ProblemDetails {
-	if smContext := smf_context.GetSMContextByRef(smContextRef); smContext != nil {
-		smContext.SMLock.Lock()
-		defer smContext.SMLock.Unlock()
-		upfUrrMap := make(map[string][]*smf_context.URR)
+	if smContext := smf_context.GetSelf().GetSMContextByRef(smContextRef); smContext != nil {
+		upfUrrMap := make(map[uuid.UUID][]*smf_context.URR)
 		for _, reauthorizeDetail := range req.ReauthorizationDetails {
 			rg := reauthorizeDetail.RatingGroup
 			logger.ChargingLog.Infof("Force update charging information for rating group %d", rg)
@@ -45,18 +45,17 @@ func (p *Processor) chargingNotificationProcedure(
 				if chgInfo.RatingGroup == rg ||
 					chgInfo.ChargingLevel == smf_context.PduSessionCharging {
 					logger.ChargingLog.Tracef("Query URR (%d) for Rating Group (%d)", urr.URRID, rg)
-					upfId := smContext.ChargingInfo[urr.URRID].UpfId
-					upfUrrMap[upfId] = append(upfUrrMap[upfId], urr)
+					upfUUID := smContext.ChargingInfo[urr.URRID].UpfUUID
+					upfUrrMap[upfUUID] = append(upfUrrMap[upfUUID], urr)
 				}
 			}
 		}
-		for upfId, urrList := range upfUrrMap {
-			upf := smf_context.GetUpfById(upfId)
-			if upf == nil {
-				logger.ChargingLog.Warnf("Cound not find upf %s", upfId)
-				continue
+		for upfUUID, urrList := range upfUrrMap {
+			if upf := smf_context.GetUserPlaneInformation().GetUpfById(upfUUID); upf == nil {
+				logger.ChargingLog.Warnf("Cound not find UPF[%s]", upfUUID)
+			} else {
+				p.QueryReport(smContext, upf, urrList, models.TriggerType_FORCED_REAUTHORISATION)
 			}
-			QueryReport(smContext, upf, urrList, models.TriggerType_FORCED_REAUTHORISATION)
 		}
 		p.ReportUsageAndUpdateQuota(smContext)
 	} else {
@@ -78,16 +77,13 @@ func (p *Processor) HandleSMPolicyUpdateNotify(
 ) {
 	logger.PduSessLog.Infoln("In HandleSMPolicyUpdateNotify")
 	decision := request.SmPolicyDecision
-	smContext := smf_context.GetSMContextByRef(smContextRef)
+	smContext := smf_context.GetSelf().GetSMContextByRef(smContextRef)
 
 	if smContext == nil {
 		logger.PduSessLog.Errorf("SMContext[%s] not found", smContextRef)
 		c.Status(http.StatusBadRequest)
 		return
 	}
-
-	smContext.SMLock.Lock()
-	defer smContext.SMLock.Unlock()
 
 	smContext.CheckState(smf_context.Active)
 	// Wait till the state becomes Active again
@@ -116,7 +112,7 @@ func (p *Processor) HandleSMPolicyUpdateNotify(
 
 	smContext.SendUpPathChgNotification("EARLY", SendUpPathChgEventExposureNotification)
 
-	ActivateUPFSession(smContext, nil)
+	p.ActivatePDUSessionAtUPFs(smContext)
 
 	smContext.SendUpPathChgNotification("LATE", SendUpPathChgEventExposureNotification)
 

@@ -30,6 +30,69 @@ var testConfig = factory.Config{
 	},
 }
 
+var createData = &models.SmContextCreateData{
+	Supi:         "imsi-208930000000001",
+	Pei:          "imeisv-1110000000000000",
+	Gpsi:         "msisdn-",
+	PduSessionId: 10,
+	Dnn:          "internet",
+	SNssai: &models.Snssai{
+		Sst: 1,
+		Sd:  "112232",
+	},
+	ServingNfId: "c8d0ee65-f466-48aa-a42f-235ec771cb52",
+	Guami: &models.Guami{
+		PlmnId: &models.PlmnId{
+			Mcc: "208",
+			Mnc: "93",
+		},
+		AmfId: "cafe00",
+	},
+	AnType: "3GPP_ACCESS",
+	ServingNetwork: &models.PlmnId{
+		Mcc: "208",
+		Mnc: "93",
+	},
+}
+
+var sessSubData = []models.SessionManagementSubscriptionData{
+	{
+		SingleNssai: &models.Snssai{
+			Sst: 1,
+			Sd:  "112232",
+		},
+		DnnConfigurations: map[string]models.DnnConfiguration{
+			"internet": {
+				PduSessionTypes: &models.PduSessionTypes{
+					DefaultSessionType: "IPV4",
+					AllowedSessionTypes: []models.PduSessionType{
+						"IPV4",
+					},
+				},
+				SscModes: &models.SscModes{
+					DefaultSscMode: "SSC_MODE_1",
+					AllowedSscModes: []models.SscMode{
+						"SSC_MODE_1",
+						"SSC_MODE_2",
+						"SSC_MODE_3",
+					},
+				},
+				Var5gQosProfile: &models.SubscribedDefaultQos{
+					Var5qi: 9,
+					Arp: &models.Arp{
+						PriorityLevel: 8,
+					},
+					PriorityLevel: 8,
+				},
+				SessionAmbr: &models.Ambr{
+					Uplink:   "1000 Kbps",
+					Downlink: "1000 Kbps",
+				},
+			},
+		},
+	},
+}
+
 func TestSendSMPolicyAssociationUpdateByUERequestModification(t *testing.T) {
 	smf_context.InitSmfContext(&testConfig)
 
@@ -44,7 +107,7 @@ func TestSendSMPolicyAssociationUpdateByUERequestModification(t *testing.T) {
 	}{
 		{
 			name:             "QoSRules is nil",
-			smContext:        smf_context.NewSMContext("imsi-208930000000001", 10),
+			smContext:        smf_context.NewSMContext(createData, sessSubData),
 			qosRules:         nasType.QoSRules{},
 			qosFlowDescs:     nasType.QoSFlowDescs{nasType.QoSFlowDesc{}},
 			smPolicyDecision: nil,
@@ -52,7 +115,7 @@ func TestSendSMPolicyAssociationUpdateByUERequestModification(t *testing.T) {
 		},
 		{
 			name:             "QoSFlowDescs is nil",
-			smContext:        smf_context.NewSMContext("imsi-208930000000001", 10),
+			smContext:        smf_context.NewSMContext(createData, sessSubData),
 			qosRules:         nasType.QoSRules{nasType.QoSRule{}},
 			qosFlowDescs:     nasType.QoSFlowDescs{},
 			smPolicyDecision: nil,

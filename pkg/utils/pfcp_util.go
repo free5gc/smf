@@ -28,9 +28,8 @@ func InitPFCPFunc() (func(a *service.SmfApp), func()) {
 		// Wait for PFCP start
 		time.Sleep(1000 * time.Millisecond)
 
-		for _, upNode := range smf_context.GetSelf().UserPlaneInformation.UPFs {
-			upNode.UPF.Ctx, upNode.UPF.CancelFunc = context.WithCancel(ctx)
-			go a.Processor().ToBeAssociatedWithUPF(ctx, upNode.UPF)
+		for _, upf := range smf_context.GetSelf().UserPlaneInformation.UPFs {
+			go a.Processor().ToBeAssociatedWithUPF(ctx, upf)
 		}
 	}
 

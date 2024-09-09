@@ -25,7 +25,7 @@ type PDUSessionInfo struct {
 }
 
 func (p *Processor) HandleOAMGetUEPDUSessionInfo(c *gin.Context, smContextRef string) {
-	smContext := context.GetSMContextByRef(smContextRef)
+	smContext := context.GetSelf().GetSMContextByRef(smContextRef)
 	if smContext == nil {
 		c.JSON(http.StatusNotFound, nil)
 		return

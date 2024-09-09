@@ -3,7 +3,7 @@ package processor
 import (
 	"encoding/hex"
 	"errors"
-	"net"
+	"fmt"
 	"net/http"
 
 	"github.com/antihax/optional"
@@ -30,7 +30,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	// PDU Session Establishment Accept/Reject
 	var response models.PostSmContextsResponse
 	response.JsonData = new(models.SmContextCreatedData)
-	logger.PduSessLog.Infoln("In HandlePDUSessionSMContextCreate")
+	logger.PduSessLog.Traceln("In HandlePDUSessionSMContextCreate")
 
 	// Check has PDU Session Establishment Request
 	m := nas.NewMessage()
@@ -48,81 +48,63 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 
 	createData := request.JsonData
 	// Check duplicate SM Context
-	if dup_smCtx := smf_context.GetSMContextById(createData.Supi, createData.PduSessionId); dup_smCtx != nil {
+	if dup_smCtx := smf_context.GetSelf().GetSMContextById(createData.Supi, createData.PduSessionId); dup_smCtx != nil {
 		p.HandlePDUSessionSMContextLocalRelease(dup_smCtx, createData)
 	}
-
-	smContext := smf_context.NewSMContext(createData.Supi, createData.PduSessionId)
-	smContext.SetState(smf_context.ActivePending)
-	smContext.SmContextCreateData = createData
-	smContext.SmStatusNotifyUri = createData.SmContextStatusUri
-
-	smContext.SMLock.Lock()
-	needUnlock := true
-	defer func() {
-		if needUnlock {
-			smContext.SMLock.Unlock()
-		}
-	}()
 
 	upi := smf_context.GetUserPlaneInformation()
 	upi.Mu.RLock()
 	defer upi.Mu.RUnlock()
 
-	// DNN Information from config
-	smContext.DNNInfo = smf_context.RetrieveDnnInformation(smContext.SNssai, smContext.Dnn)
-	if smContext.DNNInfo == nil {
-		logger.PduSessLog.Errorf("S-NSSAI[sst: %d, sd: %s] DNN[%s] not matched DNN Config",
-			smContext.SNssai.Sst, smContext.SNssai.Sd, smContext.Dnn)
-	}
-	smContext.Log.Debugf("S-NSSAI[sst: %d, sd: %s] DNN[%s]",
-		smContext.SNssai.Sst, smContext.SNssai.Sd, smContext.Dnn)
-
-	// Query UDM
+	// Discover UDM
 	if problemDetails, err := p.Consumer().SendNFDiscoveryUDM(); err != nil {
-		smContext.Log.Warnf("Send NF Discovery Serving UDM Error[%v]", err)
+		logger.PduSessLog.Errorf("Send NF Discovery Serving UDM Error[%v]", err)
+		return
 	} else if problemDetails != nil {
-		smContext.Log.Warnf("Send NF Discovery Serving UDM Problem[%+v]", problemDetails)
+		logger.PduSessLog.Errorf("Send NF Discovery Serving UDM Problem[%+v]", problemDetails)
+		return
 	} else {
-		smContext.Log.Infoln("Send NF Discovery Serving UDM Successfully")
+		logger.PduSessLog.Debugln("Send NF Discovery Serving UDM Successful")
 	}
 
-	smPlmnID := createData.Guami.PlmnId
-
+	// Query UDM for session management subscription data
 	smDataParams := &Nudm_SubscriberDataManagement.GetSmDataParamOpts{
 		Dnn:         optional.NewString(createData.Dnn),
-		PlmnId:      optional.NewInterface(openapi.MarshToJsonString(smPlmnID)),
-		SingleNssai: optional.NewInterface(openapi.MarshToJsonString(smContext.SNssai)),
+		PlmnId:      optional.NewInterface(openapi.MarshToJsonString(createData.Guami.PlmnId)),
+		SingleNssai: optional.NewInterface(openapi.MarshToJsonString(createData.SNssai)),
 	}
 
 	ctx, _, oauthErr := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_SDM, models.NfType_UDM)
 	if oauthErr != nil {
-		smContext.Log.Errorf("Get Token Context Error[%v]", oauthErr)
+		logger.PduSessLog.Errorf("Get Token Context Error[%v]", oauthErr)
 		return
 	}
 
-	if sessSubData, rsp, err := p.Consumer().
-		GetSmData(ctx, smContext.Supi, smDataParams); err != nil {
-		smContext.Log.Errorln("Get SessionManagementSubscriptionData error:", err)
+	sessSubData, rsp, err := p.Consumer().GetSmData(ctx, createData.Supi, smDataParams)
+	if err != nil {
+		logger.PduSessLog.Errorln("Get SessionManagementSubscriptionData error:", err)
+		return
 	} else {
 		defer func() {
 			if rspCloseErr := rsp.Body.Close(); rspCloseErr != nil {
-				smContext.Log.Errorf("GetSmData response body cannot close: %+v", rspCloseErr)
+				logger.PduSessLog.Errorf("GetSmData response body cannot close: %+v", rspCloseErr)
+				return
 			}
 		}()
-		if len(sessSubData) > 0 {
-			smContext.DnnConfiguration = sessSubData[0].DnnConfigurations[smContext.Dnn]
-			// UP Security info present in session management subscription data
-			if smContext.DnnConfiguration.UpSecurity != nil {
-				smContext.UpSecurity = smContext.DnnConfiguration.UpSecurity
-			}
-		} else {
-			smContext.Log.Errorln("SessionManagementSubscriptionData from UDM is nil")
+		if len(sessSubData) == 0 {
+			logger.PduSessLog.Errorf("No SessionManagementSubscriptionData registered in UDM for requested session %+v",
+				smDataParams)
+			return
 		}
 	}
 
-	establishmentRequest := m.PDUSessionEstablishmentRequest
-	if err := HandlePDUSessionEstablishmentRequest(smContext, establishmentRequest); err != nil {
+	// create session management context object
+	smContext := smf_context.NewSMContext(createData, sessSubData)
+	smContext.SetState(smf_context.ActivePending)
+
+	// TODO: from here on, RELEASE sm context after error before returning!
+
+	if err = HandlePDUSessionEstablishmentRequest(smContext, m.PDUSessionEstablishmentRequest); err != nil {
 		smContext.Log.Errorf("PDU Session Establishment fail by %s", err)
 		gsmError := &GSMError{}
 		if errors.As(err, &gsmError) {
@@ -137,22 +119,22 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		return
 	}
 
-	// Discover and new Namf_Comm client for use later
-	if problemDetails, err := p.Consumer().SendNFDiscoveryServingAMF(smContext); err != nil {
-		smContext.Log.Warnf("Send NF Discovery Serving AMF Error[%v]", err)
+	// Discover and set AMF for later use
+	servingAMF, problemDetails, err := p.Consumer().SendNFDiscoveryServingAMF(smContext.ServingNfId)
+	if err != nil {
+		logger.PduSessLog.Warnf("Send NF Discovery Serving AMF Error[%v]", err)
 	} else if problemDetails != nil {
-		smContext.Log.Warnf("Send NF Discovery Serving AMF Problem[%+v]", problemDetails)
+		logger.PduSessLog.Warnf("Send NF Discovery Serving AMF Problem[%+v]", problemDetails)
 	} else {
-		smContext.Log.Traceln("Send NF Discovery Serving AMF successfully")
-	}
-
-	for _, service := range *smContext.AMFProfile.NfServices {
-		if service.ServiceName == models.ServiceName_NAMF_COMM {
-			smContext.CommunicationClientApiPrefix = service.ApiPrefix
+		logger.PduSessLog.Traceln("Send NF Discovery Serving AMF successfully")
+		if err := smContext.SetServingAMF(servingAMF); err != nil {
+			logger.PduSessLog.Warnf("Set serving AMF error[%v]", err)
 		}
 	}
 
-	if err := smContext.AllocUeIP(); err != nil {
+	// choose PSA and allocate UE IP address (or configure static IP)
+	// also selects PSA in ULCL scenarios
+	if err = smContext.FindPSAandAllocUeIP(); err != nil {
 		smContext.SetState(smf_context.InActive)
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
 		p.makeEstRejectResAndReleaseSMContext(c, smContext,
@@ -161,8 +143,15 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		return
 	}
 
-	if err := p.Consumer().PCFSelection(smContext); err != nil {
-		smContext.Log.Errorln("pcf selection error:", err)
+	// Discover and set PCF for later use
+	servingPCF, err := p.Consumer().PCFSelection()
+	if err != nil {
+		logger.PduSessLog.Warnf("Send NF Discovery PCF Error[%v]", err)
+	} else {
+		logger.PduSessLog.Traceln("Send NF Discovery PCF successful")
+		if err := smContext.SetServingPCF(servingPCF); err != nil {
+			logger.PduSessLog.Warnf("Set serving PCF error[%v]", err)
+		}
 	}
 
 	smPolicyID, smPolicyDecision, err := p.Consumer().SendSMPolicyAssociationCreate(smContext)
@@ -186,11 +175,16 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	smContext.SMPolicyID = smPolicyID
 
 	// PDU　session create is a charging event
-	logger.PduSessLog.Infof("CHF Selection for SMContext SUPI[%s] PDUSessionID[%d]\n",
+	logger.PduSessLog.Debugf("CHF Selection for SMContext SUPI[%s] PDUSessionID[%d]\n",
 		smContext.Supi, smContext.PDUSessionID)
-	if err = p.Consumer().CHFSelection(smContext); err != nil {
-		logger.PduSessLog.Errorln("chf selection error:", err)
+	servingCHF, err := p.Consumer().CHFSelection()
+	if err != nil {
+		logger.PduSessLog.Warnf("Send NF Discovery CHF Error[%v]", err)
 	} else {
+		logger.PduSessLog.Traceln("Send NF Discovery CHF successful")
+		if err := smContext.SetServingCHF(servingCHF); err != nil {
+			logger.PduSessLog.Warnf("Set serving CHF error[%v]", err)
+		}
 		p.CreateChargingSession(smContext)
 	}
 
@@ -203,12 +197,12 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		return
 	}
 
-	// If PCF prepares default Pcc Rule, SMF do not need to create defaultDataPath.
+	// If PCF prepares default Pcc Rule, SMF does not need to create defaultDataPath
 	if err = smContext.ApplyPccRules(smPolicyDecision); err != nil {
 		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
 	}
 
-	// SelectDefaultDataPath() will create a default data path if default data path is not found.
+	// creates a default data path if it was not created in previous step
 	if err = smContext.SelectDefaultDataPath(); err != nil {
 		smContext.SetState(smf_context.InActive)
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
@@ -218,19 +212,72 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		return
 	}
 
-	// generate goroutine to handle PFCP and
-	// reply PDUSessionSMContextCreate rsp immediately
-	needUnlock = false
-	go func() {
-		defer smContext.SMLock.Unlock()
-
-		smContext.SendUpPathChgNotification("EARLY", SendUpPathChgEventExposureNotification)
-
-		handler := func(smContext *smf_context.SMContext, success bool) {
-			p.EstHandler(isDone, smContext, success)
+	// ULCL scenario: add second PSA UPF and prepare data path and PDRs
+	if smf_context.GetSelf().ULCLSupport && smf_context.CheckUEHasPreConfig(smContext.Supi) {
+		bpMGR := smContext.BPManager
+		if bpMGR == nil {
+			smContext.SetState(smf_context.InActive)
+			smContext.Log.Errorln("PDUSessionSMContextCreate err: BPManager is nil in ULCL senario")
+			p.makeEstRejectResAndReleaseSMContext(c, smContext,
+				nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN,
+				&Nsmf_PDUSession.InsufficientResourceSliceDnn)
+			return
 		}
 
-		ActivateUPFSession(smContext, handler)
+		/*	TODO: can we integrate ULCL UPLINK data path establishment here as well?
+			// or does it have to happen during session modification?
+
+			switch bpMGR.AddingPSAState {
+			case smf_context.ActivatingDataPath:
+				for {
+					// select second PSA UPF
+					bpMGR.SelectPSA2(smContext) // sets bpMGR.ActivatingPath and bpMGR.ActivatedPaths
+					if len(bpMGR.ActivatedPaths) == len(smContext.Tunnel.DataPathPool) {
+						break
+					}
+					smContext.AllocateLocalSEIDForDataPath(bpMGR.ActivatingPath)
+
+					// select a UPF as ULCL
+					err := bpMGR.FindULCL(smContext)
+					if err != nil {
+						smContext.SetState(smf_context.InActive)
+						smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
+						p.makeEstRejectResAndReleaseSMContext(c, smContext,
+							nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN,
+							&Nsmf_PDUSession.InsufficientResourceSliceDnn)
+						return
+					}
+
+					// allocate path PDR and TEID
+					bpMGR.ActivatingPath.ActivateTunnelAndPDR(smContext, 255)
+					// N1N2MessageTransfer here
+
+					// TODO: does this trigger a charging event? or only sending the PFCP message?
+				}
+			default:
+				smContext.SetState(smf_context.InActive)
+				smContext.Log.Errorln("PDUSessionSMContextCreate err: BPManager is in unexpected state")
+				p.makeEstRejectResAndReleaseSMContext(c, smContext,
+					nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN,
+					&Nsmf_PDUSession.InsufficientResourceSliceDnn)
+				return
+			}
+		*/
+	}
+
+	// generate goroutine to handle PFCP and
+	// reply PDUSessionSMContextCreate rsp immediately
+	// this establishes the UPLINK data path direction only (DOWNLINK in sess. modification)
+	go func() {
+		smContext.SendUpPathChgNotification("EARLY", SendUpPathChgEventExposureNotification)
+
+		pfcpReturnState := p.ActivatePDUSessionAtUPFs(smContext)
+		switch pfcpReturnState {
+		case smf_context.SessionEstablishSuccess:
+			p.sendPDUSessionEstablishmentAccept(smContext)
+		case smf_context.SessionEstablishFailed:
+			p.sendPDUSessionEstablishmentReject(smContext)
+		}
 
 		smContext.SendUpPathChgNotification("LATE", SendUpPathChgEventExposureNotification)
 
@@ -254,7 +301,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	var n2Buf []byte
 	var err error
 
-	smContext := smf_context.GetSMContextByRef(smContextRef)
+	smContext := smf_context.GetSelf().GetSMContextByRef(smContextRef)
 
 	upi := smf_context.GetUserPlaneInformation()
 	upi.Mu.RLock()
@@ -276,9 +323,6 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		c.JSON(http.StatusNotFound, updateSmContextError)
 		return
 	}
-
-	smContext.SMLock.Lock()
-	defer smContext.SMLock.Unlock()
 
 	var sendPFCPModification bool
 	var pfcpResponseStatus smf_context.PFCPSessionResponseStatus
@@ -363,7 +407,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 			smContext.SetState(smf_context.PFCPModification)
 
-			pfcpResponseStatus = releaseSession(smContext)
+			pfcpResponseStatus = p.ReleaseSessionAtUPFs(smContext)
 		case nas.MsgTypePDUSessionReleaseComplete:
 			smContext.CheckState(smf_context.InActivePending)
 			// Wait till the state becomes Active again
@@ -375,9 +419,10 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 			// If CN tunnel resource is released, should
 			if smContext.Tunnel.ANInformation.IPAddress == nil {
-				p.RemoveSMContextFromAllNF(smContext, true)
+				p.removeSMContextFromAllNF(smContext, true)
 			}
 		case nas.MsgTypePDUSessionModificationRequest:
+			logger.PduSessLog.Infoln("Handle PDU session modification request")
 			if rsp, errHandleReq := p.
 				HandlePDUSessionModificationRequest(smContext, m.PDUSessionModificationRequest); errHandleReq != nil {
 				if buf, err = smf_context.BuildGSMPDUSessionModificationReject(smContext); err != nil {
@@ -413,10 +458,6 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	}
 
 	tunnel := smContext.Tunnel
-	pdrList := []*smf_context.PDR{}
-	farList := []*smf_context.FAR{}
-	barList := []*smf_context.BAR{}
-	qerList := []*smf_context.QER{}
 	urrList := []*smf_context.URR{}
 
 	switch smContextUpdateData.UpCnxState {
@@ -464,7 +505,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
 						if curDataPathNode.IsANUPF() {
 							urrList = append(urrList, curDataPathNode.UpLinkTunnel.PDR.URR...)
-							QueryReport(smContext, curDataPathNode.UPF, urrList, models.TriggerType_USER_LOCATION_CHANGE)
+							p.QueryReport(smContext, curDataPathNode.UPF, urrList, models.TriggerType_USER_LOCATION_CHANGE)
 						}
 					}
 				}
@@ -477,18 +518,16 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 		// Set FAR and An, N3 Release Info
 		// TODO: Deactivate all datapath in ANUPF
-		farList = []*smf_context.FAR{}
 		for _, dataPath := range smContext.Tunnel.DataPathPool {
 			ANUPF := dataPath.FirstDPNode
 			DLPDR := ANUPF.DownLinkTunnel.PDR
 			if DLPDR == nil {
 				smContext.Log.Warnf("Access network resource is released")
 			} else {
-				DLPDR.FAR.State = smf_context.RULE_UPDATE
+				DLPDR.FAR.SetState(smf_context.RULE_UPDATE)
 				DLPDR.FAR.ApplyAction.Forw = false
 				DLPDR.FAR.ApplyAction.Buff = true
 				DLPDR.FAR.ApplyAction.Nocp = true
-				farList = append(farList, DLPDR.FAR)
 				sendPFCPModification = true
 				smContext.SetState(smf_context.PFCPModification)
 			}
@@ -502,8 +541,6 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		// TODO: implement sleep wait in concurrent architecture
 
 		smContext.SetState(smf_context.ModificationPending)
-		pdrList = []*smf_context.PDR{}
-		farList = []*smf_context.FAR{}
 
 		for _, dataPath := range tunnel.DataPathPool {
 			if dataPath.Activated {
@@ -527,11 +564,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					},
 				}
 
-				DLPDR.State = smf_context.RULE_UPDATE
-				DLPDR.FAR.State = smf_context.RULE_UPDATE
-
-				pdrList = append(pdrList, DLPDR)
-				farList = append(farList, DLPDR.FAR)
+				DLPDR.SetState(smf_context.RULE_UPDATE)
+				DLPDR.FAR.SetState(smf_context.RULE_UPDATE)
 			}
 		}
 
@@ -554,10 +588,10 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	case models.N2SmInfoType_PDU_RES_REL_RSP:
 		// remove an tunnel info
 		smContext.Log.Infoln("Handle N2 PDU Resource Release Response")
-		smContext.Tunnel.ANInformation = struct {
-			IPAddress net.IP
-			TEID      uint32
-		}{nil, 0}
+		smContext.Tunnel.ANInformation = &smf_context.ANInformation{
+			IPAddress: nil,
+			TEID:      0,
+		}
 
 		if smContext.PDUSessionRelease_DUE_TO_DUP_PDU_ID {
 			smContext.CheckState(smf_context.InActivePending)
@@ -567,7 +601,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			response.JsonData.UpCnxState = models.UpCnxState_DEACTIVATED
 			// If NAS layer is inActive, the context should be remove
 			if smContext.CheckState(smf_context.InActive) {
-				p.RemoveSMContextFromAllNF(smContext, true)
+				p.removeSMContextFromAllNF(smContext, true)
 			}
 		} else if smContext.CheckState(smf_context.InActive) { // normal case
 			// Wait till the state becomes Active again
@@ -576,7 +610,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			// If N1 PDU Session Release Complete is received, smContext state is InActive.
 			// Remove SMContext when receiving N2 PDU Resource Release Response.
 			// Use go routine to send Notification to prevent blocking the handling process
-			p.RemoveSMContextFromAllNF(smContext, true)
+			p.removeSMContextFromAllNF(smContext, true)
 		}
 	case models.N2SmInfoType_PATH_SWITCH_REQ:
 		smContext.Log.Traceln("Handle Path Switch Request")
@@ -597,16 +631,6 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			response.BinaryDataN2SmInformation = n2Buf
 			response.JsonData.N2SmInfo = &models.RefToBinaryData{
 				ContentId: "PATH_SWITCH_REQ_ACK",
-			}
-		}
-
-		for _, dataPath := range tunnel.DataPathPool {
-			if dataPath.Activated {
-				ANUPF := dataPath.FirstDPNode
-				DLPDR := ANUPF.DownLinkTunnel.PDR
-
-				pdrList = append(pdrList, DLPDR)
-				farList = append(farList, DLPDR.FAR)
 			}
 		}
 
@@ -675,10 +699,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		// request UPF establish indirect forwarding path for DL
 		if smContext.DLForwardingType == smf_context.IndirectForwarding {
 			ANUPF := smContext.IndirectForwardingTunnel.FirstDPNode
-			IndirectForwardingPDR := smContext.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel.PDR
-
-			pdrList = append(pdrList, IndirectForwardingPDR)
-			farList = append(farList, IndirectForwardingPDR.FAR)
+			IndirectForwardingPDR := ANUPF.UpLinkTunnel.PDR
 
 			// release indirect forwading path
 			if err = ANUPF.UPF.RemovePDR(IndirectForwardingPDR); err != nil {
@@ -705,23 +726,11 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		// Wait till the state becomes Active again
 		// TODO: implement sleep wait in concurrent architecture
 
-		for _, dataPath := range tunnel.DataPathPool {
-			if dataPath.Activated {
-				ANUPF := dataPath.FirstDPNode
-				DLPDR := ANUPF.DownLinkTunnel.PDR
-
-				pdrList = append(pdrList, DLPDR)
-				farList = append(farList, DLPDR.FAR)
-			}
-		}
-
 		// remove indirect forwarding path
 		if smContext.DLForwardingType == smf_context.IndirectForwarding {
 			indirectForwardingPDR := smContext.IndirectForwardingTunnel.FirstDPNode.GetUpLinkPDR()
-			indirectForwardingPDR.State = smf_context.RULE_REMOVE
-			indirectForwardingPDR.FAR.State = smf_context.RULE_REMOVE
-			pdrList = append(pdrList, indirectForwardingPDR)
-			farList = append(farList, indirectForwardingPDR.FAR)
+			indirectForwardingPDR.SetState(smf_context.RULE_REMOVE)
+			indirectForwardingPDR.FAR.SetState(smf_context.RULE_REMOVE)
 		}
 
 		sendPFCPModification = true
@@ -754,7 +763,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				}
 			}
 
-			pfcpResponseStatus = releaseSession(smContext)
+			smContext.SetState(smf_context.PFCPModification)
+
+			pfcpResponseStatus = p.ReleaseSessionAtUPFs(smContext)
 		default:
 			smContext.Log.Infof("Not needs to send pfcp release")
 		}
@@ -768,7 +779,12 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		smContext.Log.Traceln("In case PFCPModification")
 
 		if sendPFCPModification {
-			pfcpResponseStatus = p.updateAnUpfPfcpSession(smContext, pdrList, farList, barList, qerList, urrList)
+			pfcpResponseStatus = p.UpdatePDUSessionAtANUPF(smContext)
+		}
+
+		for upf, pfcp := range smContext.PFCPSessionContexts {
+			logger.PduSessLog.Tracef("After session modification: UPF %s has PFCP session context %s",
+				upf, pfcp)
 		}
 
 		switch pfcpResponseStatus {
@@ -784,13 +800,18 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				JsonData: &models.SmContextUpdateError{
 					Error: &Nsmf_PDUSession.N1SmError,
 				},
-			} // Depends on the reason why N4 fail
+			} // Depends on the reason why N4 failed
 			c.JSON(http.StatusForbidden, updateSmContextError)
 
 		case smf_context.SessionReleaseSuccess:
+			smContext.Log.Traceln("In case SessionReleaseSuccess")
+
 			p.ReleaseChargingSession(smContext)
 
-			smContext.Log.Traceln("In case SessionReleaseSuccess")
+			// release all tunnel resources and PFCP contexts of this SM context
+			// TODO: is this correct?
+			smf_context.GetSelf().RemoveSMContext(smContext)
+
 			smContext.SetState(smf_context.InActivePending)
 			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 
@@ -817,7 +838,24 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				}
 			}
 			c.JSON(int(problemDetail.Status), errResponse)
+		default:
+			logger.PduSessLog.Errorf("Returned from UpdatePDUSessionAtANUPF with unexpected status %s", pfcpResponseStatus)
+
+			smContext.SetState(smf_context.Active)
+
+			// It is just a template
+			updateSmContextError := models.UpdateSmContextErrorResponse{
+				JsonData: &models.SmContextUpdateError{
+					Error: &models.ProblemDetails{
+						Status: http.StatusInternalServerError,
+						Cause:  "SYSTEM_FAILURE",
+					},
+				},
+			} // Depends on the reason why N4 fail
+			c.JSON(http.StatusForbidden, updateSmContextError)
 		}
+
+		// TODO: required if we do: smf_context.GetSelf().RemoveSMContext(smContext)?
 		smContext.PostRemoveDataPath()
 	case smf_context.ModificationPending:
 		smContext.Log.Traceln("In case ModificationPending")
@@ -834,7 +872,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		// Note:
 		// We don't want to launch timer to wait for N2SmInfoType_PDU_RES_REL_RSP.
 		// So, local release smCtx and notify AMF after sending PDUSessionResourceReleaseCommand
-		p.RemoveSMContextFromAllNF(smContext, true)
+		p.removeSMContextFromAllNF(smContext, true)
 	}
 }
 
@@ -843,8 +881,8 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 	body models.ReleaseSmContextRequest,
 	smContextRef string,
 ) {
-	logger.PduSessLog.Infoln("In HandlePDUSessionSMContextRelease")
-	smContext := smf_context.GetSMContextByRef(smContextRef)
+	logger.PduSessLog.Traceln("In HandlePDUSessionSMContextRelease")
+	smContext := smf_context.GetSelf().GetSMContextByRef(smContextRef)
 
 	if smContext == nil {
 		logger.PduSessLog.Warnf("SMContext[%s] is not found", smContextRef)
@@ -862,9 +900,6 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 		c.JSON(http.StatusNotFound, updateSmContextError)
 		return
 	}
-
-	smContext.SMLock.Lock()
-	defer smContext.SMLock.Unlock()
 
 	smContext.StopT3591()
 	smContext.StopT3592()
@@ -894,7 +929,7 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 	if !smContext.CheckState(smf_context.InActive) {
 		smContext.SetState(smf_context.PFCPModification)
 	}
-	pfcpResponseStatus := releaseSession(smContext)
+	pfcpResponseStatus := p.ReleaseSessionAtUPFs(smContext)
 
 	switch pfcpResponseStatus {
 	case smf_context.SessionReleaseSuccess:
@@ -951,15 +986,12 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 		c.JSON(int(problemDetail.Status), errResponse)
 	}
 
-	p.RemoveSMContextFromAllNF(smContext, false)
+	p.removeSMContextFromAllNF(smContext, false)
 }
 
 func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 	smContext *smf_context.SMContext, createData *models.SmContextCreateData,
 ) {
-	smContext.SMLock.Lock()
-	defer smContext.SMLock.Unlock()
-
 	// remove SM Policy Association
 	if smContext.SMPolicyID != "" {
 		if err := p.Consumer().SendSMPolicyAssociationTermination(smContext); err != nil {
@@ -984,7 +1016,7 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 
 	smContext.SetState(smf_context.PFCPModification)
 
-	pfcpResponseStatus := releaseSession(smContext)
+	pfcpResponseStatus := p.ReleaseSessionAtUPFs(smContext)
 
 	switch pfcpResponseStatus {
 	case smf_context.SessionReleaseSuccess:
@@ -1006,10 +1038,10 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 				logger.PduSessLog.Traceln("Send SMContext Status Notification successfully")
 			}
 		}
-		p.RemoveSMContextFromAllNF(smContext, false)
+		p.removeSMContextFromAllNF(smContext, false)
 
 	case smf_context.SessionReleaseFailed:
-		logger.CtxLog.Traceln("In case SessionReleaseFailed")
+		smContext.Log.Traceln("In case SessionReleaseFailed")
 		smContext.SetState(smf_context.Active)
 
 	default:
@@ -1017,17 +1049,6 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 		logger.CtxLog.Traceln("In case Unknown")
 		smContext.SetState(smf_context.Active)
 	}
-}
-
-func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionResponseStatus {
-	smContext.SetState(smf_context.PFCPModification)
-
-	for _, res := range ReleaseTunnel(smContext) {
-		if res.Status != smf_context.SessionReleaseSuccess {
-			return res.Status
-		}
-	}
-	return smf_context.SessionReleaseSuccess
 }
 
 func (p *Processor) makeEstRejectResAndReleaseSMContext(
@@ -1057,7 +1078,108 @@ func (p *Processor) makeEstRejectResAndReleaseSMContext(
 		}
 		p.nasErrorResponse(c, int(sbiError.Status), postSmContextsError)
 	}
-	p.RemoveSMContextFromAllNF(smContext, false)
+	p.removeSMContextFromAllNF(smContext, false)
+}
+
+func (p *Processor) sendPDUSessionEstablishmentReject(
+	smContext *smf_context.SMContext,
+) {
+	smNasBuf, err := smf_context.BuildGSMPDUSessionEstablishmentReject(
+		smContext, nasMessage.Cause5GSMNetworkFailure)
+	if err != nil {
+		logger.PduSessLog.Errorf("Build GSM PDUSessionEstablishmentReject failed: %s", err)
+		return
+	}
+
+	n1n2Request := models.N1N2MessageTransferRequest{
+		BinaryDataN1Message: smNasBuf,
+		JsonData: &models.N1N2MessageTransferReqData{
+			PduSessionId: smContext.PDUSessionID,
+			N1MessageContainer: &models.N1MessageContainer{
+				N1MessageClass:   "SM",
+				N1MessageContent: &models.RefToBinaryData{ContentId: "GSM_NAS"},
+			},
+		},
+	}
+
+	smContext.SetState(smf_context.InActive)
+
+	ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+	if errToken != nil {
+		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", errToken)
+		return
+	}
+	rspData, _, err := p.Consumer().
+		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
+	if err != nil {
+		logger.ConsumerLog.Warnf("N1N2MessageTransfer for SendPDUSessionEstablishmentReject failed: %+v", err)
+		return
+	}
+
+	if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
+		logger.PduSessLog.Warnf("%v", rspData.Cause)
+	}
+	p.removeSMContextFromAllNF(smContext, true)
+}
+
+func (p *Processor) sendPDUSessionEstablishmentAccept(
+	smContext *smf_context.SMContext,
+) {
+	smNasBuf, err := smf_context.BuildGSMPDUSessionEstablishmentAccept(smContext)
+	if err != nil {
+		logger.PduSessLog.Errorf("Build GSM PDUSessionEstablishmentAccept failed: %s", err)
+		return
+	}
+
+	n2Pdu, err := smf_context.BuildPDUSessionResourceSetupRequestTransfer(smContext)
+	if err != nil {
+		logger.PduSessLog.Errorf("Build PDUSessionResourceSetupRequestTransfer failed: %s", err)
+		return
+	}
+
+	n1n2Request := models.N1N2MessageTransferRequest{
+		BinaryDataN1Message:     smNasBuf,
+		BinaryDataN2Information: n2Pdu,
+		JsonData: &models.N1N2MessageTransferReqData{
+			PduSessionId: smContext.PDUSessionID,
+			N1MessageContainer: &models.N1MessageContainer{
+				N1MessageClass:   "SM",
+				N1MessageContent: &models.RefToBinaryData{ContentId: "GSM_NAS"},
+			},
+			N2InfoContainer: &models.N2InfoContainer{
+				N2InformationClass: models.N2InformationClass_SM,
+				SmInfo: &models.N2SmInformation{
+					PduSessionId: smContext.PDUSessionID,
+					N2InfoContent: &models.N2InfoContent{
+						NgapIeType: models.NgapIeType_PDU_RES_SETUP_REQ,
+						NgapData: &models.RefToBinaryData{
+							ContentId: "N2SmInformation",
+						},
+					},
+					SNssai: smContext.SNssai,
+				},
+			},
+		},
+	}
+
+	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+	if err != nil {
+		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", err)
+		return
+	}
+
+	rspData, _, err := p.Consumer().
+		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
+	if err != nil {
+		logger.ConsumerLog.Warnf("N1N2MessageTransfer for sendPDUSessionEstablishmentAccept failed: %+v", err)
+		return
+	}
+
+	smContext.SetState(smf_context.Active)
+
+	if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
+		logger.PduSessLog.Warnf("%v", rspData.Cause)
+	}
 }
 
 func (p *Processor) sendGSMPDUSessionReleaseCommand(smContext *smf_context.SMContext, nasPdu []byte) {
@@ -1085,7 +1207,6 @@ func (p *Processor) sendGSMPDUSessionReleaseCommand(smContext *smf_context.SMCon
 		}
 
 		smContext.T3592 = smf_context.NewTimer(t3592.ExpireTime, t3592.MaxRetryTimes, func(expireTimes int32) {
-			smContext.SMLock.Lock()
 			rspData, _, errMsgTransfer := p.Consumer().
 				N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 			if errMsgTransfer != nil {
@@ -1096,14 +1217,10 @@ func (p *Processor) sendGSMPDUSessionReleaseCommand(smContext *smf_context.SMCon
 			if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 				smContext.Log.Warnf("%v", rspData.Cause)
 			}
-
-			smContext.SMLock.Unlock()
 		}, func() {
 			smContext.Log.Warn("T3592 Expires 3 times, abort notification procedure")
-			smContext.SMLock.Lock()
 			smContext.T3592 = nil
-			p.SendReleaseNotification(smContext)
-			smContext.SMLock.Unlock()
+			p.sendReleaseNotification(smContext)
 		})
 	}
 }
@@ -1134,8 +1251,6 @@ func (p *Processor) sendGSMPDUSessionModificationCommand(smContext *smf_context.
 		}
 
 		smContext.T3591 = smf_context.NewTimer(t3591.ExpireTime, t3591.MaxRetryTimes, func(expireTimes int32) {
-			smContext.SMLock.Lock()
-			defer smContext.SMLock.Unlock()
 			rspData, _, errMsgTransfer := p.Consumer().
 				N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 			if errMsgTransfer != nil {
@@ -1148,8 +1263,6 @@ func (p *Processor) sendGSMPDUSessionModificationCommand(smContext *smf_context.
 			}
 		}, func() {
 			smContext.Log.Warn("T3591 Expires3 times, abort notification procedure")
-			smContext.SMLock.Lock()
-			defer smContext.SMLock.Unlock()
 			smContext.T3591 = nil
 		})
 	}
@@ -1169,4 +1282,59 @@ func (p *Processor) nasErrorResponse(
 	default:
 		c.JSON(status, errBody)
 	}
+}
+
+func AuthDefQosToString(a *models.AuthorizedDefaultQos) string {
+	str := "AuthorizedDefaultQos: {"
+	str += fmt.Sprintf("Var5qi: %d ", a.Var5qi)
+	str += fmt.Sprintf("Arp: %+v ", a.Arp)
+	str += fmt.Sprintf("PriorityLevel: %d ", a.PriorityLevel)
+	str += "} "
+	return str
+}
+
+func SessRuleToString(rule *models.SessionRule, prefix string) string {
+	str := prefix + "SessionRule {"
+	str += fmt.Sprintf("AuthSessAmbr: { %+v } ", rule.AuthSessAmbr)
+	str += fmt.Sprint(AuthDefQosToString(rule.AuthDefQos))
+	str += fmt.Sprintf("SessRuleId: %s ", rule.SessRuleId)
+	str += fmt.Sprintf("RefUmData: %s ", rule.RefUmData)
+	str += fmt.Sprintf("RefCondData: %s ", rule.RefCondData)
+	str += prefix + "}"
+	return str
+}
+
+func SmPolicyDecisionToString(decision *models.SmPolicyDecision) string {
+	str := "SmPolicyDecision {\n"
+	prefix := "  "
+	str += prefix + fmt.Sprintf("SessRules %+v\n", decision.SessRules)
+	for _, rule := range decision.SessRules {
+		str += prefix + fmt.Sprintln(SessRuleToString(rule, prefix))
+	}
+	str += prefix + fmt.Sprintf("PccRules %+v\n", decision.PccRules)
+	for _, pccRule := range decision.PccRules {
+		str += prefix + fmt.Sprintf("PccRule %+v\n", pccRule)
+	}
+	str += prefix + fmt.Sprintf("QosDecs %+v\n", decision.QosDecs)
+	for _, qos := range decision.QosDecs {
+		str += prefix + fmt.Sprintf("QosDec %+v\n", qos)
+	}
+	str += "}"
+	return str
+}
+
+func PDUSessionEstablishmentRequestToString(r *nasMessage.PDUSessionEstablishmentRequest) string {
+	str := "PDUSessionEstablishmentRequest: {\n"
+	prefix := "  "
+	str += prefix + fmt.Sprintf("ExtendedProtocolDiscriminator: %d\n", r.ExtendedProtocolDiscriminator)
+	str += prefix + fmt.Sprintf("PDUSessionID: %d\n", r.PDUSessionID)
+	str += prefix + fmt.Sprintf("PTI: %d\n", r.PTI)
+	str += prefix + fmt.Sprintf("PDUSESSIONESTABLISHMENTREQUESTMessageIdentity: %d\n", r.PDUSESSIONESTABLISHMENTREQUESTMessageIdentity)
+	str += prefix + fmt.Sprintf("IntegrityProtectionMaximumDataRate: %+v\n", r.IntegrityProtectionMaximumDataRate)
+	str += prefix + fmt.Sprintf("PDUSessionType: %+v\n", r.PDUSessionType)
+	str += prefix + fmt.Sprintf("SSCMode: %+v\n", r.SSCMode)
+	str += prefix + fmt.Sprintf("Capability5GSM: %+v\n", r.Capability5GSM)
+	str += prefix + fmt.Sprintf("ExtendedProtocolConfigurationOptions: %+v\n", r.ExtendedProtocolConfigurationOptions)
+	str += "}"
+	return str
 }
