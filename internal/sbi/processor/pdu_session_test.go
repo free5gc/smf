@@ -449,7 +449,7 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 	// modify associate setup status
 	allUPFs := smf_context.GetSelf().UserPlaneInformation.UPFs
 	for _, upfNode := range allUPFs {
-		upfNode.UPF.UPFStatus = smf_context.AssociatedSetUpSuccess
+		upfNode.UPFStatus = smf_context.AssociatedSetUpSuccess
 	}
 
 	testCases := []struct {

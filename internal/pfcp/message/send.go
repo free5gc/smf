@@ -139,12 +139,12 @@ func SendPfcpSessionEstablishmentRequest(
 	qerList []*context.QER,
 	urrList []*context.URR,
 ) (resMsg *pfcpUdp.Message, err error) {
-	nodeIDtoIP := upf.NodeID.ResolveNodeIdToIp()
+	nodeIDtoIP := upf.GetNodeIDString()
 	if upf.UPFStatus != context.AssociatedSetUpSuccess {
-		return nil, fmt.Errorf("Not Associated with UPF[%s]", nodeIDtoIP.String())
+		return nil, fmt.Errorf("Not Associated with UPF[%s]", nodeIDtoIP)
 	}
 
-	pfcpMsg, err := BuildPfcpSessionEstablishmentRequest(upf.NodeID, nodeIDtoIP.String(),
+	pfcpMsg, err := BuildPfcpSessionEstablishmentRequest(upf.NodeID, nodeIDtoIP,
 		ctx, pdrList, farList, barList, qerList, urrList)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Establishment Request failed: %v", err)
@@ -165,7 +165,7 @@ func SendPfcpSessionEstablishmentRequest(
 	}
 
 	upaddr := &net.UDPAddr{
-		IP:   nodeIDtoIP,
+		IP:   net.ParseIP(nodeIDtoIP),
 		Port: pfcpUdp.PFCP_PORT,
 	}
 	logger.PduSessLog.Traceln("[SMF] Send SendPfcpSessionEstablishmentRequest")
@@ -180,7 +180,7 @@ func SendPfcpSessionEstablishmentRequest(
 		return resMsg, fmt.Errorf("received unexpected type response message: %+v", resMsg.PfcpMessage.Header)
 	}
 
-	localSEID := ctx.PFCPContext[nodeIDtoIP.String()].LocalSEID
+	localSEID := ctx.PFCPContext[nodeIDtoIP].LocalSEID
 	if resMsg.PfcpMessage.Header.SEID != localSEID {
 		return resMsg, fmt.Errorf("received unexpected SEID response message: %+v, exptcted: %d",
 			resMsg.PfcpMessage.Header, localSEID)
@@ -222,12 +222,12 @@ func SendPfcpSessionModificationRequest(
 	qerList []*context.QER,
 	urrList []*context.URR,
 ) (resMsg *pfcpUdp.Message, err error) {
-	nodeIDtoIP := upf.NodeID.ResolveNodeIdToIp()
+	nodeIDtoIP := upf.GetNodeIDString()
 	if upf.UPFStatus != context.AssociatedSetUpSuccess {
-		return nil, fmt.Errorf("Not Associated with UPF[%s]", nodeIDtoIP.String())
+		return nil, fmt.Errorf("Not Associated with UPF[%s]", nodeIDtoIP)
 	}
 
-	pfcpMsg, err := BuildPfcpSessionModificationRequest(upf.NodeID, nodeIDtoIP.String(),
+	pfcpMsg, err := BuildPfcpSessionModificationRequest(upf.NodeID, nodeIDtoIP,
 		ctx, pdrList, farList, barList, qerList, urrList)
 	if err != nil {
 		logger.PfcpLog.Errorf("Build PFCP Session Modification Request failed: %v", err)
@@ -235,7 +235,7 @@ func SendPfcpSessionModificationRequest(
 	}
 
 	seqNum := getSeqNumber()
-	remoteSEID := ctx.PFCPContext[nodeIDtoIP.String()].RemoteSEID
+	remoteSEID := ctx.PFCPContext[nodeIDtoIP].RemoteSEID
 	message := &pfcp.Message{
 		Header: pfcp.Header{
 			Version:         pfcp.PfcpVersion,
@@ -250,7 +250,7 @@ func SendPfcpSessionModificationRequest(
 	}
 
 	upaddr := &net.UDPAddr{
-		IP:   nodeIDtoIP,
+		IP:   net.ParseIP(nodeIDtoIP),
 		Port: pfcpUdp.PFCP_PORT,
 	}
 
@@ -263,7 +263,7 @@ func SendPfcpSessionModificationRequest(
 		return resMsg, fmt.Errorf("received unexpected type response message: %+v", resMsg.PfcpMessage.Header)
 	}
 
-	localSEID := ctx.PFCPContext[nodeIDtoIP.String()].LocalSEID
+	localSEID := ctx.PFCPContext[nodeIDtoIP].LocalSEID
 	if resMsg.PfcpMessage.Header.SEID != localSEID {
 		return resMsg, fmt.Errorf("received unexpected SEID response message: %+v, exptcted: %d",
 			resMsg.PfcpMessage.Header, localSEID)
@@ -297,9 +297,9 @@ func SendPfcpSessionModificationResponse(addr *net.UDPAddr) {
 }
 
 func SendPfcpSessionDeletionRequest(upf *context.UPF, ctx *context.SMContext) (resMsg *pfcpUdp.Message, err error) {
-	nodeIDtoIP := upf.NodeID.ResolveNodeIdToIp()
+	nodeIDtoIP := upf.GetNodeIDString()
 	if upf.UPFStatus != context.AssociatedSetUpSuccess {
-		return nil, fmt.Errorf("Not Associated with UPF[%s]", nodeIDtoIP.String())
+		return nil, fmt.Errorf("Not Associated with UPF[%s]", nodeIDtoIP)
 	}
 
 	pfcpMsg, err := BuildPfcpSessionDeletionRequest()
@@ -308,7 +308,7 @@ func SendPfcpSessionDeletionRequest(upf *context.UPF, ctx *context.SMContext) (r
 		return nil, err
 	}
 	seqNum := getSeqNumber()
-	remoteSEID := ctx.PFCPContext[nodeIDtoIP.String()].RemoteSEID
+	remoteSEID := ctx.PFCPContext[nodeIDtoIP].RemoteSEID
 	message := &pfcp.Message{
 		Header: pfcp.Header{
 			Version:         pfcp.PfcpVersion,
@@ -323,7 +323,7 @@ func SendPfcpSessionDeletionRequest(upf *context.UPF, ctx *context.SMContext) (r
 	}
 
 	upaddr := &net.UDPAddr{
-		IP:   nodeIDtoIP,
+		IP:   net.ParseIP(nodeIDtoIP),
 		Port: pfcpUdp.PFCP_PORT,
 	}
 
@@ -336,7 +336,7 @@ func SendPfcpSessionDeletionRequest(upf *context.UPF, ctx *context.SMContext) (r
 		return resMsg, fmt.Errorf("received unexpected type response message: %+v", resMsg.PfcpMessage.Header)
 	}
 
-	localSEID := ctx.PFCPContext[nodeIDtoIP.String()].LocalSEID
+	localSEID := ctx.PFCPContext[nodeIDtoIP].LocalSEID
 	if resMsg.PfcpMessage.Header.SEID != localSEID {
 		return resMsg, fmt.Errorf("received unexpected SEID response message: %+v, exptcted: %d",
 			resMsg.PfcpMessage.Header, localSEID)

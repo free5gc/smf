@@ -15,15 +15,20 @@ type UEPreConfigPaths struct {
 }
 
 func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
-	upNodes := smfContext.UserPlaneInformation.UPNodes
+	var upNode UPNodeInterface
 
-	if _, exist := upNodes[name]; !exist {
+	if _, exist := smfContext.UserPlaneInformation.UPNodes[name]; !exist {
 		err = fmt.Errorf("UPNode %s isn't exist in smfcfg.yaml, but in UERouting.yaml!", name)
 		return nil, err
 	}
 
+	if upNode.GetType() == UPNODE_AN {
+		err = fmt.Errorf("UPNode %s has type 'UPNODE_AN', cannot add as DataPathNode!", name)
+		return nil, err
+	}
+
 	node = &DataPathNode{
-		UPF:            upNodes[name].UPF,
+		UPF:            upNode.(*UPF),
 		UpLinkTunnel:   &GTPTunnel{},
 		DownLinkTunnel: &GTPTunnel{},
 	}

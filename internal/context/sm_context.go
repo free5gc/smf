@@ -94,7 +94,7 @@ type EventExposureNotification struct {
 
 type UsageReport struct {
 	UrrId uint32
-	UpfId string
+	UpfId uuid.UUID
 
 	TotalVolume    uint64
 	UplinkVolume   uint64
@@ -160,7 +160,7 @@ type SMContext struct {
 	SmStatusNotifyUri  string
 
 	Tunnel      *UPTunnel
-	SelectedUPF *UPNode
+	SelectedUPF *UPF
 	BPManager   *BPManager
 	// NodeID(string form) to PFCP Session Context
 	PFCPContext                         map[string]*PFCPSessionContext
@@ -476,13 +476,13 @@ func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) pfcpType.NodeID {
 
 func (smContext *SMContext) AllocateLocalSEIDForUPPath(path UPPath) {
 	for _, upNode := range path {
-		NodeIDtoIP := upNode.NodeID.ResolveNodeIdToIp().String()
+		NodeIDtoIP := upNode.GetNodeIDString()
 		if _, exist := smContext.PFCPContext[NodeIDtoIP]; !exist {
 			allocatedSEID := AllocateLocalSEID()
 
 			smContext.PFCPContext[NodeIDtoIP] = &PFCPSessionContext{
 				PDRs:      make(map[uint16]*PDR),
-				NodeID:    upNode.NodeID,
+				NodeID:    upNode.GetNodeID(),
 				LocalSEID: allocatedSEID,
 			}
 
@@ -494,7 +494,7 @@ func (smContext *SMContext) AllocateLocalSEIDForUPPath(path UPPath) {
 func (smContext *SMContext) AllocateLocalSEIDForDataPath(dataPath *DataPath) {
 	logger.PduSessLog.Traceln("In AllocateLocalSEIDForDataPath")
 	for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
-		NodeIDtoIP := node.UPF.NodeID.ResolveNodeIdToIp().String()
+		NodeIDtoIP := node.GetNodeIP()
 		logger.PduSessLog.Traceln("NodeIDtoIP: ", NodeIDtoIP)
 		if _, exist := smContext.PFCPContext[NodeIDtoIP]; !exist {
 			allocatedSEID := AllocateLocalSEID()

@@ -11,6 +11,7 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	pfcp_message "github.com/free5gc/smf/internal/pfcp/message"
+	"github.com/google/uuid"
 )
 
 type PFCPState struct {
@@ -383,7 +384,7 @@ func (p *Processor) updateAnUpfPfcpSession(
 func ReleaseTunnel(smContext *smf_context.SMContext) []SendPfcpResult {
 	resChan := make(chan SendPfcpResult)
 
-	deletedPFCPNode := make(map[string]bool)
+	deletedPFCPNode := make(map[uuid.UUID]bool)
 	for _, dataPath := range smContext.Tunnel.DataPathPool {
 		var targetNodes []*smf_context.DataPathNode
 		for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
@@ -391,11 +392,7 @@ func ReleaseTunnel(smContext *smf_context.SMContext) []SendPfcpResult {
 		}
 		dataPath.DeactivateTunnelAndPDR(smContext)
 		for _, node := range targetNodes {
-			curUPFID, err := node.GetUPFID()
-			if err != nil {
-				logger.PduSessLog.Error(err)
-				continue
-			}
+			curUPFID := node.GetUPFID()
 			if _, exist := deletedPFCPNode[curUPFID]; !exist {
 				go deletePfcpSession(node.UPF, smContext, resChan)
 				deletedPFCPNode[curUPFID] = true

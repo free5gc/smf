@@ -478,8 +478,6 @@ func (u *UserPlaneInformation) validate() (bool, error) {
 type UPNode struct {
 	Type                 string                  `json:"type" yaml:"type" valid:"upNodeType,required"`
 	NodeID               string                  `json:"nodeID" yaml:"nodeID" valid:"host,optional"`
-	Addr                 string                  `json:"addr" yaml:"addr" valid:"host,optional"`
-	ANIP                 string                  `json:"anIP" yaml:"anIP" valid:"host,optional"`
 	Dnn                  string                  `json:"dnn" yaml:"dnn" valid:"type(string),minstringlength(1),optional"`
 	SNssaiInfos          []*SnssaiUpfInfoItem    `json:"sNssaiUpfInfos" yaml:"sNssaiUpfInfos,omitempty" valid:"optional"`
 	InterfaceUpfInfoList []*InterfaceUpfInfoItem `json:"interfaces" yaml:"interfaces,omitempty" valid:"optional"`

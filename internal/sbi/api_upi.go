@@ -69,9 +69,9 @@ func (s *Server) PostUpNodesLinks(c *gin.Context) {
 
 	for _, upf := range upi.UPFs {
 		// only associate new ones
-		if upf.UPF.UPFStatus == smf_context.NotAssociated {
-			upf.UPF.Ctx, upf.UPF.CancelFunc = context.WithCancel(context.Background())
-			go s.Processor().ToBeAssociatedWithUPF(smf_context.GetSelf().Ctx, upf.UPF)
+		if upf.UPFStatus == smf_context.NotAssociated {
+			upf.Ctx, upf.CancelFunc = context.WithCancel(context.Background())
+			go s.Processor().ToBeAssociatedWithUPF(smf_context.GetSelf().Ctx, upf)
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "OK"})
@@ -87,11 +87,11 @@ func (s *Server) DeleteUpNodeLink(c *gin.Context) {
 		upi.Mu.Lock()
 		defer upi.Mu.Unlock()
 		if upNode, ok := upi.UPNodes[upNodeRef]; ok {
-			if upNode.Type == smf_context.UPNODE_UPF {
-				go s.Processor().ReleaseAllResourcesOfUPF(upNode.UPF)
+			if upNode.GetType() == smf_context.UPNODE_UPF {
+				go s.Processor().ReleaseAllResourcesOfUPF(upNode.(*smf_context.UPF))
+				upNode.(*smf_context.UPF).CancelFunc()
 			}
 			upi.UpNodeDelete(upNodeRef)
-			upNode.UPF.CancelFunc()
 			c.JSON(http.StatusOK, gin.H{"status": "OK"})
 		} else {
 			c.JSON(http.StatusNotFound, gin.H{})

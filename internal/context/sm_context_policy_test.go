@@ -18,7 +18,6 @@ var userPlaneConfig = factory.UserPlaneInformation{
 		"UPF1": {
 			Type:   "UPF",
 			NodeID: "10.4.0.11",
-			Addr:   "10.4.0.11",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
 					SNssai: &models.Snssai{
@@ -53,7 +52,6 @@ var userPlaneConfig = factory.UserPlaneInformation{
 		"UPF2": {
 			Type:   "UPF",
 			NodeID: "10.4.0.12",
-			Addr:   "10.4.0.12",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
 					SNssai: &models.Snssai{
@@ -622,7 +620,7 @@ func TestApplyPccRules(t *testing.T) {
 	smfContext := context.GetSelf()
 	smfContext.UserPlaneInformation = context.NewUserPlaneInformation(&userPlaneConfig)
 	for _, n := range smfContext.UserPlaneInformation.UPFs {
-		n.UPF.UPFStatus = context.AssociatedSetUpSuccess
+		n.UPFStatus = context.AssociatedSetUpSuccess
 	}
 
 	smctx := context.NewSMContext("imsi-208930000000002", 10)

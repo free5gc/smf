@@ -269,7 +269,7 @@ func TestSelectUPFAndAllocUEIP(t *testing.T) {
 
 	userplaneInformation := context.NewUserPlaneInformation(configuration)
 	for _, upf := range userplaneInformation.UPFs {
-		upf.UPF.UPFStatus = context.AssociatedSetUpSuccess
+		upf.UPFStatus = context.AssociatedSetUpSuccess
 	}
 
 	for i := 0; i <= 100; i++ {
@@ -486,7 +486,7 @@ var testCasesOfGetUEIPPool = []struct {
 func TestGetUEIPPool(t *testing.T) {
 	userplaneInformation := context.NewUserPlaneInformation(configForIPPoolAllocate)
 	for _, upf := range userplaneInformation.UPFs {
-		upf.UPF.UPFStatus = context.AssociatedSetUpSuccess
+		upf.UPFStatus = context.AssociatedSetUpSuccess
 	}
 
 	for ci, tc := range testCasesOfGetUEIPPool {
@@ -498,7 +498,7 @@ func TestGetUEIPPool(t *testing.T) {
 				}
 			}
 
-			var upf *context.UPNode
+			var upf *context.UPF
 			var allocatedIP net.IP
 			var useStatic bool
 			for times := 1; times <= tc.allocateTimes; times++ {

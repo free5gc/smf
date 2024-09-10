@@ -65,9 +65,8 @@ const (
 )
 
 type UPF struct {
-	uuid              uuid.UUID
-	NodeID            pfcpType.NodeID
-	Addr              string
+	*UPNode
+
 	UPIPInfo          pfcpType.UserPlaneIPResourceInformation
 	UPFStatus         UPFStatus
 	RecoveryTimeStamp time.Time
@@ -92,6 +91,96 @@ type UPF struct {
 	qerIDGenerator *idgenerator.IDGenerator
 }
 
+func (upf *UPF) String() string {
+	str := "UPF {\n"
+	prefix := "  "
+	str += prefix + fmt.Sprintf("Name: %s\n", upf.Name)
+	str += prefix + fmt.Sprintf("ID: %s\n", upf.ID)
+	str += prefix + fmt.Sprintf("NodeID: %s\n", upf.GetNodeIDString())
+	str += prefix + fmt.Sprintf("Dnn: %s\n", upf.Dnn)
+	str += prefix + fmt.Sprintln("Links:")
+	for _, link := range upf.Links {
+		str += prefix + fmt.Sprintf("-- %s: %s\n", link.GetName(), link.GetNodeIDString())
+	}
+	str += prefix + fmt.Sprintln("N3 interfaces:")
+	for _, iface := range upf.N3Interfaces {
+		str += prefix + fmt.Sprintf("-- %s\n", iface)
+	}
+	if len(upf.N9Interfaces) > 0 {
+		str += prefix + fmt.Sprintln("N9 interfaces:")
+		for _, iface := range upf.N9Interfaces {
+			str += prefix + fmt.Sprintf("-- %s\n", iface)
+		}
+	}
+	str += "}"
+	return str
+}
+
+// Checks the NodeID type and either returns IPv4, IPv6, or FQDN
+func (upf *UPF) GetNodeIDString() string {
+	switch upf.NodeID.NodeIdType {
+	case pfcpType.NodeIdTypeIpv4Address, pfcpType.NodeIdTypeIpv6Address:
+		return upf.NodeID.IP.String()
+	case pfcpType.NodeIdTypeFqdn:
+		ip := upf.NodeID.ResolveNodeIdToIp()
+		return ip.String()
+	default:
+		logger.CtxLog.Errorf("nodeID has unknown type %d", upf.NodeID.NodeIdType)
+		return ""
+	}
+}
+
+func (upf *UPF) GetNodeID() pfcpType.NodeID {
+	return upf.NodeID
+}
+
+func (upf *UPF) GetName() string {
+	return upf.Name
+}
+
+func (upf *UPF) GetID() uuid.UUID {
+	return upf.ID
+}
+
+func (upf *UPF) GetType() UPNodeType {
+	return upf.Type
+}
+
+func (upf *UPF) GetDnn() string {
+	return upf.Dnn
+}
+
+func (upf *UPF) GetLinks() UPPath {
+	return upf.Links
+}
+
+func (upf *UPF) AddLink(link UPNodeInterface) bool {
+	for _, existingLink := range upf.Links {
+		if link.GetName() == existingLink.GetName() {
+			logger.CfgLog.Warningf("UPLink [%s] <=> [%s] already exists, skip\n", existingLink.GetName(), link.GetName())
+			return false
+		}
+	}
+	upf.Links = append(upf.Links, link)
+	return true
+}
+
+func (upf *UPF) RemoveLink(link UPNodeInterface) bool {
+	for i, existingLink := range upf.Links {
+		if link.GetName() == existingLink.GetName() && existingLink.GetNodeIDString() == link.GetNodeIDString() {
+			logger.CfgLog.Warningf("Remove UPLink [%s] <=> [%s]\n", existingLink.GetName(), link.GetName())
+			upf.Links = append(upf.Links[:i], upf.Links[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+func (upf *UPF) RemoveLinkByIndex(index int) bool {
+	upf.Links[index] = upf.Links[len(upf.Links)-1]
+	return true
+}
+
 // UPFSelectionParams ... parameters for upf selection
 type UPFSelectionParams struct {
 	Dnn        string
@@ -106,6 +195,14 @@ type UPFInterfaceInfo struct {
 	IPv4EndPointAddresses []net.IP
 	IPv6EndPointAddresses []net.IP
 	EndpointFQDN          string
+}
+
+func (i *UPFInterfaceInfo) String() string {
+	str := ""
+	str += fmt.Sprintf("NetworkInstances: %v, ", i.NetworkInstances)
+	str += fmt.Sprintf("IPv4EndPointAddresses: %v, ", i.IPv4EndPointAddresses)
+	str += fmt.Sprintf("EndpointFQDN: %s", i.EndpointFQDN)
+	return str
 }
 
 func GetUpfById(uuid string) *UPF {
@@ -178,35 +275,21 @@ func (i *UPFInterfaceInfo) IP(pduSessType uint8) (net.IP, error) {
 }
 
 func (upfSelectionParams *UPFSelectionParams) String() string {
-	str := ""
-	Dnn := upfSelectionParams.Dnn
-	if Dnn != "" {
-		str += fmt.Sprintf("Dnn: %s\n", Dnn)
+	str := "UPFSelectionParams {"
+	if upfSelectionParams.Dnn != "" {
+		str += fmt.Sprintf("Dnn: %s -- ", upfSelectionParams.Dnn)
 	}
-
-	SNssai := upfSelectionParams.SNssai
-	if SNssai != nil {
-		str += fmt.Sprintf("Sst: %d, Sd: %s\n", int(SNssai.Sst), SNssai.Sd)
+	if upfSelectionParams.SNssai != nil {
+		str += fmt.Sprintf("Sst: %d, Sd: %s -- ", upfSelectionParams.SNssai.Sst, upfSelectionParams.SNssai.Sd)
 	}
-
-	Dnai := upfSelectionParams.Dnai
-	if Dnai != "" {
-		str += fmt.Sprintf("DNAI: %s\n", Dnai)
+	if upfSelectionParams.Dnai != "" {
+		str += fmt.Sprintf("DNAI: %s -- ", upfSelectionParams.Dnai)
 	}
-
-	pduAddress := upfSelectionParams.PDUAddress
-	if pduAddress != nil {
-		str += fmt.Sprintf("PDUAddress: %s\n", pduAddress)
+	if upfSelectionParams.PDUAddress != nil {
+		str += fmt.Sprintf("PDUAddress: %s -- ", upfSelectionParams.PDUAddress)
 	}
-
+	str += " }"
 	return str
-}
-
-// UUID return this UPF UUID (allocate by SMF in this time)
-// Maybe allocate by UPF in future
-func (upf *UPF) UUID() string {
-	uuid := upf.uuid.String()
-	return uuid
 }
 
 func NewUPTunnel() (tunnel *UPTunnel) {
@@ -237,15 +320,17 @@ func (t *UPTunnel) RemoveDataPath(pathID int64) {
 
 // *** add unit test ***//
 // NewUPF returns a new UPF context in SMF
-func NewUPF(nodeID *pfcpType.NodeID, ifaces []*factory.InterfaceUpfInfoItem) (upf *UPF) {
+func NewUPF(
+	upNode *UPNode,
+	ifaces []*factory.InterfaceUpfInfoItem,
+) (upf *UPF) {
 	upf = new(UPF)
-	upf.uuid = uuid.New()
+	upf.UPNode = upNode
 
-	upfPool.Store(upf.UUID(), upf)
+	upfPool.Store(upf.GetID(), upf)
 
 	// Initialize context
 	upf.UPFStatus = NotAssociated
-	upf.NodeID = *nodeID
 	upf.pdrIDGenerator = idgenerator.NewGenerator(1, math.MaxUint16)
 	upf.farIDGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
 	upf.barIDGenerator = idgenerator.NewGenerator(1, math.MaxUint8)
@@ -365,20 +450,9 @@ func SelectUPFByDnn(dnn string) *UPF {
 	return upf
 }
 
-func (upf *UPF) GetUPFIP() string {
-	upfIP := upf.NodeID.ResolveNodeIdToIp().String()
-	return upfIP
-}
-
-func (upf *UPF) GetUPFID() string {
-	upInfo := GetUserPlaneInformation()
-	upfIP := upf.NodeID.ResolveNodeIdToIp().String()
-	return upInfo.GetUPFIDByIP(upfIP)
-}
-
 func (upf *UPF) pdrID() (uint16, error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.GetNodeIDString())
 		return 0, err
 	}
 
@@ -394,7 +468,7 @@ func (upf *UPF) pdrID() (uint16, error) {
 
 func (upf *UPF) farID() (uint32, error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.GetNodeIDString())
 		return 0, err
 	}
 
@@ -410,7 +484,7 @@ func (upf *UPF) farID() (uint32, error) {
 
 func (upf *UPF) barID() (uint8, error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.GetNodeIDString())
 		return 0, err
 	}
 
@@ -426,7 +500,7 @@ func (upf *UPF) barID() (uint8, error) {
 
 func (upf *UPF) qerID() (uint32, error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.GetNodeIDString())
 		return 0, err
 	}
 
@@ -453,7 +527,7 @@ func (upf *UPF) urrID() (uint32, error) {
 
 func (upf *UPF) AddPDR() (*PDR, error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.GetNodeIDString())
 		return nil, err
 	}
 
@@ -476,7 +550,7 @@ func (upf *UPF) AddPDR() (*PDR, error) {
 
 func (upf *UPF) AddFAR() (*FAR, error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.GetNodeIDString())
 		return nil, err
 	}
 
@@ -493,7 +567,7 @@ func (upf *UPF) AddFAR() (*FAR, error) {
 
 func (upf *UPF) AddBAR() (*BAR, error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.GetNodeIDString())
 		return nil, err
 	}
 
@@ -509,7 +583,7 @@ func (upf *UPF) AddBAR() (*BAR, error) {
 
 func (upf *UPF) AddQER() (*QER, error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.GetNodeIDString())
 		return nil, err
 	}
 
@@ -525,7 +599,7 @@ func (upf *UPF) AddQER() (*QER, error) {
 
 func (upf *UPF) AddURR(urrId uint32, opts ...UrrOpt) (*URR, error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.GetNodeIDString())
 		return nil, err
 	}
 
@@ -550,10 +624,6 @@ func (upf *UPF) AddURR(urrId uint32, opts ...UrrOpt) (*URR, error) {
 	return urr, nil
 }
 
-func (upf *UPF) GetUUID() uuid.UUID {
-	return upf.uuid
-}
-
 func (upf *UPF) GetQERById(qerId uint32) *QER {
 	qer, ok := upf.qerPool.Load(qerId)
 	if ok {
@@ -565,7 +635,7 @@ func (upf *UPF) GetQERById(qerId uint32) *QER {
 // *** add unit test ***//
 func (upf *UPF) RemovePDR(pdr *PDR) (err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.GetNodeIDString())
 		return err
 	}
 
@@ -577,7 +647,7 @@ func (upf *UPF) RemovePDR(pdr *PDR) (err error) {
 // *** add unit test ***//
 func (upf *UPF) RemoveFAR(far *FAR) (err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.GetNodeIDString())
 		return err
 	}
 
@@ -589,7 +659,7 @@ func (upf *UPF) RemoveFAR(far *FAR) (err error) {
 // *** add unit test ***//
 func (upf *UPF) RemoveBAR(bar *BAR) (err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.GetNodeIDString())
 		return err
 	}
 
@@ -601,7 +671,7 @@ func (upf *UPF) RemoveBAR(bar *BAR) (err error) {
 // *** add unit test ***//
 func (upf *UPF) RemoveQER(qer *QER) (err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.GetNodeIDString())
 		return err
 	}
 
@@ -622,9 +692,27 @@ func (upf *UPF) isSupportSnssai(snssai *SNssai) bool {
 func (upf *UPF) ProcEachSMContext(procFunc func(*SMContext)) {
 	smContextPool.Range(func(key, value interface{}) bool {
 		smContext := value.(*SMContext)
-		if smContext.SelectedUPF != nil && smContext.SelectedUPF.UPF == upf {
+		if smContext.SelectedUPF != nil && smContext.SelectedUPF == upf {
 			procFunc(smContext)
 		}
 		return true
 	})
+}
+
+func (upf *UPF) MatchedSelection(selection *UPFSelectionParams) bool {
+	for _, snssaiInfo := range upf.SNssaiInfos {
+		currentSnssai := snssaiInfo.SNssai
+		if currentSnssai.Equal(selection.SNssai) {
+			for _, dnnInfo := range snssaiInfo.DnnList {
+				if dnnInfo.Dnn == selection.Dnn {
+					if selection.Dnai == "" {
+						return true
+					} else if dnnInfo.ContainsDNAI(selection.Dnai) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
 }

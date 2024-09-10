@@ -135,7 +135,7 @@ func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) error {
 
 	destUPF := node.UPF
 	if node.UpLinkTunnel.PDR, err = destUPF.AddPDR(); err != nil {
-		logger.CtxLog.Errorln("In ActivateUpLinkTunnel UPF IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
+		logger.CtxLog.Errorln("In ActivateUpLinkTunnel UPF IP: ", node.GetNodeIP())
 		logger.CtxLog.Errorln("Allocate PDR Error: ", err)
 		return fmt.Errorf("Add PDR failed: %s", err)
 	}
@@ -159,7 +159,7 @@ func (node *DataPathNode) ActivateDownLinkTunnel(smContext *SMContext) error {
 
 	destUPF := node.UPF
 	if node.DownLinkTunnel.PDR, err = destUPF.AddPDR(); err != nil {
-		logger.CtxLog.Errorln("In ActivateDownLinkTunnel UPF IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
+		logger.CtxLog.Errorln("In ActivateDownLinkTunnel UPF IP: ", node.GetNodeIP())
 		logger.CtxLog.Errorln("Allocate PDR Error: ", err)
 		return fmt.Errorf("Add PDR failed: %s", err)
 	}
@@ -244,20 +244,12 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 	}
 }
 
-func (node *DataPathNode) GetUPFID() (id string, err error) {
-	node_ip := node.GetNodeIP()
-	var exist bool
-
-	if id, exist = smfContext.UserPlaneInformation.UPFsIPtoID[node_ip]; !exist {
-		err = fmt.Errorf("UPNode IP %s doesn't exist in smfcfg.yaml", node_ip)
-		return "", err
-	}
-
-	return id, nil
+func (node *DataPathNode) GetUPFID() uuid.UUID {
+	return node.UPF.GetID()
 }
 
 func (node *DataPathNode) GetNodeIP() (ip string) {
-	ip = node.UPF.NodeID.ResolveNodeIdToIp().String()
+	ip = node.UPF.GetNodeIDString()
 	return
 }
 
@@ -319,17 +311,17 @@ func (dataPath *DataPath) String() string {
 	for curDPNode := firstDPNode; curDPNode != nil; curDPNode = curDPNode.Next() {
 		str += strconv.Itoa(index) + "th Node in the Path\n"
 		str += "Current UPF IP: " + curDPNode.GetNodeIP() + "\n"
-		str += "Current UPF ID: " + curDPNode.UPF.GetUPFID() + "\n"
+		str += "Current UPF ID: " + curDPNode.UPF.GetID().String() + "\n"
 		if curDPNode.Prev() != nil {
 			str += "Previous UPF IP: " + curDPNode.Prev().GetNodeIP() + "\n"
-			str += "Previous UPF ID: " + curDPNode.Prev().UPF.GetUPFID() + "\n"
+			str += "Previous UPF ID: " + curDPNode.Prev().UPF.GetID().String() + "\n"
 		} else {
 			str += "Previous UPF IP: None\n"
 		}
 
 		if curDPNode.Next() != nil {
 			str += "Next UPF IP: " + curDPNode.Next().GetNodeIP() + "\n"
-			str += "Next UPF ID: " + curDPNode.Next().UPF.GetUPFID() + "\n"
+			str += "Next UPF ID: " + curDPNode.Next().UPF.GetID().String() + "\n"
 		} else {
 			str += "Next UPF IP: None\n"
 		}
@@ -340,8 +332,8 @@ func (dataPath *DataPath) String() string {
 	return str
 }
 
-func getUrrIdKey(uuid string, urrId uint32) string {
-	return uuid + ":" + strconv.Itoa(int(urrId))
+func getUrrIdKey(uuid uuid.UUID, urrId uint32) string {
+	return uuid.String() + ":" + strconv.Itoa(int(urrId))
 }
 
 func GetUpfIdFromUrrIdKey(urrIdKey string) string {
@@ -352,7 +344,7 @@ func (node DataPathNode) addUrrToNode(smContext *SMContext, urrId uint32, isMeas
 	var urr *URR
 	var ok bool
 	var err error
-	currentUUID := node.UPF.UUID()
+	currentUUID := node.UPF.GetID()
 	id := getUrrIdKey(currentUUID, urrId)
 
 	if urr, ok = smContext.UrrUpfMap[id]; !ok {
@@ -412,7 +404,7 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 	logger.PduSessLog.Traceln(dataPath.String())
 	// Activate Tunnels
 	for node := firstDPNode; node != nil; node = node.Next() {
-		logger.PduSessLog.Traceln("Current DP Node IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
+		logger.PduSessLog.Traceln("Current DP Node IP: ", node.GetNodeIP())
 		if err := node.ActivateUpLinkTunnel(smContext); err != nil {
 			logger.CtxLog.Warnln(err)
 			return
@@ -438,7 +430,7 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 	for curDataPathNode := firstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
 		var defaultQER *QER
 		var ambrQER *QER
-		currentUUID := curDataPathNode.UPF.uuid
+		currentUUID := curDataPathNode.UPF.GetID()
 		if qerId, okCurrentId := smContext.AMBRQerMap[currentUUID]; !okCurrentId {
 			if newQER, err := curDataPathNode.UPF.AddQER(); err != nil {
 				logger.PduSessLog.Errorln("new QER failed")
@@ -644,7 +636,7 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 
 			DLFAR := DLPDR.FAR
 
-			logger.PduSessLog.Traceln("Current DP Node IP: ", curDataPathNode.UPF.NodeID.ResolveNodeIdToIp().String())
+			logger.PduSessLog.Traceln("Current DP Node IP: ", curDataPathNode.GetNodeIP())
 			logger.PduSessLog.Traceln("Before DLPDR OuterHeaderCreation")
 			if nextDLDest := curDataPathNode.Prev(); nextDLDest != nil {
 				logger.PduSessLog.Traceln("In DLPDR OuterHeaderCreation")
@@ -768,7 +760,7 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 			chgInfo := &ChargingInfo{
 				RatingGroup:   chgData.RatingGroup,
 				ChargingLevel: chgLevel,
-				UpfId:         node.UPF.UUID(),
+				UpfId:         node.UPF.GetID().String(),
 			}
 
 			urrId, err := smContext.UrrIDGenerator.Allocate()
@@ -777,7 +769,7 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 				return
 			}
 
-			currentUUID := node.UPF.UUID()
+			currentUUID := node.UPF.GetID()
 			id := getUrrIdKey(currentUUID, uint32(urrId))
 
 			if oldURR, ok := smContext.UrrUpfMap[id]; !ok {
@@ -820,7 +812,7 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 					if !isUrrExist(node.UpLinkTunnel.PDR.URR, urr) {
 						node.UpLinkTunnel.PDR.AppendURRs([]*URR{urr})
 						// nolint
-						nodeId, _ := node.GetUPFID()
+						nodeId := node.GetUPFID()
 						logger.PduSessLog.Tracef("UpLinkTunnel add URR for node %s %+v",
 							nodeId, node.UpLinkTunnel.PDR)
 					}
@@ -829,7 +821,7 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 					if !isUrrExist(node.DownLinkTunnel.PDR.URR, urr) {
 						node.DownLinkTunnel.PDR.AppendURRs([]*URR{urr})
 						// nolint
-						nodeId, _ := node.GetUPFID()
+						nodeId := node.GetUPFID()
 						logger.PduSessLog.Tracef("DownLinkTunnel add URR for node %s %+v",
 							nodeId, node.UpLinkTunnel.PDR)
 					}
@@ -847,7 +839,7 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 	for node := p.FirstDPNode; node != nil; node = node.Next() {
 		var qer *QER
 
-		currentUUID := node.UPF.GetUUID()
+		currentUUID := node.UPF.GetID()
 		id := getQosIdKey(currentUUID, qfi)
 
 		if qerId, ok := smContext.QerUpfMap[id]; !ok {
