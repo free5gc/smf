@@ -140,8 +140,10 @@ func SendPfcpSessionEstablishmentRequest(
 	urrList []*context.URR,
 ) (resMsg *pfcpUdp.Message, err error) {
 	nodeIDtoIP := upf.NodeID.ResolveNodeIdToIp()
-	if upf.UPFStatus != context.AssociatedSetUpSuccess {
+	select {
+	case <-upf.AssociationContext.Done():
 		return nil, fmt.Errorf("Not Associated with UPF[%s]", nodeIDtoIP.String())
+	default:
 	}
 
 	pfcpMsg, err := BuildPfcpSessionEstablishmentRequest(upf.NodeID, nodeIDtoIP.String(),
@@ -223,8 +225,10 @@ func SendPfcpSessionModificationRequest(
 	urrList []*context.URR,
 ) (resMsg *pfcpUdp.Message, err error) {
 	nodeIDtoIP := upf.NodeID.ResolveNodeIdToIp()
-	if upf.UPFStatus != context.AssociatedSetUpSuccess {
+	select {
+	case <-upf.AssociationContext.Done():
 		return nil, fmt.Errorf("Not Associated with UPF[%s]", nodeIDtoIP.String())
+	default:
 	}
 
 	pfcpMsg, err := BuildPfcpSessionModificationRequest(upf.NodeID, nodeIDtoIP.String(),
@@ -298,8 +302,10 @@ func SendPfcpSessionModificationResponse(addr *net.UDPAddr) {
 
 func SendPfcpSessionDeletionRequest(upf *context.UPF, ctx *context.SMContext) (resMsg *pfcpUdp.Message, err error) {
 	nodeIDtoIP := upf.NodeID.ResolveNodeIdToIp()
-	if upf.UPFStatus != context.AssociatedSetUpSuccess {
+	select {
+	case <-upf.AssociationContext.Done():
 		return nil, fmt.Errorf("Not Associated with UPF[%s]", nodeIDtoIP.String())
+	default:
 	}
 
 	pfcpMsg, err := BuildPfcpSessionDeletionRequest()

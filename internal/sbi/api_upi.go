@@ -1,7 +1,6 @@
 package sbi
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -69,9 +68,10 @@ func (s *Server) PostUpNodesLinks(c *gin.Context) {
 
 	for _, upf := range upi.UPFs {
 		// only associate new ones
-		if upf.UPF.UPFStatus == smf_context.NotAssociated {
-			upf.UPF.Ctx, upf.UPF.CancelFunc = context.WithCancel(context.Background())
-			go s.Processor().ToBeAssociatedWithUPF(smf_context.GetSelf().Ctx, upf.UPF)
+		select {
+		case <-upf.UPF.AssociationContext.Done():
+			go s.Processor().ToBeAssociatedWithUPF(smf_context.GetSelf().PfcpContext, upf.UPF)
+		default:
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "OK"})
@@ -91,7 +91,7 @@ func (s *Server) DeleteUpNodeLink(c *gin.Context) {
 				go s.Processor().ReleaseAllResourcesOfUPF(upNode.UPF)
 			}
 			upi.UpNodeDelete(upNodeRef)
-			upNode.UPF.CancelFunc()
+			upNode.UPF.CancelAssociation()
 			c.JSON(http.StatusOK, gin.H{"status": "OK"})
 		} else {
 			c.JSON(http.StatusNotFound, gin.H{})

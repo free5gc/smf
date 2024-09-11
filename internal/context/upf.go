@@ -69,11 +69,10 @@ type UPF struct {
 	NodeID            pfcpType.NodeID
 	Addr              string
 	UPIPInfo          pfcpType.UserPlaneIPResourceInformation
-	UPFStatus         UPFStatus
 	RecoveryTimeStamp time.Time
 
-	Ctx        context.Context
-	CancelFunc context.CancelFunc
+	AssociationContext context.Context
+	CancelAssociation  context.CancelFunc
 
 	SNssaiInfos  []*SnssaiUPFInfo
 	N3Interfaces []*UPFInterfaceInfo
@@ -244,7 +243,9 @@ func NewUPF(nodeID *pfcpType.NodeID, ifaces []*factory.InterfaceUpfInfoItem) (up
 	upfPool.Store(upf.UUID(), upf)
 
 	// Initialize context
-	upf.UPFStatus = NotAssociated
+	upf.AssociationContext, upf.CancelAssociation = context.WithCancel(context.Background())
+	upf.CancelAssociation() // necessary to avoid nil pointer for checks of AssociationContext before UPF is associated
+
 	upf.NodeID = *nodeID
 	upf.pdrIDGenerator = idgenerator.NewGenerator(1, math.MaxUint16)
 	upf.farIDGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
@@ -377,9 +378,11 @@ func (upf *UPF) GetUPFID() string {
 }
 
 func (upf *UPF) pdrID() (uint16, error) {
-	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+	select {
+	case <-upf.AssociationContext.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF", upf.NodeID.ResolveNodeIdToIp().String())
 		return 0, err
+	default:
 	}
 
 	var pdrID uint16
@@ -393,9 +396,11 @@ func (upf *UPF) pdrID() (uint16, error) {
 }
 
 func (upf *UPF) farID() (uint32, error) {
-	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+	select {
+	case <-upf.AssociationContext.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF", upf.NodeID.ResolveNodeIdToIp().String())
 		return 0, err
+	default:
 	}
 
 	var farID uint32
@@ -409,9 +414,11 @@ func (upf *UPF) farID() (uint32, error) {
 }
 
 func (upf *UPF) barID() (uint8, error) {
-	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+	select {
+	case <-upf.AssociationContext.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF", upf.NodeID.ResolveNodeIdToIp().String())
 		return 0, err
+	default:
 	}
 
 	var barID uint8
@@ -425,9 +432,11 @@ func (upf *UPF) barID() (uint8, error) {
 }
 
 func (upf *UPF) qerID() (uint32, error) {
-	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+	select {
+	case <-upf.AssociationContext.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF", upf.NodeID.ResolveNodeIdToIp().String())
 		return 0, err
+	default:
 	}
 
 	var qerID uint32
@@ -452,9 +461,11 @@ func (upf *UPF) urrID() (uint32, error) {
 }
 
 func (upf *UPF) AddPDR() (*PDR, error) {
-	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+	select {
+	case <-upf.AssociationContext.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF", upf.NodeID.ResolveNodeIdToIp().String())
 		return nil, err
+	default:
 	}
 
 	pdr := new(PDR)
@@ -475,9 +486,11 @@ func (upf *UPF) AddPDR() (*PDR, error) {
 }
 
 func (upf *UPF) AddFAR() (*FAR, error) {
-	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+	select {
+	case <-upf.AssociationContext.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF", upf.NodeID.ResolveNodeIdToIp().String())
 		return nil, err
+	default:
 	}
 
 	far := new(FAR)
@@ -492,9 +505,11 @@ func (upf *UPF) AddFAR() (*FAR, error) {
 }
 
 func (upf *UPF) AddBAR() (*BAR, error) {
-	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+	select {
+	case <-upf.AssociationContext.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF", upf.NodeID.ResolveNodeIdToIp().String())
 		return nil, err
+	default:
 	}
 
 	bar := new(BAR)
@@ -508,9 +523,11 @@ func (upf *UPF) AddBAR() (*BAR, error) {
 }
 
 func (upf *UPF) AddQER() (*QER, error) {
-	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+	select {
+	case <-upf.AssociationContext.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF", upf.NodeID.ResolveNodeIdToIp().String())
 		return nil, err
+	default:
 	}
 
 	qer := new(QER)
@@ -524,9 +541,11 @@ func (upf *UPF) AddQER() (*QER, error) {
 }
 
 func (upf *UPF) AddURR(urrId uint32, opts ...UrrOpt) (*URR, error) {
-	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err := fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+	select {
+	case <-upf.AssociationContext.Done():
+		err := fmt.Errorf("UPF[%s] not associated with SMF", upf.NodeID.ResolveNodeIdToIp().String())
 		return nil, err
+	default:
 	}
 
 	urr := new(URR)
@@ -564,9 +583,10 @@ func (upf *UPF) GetQERById(qerId uint32) *QER {
 
 // *** add unit test ***//
 func (upf *UPF) RemovePDR(pdr *PDR) (err error) {
-	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
-		return err
+	select {
+	case <-upf.AssociationContext.Done():
+		return fmt.Errorf("UPF[%s] not associated with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+	default:
 	}
 
 	upf.pdrIDGenerator.FreeID(int64(pdr.PDRID))
@@ -576,9 +596,10 @@ func (upf *UPF) RemovePDR(pdr *PDR) (err error) {
 
 // *** add unit test ***//
 func (upf *UPF) RemoveFAR(far *FAR) (err error) {
-	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
-		return err
+	select {
+	case <-upf.AssociationContext.Done():
+		return fmt.Errorf("UPF[%s] not associated with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+	default:
 	}
 
 	upf.farIDGenerator.FreeID(int64(far.FARID))
@@ -588,9 +609,10 @@ func (upf *UPF) RemoveFAR(far *FAR) (err error) {
 
 // *** add unit test ***//
 func (upf *UPF) RemoveBAR(bar *BAR) (err error) {
-	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
-		return err
+	select {
+	case <-upf.AssociationContext.Done():
+		return fmt.Errorf("UPF[%s] not associated with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+	default:
 	}
 
 	upf.barIDGenerator.FreeID(int64(bar.BARID))
@@ -600,9 +622,10 @@ func (upf *UPF) RemoveBAR(bar *BAR) (err error) {
 
 // *** add unit test ***//
 func (upf *UPF) RemoveQER(qer *QER) (err error) {
-	if upf.UPFStatus != AssociatedSetUpSuccess {
-		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
-		return err
+	select {
+	case <-upf.AssociationContext.Done():
+		return fmt.Errorf("UPF[%s] not associated with SMF", upf.NodeID.ResolveNodeIdToIp().String())
+	default:
 	}
 
 	upf.qerIDGenerator.FreeID(int64(qer.QERID))
