@@ -610,6 +610,7 @@ func (upf *UPF) RemoveQER(qer *QER) (err error) {
 	return nil
 }
 
+// TODO: add unit test
 func (upf *UPF) RemoveURR(urr *URR) (err error) {
 	if upf.UPFStatus != AssociatedSetUpSuccess {
 		err = fmt.Errorf("UPF[%s] not Associate with SMF", upf.NodeID.ResolveNodeIdToIp().String())
