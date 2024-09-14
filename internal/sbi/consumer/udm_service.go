@@ -199,3 +199,106 @@ func (s *nudmService) GetSmData(ctx context.Context, supi string,
 
 	return sessSubData, rsp, err
 }
+
+func (s *nudmService) Subscribe(ctx context.Context, smCtx *smf_context.SMContext, smPlmnID *models.PlmnId) (
+	*models.ProblemDetails, error,
+) {
+	var client *Nudm_SubscriberDataManagement.APIClient
+	for _, service := range *s.consumer.Context().UDMProfile.NfServices {
+		if service.ServiceName == models.ServiceName_NUDM_SDM {
+			SDMConf := Nudm_SubscriberDataManagement.NewConfiguration()
+			SDMConf.SetBasePath(service.ApiPrefix)
+			client = s.getSubscribeDataManagementClient(service.ApiPrefix)
+		}
+	}
+
+	if client == nil {
+		return nil, fmt.Errorf("sdm client failed")
+	}
+
+	sdmSubscription := models.SdmSubscription{
+		NfInstanceId: smf_context.GetSelf().NfInstanceID,
+		PlmnId:       smPlmnID,
+	}
+
+	resSubscription, httpResp, localErr := client.SubscriptionCreationApi.Subscribe(
+		ctx, smCtx.Supi, sdmSubscription)
+	defer func() {
+		if httpResp != nil {
+			if rspCloseErr := httpResp.Body.Close(); rspCloseErr != nil {
+				logger.ConsumerLog.Errorf("Subscribe response body cannot close: %+v",
+					rspCloseErr)
+			}
+		}
+	}()
+
+	if localErr == nil {
+		smf_context.GetSelf().Ues.SetSubscriptionId(smCtx.Supi, resSubscription.SubscriptionId)
+		logger.PduSessLog.Infoln("SDM Subscription Successful UE:", smCtx.Supi, "SubscriptionId:",
+			resSubscription.SubscriptionId)
+	} else if httpResp != nil {
+		if httpResp.Status != localErr.Error() {
+			return nil, localErr
+		}
+		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
+		return &problem, nil
+	} else {
+		return nil, openapi.ReportError("server no response")
+	}
+
+	smf_context.GetSelf().Ues.IncrementPduSessionCount(smCtx.Supi)
+	return nil, nil
+}
+
+func (s *nudmService) UnSubscribe(smCtx *smf_context.SMContext) (
+	*models.ProblemDetails, error,
+) {
+	ctx, _, oauthErr := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_SDM, models.NfType_UDM)
+	if oauthErr != nil {
+		return nil, fmt.Errorf("Get Token Context Error[%v]", oauthErr)
+	}
+
+	if smf_context.GetSelf().Ues.IsLastPduSession(smCtx.Supi) {
+		var client *Nudm_SubscriberDataManagement.APIClient
+		for _, service := range *s.consumer.Context().UDMProfile.NfServices {
+			if service.ServiceName == models.ServiceName_NUDM_SDM {
+				SDMConf := Nudm_SubscriberDataManagement.NewConfiguration()
+				SDMConf.SetBasePath(service.ApiPrefix)
+				client = s.getSubscribeDataManagementClient(service.ApiPrefix)
+			}
+		}
+
+		if client == nil {
+			return nil, fmt.Errorf("sdm client failed")
+		}
+
+		subscriptionId := smf_context.GetSelf().Ues.GetSubscriptionId(smCtx.Supi)
+
+		httpResp, localErr := client.SubscriptionDeletionApi.Unsubscribe(ctx, smCtx.Supi, subscriptionId)
+		defer func() {
+			if httpResp != nil {
+				if rspCloseErr := httpResp.Body.Close(); rspCloseErr != nil {
+					logger.PduSessLog.Errorf("Unsubscribe response body cannot close: %+v",
+						rspCloseErr)
+				}
+			}
+		}()
+		if localErr == nil {
+			logger.PduSessLog.Infoln("SDM UnSubscription Successful UE:", smCtx.Supi, "SubscriptionId:",
+				subscriptionId)
+		} else if httpResp != nil {
+			if httpResp.Status != localErr.Error() {
+				return nil, localErr
+			}
+			problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
+			return &problem, nil
+		} else {
+			return nil, openapi.ReportError("server no response")
+		}
+		smf_context.GetSelf().Ues.DeleteUe(smCtx.Supi)
+	} else {
+		smf_context.GetSelf().Ues.DecrementPduSessionCount(smCtx.Supi)
+	}
+
+	return nil, nil
+}
