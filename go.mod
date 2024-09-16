@@ -7,11 +7,13 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/free5gc/aper v1.0.5
 	github.com/free5gc/nas v1.1.4-0.20240801045646-998afcbf3811
+	github.com/free5gc/ngap v1.0.8
 	github.com/free5gc/openapi v1.0.9-0.20240823100026-6a9f667e914f
 	github.com/free5gc/pfcp v1.0.7
 	github.com/free5gc/util v1.0.6
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.3.0
+	github.com/h2non/gock v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/smartystreets/goconvey v1.6.4
@@ -19,11 +21,6 @@ require (
 	github.com/urfave/cli v1.22.5
 	go.uber.org/mock v0.4.0
 	gopkg.in/yaml.v2 v2.4.0
-)
-
-require (
-	github.com/free5gc/ngap v1.0.8
-	github.com/h2non/gock v1.2.0
 )
 
 require (
