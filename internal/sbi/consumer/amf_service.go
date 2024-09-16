@@ -53,7 +53,7 @@ func (s *namfService) N1N2MessageTransfer(
 	}
 
 	rsp, err := client.N1N2MessageCollectionCollectionApi.N1N2MessageTransfer(ctx, n1n2MessageTransferRequest)
-	if err != nil {
+	if err != nil || rsp == nil {
 		return nil, err
 	}
 

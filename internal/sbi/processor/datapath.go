@@ -272,7 +272,7 @@ func (p *Processor) sendPDUSessionEstablishmentReject(
 	}
 	rspData, err := p.Consumer().
 		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
-	if err != nil {
+	if err != nil || rspData == nil {
 		logger.ConsumerLog.Warnf("N1N2MessageTransfer for SendPDUSessionEstablishmentReject failed: %+v", err)
 		return
 	}
@@ -331,7 +331,7 @@ func (p *Processor) sendPDUSessionEstablishmentAccept(
 
 	rspData, err := p.Consumer().
 		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
-	if err != nil {
+	if err != nil || rspData == nil {
 		logger.ConsumerLog.Warnf("N1N2MessageTransfer for sendPDUSessionEstablishmentAccept failed: %+v", err)
 		return
 	}
