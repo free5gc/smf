@@ -253,7 +253,7 @@ func (p *Processor) requestAMFToReleasePDUResources(
 	rspData, err := p.Consumer().
 		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 
-	if err != nil {
+	if err != nil || rspData == nil {
 		logger.ConsumerLog.Warnf("N1N2MessageTransfer for RequestAMFToReleasePDUResources failed: %+v", err)
 		// keep SM Context to avoid inconsistency with AMF
 		smContext.SetState(smf_context.InActive)

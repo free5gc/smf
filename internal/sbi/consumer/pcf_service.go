@@ -102,7 +102,7 @@ func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMCon
 	}
 
 	smPolicyDecisionFromPCF, err := client.SMPoliciesCollectionApi.CreateSMPolicy(ctx, request)
-	if err != nil {
+	if err != nil || smPolicyDecisionFromPCF == nil {
 		return "", nil, err
 	}
 
