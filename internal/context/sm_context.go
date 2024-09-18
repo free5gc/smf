@@ -16,7 +16,6 @@ import (
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/ngap/ngapType"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/openapi/smf/EventExposure"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
@@ -717,7 +716,7 @@ func newEventExposureNotification(
 }
 
 type NotifCallback func(uri string,
-	notification *EventExposure.CreateIndividualSubcriptionMyNotificationPostRequest)
+	notification *models.NsmfEventExposureNotification)
 
 func (c *SMContext) SendUpPathChgNotification(chgType string, notifCb NotifCallback) {
 	var notifications map[string]*EventExposureNotification
@@ -730,10 +729,7 @@ func (c *SMContext) SendUpPathChgNotification(chgType string, notifCb NotifCallb
 	}
 	for k, n := range notifications {
 		c.Log.Infof("Send UpPathChg Event Exposure Notification [%s][%s] to NEF/AF", chgType, n.NotifId)
-		notification := &EventExposure.CreateIndividualSubcriptionMyNotificationPostRequest{
-			NsmfEventExposureNotification: n.NsmfEventExposureNotification,
-		}
-		go notifCb(n.Uri, notification)
+		go notifCb(n.Uri, n.NsmfEventExposureNotification)
 		delete(notifications, k)
 	}
 }
