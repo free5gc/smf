@@ -123,13 +123,16 @@ func (p *Processor) HandleSMPolicyUpdateNotify(
 }
 
 func SendUpPathChgEventExposureNotification(
-	uri string, notification *EventExposure.CreateIndividualSubcriptionMyNotificationPostRequest,
+	uri string, notification *models.NsmfEventExposureNotification,
 ) {
 	configuration := EventExposure.NewConfiguration()
 	client := EventExposure.NewAPIClient(configuration)
+	request := &EventExposure.CreateIndividualSubcriptionMyNotificationPostRequest{
+		NsmfEventExposureNotification: notification,
+	}
 	_, err := client.
 		SubscriptionsCollectionApi.
-		CreateIndividualSubcriptionMyNotificationPost(context.Background(), uri, notification)
+		CreateIndividualSubcriptionMyNotificationPost(context.Background(), uri, request)
 
 	switch err := err.(type) {
 	case openapi.GenericOpenAPIError:
