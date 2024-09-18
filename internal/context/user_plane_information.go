@@ -9,11 +9,12 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/google/uuid"
+
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
-	"github.com/google/uuid"
 )
 
 // UserPlaneInformation store userplane topology
@@ -676,7 +677,7 @@ func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNN(selection *UPFSele
 func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNNAndUPF(
 	selection *UPFSelectionParams,
 	upf *UPF,
-) (path UPPath) {
+) UPPath {
 	nodeID := upf.GetNodeIDString()
 
 	if upi.DefaultUserPlanePathToUPF[selection.String()] != nil {
@@ -852,7 +853,8 @@ func getPathBetween(
 	visited map[UPNodeInterface]bool,
 	selection *UPFSelectionParams,
 ) (path UPPath, pathExist bool) {
-	logger.CtxLog.Tracef("[getPathBetween] node %s[%s] and %s[%s]", cur.GetName(), cur.GetNodeIDString(), dest.GetName(), dest.GetNodeIDString())
+	logger.CtxLog.Tracef("[getPathBetween] node %s[%s] and %s[%s]",
+		cur.GetName(), cur.GetNodeIDString(), dest.GetName(), dest.GetNodeIDString())
 	visited[cur] = true
 
 	if reflect.DeepEqual(cur, dest) {

@@ -3,6 +3,8 @@ package processor
 import (
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pfcp"
@@ -11,7 +13,6 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	pfcp_message "github.com/free5gc/smf/internal/pfcp/message"
-	"github.com/google/uuid"
 )
 
 type PFCPState struct {
