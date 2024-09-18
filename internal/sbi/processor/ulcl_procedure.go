@@ -149,11 +149,11 @@ func EstablishULCL(smContext *context.SMContext) {
 
 			// new IPFilterRule with action:"permit" and diection:"out"
 			FlowDespcription := flowdesc.NewIPFilterRule()
-			FlowDespcription.Dst = dest.DestinationIP
+			FlowDespcription.Src = dest.DestinationIP
 			if dstPort, err := flowdesc.ParsePorts(dest.DestinationPort); err != nil {
-				FlowDespcription.DstPorts = dstPort
+				FlowDespcription.SrcPorts = dstPort
 			}
-			FlowDespcription.Src = smContext.PDUAddress.To4().String()
+			FlowDespcription.Dst = smContext.PDUAddress.To4().String()
 
 			FlowDespcriptionStr, err := flowdesc.Encode(FlowDespcription)
 			if err != nil {
