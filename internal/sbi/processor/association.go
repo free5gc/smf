@@ -255,6 +255,7 @@ func (p *Processor) requestAMFToReleasePDUResources(
 		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 	if err != nil {
 		logger.ConsumerLog.Warnf("N1N2MessageTransfer for RequestAMFToReleasePDUResources failed: %+v", err)
+		return false, true
 	}
 
 	switch *statusCode {
