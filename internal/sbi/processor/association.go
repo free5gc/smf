@@ -24,11 +24,11 @@ func (p *Processor) ToBeAssociatedWithUPF(smfPfcpContext context.Context, upf *s
 	}
 
 	for {
-		// check if SMF PFCP context (parent) was cancelled
+		// check if SMF PFCP context (parent) was canceled
 		// note: UPF AssociationContexts are children of smfPfcpContext
 		select {
 		case <-smfPfcpContext.Done():
-			logger.MainLog.Infoln("Cancelled SMF PFCP context")
+			logger.MainLog.Infoln("Canceled SMF PFCP context")
 			return
 		default:
 			ensureSetupPfcpAssociation(smfPfcpContext, upf, upfStr)
@@ -36,7 +36,7 @@ func (p *Processor) ToBeAssociatedWithUPF(smfPfcpContext context.Context, upf *s
 				return
 			}
 			keepHeartbeatTo(upf, upfStr)
-			// returns when UPF heartbeat loss is detected or association is cancelled
+			// returns when UPF heartbeat loss is detected or association is canceled
 
 			p.releaseAllResourcesOfUPF(upf, upfStr)
 		}
@@ -76,7 +76,7 @@ func ensureSetupPfcpAssociation(parentContext context.Context, upf *smf_context.
 		timer := time.After(retryInterval)
 		select { // no default case, either case needs to be true to continue
 		case <-parentContext.Done():
-			logger.MainLog.Infoln("Cancelled SMF PFCP context")
+			logger.MainLog.Infoln("Canceled SMF PFCP context")
 			return
 		case <-timer:
 			continue
@@ -128,7 +128,7 @@ func keepHeartbeatTo(upf *smf_context.UPF, upfStr string) {
 		timer := time.After(smf_context.GetSelf().PfcpHeartbeatInterval)
 		select {
 		case <-upf.AssociationContext.Done():
-			logger.MainLog.Infof("Cancelled association to UPF[%s]", upfStr)
+			logger.MainLog.Infof("Canceled association to UPF[%s]", upfStr)
 			return
 		case <-timer:
 			continue

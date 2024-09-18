@@ -11,11 +11,6 @@ import (
 	"github.com/free5gc/smf/pkg/service"
 )
 
-//var (
-//	pfcpStart func(a *service.SmfApp)
-//	pfcpStop  func()
-//)
-
 func InitPFCPFunc() (func(a *service.SmfApp), func()) {
 	smfContext := smf_context.GetSelf()
 
