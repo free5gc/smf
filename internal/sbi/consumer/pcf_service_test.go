@@ -18,7 +18,7 @@ import (
 var testConfig = factory.Config{
 	Info: &factory.Info{
 		Version:     "1.0.0",
-		Description: "SMF procdeure test configuration",
+		Description: "SMF procedure test configuration",
 	},
 	Configuration: &factory.Configuration{
 		Sbi: &factory.Sbi{

@@ -33,7 +33,8 @@ import (
 var userPlaneConfig = factory.UserPlaneInformation{
 	UPNodes: map[string]*factory.UPNode{
 		"GNodeB": {
-			Type: "AN",
+			Type:   "AN",
+			NodeID: "192.168.1.1",
 		},
 		"UPF1": {
 			Type:   "UPF",
@@ -76,7 +77,7 @@ var userPlaneConfig = factory.UserPlaneInformation{
 var testConfig = factory.Config{
 	Info: &factory.Info{
 		Version:     "1.0.0",
-		Description: "SMF procdeure test configuration",
+		Description: "SMF procedure test configuration",
 	},
 	Configuration: &factory.Configuration{
 		SmfName: "SMF Procedure Test",

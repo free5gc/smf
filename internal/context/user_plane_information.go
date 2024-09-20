@@ -168,7 +168,7 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 	for name, node := range upTopology.UPNodes {
 		nodeID, err := ConfigToNodeID(node.NodeID)
 		if err != nil {
-			logger.InitLog.Fatalf("Cannot parse NodeID from config: %+v", err)
+			logger.InitLog.Fatalf("[NewUserPlaneInformation] cannot parse %s NodeID from config: %+v", name, err)
 		}
 		upNode := &UPNode{
 			Name:   name,
@@ -413,7 +413,7 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 		}
 		nodeID, err := ConfigToNodeID(node.NodeID)
 		if err != nil {
-			logger.InitLog.Fatalf("Cannot parse NodeID from config: %+v", err)
+			logger.InitLog.Fatalf("[UpNodesFromConfiguration] cannot parse NodeID from config: %+v", err)
 		}
 		upNode := &UPNode{
 			Name:   name,
