@@ -176,25 +176,12 @@ func InitSmfContext(config *factory.Config) {
 		smfContext.ListenAddr = pfcp.ListenAddr
 		smfContext.ExternalAddr = pfcp.ExternalAddr
 
-		if ip := net.ParseIP(pfcp.NodeID); ip == nil {
-			smfContext.CPNodeID = pfcpType.NodeID{
-				NodeIdType: pfcpType.NodeIdTypeFqdn,
-				FQDN:       pfcp.NodeID,
-			}
-		} else {
-			ipv4 := ip.To4()
-			if ipv4 != nil {
-				smfContext.CPNodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeIpv4Address,
-					IP:         ipv4,
-				}
-			} else {
-				smfContext.CPNodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeIpv6Address,
-					IP:         ip,
-				}
-			}
+		nodeID, err := ConfigToNodeID(pfcp.NodeID)
+		if err != nil {
+			logger.InitLog.Fatalf("[InitSmfContext] cannot parse PFCP NodeID from config: %+v", err)
 		}
+
+		smfContext.CPNodeID = nodeID
 
 		smfContext.PfcpHeartbeatInterval = pfcp.HeartbeatInterval
 		var multipleOfInterval time.Duration = 5
