@@ -105,8 +105,6 @@ func setupPfcpAssociation(upf *smf_context.UPF, upfStr string) error {
 
 	logger.MainLog.Infof("Received PFCP Association Setup Accepted Response from UPF%s", upfStr)
 
-	//upf.UPFStatus = smf_context.AssociatedSetUpSuccess
-
 	if rsp.UserPlaneIPResourceInformation != nil {
 		upf.UPIPInfo = *rsp.UserPlaneIPResourceInformation
 
