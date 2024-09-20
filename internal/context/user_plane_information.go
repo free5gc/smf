@@ -112,30 +112,49 @@ func AllocateUPFID() {
 
 // the config has a single string for NodeID,
 // check its nature and create either IPv4, IPv6, or FQDN NodeID type
-func configToNodeID(configNodeID string) pfcpType.NodeID {
-	var ip net.IP
-	if net.ParseIP(configNodeID).To4() == nil {
-		ip = net.ParseIP(configNodeID)
-	} else {
-		ip = net.ParseIP(configNodeID).To4()
+func ConfigToNodeID(configNodeID string) (pfcpType.NodeID, error) {
+	logger.CfgLog.Tracef("Converting config input %s to NodeID", configNodeID)
+
+	ip := net.ParseIP(configNodeID)
+	var err error
+
+	if ip == nil {
+		// might be in CIDR notation
+		ip, _, err = net.ParseCIDR(configNodeID)
 	}
-	switch len(configNodeID) {
-	case net.IPv4len:
-		return pfcpType.NodeID{
-			NodeIdType: pfcpType.NodeIdTypeIpv4Address,
-			IP:         ip,
-		}
-	case net.IPv6len:
-		return pfcpType.NodeID{
-			NodeIdType: pfcpType.NodeIdTypeIpv6Address,
-			IP:         ip,
-		}
-	default:
-		return pfcpType.NodeID{
-			NodeIdType: pfcpType.NodeIdTypeFqdn,
-			FQDN:       configNodeID,
+
+	if err == nil && ip != nil {
+		// valid IP address, check the type
+		if ip.To4() != nil {
+			logger.CfgLog.Tracef("%s is IPv4", configNodeID)
+			return pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+				IP:         ip.To4(),
+			}, nil
+		} else {
+			logger.CfgLog.Tracef("%s is IPv6", configNodeID)
+			return pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeIpv6Address,
+				IP:         ip,
+			}, nil
 		}
 	}
+
+	// might be an FQDN, try to resolve it
+	ips, err := net.LookupIP(configNodeID)
+	if err != nil {
+		return pfcpType.NodeID{}, fmt.Errorf("input %s is not a valid IP address or resolvable FQDN", configNodeID)
+	}
+	if len(ips) == 0 {
+		return pfcpType.NodeID{}, fmt.Errorf("no IP addresses found for the given FQDN %s", configNodeID)
+	}
+
+	logger.CfgLog.Tracef("%s is FQDN", configNodeID)
+
+	return pfcpType.NodeID{
+		NodeIdType: pfcpType.NodeIdTypeFqdn,
+		FQDN:       configNodeID,
+	}, nil
 }
 
 // NewUserPlaneInformation process the configuration then returns a new instance of UserPlaneInformation
@@ -147,11 +166,15 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 	allUEIPPools := []*UeIPPool{}
 
 	for name, node := range upTopology.UPNodes {
+		nodeID, err := ConfigToNodeID(node.NodeID)
+		if err != nil {
+			logger.InitLog.Fatalf("Cannot parse NodeID from config: %+v", err)
+		}
 		upNode := &UPNode{
 			Name:   name,
 			Type:   UPNodeType(node.Type),
 			ID:     uuid.New(),
-			NodeID: configToNodeID(node.NodeID),
+			NodeID: nodeID,
 			Dnn:    node.Dnn,
 		}
 		switch upNode.Type {
@@ -388,11 +411,15 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 			logger.InitLog.Warningf("Node [%s] already exists in SMF.\n", name)
 			continue
 		}
+		nodeID, err := ConfigToNodeID(node.NodeID)
+		if err != nil {
+			logger.InitLog.Fatalf("Cannot parse NodeID from config: %+v", err)
+		}
 		upNode := &UPNode{
 			Name:   name,
 			Type:   UPNodeType(node.Type),
 			ID:     uuid.New(),
-			NodeID: configToNodeID(node.NodeID),
+			NodeID: nodeID,
 			Dnn:    node.Dnn,
 		}
 		switch upNode.Type {

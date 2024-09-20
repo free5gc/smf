@@ -5,10 +5,12 @@ import (
 	"net"
 	"testing"
 
+	. "github.com/smartystreets/goconvey/convey"
 	"github.com/stretchr/testify/require"
 
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/smf/internal/context"
+	"github.com/free5gc/pfcp/pfcpType"
+	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
@@ -149,7 +151,7 @@ var configuration = &factory.UserPlaneInformation{
 }
 
 func TestNewUserPlaneInformation(t *testing.T) {
-	userplaneInformation := context.NewUserPlaneInformation(configuration)
+	userplaneInformation := smf_context.NewUserPlaneInformation(configuration)
 
 	require.NotNil(t, userplaneInformation.AccessNetwork["GNodeB"])
 
@@ -188,13 +190,13 @@ func TestGenerateDefaultPath(t *testing.T) {
 
 	testCases := []struct {
 		name     string
-		param    *context.UPFSelectionParams
+		param    *smf_context.UPFSelectionParams
 		expected bool
 	}{
 		{
 			"S-NSSAI 01112232 and DNN internet ok",
-			&context.UPFSelectionParams{
-				SNssai: &context.SNssai{
+			&smf_context.UPFSelectionParams{
+				SNssai: &smf_context.SNssai{
 					Sst: 1,
 					Sd:  "112232",
 				},
@@ -204,8 +206,8 @@ func TestGenerateDefaultPath(t *testing.T) {
 		},
 		{
 			"S-NSSAI 02112233 and DNN internet ok",
-			&context.UPFSelectionParams{
-				SNssai: &context.SNssai{
+			&smf_context.UPFSelectionParams{
+				SNssai: &smf_context.SNssai{
 					Sst: 2,
 					Sd:  "112233",
 				},
@@ -215,8 +217,8 @@ func TestGenerateDefaultPath(t *testing.T) {
 		},
 		{
 			"S-NSSAI 03112234 and DNN internet ok",
-			&context.UPFSelectionParams{
-				SNssai: &context.SNssai{
+			&smf_context.UPFSelectionParams{
+				SNssai: &smf_context.SNssai{
 					Sst: 3,
 					Sd:  "112234",
 				},
@@ -226,8 +228,8 @@ func TestGenerateDefaultPath(t *testing.T) {
 		},
 		{
 			"S-NSSAI 01112235 and DNN internet ok",
-			&context.UPFSelectionParams{
-				SNssai: &context.SNssai{
+			&smf_context.UPFSelectionParams{
+				SNssai: &smf_context.SNssai{
 					Sst: 1,
 					Sd:  "112235",
 				},
@@ -237,8 +239,8 @@ func TestGenerateDefaultPath(t *testing.T) {
 		},
 		{
 			"S-NSSAI 01010203 and DNN internet fail",
-			&context.UPFSelectionParams{
-				SNssai: &context.SNssai{
+			&smf_context.UPFSelectionParams{
+				SNssai: &smf_context.SNssai{
 					Sst: 1,
 					Sd:  "010203",
 				},
@@ -248,7 +250,7 @@ func TestGenerateDefaultPath(t *testing.T) {
 		},
 	}
 
-	userplaneInformation := context.NewUserPlaneInformation(&config1)
+	userplaneInformation := smf_context.NewUserPlaneInformation(&config1)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			pathExist := userplaneInformation.GenerateDefaultPath(tc.param)
@@ -267,15 +269,15 @@ func TestSelectUPFAndAllocUEIP(t *testing.T) {
 		expectedIPPool = append(expectedIPPool, net.ParseIP(fmt.Sprintf("10.60.0.%d", i)).To4())
 	}
 
-	userplaneInformation := context.NewUserPlaneInformation(configuration)
+	userplaneInformation := smf_context.NewUserPlaneInformation(configuration)
 	for _, upf := range userplaneInformation.UPFs {
-		upf.UPFStatus = context.AssociatedSetUpSuccess
+		upf.UPFStatus = smf_context.AssociatedSetUpSuccess
 	}
 
 	for i := 0; i <= 100; i++ {
-		upf, allocatedIP, _ := userplaneInformation.SelectUPFAndAllocUEIP(&context.UPFSelectionParams{
+		upf, allocatedIP, _ := userplaneInformation.SelectUPFAndAllocUEIP(&smf_context.UPFSelectionParams{
 			Dnn: "internet",
-			SNssai: &context.SNssai{
+			SNssai: &smf_context.SNssai{
 				Sst: 1,
 				Sd:  "112232",
 			},
@@ -393,16 +395,16 @@ var configForIPPoolAllocate = &factory.UserPlaneInformation{
 var testCasesOfGetUEIPPool = []struct {
 	name          string
 	allocateTimes int
-	param         *context.UPFSelectionParams
+	param         *smf_context.UPFSelectionParams
 	subnet        uint8
 	useStaticIP   bool
 }{
 	{
 		name:          "static IP not in dynamic pool or static pool",
 		allocateTimes: 1,
-		param: &context.UPFSelectionParams{
+		param: &smf_context.UPFSelectionParams{
 			Dnn: "internet",
-			SNssai: &context.SNssai{
+			SNssai: &smf_context.SNssai{
 				Sst: 1,
 				Sd:  "111111",
 			},
@@ -414,9 +416,9 @@ var testCasesOfGetUEIPPool = []struct {
 	{
 		name:          "static IP not in static pool but in dynamic pool",
 		allocateTimes: 1,
-		param: &context.UPFSelectionParams{
+		param: &smf_context.UPFSelectionParams{
 			Dnn: "internet",
-			SNssai: &context.SNssai{
+			SNssai: &smf_context.SNssai{
 				Sst: 2,
 				Sd:  "222222",
 			},
@@ -428,9 +430,9 @@ var testCasesOfGetUEIPPool = []struct {
 	{
 		name:          "dynamic pool is exhausted",
 		allocateTimes: 2,
-		param: &context.UPFSelectionParams{
+		param: &smf_context.UPFSelectionParams{
 			Dnn: "internet",
-			SNssai: &context.SNssai{
+			SNssai: &smf_context.SNssai{
 				Sst: 2,
 				Sd:  "222222",
 			},
@@ -442,9 +444,9 @@ var testCasesOfGetUEIPPool = []struct {
 	{
 		name:          "static IP is in static pool",
 		allocateTimes: 1,
-		param: &context.UPFSelectionParams{
+		param: &smf_context.UPFSelectionParams{
 			Dnn: "internet",
-			SNssai: &context.SNssai{
+			SNssai: &smf_context.SNssai{
 				Sst: 3,
 				Sd:  "333333",
 			},
@@ -456,9 +458,9 @@ var testCasesOfGetUEIPPool = []struct {
 	{
 		name:          "static pool is exhausted",
 		allocateTimes: 2,
-		param: &context.UPFSelectionParams{
+		param: &smf_context.UPFSelectionParams{
 			Dnn: "internet",
-			SNssai: &context.SNssai{
+			SNssai: &smf_context.SNssai{
 				Sst: 3,
 				Sd:  "333333",
 			},
@@ -470,9 +472,9 @@ var testCasesOfGetUEIPPool = []struct {
 	{
 		name:          "static IP is in static pool, and dynamic pool is exhaust(allocate twice and not release)",
 		allocateTimes: 2,
-		param: &context.UPFSelectionParams{
+		param: &smf_context.UPFSelectionParams{
 			Dnn: "internet",
-			SNssai: &context.SNssai{
+			SNssai: &smf_context.SNssai{
 				Sst: 3,
 				Sd:  "333333",
 			},
@@ -484,9 +486,9 @@ var testCasesOfGetUEIPPool = []struct {
 }
 
 func TestGetUEIPPool(t *testing.T) {
-	userplaneInformation := context.NewUserPlaneInformation(configForIPPoolAllocate)
+	userplaneInformation := smf_context.NewUserPlaneInformation(configForIPPoolAllocate)
 	for _, upf := range userplaneInformation.UPFs {
-		upf.UPFStatus = context.AssociatedSetUpSuccess
+		upf.UPFStatus = smf_context.AssociatedSetUpSuccess
 	}
 
 	for ci, tc := range testCasesOfGetUEIPPool {
@@ -498,7 +500,7 @@ func TestGetUEIPPool(t *testing.T) {
 				}
 			}
 
-			var upf *context.UPF
+			var upf *smf_context.UPF
 			var allocatedIP net.IP
 			var useStatic bool
 			for times := 1; times <= tc.allocateTimes; times++ {
@@ -516,4 +518,109 @@ func TestGetUEIPPool(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConfigToNodeID(t *testing.T) {
+	testCases := []struct {
+		name           string
+		configNodeID   string
+		expectedNodeID pfcpType.NodeID
+		expectedError  error
+	}{
+		{
+			name:         "IPv4",
+			configNodeID: "192.168.179.100",
+			expectedNodeID: pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+				IP:         net.ParseIP("192.168.179.100").To4(),
+			},
+			expectedError: nil,
+		},
+		{
+			name:         "IPv4 CIDR",
+			configNodeID: "192.168.179.100/24",
+			expectedNodeID: pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+				IP:         net.ParseIP("192.168.179.100").To4(),
+			},
+			expectedError: nil,
+		},
+		{
+			name:           "IPv4 error",
+			configNodeID:   "192.168.179.1111",
+			expectedNodeID: pfcpType.NodeID{},
+			expectedError:  fmt.Errorf("input %s is not a valid IP address or resolvable FQDN", "192.168.179.1111"),
+		},
+		{
+			name:         "IPv6",
+			configNodeID: "2001:41b8:810:20:df55:785b:e4ed:15b8",
+			expectedNodeID: pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeIpv6Address,
+				IP:         net.ParseIP("2001:41b8:810:20:df55:785b:e4ed:15b8"),
+			},
+			expectedError: nil,
+		},
+		{
+			name:         "IPv6 CIDR",
+			configNodeID: "2001:41b8:810:20:df55:785b:e4ed:15b8/64",
+			expectedNodeID: pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeIpv6Address,
+				IP:         net.ParseIP("2001:41b8:810:20:df55:785b:e4ed:15b8"),
+			},
+			expectedError: nil,
+		},
+		{
+			name:           "IPv6 error",
+			configNodeID:   "2001:810:20:df55:785b:e4ed:15b8",
+			expectedNodeID: pfcpType.NodeID{},
+			expectedError: fmt.Errorf("input %s is not a valid IP address or resolvable FQDN",
+				"2001:810:20:df55:785b:e4ed:15b8"),
+		},
+		{
+			name:         "IPv6 short",
+			configNodeID: "::1",
+			expectedNodeID: pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeIpv6Address,
+				IP:         net.ParseIP("::1"),
+			},
+			expectedError: nil,
+		},
+		{
+			name:         "FQDN",
+			configNodeID: "example.com",
+			expectedNodeID: pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeFqdn,
+				FQDN:       "example.com",
+			},
+			expectedError: nil,
+		},
+		{
+			name:           "FQDN error",
+			configNodeID:   "notresolving.example.com",
+			expectedNodeID: pfcpType.NodeID{},
+			expectedError:  fmt.Errorf("input %s is not a valid IP address or resolvable FQDN", "notresolving.example.com"),
+		},
+	}
+
+	Convey("Should convert config input string to valid NodeID or throw error", t, func() {
+		for i, testcase := range testCases {
+			infoStr := fmt.Sprintf("testcase[%d]: %s", i, testcase.name)
+
+			Convey(infoStr, func() {
+				nodeID, err := smf_context.ConfigToNodeID(testcase.configNodeID)
+
+				if testcase.expectedError == nil {
+					So(err, ShouldBeNil)
+					So(nodeID.NodeIdType, ShouldEqual, testcase.expectedNodeID.NodeIdType)
+					So(nodeID.IP, ShouldEqual, testcase.expectedNodeID.IP)
+					So(nodeID.FQDN, ShouldEqual, testcase.expectedNodeID.FQDN)
+				} else {
+					So(err, ShouldNotBeNil)
+					if err != nil {
+						So(err.Error(), ShouldEqual, testcase.expectedError.Error())
+					}
+				}
+			})
+		}
+	})
 }
