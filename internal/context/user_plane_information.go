@@ -218,7 +218,7 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 							staticUeIPPools = append(staticUeIPPools, staticUeIPPool)
 							for _, dynamicUePool := range ueIPPools {
 								if dynamicUePool.ueSubNet.Contains(staticUeIPPool.ueSubNet.IP) {
-									if err := dynamicUePool.Exclude(staticUeIPPool); err != nil {
+									if err = dynamicUePool.Exclude(staticUeIPPool); err != nil {
 										logger.InitLog.Fatalf("exclude static Pool[%s] failed: %v",
 											staticUeIPPool.ueSubNet, err)
 									}
@@ -228,10 +228,10 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 					}
 					for _, pool := range ueIPPools {
 						if pool.pool.Min() != pool.pool.Max() {
-							if err := pool.pool.Reserve(pool.pool.Min(), pool.pool.Min()); err != nil {
+							if err = pool.pool.Reserve(pool.pool.Min(), pool.pool.Min()); err != nil {
 								logger.InitLog.Errorf("Remove network address failed for %s: %s", pool.ueSubNet.String(), err)
 							}
-							if err := pool.pool.Reserve(pool.pool.Max(), pool.pool.Max()); err != nil {
+							if err = pool.pool.Reserve(pool.pool.Max(), pool.pool.Max()); err != nil {
 								logger.InitLog.Errorf("Remove network address failed for %s: %s", pool.ueSubNet.String(), err)
 							}
 						}
@@ -463,7 +463,7 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 							staticUeIPPools = append(staticUeIPPools, ueIPPool)
 							for _, dynamicUePool := range ueIPPools {
 								if dynamicUePool.ueSubNet.Contains(ueIPPool.ueSubNet.IP) {
-									if err := dynamicUePool.Exclude(ueIPPool); err != nil {
+									if err = dynamicUePool.Exclude(ueIPPool); err != nil {
 										logger.InitLog.Fatalf("exclude static Pool[%s] failed: %v",
 											ueIPPool.ueSubNet, err)
 									}

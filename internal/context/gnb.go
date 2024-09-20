@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/google/uuid"
+
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/google/uuid"
 )
 
 // embeds the UPNode struct ("inheritance")
