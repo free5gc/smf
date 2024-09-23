@@ -135,10 +135,8 @@ func keepHeartbeatTo(upf *smf_context.UPF, upfStr string) {
 }
 
 func doPfcpHeartbeat(upf *smf_context.UPF, upfStr string) error {
-	select {
-	case <-upf.AssociationContext.Done():
-		return fmt.Errorf("Cancel heartbeat, UPF[%s] is not associted", upfStr)
-	default:
+	if err := upf.IsAssociated(); err != nil {
+		return fmt.Errorf("Cancel heartbeat: %+v", err)
 	}
 
 	logger.MainLog.Debugf("Sending PFCP Heartbeat Request to UPF%s", upfStr)

@@ -68,10 +68,8 @@ func (s *Server) PostUpNodesLinks(c *gin.Context) {
 
 	for _, upf := range upi.UPFs {
 		// only associate new ones
-		select {
-		case <-upf.UPF.AssociationContext.Done():
+		if err := upf.UPF.IsAssociated(); err != nil {
 			go s.Processor().ToBeAssociatedWithUPF(smf_context.GetSelf().PfcpContext, upf.UPF)
-		default:
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "OK"})
