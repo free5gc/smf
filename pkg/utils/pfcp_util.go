@@ -11,12 +11,12 @@ import (
 	"github.com/free5gc/smf/pkg/service"
 )
 
-func InitPFCPFunc() (func(a *service.SmfApp), func()) {
+func InitPFCPFunc(pCtx context.Context) (func(a *service.SmfApp), func()) {
 	smfContext := smf_context.GetSelf()
 
 	pfcpStart := func(a *service.SmfApp) {
 		// Initialize PFCP server
-		smfContext.PfcpContext, smfContext.PfcpCancelFunc = context.WithCancel(context.Background())
+		smfContext.PfcpContext, smfContext.PfcpCancelFunc = context.WithCancel(pCtx)
 
 		udp.Run(pfcp.Dispatch)
 
