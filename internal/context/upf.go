@@ -377,169 +377,162 @@ func (upf *UPF) GetUPFID() string {
 	return upInfo.GetUPFIDByIP(upfIP)
 }
 
-func (upf *UPF) pdrID() (uint16, error) {
-	if err := upf.IsAssociated(); err != nil {
-		return 0, err
+func (upf *UPF) pdrID() (pdrID uint16, err error) {
+	if err = upf.IsAssociated(); err != nil {
+		return
 	}
 
-	var pdrID uint16
-	if tmpID, err := upf.pdrIDGenerator.Allocate(); err != nil {
+	tmpID, err := upf.pdrIDGenerator.Allocate()
+	if err != nil {
 		return 0, err
-	} else {
-		pdrID = uint16(tmpID)
 	}
-
-	return pdrID, nil
+	pdrID = uint16(tmpID)
+	return
 }
 
-func (upf *UPF) farID() (uint32, error) {
-	if err := upf.IsAssociated(); err != nil {
-		return 0, err
+func (upf *UPF) farID() (farID uint32, err error) {
+	if err = upf.IsAssociated(); err != nil {
+		return
 	}
 
-	var farID uint32
-	if tmpID, err := upf.farIDGenerator.Allocate(); err != nil {
+	tmpID, err := upf.farIDGenerator.Allocate()
+	if err != nil {
 		return 0, err
-	} else {
-		farID = uint32(tmpID)
 	}
-
-	return farID, nil
+	farID = uint32(tmpID)
+	return
 }
 
-func (upf *UPF) barID() (uint8, error) {
-	if err := upf.IsAssociated(); err != nil {
-		return 0, err
+func (upf *UPF) barID() (barID uint8, err error) {
+	if err = upf.IsAssociated(); err != nil {
+		return
 	}
 
-	var barID uint8
-	if tmpID, err := upf.barIDGenerator.Allocate(); err != nil {
+	tmpID, err := upf.barIDGenerator.Allocate()
+	if err != nil {
 		return 0, err
-	} else {
-		barID = uint8(tmpID)
 	}
-
-	return barID, nil
+	barID = uint8(tmpID)
+	return
 }
 
-func (upf *UPF) qerID() (uint32, error) {
-	if err := upf.IsAssociated(); err != nil {
+func (upf *UPF) qerID() (qerID uint32, err error) {
+	if err = upf.IsAssociated(); err != nil {
+		return
+	}
+
+	tmpID, err := upf.qerIDGenerator.Allocate()
+	if err != nil {
 		return 0, err
 	}
+	qerID = uint32(tmpID)
+	return
+}
 
-	var qerID uint32
-	if tmpID, err := upf.qerIDGenerator.Allocate(); err != nil {
+func (upf *UPF) urrID() (urrID uint32, err error) {
+	tmpID, err := upf.urrIDGenerator.Allocate()
+	if err != nil {
 		return 0, err
-	} else {
-		qerID = uint32(tmpID)
 	}
-
-	return qerID, nil
+	urrID = uint32(tmpID)
+	return
 }
 
-func (upf *UPF) urrID() (uint32, error) {
-	var urrID uint32
-	if tmpID, err := upf.urrIDGenerator.Allocate(); err != nil {
-		return 0, err
-	} else {
-		urrID = uint32(tmpID)
+func (upf *UPF) AddPDR() (pdr *PDR, err error) {
+	if err = upf.IsAssociated(); err != nil {
+		return
 	}
 
-	return urrID, nil
+	pdrID, err := upf.pdrID()
+	if err != nil {
+		return
+	}
+
+	newFAR, err := upf.AddFAR()
+	if err != nil {
+		return
+	}
+
+	pdr = &PDR{
+		PDRID: pdrID,
+		FAR:   newFAR,
+	}
+	upf.pdrPool.Store(pdr.PDRID, pdr)
+	return
 }
 
-func (upf *UPF) AddPDR() (*PDR, error) {
-	if err := upf.IsAssociated(); err != nil {
-		return nil, err
+func (upf *UPF) AddFAR() (far *FAR, err error) {
+	if err = upf.IsAssociated(); err != nil {
+		return
 	}
 
-	pdr := new(PDR)
-	if PDRID, err := upf.pdrID(); err != nil {
-		return nil, err
-	} else {
-		pdr.PDRID = PDRID
-		upf.pdrPool.Store(pdr.PDRID, pdr)
+	farID, err := upf.farID()
+	if err != nil {
+		return
 	}
-
-	if newFAR, err := upf.AddFAR(); err != nil {
-		return nil, err
-	} else {
-		pdr.FAR = newFAR
+	far = &FAR{
+		FARID: farID,
 	}
-
-	return pdr, nil
-}
-
-func (upf *UPF) AddFAR() (*FAR, error) {
-	if err := upf.IsAssociated(); err != nil {
-		return nil, err
-	}
-
-	far := new(FAR)
-	if FARID, err := upf.farID(); err != nil {
-		return nil, err
-	} else {
-		far.FARID = FARID
-		upf.farPool.Store(far.FARID, far)
-	}
-
+	upf.farPool.Store(far.FARID, far)
 	return far, nil
 }
 
-func (upf *UPF) AddBAR() (*BAR, error) {
-	if err := upf.IsAssociated(); err != nil {
-		return nil, err
+func (upf *UPF) AddBAR() (bar *BAR, err error) {
+	if err = upf.IsAssociated(); err != nil {
+		return
 	}
 
-	bar := new(BAR)
-	if BARID, err := upf.barID(); err != nil {
-	} else {
-		bar.BARID = BARID
-		upf.barPool.Store(bar.BARID, bar)
+	barID, err := upf.barID()
+	if err != nil {
+		return
 	}
-
-	return bar, nil
+	bar = &BAR{
+		BARID: barID,
+	}
+	upf.barPool.Store(bar.BARID, bar)
+	return
 }
 
-func (upf *UPF) AddQER() (*QER, error) {
-	if err := upf.IsAssociated(); err != nil {
-		return nil, err
+func (upf *UPF) AddQER() (qer *QER, err error) {
+	if err = upf.IsAssociated(); err != nil {
+		return
 	}
 
-	qer := new(QER)
-	if QERID, err := upf.qerID(); err != nil {
-	} else {
-		qer.QERID = QERID
-		upf.qerPool.Store(qer.QERID, qer)
+	qerID, err := upf.qerID()
+	if err != nil {
+		return
 	}
-
-	return qer, nil
+	qer = &QER{
+		QERID: qerID,
+	}
+	upf.qerPool.Store(qer.QERID, qer)
+	return
 }
 
-func (upf *UPF) AddURR(urrId uint32, opts ...UrrOpt) (*URR, error) {
-	if err := upf.IsAssociated(); err != nil {
-		return nil, err
+func (upf *UPF) AddURR(urrID uint32, opts ...UrrOpt) (urr *URR, err error) {
+	if err = upf.IsAssociated(); err != nil {
+		return
 	}
 
-	urr := new(URR)
-	urr.MeasureMethod = MesureMethodVol
-	urr.MeasurementInformation = MeasureInformation(true, false)
+	if urrID == 0 {
+		urrID, err = upf.urrID()
+		if err != nil {
+			return
+		}
+	}
+
+	urr = &URR{
+		URRID:                  urrID,
+		MeasureMethod:          MesureMethodVol,
+		MeasurementInformation: MeasureInformation(true, false),
+	}
 
 	for _, opt := range opts {
 		opt(urr)
 	}
 
-	if urrId == 0 {
-		if URRID, err := upf.urrID(); err != nil {
-		} else {
-			urr.URRID = URRID
-			upf.urrPool.Store(urr.URRID, urr)
-		}
-	} else {
-		urr.URRID = urrId
-		upf.urrPool.Store(urr.URRID, urr)
-	}
-	return urr, nil
+	upf.urrPool.Store(urr.URRID, urr)
+	return
 }
 
 func (upf *UPF) GetUUID() uuid.UUID {
@@ -556,46 +549,46 @@ func (upf *UPF) GetQERById(qerId uint32) *QER {
 
 // *** add unit test ***//
 func (upf *UPF) RemovePDR(pdr *PDR) (err error) {
-	if err := upf.IsAssociated(); err != nil {
-		return err
+	if err = upf.IsAssociated(); err != nil {
+		return
 	}
 
 	upf.pdrIDGenerator.FreeID(int64(pdr.PDRID))
 	upf.pdrPool.Delete(pdr.PDRID)
-	return nil
+	return
 }
 
 // *** add unit test ***//
 func (upf *UPF) RemoveFAR(far *FAR) (err error) {
-	if err := upf.IsAssociated(); err != nil {
-		return err
+	if err = upf.IsAssociated(); err != nil {
+		return
 	}
 
 	upf.farIDGenerator.FreeID(int64(far.FARID))
 	upf.farPool.Delete(far.FARID)
-	return nil
+	return
 }
 
 // *** add unit test ***//
 func (upf *UPF) RemoveBAR(bar *BAR) (err error) {
-	if err := upf.IsAssociated(); err != nil {
-		return err
+	if err = upf.IsAssociated(); err != nil {
+		return
 	}
 
 	upf.barIDGenerator.FreeID(int64(bar.BARID))
 	upf.barPool.Delete(bar.BARID)
-	return nil
+	return
 }
 
 // *** add unit test ***//
 func (upf *UPF) RemoveQER(qer *QER) (err error) {
-	if err := upf.IsAssociated(); err != nil {
-		return err
+	if err = upf.IsAssociated(); err != nil {
+		return
 	}
 
 	upf.qerIDGenerator.FreeID(int64(qer.QERID))
 	upf.qerPool.Delete(qer.QERID)
-	return nil
+	return
 }
 
 func (upf *UPF) isSupportSnssai(snssai *SNssai) bool {
