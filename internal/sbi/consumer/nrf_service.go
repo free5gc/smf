@@ -289,8 +289,14 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 
 	switch err := localErr.(type) {
 	case openapi.GenericOpenAPIError:
-		errorModel := err.Model().(NFDiscovery.SearchNFInstancesError)
-		return &errorModel.ProblemDetails, nil
+		switch errModel := err.Model().(type) {
+		case NFDiscovery.SearchNFInstancesError:
+			return &errModel.ProblemDetails, nil
+		case error:
+			return openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
+		default:
+			return nil, openapi.ReportError("openapi error")
+		}
 	case error:
 		return openapi.ProblemDetailsSystemFailure(err.Error()), nil
 	case nil:
@@ -324,8 +330,14 @@ func (s *nnrfService) SendNFDiscoveryPCF() (*models.ProblemDetails, error) {
 
 	switch err := localErr.(type) {
 	case openapi.GenericOpenAPIError:
-		errorModel := err.Model().(NFDiscovery.SearchNFInstancesError)
-		return &errorModel.ProblemDetails, nil
+		switch errModel := err.Model().(type) {
+		case NFDiscovery.SearchNFInstancesError:
+			return &errModel.ProblemDetails, nil
+		case error:
+			return openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
+		default:
+			return nil, openapi.ReportError("openapi error")
+		}
 	case error:
 		return openapi.ProblemDetailsSystemFailure(err.Error()), nil
 	case nil:
@@ -348,8 +360,14 @@ func (s *nnrfService) SendNFDiscoveryServingAMF(smContext *smf_context.SMContext
 
 	switch err := localErr.(type) {
 	case openapi.GenericOpenAPIError:
-		errorModel := err.Model().(NFDiscovery.SearchNFInstancesError)
-		return &errorModel.ProblemDetails, nil
+		switch errModel := err.Model().(type) {
+		case NFDiscovery.SearchNFInstancesError:
+			return &errModel.ProblemDetails, nil
+		case error:
+			return openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
+		default:
+			return nil, openapi.ReportError("openapi error")
+		}
 	case error:
 		return openapi.ProblemDetailsSystemFailure(err.Error()), nil
 	case nil:
