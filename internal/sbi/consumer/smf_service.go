@@ -58,16 +58,19 @@ func (s *nsmfService) SendSMContextStatusNotification(uri string) (*models.Probl
 
 		switch err := localErr.(type) {
 		case openapi.GenericOpenAPIError:
-			errorModel := err.Model().(PDUSession.PostSmContextsSmContextStatusNotificationPostError)
-			return &errorModel.ProblemDetails, nil
-
+			switch errModel := err.Model().(type) {
+			case PDUSession.PostSmContextsSmContextStatusNotificationPostError:
+				return &errModel.ProblemDetails, nil
+			case error:
+				return openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
+			default:
+				return nil, openapi.ReportError("openapi error")
+			}
 		case error:
 			return openapi.ProblemDetailsSystemFailure(err.Error()), nil
-
 		case nil:
 			logger.PduSessLog.Tracef("Send SMContextStatus Notification Success")
 			return nil, nil
-
 		default:
 			logger.PduSessLog.Warnf("Send SMContextStatus Notification Unknown Error: %+v", err)
 			return nil, openapi.ReportError("server no response")

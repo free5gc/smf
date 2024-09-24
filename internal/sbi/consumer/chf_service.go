@@ -146,10 +146,16 @@ func (s *nchfService) SendConvergedChargingRequest(
 
 		switch err := localErr.(type) {
 		case openapi.GenericOpenAPIError:
-			errorModel := err.Model().(ConvergedCharging.PostChargingDataError)
-			chargingDataRef := strings.Split(errorModel.Location, "/")
-			smContext.ChargingDataRef = chargingDataRef[len(chargingDataRef)-1]
-			return nil, &errorModel.ProblemDetails, nil
+			switch errModel := err.Model().(type) {
+			case ConvergedCharging.PostChargingDataError:
+				chargingDataRef := strings.Split(errModel.Location, "/")
+				smContext.ChargingDataRef = chargingDataRef[len(chargingDataRef)-1]
+				return nil, &errModel.ProblemDetails, nil
+			case error:
+				return nil, openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
+			default:
+				return nil, nil, openapi.ReportError("openapi error")
+			}
 		case error:
 			return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
 		case nil:
@@ -166,8 +172,14 @@ func (s *nchfService) SendConvergedChargingRequest(
 
 		switch err := localErr.(type) {
 		case openapi.GenericOpenAPIError:
-			errorModel := err.Model().(ConvergedCharging.UpdateChargingDataError)
-			return nil, &errorModel.ProblemDetails, nil
+			switch errModel := err.Model().(type) {
+			case ConvergedCharging.UpdateChargingDataError:
+				return nil, &errModel.ProblemDetails, nil
+			case error:
+				return nil, openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
+			default:
+				return nil, nil, openapi.ReportError("openapi error")
+			}
 		case error:
 			return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
 		case nil:
@@ -184,8 +196,14 @@ func (s *nchfService) SendConvergedChargingRequest(
 
 		switch err := localErr.(type) {
 		case openapi.GenericOpenAPIError:
-			errorModel := err.Model().(ConvergedCharging.ReleaseChargingDataError)
-			return nil, &errorModel.ProblemDetails, nil
+			switch errModel := err.Model().(type) {
+			case ConvergedCharging.ReleaseChargingDataError:
+				return nil, &errModel.ProblemDetails, nil
+			case error:
+				return nil, openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
+			default:
+				return nil, nil, openapi.ReportError("openapi error")
+			}
 		case error:
 			return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
 		case nil:

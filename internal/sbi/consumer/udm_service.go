@@ -117,17 +117,20 @@ func (s *nudmService) UeCmRegistration(smCtx *smf_context.SMContext) (
 
 	switch err := localErr.(type) {
 	case openapi.GenericOpenAPIError:
-		errorModel := err.Model().(UEContextManagement.RegistrationError)
-		return &errorModel.ProblemDetails, nil
-
+		switch errModel := err.Model().(type) {
+		case UEContextManagement.RegistrationError:
+			return &errModel.ProblemDetails, nil
+		case error:
+			return openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
+		default:
+			return nil, openapi.ReportError("openapi error")
+		}
 	case error:
 		return openapi.ProblemDetailsSystemFailure(err.Error()), nil
-
 	case nil:
 		logger.PduSessLog.Tracef("UECM Registration Success")
 		smCtx.UeCmRegistered = true
 		return nil, nil
-
 	default:
 		return nil, openapi.ReportError("server no response")
 	}
@@ -157,17 +160,20 @@ func (s *nudmService) UeCmDeregistration(smCtx *smf_context.SMContext) (*models.
 
 	switch err := localErr.(type) {
 	case openapi.GenericOpenAPIError:
-		errorModel := err.Model().(UEContextManagement.SmfDeregistrationError)
-		return &errorModel.ProblemDetails, nil
-
+		switch errModel := err.Model().(type) {
+		case UEContextManagement.SmfDeregistrationError:
+			return &errModel.ProblemDetails, nil
+		case error:
+			return openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
+		default:
+			return nil, openapi.ReportError("openapi error")
+		}
 	case error:
 		return openapi.ProblemDetailsSystemFailure(err.Error()), nil
-
 	case nil:
 		logger.PduSessLog.Tracef("UECM Deregistration Success")
 		smCtx.UeCmRegistered = false
 		return nil, nil
-
 	default:
 		return nil, openapi.ReportError("server no response")
 	}
