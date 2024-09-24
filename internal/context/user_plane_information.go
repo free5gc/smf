@@ -877,7 +877,7 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionPa
 	for _, upf := range sortedUPFList {
 		logger.CtxLog.Debugf("check start UPF: %s",
 			upi.GetUPFNameByIp(upf.NodeID.ResolveNodeIdToIp().String()))
-		if err := upf.UPF.IsAssociated(); err != nil {
+		if err = upf.UPF.IsAssociated(); err != nil {
 			logger.CtxLog.Infoln(err)
 			continue
 		}

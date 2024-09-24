@@ -140,7 +140,7 @@ func SendPfcpSessionEstablishmentRequest(
 	urrList []*context.URR,
 ) (resMsg *pfcpUdp.Message, err error) {
 	nodeIDtoIP := upf.NodeID.ResolveNodeIdToIp()
-	if err := upf.IsAssociated(); err != nil {
+	if err = upf.IsAssociated(); err != nil {
 		return nil, err
 	}
 
@@ -223,7 +223,7 @@ func SendPfcpSessionModificationRequest(
 	urrList []*context.URR,
 ) (resMsg *pfcpUdp.Message, err error) {
 	nodeIDtoIP := upf.NodeID.ResolveNodeIdToIp()
-	if err := upf.IsAssociated(); err != nil {
+	if err = upf.IsAssociated(); err != nil {
 		return nil, err
 	}
 
@@ -296,9 +296,12 @@ func SendPfcpSessionModificationResponse(addr *net.UDPAddr) {
 	udp.SendPfcpResponse(message, addr)
 }
 
-func SendPfcpSessionDeletionRequest(upf *context.UPF, ctx *context.SMContext) (resMsg *pfcpUdp.Message, err error) {
+func SendPfcpSessionDeletionRequest(
+	upf *context.UPF,
+	ctx *context.SMContext,
+) (resMsg *pfcpUdp.Message, err error) {
 	nodeIDtoIP := upf.NodeID.ResolveNodeIdToIp()
-	if err := upf.IsAssociated(); err != nil {
+	if err = upf.IsAssociated(); err != nil {
 		return nil, err
 	}
 
