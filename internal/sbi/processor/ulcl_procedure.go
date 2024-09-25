@@ -147,13 +147,13 @@ func EstablishULCL(smContext *context.SMContext) {
 			DownLinkPDR := curDPNode.DownLinkTunnel.PDR
 			UPLinkPDR.State = context.RULE_INITIAL
 
-			// new IPFilterRule with action:"permit" and diection:"out"
+			// new IPFilterRule with action:"permit" and direction:"out"
 			FlowDespcription := flowdesc.NewIPFilterRule()
-			FlowDespcription.Dst = dest.DestinationIP
+			FlowDespcription.Src = dest.DestinationIP
 			if dstPort, err := flowdesc.ParsePorts(dest.DestinationPort); err != nil {
-				FlowDespcription.DstPorts = dstPort
+				FlowDespcription.SrcPorts = dstPort
 			}
-			FlowDespcription.Src = smContext.PDUAddress.To4().String()
+			FlowDespcription.Dst = smContext.PDUAddress.To4().String()
 
 			FlowDespcriptionStr, err := flowdesc.Encode(FlowDespcription)
 			if err != nil {
@@ -305,13 +305,13 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 
 			if _, exist := bpMGR.UpdatedBranchingPoint[curDPNode.UPF]; exist {
 				// add SDF Filter
-				// new IPFilterRule with action:"permit" and diection:"out"
+				// new IPFilterRule with action:"permit" and direction:"out"
 				FlowDespcription := flowdesc.NewIPFilterRule()
-				FlowDespcription.Dst = dest.DestinationIP
+				FlowDespcription.Src = dest.DestinationIP
 				if dstPort, err := flowdesc.ParsePorts(dest.DestinationPort); err != nil {
-					FlowDespcription.DstPorts = dstPort
+					FlowDespcription.SrcPorts = dstPort
 				}
-				FlowDespcription.Src = smContext.PDUAddress.To4().String()
+				FlowDespcription.Dst = smContext.PDUAddress.To4().String()
 
 				FlowDespcriptionStr, err := flowdesc.Encode(FlowDespcription)
 				if err != nil {
@@ -328,6 +328,7 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 					FlowDescription:         []byte(FlowDespcriptionStr),
 				}
 			}
+			UPLinkPDR.Precedence = 30
 
 			pfcpState := &PFCPState{
 				upf:     curDPNode.UPF,
