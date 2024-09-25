@@ -88,9 +88,8 @@ func NewApp(
 	smf.ctx, smf.cancel = context.WithCancel(ctx)
 
 	// for PFCP
-	ctx, cancel := context.WithCancel(smf.ctx)
-	smf_context.GetSelf().Ctx = ctx
-	smf_context.GetSelf().PFCPCancelFunc = cancel
+	smfContext := smf_context.GetSelf()
+	smfContext.PfcpContext, smfContext.PfcpCancelFunc = context.WithCancel(smf.ctx)
 
 	SMF = smf
 

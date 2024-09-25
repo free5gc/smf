@@ -86,7 +86,7 @@ func action(cliCtx *cli.Context) error {
 	}
 	factory.UERoutingConfig = ueRoutingCfg
 
-	pfcpStart, pfcpTerminate := utils.InitPFCPFunc()
+	pfcpStart, pfcpTerminate := utils.InitPFCPFunc(ctx)
 	smf, err := service.NewApp(ctx, cfg, tlsKeyLogPath, pfcpStart, pfcpTerminate)
 	if err != nil {
 		sigCh <- nil
