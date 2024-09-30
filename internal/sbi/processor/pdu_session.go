@@ -121,7 +121,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		}
 	}
 
-	if !smf_context.GetSelf().Ues.UeExists(smContext.Supi) {
+	if !p.Context().Ues.UeExists(smContext.Supi) {
 		if problemDetails, err := p.Consumer().
 			Subscribe(ctx, smContext, smPlmnID); problemDetails != nil {
 			smContext.Log.Errorln("SDM Subscription Failed Problem:", problemDetails)
@@ -129,7 +129,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 			smContext.Log.Errorln("SDM Subscription Error:", err)
 		}
 	} else {
-		smf_context.GetSelf().Ues.IncrementPduSessionCount(smContext.Supi)
+		p.Context().Ues.IncrementPduSessionCount(smContext.Supi)
 	}
 
 	establishmentRequest := m.PDUSessionEstablishmentRequest
@@ -898,7 +898,7 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 		}
 	}
 
-	if smf_context.GetSelf().Ues.UeExists(smContext.Supi) {
+	if p.Context().Ues.UeExists(smContext.Supi) {
 		problemDetails, err := p.Consumer().UnSubscribe(smContext)
 		if problemDetails != nil {
 			logger.PduSessLog.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
@@ -998,7 +998,7 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 		}
 	}
 
-	if smf_context.GetSelf().Ues.UeExists(smContext.Supi) {
+	if p.Context().Ues.UeExists(smContext.Supi) {
 		problemDetails, err := p.Consumer().UnSubscribe(smContext)
 		if problemDetails != nil {
 			logger.PduSessLog.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
