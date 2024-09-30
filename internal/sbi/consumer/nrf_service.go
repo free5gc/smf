@@ -167,13 +167,14 @@ func (s *nnrfService) RetrySendNFRegistration(maxRetry int) error {
 	return fmt.Errorf("[SMF] Retry NF Registration has meet maximum")
 }
 
-func (s *nnrfService) SendDeregisterNFInstance() (problemDetails *models.ProblemDetails, err error) {
+func (s *nnrfService) SendDeregisterNFInstance() (err error) {
 	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
 	smfContext := s.consumer.Context()
 	ctx, pd, err := smfContext.GetTokenCtx(models.ServiceName_NNRF_NFM, models.NrfNfManagementNfType_NRF)
 	if err != nil {
-		return pd, err
+		logger.ConsumerLog.Errorf("Get token context failed, problem details: %+v", pd)
+		return err
 	}
 
 	client := s.getNFManagementClient(smfContext.NrfUri)
@@ -183,7 +184,7 @@ func (s *nnrfService) SendDeregisterNFInstance() (problemDetails *models.Problem
 
 	_, err = client.NFInstanceIDDocumentApi.DeregisterNFInstance(ctx, request)
 
-	return problemDetails, err
+	return err
 }
 
 func (s *nnrfService) SendSearchNFInstances(
