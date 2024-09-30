@@ -176,8 +176,6 @@ func (s *nudmService) GetSmData(ctx context.Context, supi string,
 	var client *Nudm_SubscriberDataManagement.APIClient
 	for _, service := range *s.consumer.Context().UDMProfile.NfServices {
 		if service.ServiceName == models.ServiceName_NUDM_SDM {
-			SDMConf := Nudm_SubscriberDataManagement.NewConfiguration()
-			SDMConf.SetBasePath(service.ApiPrefix)
 			client = s.getSubscribeDataManagementClient(service.ApiPrefix)
 			if client != nil {
 				break
@@ -209,8 +207,6 @@ func (s *nudmService) Subscribe(ctx context.Context, smCtx *smf_context.SMContex
 	var client *Nudm_SubscriberDataManagement.APIClient
 	for _, service := range *s.consumer.Context().UDMProfile.NfServices {
 		if service.ServiceName == models.ServiceName_NUDM_SDM {
-			SDMConf := Nudm_SubscriberDataManagement.NewConfiguration()
-			SDMConf.SetBasePath(service.ApiPrefix)
 			client = s.getSubscribeDataManagementClient(service.ApiPrefix)
 			if client != nil {
 				break
@@ -268,9 +264,10 @@ func (s *nudmService) UnSubscribe(smCtx *smf_context.SMContext) (
 		var client *Nudm_SubscriberDataManagement.APIClient
 		for _, service := range *s.consumer.Context().UDMProfile.NfServices {
 			if service.ServiceName == models.ServiceName_NUDM_SDM {
-				SDMConf := Nudm_SubscriberDataManagement.NewConfiguration()
-				SDMConf.SetBasePath(service.ApiPrefix)
 				client = s.getSubscribeDataManagementClient(service.ApiPrefix)
+				if client != nil {
+					break
+				}
 			}
 		}
 
