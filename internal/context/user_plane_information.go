@@ -40,12 +40,10 @@ const (
 // UPNode represents a gNB or UPF in the user plane node topology
 // UPF and gNB structs embed this ("interitance")
 type UPNode struct {
-	Name   string
-	Type   UPNodeType
-	ID     uuid.UUID
-	NodeID pfcpType.NodeID
-	Dnn    string
-	Links  UPPath
+	Name  string
+	Type  UPNodeType
+	ID    uuid.UUID
+	Links UPPath
 }
 
 // UPF and gNB structs implement this interface to provide common methods
@@ -55,13 +53,10 @@ type UPNodeInterface interface {
 	GetName() string
 	GetID() uuid.UUID
 	GetType() UPNodeType
-	GetDnn() string
 	GetLinks() UPPath
 	AddLink(link UPNodeInterface) bool
 	RemoveLink(link UPNodeInterface) bool
 	RemoveLinkByIndex(index int) bool
-	GetNodeID() pfcpType.NodeID
-	GetNodeIDString() string
 }
 
 // UPPath represents the User Plane Node Sequence of this path
@@ -166,30 +161,28 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 	allUEIPPools := []*UeIPPool{}
 
 	for name, node := range upTopology.UPNodes {
-		nodeID, err := ConfigToNodeID(node.NodeID)
-		if err != nil {
-			logger.InitLog.Fatalf("[NewUserPlaneInformation] cannot parse %s NodeID from config: %+v", name, err)
-		}
 		upNode := &UPNode{
-			Name:   name,
-			Type:   UPNodeType(node.Type),
-			ID:     uuid.New(),
-			NodeID: nodeID,
-			Dnn:    node.Dnn,
+			Name: name,
+			Type: UPNodeType(node.GetType()),
+			ID:   uuid.New(),
 		}
 		switch upNode.Type {
 		case UPNODE_AN:
 			gNB := &GNB{
-				UPNode: *upNode,
-				ANIP:   upNode.NodeID.ResolveNodeIdToIp(),
+				UPNode: upNode,
 			}
 			anPool[name] = gNB
 			nodePool[name] = gNB
 		case UPNODE_UPF:
-			upf := NewUPF(upNode, node.InterfaceUpfInfoList)
+			upfConfig := node.(*factory.UPFConfig)
+			nodeID, err := ConfigToNodeID(upfConfig.GetNodeID())
+			if err != nil {
+				logger.InitLog.Fatalf("[NewUserPlaneInformation] cannot parse %s NodeID from config: %+v", name, err)
+			}
+			upf := NewUPF(upNode, &nodeID, upfConfig.Interfaces)
 
 			snssaiInfos := make([]*SnssaiUPFInfo, 0)
-			for _, snssaiInfoConfig := range node.SNssaiInfos {
+			for _, snssaiInfoConfig := range upfConfig.SNssaiInfos {
 				snssaiInfo := SnssaiUPFInfo{
 					SNssai: &SNssai{
 						Sst: snssaiInfoConfig.SNssai.Sst,
@@ -229,10 +222,12 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 					for _, pool := range ueIPPools {
 						if pool.pool.Min() != pool.pool.Max() {
 							if err = pool.pool.Reserve(pool.pool.Min(), pool.pool.Min()); err != nil {
-								logger.InitLog.Errorf("Remove network address failed for %s: %s", pool.ueSubNet.String(), err)
+								logger.InitLog.Errorf("Remove network address failed for %s: %s",
+									pool.ueSubNet.String(), err)
 							}
 							if err = pool.pool.Reserve(pool.pool.Max(), pool.pool.Max()); err != nil {
-								logger.InitLog.Errorf("Remove network address failed for %s: %s", pool.ueSubNet.String(), err)
+								logger.InitLog.Errorf("Remove network address failed for %s: %s",
+									pool.ueSubNet.String(), err)
 							}
 						}
 						logger.InitLog.Debugf("%d-%s %s %s",
@@ -278,21 +273,27 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 	return userplaneInformation
 }
 
-func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]*factory.UPNode {
-	nodes := make(map[string]*factory.UPNode)
+func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]factory.UPNodeConfigInterface {
+	nodes := make(map[string]factory.UPNodeConfigInterface)
 	for name, upNode := range upi.UPNodes {
-		node := &factory.UPNode{
-			NodeID: upNode.GetNodeIDString(),
-			Dnn:    upNode.GetDnn(),
-		}
-		nodes[name] = node
-
 		switch upNode.GetType() {
 		case UPNODE_AN:
-			node.Type = "AN"
+			gNBConfig := &factory.GNBConfig{
+				UPNodeConfig: &factory.UPNodeConfig{
+					Type: "AN",
+				},
+			}
+			nodes[name] = gNBConfig
 		case UPNODE_UPF:
-			node.Type = "UPF"
 			upf := upNode.(*UPF)
+			upfConfig := &factory.UPFConfig{
+				UPNodeConfig: &factory.UPNodeConfig{
+					Type: "UPF",
+				},
+				NodeID: upf.GetNodeIDString(),
+			}
+			nodes[name] = upfConfig
+
 			if upf.SNssaiInfos != nil {
 				FsNssaiInfoList := make([]*factory.SnssaiUpfInfoItem, 0)
 				for _, sNssaiInfo := range upf.SNssaiInfos {
@@ -325,9 +326,9 @@ func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]*factory.UP
 					}
 					FsNssaiInfoList = append(FsNssaiInfoList, Fsnssai)
 				} // for sNssaiInfo
-				node.SNssaiInfos = FsNssaiInfoList
+				upfConfig.SNssaiInfos = FsNssaiInfoList
 			} // if UPF.SNssaiInfos
-			FNxList := make([]*factory.InterfaceUpfInfoItem, 0)
+			FNxList := make([]*factory.Interface, 0)
 			for _, iface := range upf.N3Interfaces {
 				endpoints := make([]string, 0)
 				// upf.go L90
@@ -337,7 +338,7 @@ func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]*factory.UP
 				for _, eIP := range iface.IPv4EndPointAddresses {
 					endpoints = append(endpoints, eIP.String())
 				}
-				FNxList = append(FNxList, &factory.InterfaceUpfInfoItem{
+				FNxList = append(FNxList, &factory.Interface{
 					InterfaceType:    models.UpInterfaceType_N3,
 					Endpoints:        endpoints,
 					NetworkInstances: iface.NetworkInstances,
@@ -353,16 +354,15 @@ func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]*factory.UP
 				for _, eIP := range iface.IPv4EndPointAddresses {
 					endpoints = append(endpoints, eIP.String())
 				}
-				FNxList = append(FNxList, &factory.InterfaceUpfInfoItem{
+				FNxList = append(FNxList, &factory.Interface{
 					InterfaceType:    models.UpInterfaceType_N9,
 					Endpoints:        endpoints,
 					NetworkInstances: iface.NetworkInstances,
 				})
 			} // N9Interfaces
-			node.InterfaceUpfInfoList = FNxList
+			upfConfig.Interfaces = FNxList
 		default:
-			logger.InitLog.Warningf("invalid UPNodeType: %s\n", upNode.GetType())
-			node.Type = "Unknown"
+			logger.InitLog.Fatalf("invalid UPNodeType: %s\n", upNode.GetType())
 		}
 	}
 
@@ -385,8 +385,8 @@ func (upi *UserPlaneInformation) LinksToConfiguration() []*factory.UPLink {
 			for _, link := range node.GetLinks() {
 				if !visited[link] {
 					queue = append(queue, link)
-					nodeIpStr := node.GetNodeIDString()
-					ipStr := link.GetNodeIDString()
+					nodeIpStr := node.(*UPF).GetNodeIDString()
+					ipStr := link.(*UPF).GetNodeIDString()
 					linkA := upi.UPFIPToName[nodeIpStr]
 					linkB := upi.UPFIPToName[ipStr]
 					links = append(links, &factory.UPLink{
@@ -411,31 +411,31 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 			logger.InitLog.Warningf("Node [%s] already exists in SMF.\n", name)
 			continue
 		}
-		nodeID, err := ConfigToNodeID(node.NodeID)
-		if err != nil {
-			logger.InitLog.Fatalf("[UpNodesFromConfiguration] cannot parse NodeID from config: %+v", err)
-		}
 		upNode := &UPNode{
-			Name:   name,
-			Type:   UPNodeType(node.Type),
-			ID:     uuid.New(),
-			NodeID: nodeID,
-			Dnn:    node.Dnn,
+			Name: name,
+			Type: UPNodeType(node.GetType()),
+			ID:   uuid.New(),
 		}
 		switch upNode.Type {
 		case UPNODE_AN:
 			gNB := &GNB{
-				UPNode: *upNode,
-				ANIP:   upNode.NodeID.ResolveNodeIdToIp(),
+				UPNode: upNode,
 			}
 
 			upi.AccessNetwork[name] = gNB
 			upi.UPNodes[name] = gNB
 
 		case UPNODE_UPF:
-			upf := NewUPF(upNode, node.InterfaceUpfInfoList)
+			upfConfig := node.(*factory.UPFConfig)
+			nodeID, err := ConfigToNodeID(upfConfig.GetNodeID())
+			if err != nil {
+				logger.InitLog.Fatalf("[UpNodesFromConfiguration] cannot parse NodeID from config: %+v", err)
+			}
+
+			upf := NewUPF(upNode, &nodeID, upfConfig.Interfaces)
+
 			snssaiInfos := make([]*SnssaiUPFInfo, 0)
-			for _, snssaiInfoConfig := range node.SNssaiInfos {
+			for _, snssaiInfoConfig := range upfConfig.SNssaiInfos {
 				snssaiInfo := &SnssaiUPFInfo{
 					SNssai: &SNssai{
 						Sst: snssaiInfoConfig.SNssai.Sst,
@@ -533,7 +533,7 @@ func (upi *UserPlaneInformation) UpNodeDelete(upNodeName string) {
 		logger.InitLog.Infof("UPNode [%s] found. Deleting it.\n", upNodeName)
 		if upNode.GetType() == UPNODE_UPF {
 			logger.InitLog.Tracef("Delete UPF [%s] from its NodeID.\n", upNodeName)
-			RemoveUPFNodeByNodeID(upNode.GetNodeID())
+			RemoveUPFNodeByNodeID(upNode.(*UPF).GetNodeID())
 			if _, ok = upi.UPFs[upNodeName]; ok {
 				logger.InitLog.Tracef("Delete UPF [%s] from upi.UPFs.\n", upNodeName)
 				delete(upi.UPFs, upNodeName)
@@ -795,7 +795,7 @@ func getPathBetween(
 	selection *UPFSelectionParams,
 ) (path UPPath, pathExist bool) {
 	logger.CtxLog.Tracef("[getPathBetween] node %s[%s] and %s[%s]",
-		cur.GetName(), cur.GetNodeIDString(), dest.GetName(), dest.GetNodeIDString())
+		cur.GetName(), cur.GetName(), dest.GetName(), dest.GetName())
 	visited[cur] = true
 
 	if reflect.DeepEqual(cur, dest) {

@@ -67,6 +67,8 @@ const (
 type UPF struct {
 	*UPNode
 
+	NodeID pfcpType.NodeID
+
 	UPIPInfo          pfcpType.UserPlaneIPResourceInformation
 	UPFStatus         UPFStatus
 	RecoveryTimeStamp time.Time
@@ -97,10 +99,9 @@ func (upf *UPF) String() string {
 	str += prefix + fmt.Sprintf("Name: %s\n", upf.Name)
 	str += prefix + fmt.Sprintf("ID: %s\n", upf.ID)
 	str += prefix + fmt.Sprintf("NodeID: %s\n", upf.GetNodeIDString())
-	str += prefix + fmt.Sprintf("Dnn: %s\n", upf.Dnn)
 	str += prefix + fmt.Sprintln("Links:")
 	for _, link := range upf.Links {
-		str += prefix + fmt.Sprintf("-- %s: %s\n", link.GetName(), link.GetNodeIDString())
+		str += prefix + fmt.Sprintf("-- %s: %s\n", link.GetName(), link.GetName())
 	}
 	str += prefix + fmt.Sprintln("N3 interfaces:")
 	for _, iface := range upf.N3Interfaces {
@@ -135,7 +136,7 @@ func (upf *UPF) GetNodeID() pfcpType.NodeID {
 }
 
 func (upf *UPF) GetName() string {
-	return upf.Name
+	return fmt.Sprintf("%s[%s]", upf.Name, upf.GetNodeIDString())
 }
 
 func (upf *UPF) GetID() uuid.UUID {
@@ -144,10 +145,6 @@ func (upf *UPF) GetID() uuid.UUID {
 
 func (upf *UPF) GetType() UPNodeType {
 	return upf.Type
-}
-
-func (upf *UPF) GetDnn() string {
-	return upf.Dnn
 }
 
 func (upf *UPF) GetLinks() UPPath {
@@ -167,7 +164,7 @@ func (upf *UPF) AddLink(link UPNodeInterface) bool {
 
 func (upf *UPF) RemoveLink(link UPNodeInterface) bool {
 	for i, existingLink := range upf.Links {
-		if link.GetName() == existingLink.GetName() && existingLink.GetNodeIDString() == link.GetNodeIDString() {
+		if link.GetName() == existingLink.GetName() && existingLink.GetName() == link.GetName() {
 			logger.CfgLog.Warningf("Remove UPLink [%s] <=> [%s]\n", existingLink.GetName(), link.GetName())
 			upf.Links = append(upf.Links[:i], upf.Links[i+1:]...)
 			return true
@@ -214,7 +211,7 @@ func GetUpfById(uuid string) *UPF {
 }
 
 // NewUPFInterfaceInfo parse the InterfaceUpfInfoItem to generate UPFInterfaceInfo
-func NewUPFInterfaceInfo(i *factory.InterfaceUpfInfoItem) *UPFInterfaceInfo {
+func NewUPFInterfaceInfo(i *factory.Interface) *UPFInterfaceInfo {
 	interfaceInfo := new(UPFInterfaceInfo)
 
 	interfaceInfo.IPv4EndPointAddresses = make([]net.IP, 0)
@@ -322,7 +319,8 @@ func (t *UPTunnel) RemoveDataPath(pathID int64) {
 // NewUPF returns a new UPF context in SMF
 func NewUPF(
 	upNode *UPNode,
-	ifaces []*factory.InterfaceUpfInfoItem,
+	nodeID *pfcpType.NodeID,
+	ifaces []*factory.Interface,
 ) (upf *UPF) {
 	upf = new(UPF)
 	upf.UPNode = upNode

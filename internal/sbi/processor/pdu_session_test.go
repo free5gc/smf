@@ -30,14 +30,17 @@ import (
 	"github.com/free5gc/util/httpwrapper"
 )
 
-var userPlaneConfig = factory.UserPlaneInformation{
-	UPNodes: map[string]*factory.UPNode{
-		"GNodeB": {
-			Type:   "AN",
-			NodeID: "192.168.1.1",
+var userPlaneConfig = &factory.UserPlaneInformation{
+	UPNodes: map[string]factory.UPNodeConfigInterface{
+		"GNodeB": &factory.GNBConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "AN",
+			},
 		},
-		"UPF1": {
-			Type:   "UPF",
+		"UPF1": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.1",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -55,7 +58,7 @@ var userPlaneConfig = factory.UserPlaneInformation{
 					},
 				},
 			},
-			InterfaceUpfInfoList: []*factory.InterfaceUpfInfoItem{
+			Interfaces: []*factory.Interface{
 				{
 					InterfaceType: "N3",
 					Endpoints: []string{

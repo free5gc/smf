@@ -474,15 +474,15 @@ func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) pfcpType.NodeID {
 	return pfcpType.NodeID{}
 }
 
-func (smContext *SMContext) AllocateLocalSEIDForUPPath(path UPPath) {
-	for _, upNode := range path {
-		NodeIDtoIP := upNode.GetNodeIDString()
+func (smContext *SMContext) AllocateLocalSEIDForUPPath(path []*UPF) {
+	for _, upf := range path {
+		NodeIDtoIP := upf.GetName()
 		if _, exist := smContext.PFCPContext[NodeIDtoIP]; !exist {
 			allocatedSEID := AllocateLocalSEID()
 
 			smContext.PFCPContext[NodeIDtoIP] = &PFCPSessionContext{
 				PDRs:      make(map[uint16]*PDR),
-				NodeID:    upNode.GetNodeID(),
+				NodeID:    upf.GetNodeID(),
 				LocalSEID: allocatedSEID,
 			}
 

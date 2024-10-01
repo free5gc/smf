@@ -15,13 +15,16 @@ import (
 )
 
 var configuration = &factory.UserPlaneInformation{
-	UPNodes: map[string]*factory.UPNode{
-		"GNodeB": {
-			Type:   "AN",
-			NodeID: "192.168.179.100",
+	UPNodes: map[string]factory.UPNodeConfigInterface{
+		"GNodeB": &factory.GNBConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "AN",
+			},
 		},
-		"UPF1": {
-			Type:   "UPF",
+		"UPF1": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.1",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -63,8 +66,10 @@ var configuration = &factory.UserPlaneInformation{
 				},
 			},
 		},
-		"UPF2": {
-			Type:   "UPF",
+		"UPF2": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.2",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -85,8 +90,10 @@ var configuration = &factory.UserPlaneInformation{
 				},
 			},
 		},
-		"UPF3": {
-			Type:   "UPF",
+		"UPF3": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.3",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -107,8 +114,10 @@ var configuration = &factory.UserPlaneInformation{
 				},
 			},
 		},
-		"UPF4": {
-			Type:   "UPF",
+		"UPF4": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.4",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -289,13 +298,16 @@ func TestSelectUPFAndAllocUEIP(t *testing.T) {
 }
 
 var configForIPPoolAllocate = &factory.UserPlaneInformation{
-	UPNodes: map[string]*factory.UPNode{
-		"GNodeB": {
-			Type:   "AN",
-			NodeID: "192.168.179.100",
+	UPNodes: map[string]factory.UPNodeConfigInterface{
+		"GNodeB": &factory.GNBConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "AN",
+			},
 		},
-		"UPF1": {
-			Type:   "UPF",
+		"UPF1": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.1",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -321,8 +333,10 @@ var configForIPPoolAllocate = &factory.UserPlaneInformation{
 				},
 			},
 		},
-		"UPF2": {
-			Type:   "UPF",
+		"UPF2": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.2",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -348,8 +362,10 @@ var configForIPPoolAllocate = &factory.UserPlaneInformation{
 				},
 			},
 		},
-		"UPF3": {
-			Type:   "UPF",
+		"UPF3": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.3",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{

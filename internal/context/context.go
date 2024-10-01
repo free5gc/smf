@@ -226,7 +226,7 @@ func InitSmfContext(config *factory.Config) {
 
 	smfContext.SupportedPDUSessionType = "IPv4"
 
-	smfContext.UserPlaneInformation = NewUserPlaneInformation(&configuration.UserPlaneInformation)
+	smfContext.UserPlaneInformation = NewUserPlaneInformation(configuration.UserPlaneInformation)
 
 	smfContext.ChargingIDGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
 

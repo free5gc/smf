@@ -2,19 +2,16 @@ package context
 
 import (
 	"fmt"
-	"net"
 
 	"github.com/google/uuid"
 
-	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
 )
 
 // embeds the UPNode struct ("inheritance")
 // implements UPNodeInterface
 type GNB struct {
-	UPNode
-	ANIP net.IP
+	*UPNode
 }
 
 func (gNB *GNB) GetName() string {
@@ -29,40 +26,17 @@ func (gNB *GNB) GetType() UPNodeType {
 	return gNB.Type
 }
 
-func (gNB *GNB) GetDnn() string {
-	return gNB.Dnn
-}
-
 func (gNB *GNB) String() string {
 	str := "gNB {\n"
 	prefix := "  "
 	str += prefix + fmt.Sprintf("Name: %s\n", gNB.Name)
-	str += prefix + fmt.Sprintf("ANIP: %s\n", gNB.ANIP)
 	str += prefix + fmt.Sprintf("ID: %s\n", gNB.ID)
-	str += prefix + fmt.Sprintf("NodeID: %s\n", gNB.GetNodeIDString())
-	str += prefix + fmt.Sprintf("Dnn: %s\n", gNB.Dnn)
 	str += prefix + fmt.Sprintln("Links:")
 	for _, link := range gNB.Links {
-		str += prefix + fmt.Sprintf("-- %s: %s\n", link.GetName(), link.GetNodeIDString())
+		str += prefix + fmt.Sprintf("-- %s: %s\n", link.GetName(), link.GetName())
 	}
 	str += "}"
 	return str
-}
-
-func (gNB *GNB) GetNodeIDString() string {
-	switch gNB.NodeID.NodeIdType {
-	case pfcpType.NodeIdTypeIpv4Address, pfcpType.NodeIdTypeIpv6Address:
-		return gNB.NodeID.IP.String()
-	case pfcpType.NodeIdTypeFqdn:
-		return gNB.NodeID.FQDN
-	default:
-		logger.CtxLog.Errorf("nodeID has unknown type %d", gNB.NodeID.NodeIdType)
-		return ""
-	}
-}
-
-func (gNB *GNB) GetNodeID() pfcpType.NodeID {
-	return gNB.NodeID
 }
 
 func (gNB *GNB) GetLinks() UPPath {
@@ -82,7 +56,7 @@ func (gNB *GNB) AddLink(link UPNodeInterface) bool {
 
 func (gNB *GNB) RemoveLink(link UPNodeInterface) bool {
 	for i, existingLink := range gNB.Links {
-		if link.GetName() == existingLink.GetName() && existingLink.GetNodeIDString() == link.GetNodeIDString() {
+		if link.GetName() == existingLink.GetName() && existingLink.GetName() == link.GetName() {
 			logger.CfgLog.Warningf("Remove UPLink [%s] <=> [%s]\n", existingLink.GetName(), link.GetName())
 			gNB.Links = append(gNB.Links[:i], gNB.Links[i+1:]...)
 			return true

@@ -10,14 +10,17 @@ import (
 	"github.com/free5gc/smf/pkg/factory"
 )
 
-var userPlaneConfig = factory.UserPlaneInformation{
-	UPNodes: map[string]*factory.UPNode{
-		"GNodeB": {
-			Type:   "AN",
-			NodeID: "192.168.1.1",
+var userPlaneConfig = &factory.UserPlaneInformation{
+	UPNodes: map[string]factory.UPNodeConfigInterface{
+		"GNodeB": &factory.GNBConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "AN",
+			},
 		},
-		"UPF1": {
-			Type:   "UPF",
+		"UPF1": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "10.4.0.11",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -33,7 +36,7 @@ var userPlaneConfig = factory.UserPlaneInformation{
 					},
 				},
 			},
-			InterfaceUpfInfoList: []*factory.InterfaceUpfInfoItem{
+			Interfaces: []*factory.Interface{
 				{
 					InterfaceType: "N3",
 					Endpoints: []string{
@@ -50,8 +53,10 @@ var userPlaneConfig = factory.UserPlaneInformation{
 				},
 			},
 		},
-		"UPF2": {
-			Type:   "UPF",
+		"UPF2": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "10.4.0.12",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -69,7 +74,7 @@ var userPlaneConfig = factory.UserPlaneInformation{
 					},
 				},
 			},
-			InterfaceUpfInfoList: []*factory.InterfaceUpfInfoItem{
+			Interfaces: []*factory.Interface{
 				{
 					InterfaceType: "N9",
 					Endpoints: []string{
@@ -619,7 +624,7 @@ func TestApplyPccRules(t *testing.T) {
 	}
 
 	smfContext := context.GetSelf()
-	smfContext.UserPlaneInformation = context.NewUserPlaneInformation(&userPlaneConfig)
+	smfContext.UserPlaneInformation = context.NewUserPlaneInformation(userPlaneConfig)
 	for _, n := range smfContext.UserPlaneInformation.UPFs {
 		n.UPFStatus = context.AssociatedSetUpSuccess
 	}
