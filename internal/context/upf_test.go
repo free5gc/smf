@@ -1,6 +1,7 @@
 package context_test
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/pfcp/pfcpType"
-	"github.com/free5gc/smf/internal/context"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/factory"
 )
@@ -158,11 +158,11 @@ func TestAddPDR(t *testing.T) {
 		{
 			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddPDR should fail",
-			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
+			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
 	}
 
-	testCases[0].upf.UPFStatus = context.AssociatedSetUpSuccess
+	testCases[0].upf.AssociationContext = context.Background()
 
 	Convey("AddPDR should indeed add PDR and report error appropiately", t, func() {
 		for i, testcase := range testCases {
@@ -194,18 +194,18 @@ func TestAddFAR(t *testing.T) {
 		expectedError error
 	}{
 		{
-			upf:           context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddFAR should success",
 			expectedError: nil,
 		},
 		{
-			upf:           context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddFAR should fail",
-			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
+			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
 	}
 
-	testCases[0].upf.UPFStatus = context.AssociatedSetUpSuccess
+	testCases[0].upf.AssociationContext = context.Background()
 
 	Convey("AddFAR should indeed add FAR and report error appropiately", t, func() {
 		for i, testcase := range testCases {
@@ -237,18 +237,18 @@ func TestAddQER(t *testing.T) {
 		expectedError error
 	}{
 		{
-			upf:           context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddQER should success",
 			expectedError: nil,
 		},
 		{
-			upf:           context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddQER should fail",
-			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
+			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
 	}
 
-	testCases[0].upf.UPFStatus = context.AssociatedSetUpSuccess
+	testCases[0].upf.AssociationContext = context.Background()
 
 	Convey("AddQER should indeed add QER and report error appropiately", t, func() {
 		for i, testcase := range testCases {
@@ -280,18 +280,18 @@ func TestAddBAR(t *testing.T) {
 		expectedError error
 	}{
 		{
-			upf:           context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddBAR should success",
 			expectedError: nil,
 		},
 		{
-			upf:           context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddBAR should fail",
-			expectedError: fmt.Errorf("UPF[127.0.0.1] not Associate with SMF"),
+			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
 	}
 
-	testCases[0].upf.UPFStatus = context.AssociatedSetUpSuccess
+	testCases[0].upf.AssociationContext = context.Background()
 
 	Convey("AddBAR should indeed add BAR and report error appropiately", t, func() {
 		for i, testcase := range testCases {

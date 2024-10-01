@@ -823,7 +823,7 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 						// nolint
 						nodeId := node.GetUPFID()
 						logger.PduSessLog.Tracef("DownLinkTunnel add URR for node %s %+v",
-							nodeId, node.UpLinkTunnel.PDR)
+							nodeId, node.DownLinkTunnel.PDR)
 					}
 				}
 			}

@@ -370,9 +370,8 @@ func initDiscAMFStubNRF() {
 }
 
 func initStubPFCP() {
-	ctx, cancel := context.WithCancel(context.Background())
-	smf_context.GetSelf().Ctx = ctx
-	smf_context.GetSelf().PFCPCancelFunc = cancel
+	smfContext := smf_context.GetSelf()
+	smfContext.PfcpContext, smfContext.PfcpCancelFunc = context.WithCancel(context.Background())
 
 	udp.Run(pfcp.Dispatch)
 }
@@ -451,9 +450,8 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 	initStubPFCP()
 
 	// modify associate setup status
-	allUPFs := smf_context.GetSelf().UserPlaneInformation.UPFs
-	for _, upfNode := range allUPFs {
-		upfNode.UPFStatus = smf_context.AssociatedSetUpSuccess
+	for _, upf := range smf_context.GetSelf().UserPlaneInformation.UPFs {
+		upf.AssociationContext = context.Background()
 	}
 
 	testCases := []struct {

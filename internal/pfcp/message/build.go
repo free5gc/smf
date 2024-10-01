@@ -435,8 +435,9 @@ func BuildPfcpSessionEstablishmentRequest(
 		urrMap[urr.URRID] = urr
 	}
 	for _, filteredURR := range urrMap {
-		if filteredURR.State == context.RULE_INITIAL {
-			msg.CreateURR = append(msg.CreateURR, urrToCreateURR(filteredURR))
+		msg.CreateURR = append(msg.CreateURR, urrToCreateURR(filteredURR))
+		if filteredURR.State == context.RULE_CREATE {
+			smContext.Log.Warn("Duplicate URR creation")
 		}
 		filteredURR.State = context.RULE_CREATE
 	}
@@ -564,6 +565,9 @@ func BuildPfcpSessionModificationRequest(
 
 	for _, urr := range urrList {
 		switch urr.State {
+		case context.RULE_CREATE:
+			smContext.Log.Warn("Duplicate URR creation")
+			fallthrough
 		case context.RULE_INITIAL:
 			msg.CreateURR = append(msg.CreateURR, urrToCreateURR(urr))
 		case context.RULE_UPDATE:

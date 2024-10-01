@@ -1,6 +1,7 @@
 package context_test
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -280,7 +281,7 @@ func TestSelectUPFAndAllocUEIP(t *testing.T) {
 
 	userplaneInformation := smf_context.NewUserPlaneInformation(configuration)
 	for _, upf := range userplaneInformation.UPFs {
-		upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+		upf.AssociationContext = context.Background()
 	}
 
 	for i := 0; i <= 100; i++ {
@@ -504,7 +505,7 @@ var testCasesOfGetUEIPPool = []struct {
 func TestGetUEIPPool(t *testing.T) {
 	userplaneInformation := smf_context.NewUserPlaneInformation(configForIPPoolAllocate)
 	for _, upf := range userplaneInformation.UPFs {
-		upf.UPFStatus = smf_context.AssociatedSetUpSuccess
+		upf.AssociationContext = context.Background()
 	}
 
 	for ci, tc := range testCasesOfGetUEIPPool {

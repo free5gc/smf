@@ -773,14 +773,10 @@ func (upi *UserPlaneInformation) selectMatchUPF(selection *UPFSelectionParams) [
 
 			if currentSnssai.Equal(targetSnssai) {
 				for _, dnnInfo := range snssaiInfo.DnnList {
-					if dnnInfo.Dnn != selection.Dnn {
-						continue
+					if dnnInfo.Dnn == selection.Dnn && dnnInfo.ContainsDNAI(selection.Dnai) {
+						upfList = append(upfList, upf)
+						break
 					}
-					if selection.Dnai != "" && !dnnInfo.ContainsDNAI(selection.Dnai) {
-						continue
-					}
-					upfList = append(upfList, upf)
-					break
 				}
 			}
 		}
@@ -912,12 +908,12 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionPa
 	sortedUPFList := createUPFListForSelection(upfList)
 	for _, upf := range sortedUPFList {
 		logger.CtxLog.Debugf("check start UPF: %s",
-			upi.GetUPFNameByIp(upf.GetNodeIDString()))
-		if upf.UPFStatus != AssociatedSetUpSuccess {
-			logger.CtxLog.Infof("PFCP Association not yet Established with: %s",
-				upi.GetUPFNameByIp(upf.GetNodeIDString()))
+			upi.GetUPFNameByIp(upf.NodeID.ResolveNodeIdToIp().String()))
+		if err = upf.IsAssociated(); err != nil {
+			logger.CtxLog.Infoln(err)
 			continue
 		}
+
 		pools, useStaticIPPool := getUEIPPool(upf, selection)
 		if len(pools) == 0 {
 			continue
