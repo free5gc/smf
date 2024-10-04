@@ -604,21 +604,12 @@ func (upf *UPF) AddURR(urrID uint32, opts ...UrrOpt) (urr *URR, err error) {
 		opt(urr)
 	}
 
-	if urrId == 0 {
-		if URRID, err := upf.urrID(); err != nil {
-		} else {
-			urr.URRID = URRID
-			upf.urrPool.Store(urr.URRID, urr)
-		}
-	} else {
-		urr.URRID = urrId
-		upf.urrPool.Store(urr.URRID, urr)
-	}
+	upf.urrPool.Store(urr.URRID, urr)
 	return urr, nil
 }
 
 func (upf *UPF) GetUUID() uuid.UUID {
-	return upf.uuid
+	return upf.ID
 }
 
 func (upf *UPF) GetQERById(qerId uint32) *QER {
@@ -700,4 +691,22 @@ func (upf *UPF) IsAssociated() error {
 	default:
 		return nil
 	}
+}
+
+func (upf *UPF) MatchedSelection(selection *UPFSelectionParams) bool {
+	for _, snssaiInfo := range upf.SNssaiInfos {
+		currentSnssai := snssaiInfo.SNssai
+		if currentSnssai.Equal(selection.SNssai) {
+			for _, dnnInfo := range snssaiInfo.DnnList {
+				if dnnInfo.Dnn == selection.Dnn {
+					if selection.Dnai == "" {
+						return true
+					} else if dnnInfo.ContainsDNAI(selection.Dnai) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
 }

@@ -1,6 +1,7 @@
 package factory_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -55,81 +56,95 @@ func baseUPF() *factory.UPFConfig {
 	}
 }
 
-func TestUPNodeConfigInterfaceValidation(t *testing.T) {
+func baseUPI() *factory.UserPlaneInformation {
+	return &factory.UserPlaneInformation{
+		UPNodes: map[string]factory.UPNodeConfigInterface{
+			"gNB":  baseGNB(),
+			"UPF1": baseUPF(),
+		},
+		Links: []*factory.UPLink{
+			{
+				A: "gNB",
+				B: "UPF1",
+			},
+		},
+	}
+}
+
+func TestUserplaneInformationValidation(t *testing.T) {
 	testcase := []struct {
-		Name         string
-		UPNodeConfig factory.UPNodeConfigInterface
-		Valid        bool
+		Name  string
+		Upi   *factory.UserPlaneInformation
+		Valid bool
 	}{
 		{
-			Name:         "Valid gNB",
-			UPNodeConfig: baseGNB(),
-			Valid:        true,
+			Name:  "Valid userPlaneInformation",
+			Upi:   baseUPI(),
+			Valid: true,
 		},
 		{
-			Name:         "Valid UPF",
-			UPNodeConfig: baseUPF(),
-			Valid:        true,
+			Name: "gNB with wrong type",
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["gNB"].(*factory.GNBConfig).Type = "xxx"
+				return config
+			}(),
+			Valid: false,
 		},
 		{
 			Name: "UPF with wrong type",
-			UPNodeConfig: func() *factory.UPFConfig {
-				config := baseUPF()
-				config.UPNodeConfig.Type = "xxx"
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["UPF1"].(*factory.UPFConfig).Type = "xxx"
 				return config
 			}(),
 			Valid: false,
 		},
 		{
 			Name: "UPF with wrong NodeID",
-			UPNodeConfig: func() *factory.UPFConfig {
-				config := baseUPF()
-				config.NodeID = "foobar"
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["UPF1"].(*factory.UPFConfig).NodeID = "127.0.0.1/24"
 				return config
 			}(),
 			Valid: false,
 		},
 		{
 			Name: "UPF with nil sNssaiUpfInfos",
-			UPNodeConfig: func() *factory.UPFConfig {
-				config := baseUPF()
-				config.SNssaiInfos = nil
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["UPF1"].(*factory.UPFConfig).SNssaiInfos = nil
 				return config
 			}(),
 			Valid: false,
 		},
 		{
 			Name: "UPF with empty sNssaiUpfInfos",
-			UPNodeConfig: func() *factory.UPFConfig {
-				config := baseUPF()
-				config.SNssaiInfos = []*factory.SnssaiUpfInfoItem{}
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["UPF1"].(*factory.UPFConfig).SNssaiInfos = []*factory.SnssaiUpfInfoItem{}
 				return config
 			}(),
 			Valid: false,
 		},
 		{
-			Name: "UPF with nil interfaces",
-			UPNodeConfig: func() *factory.UPFConfig {
-				config := baseUPF()
-				config.Interfaces = nil
+			Name: "UPF with invalid pool cidr",
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["UPF1"].(*factory.UPFConfig).SNssaiInfos[0].DnnUpfInfoList[0].Pools = []*factory.UEIPPool{
+					{
+						Cidr: "10.60.0.0",
+					},
+				}
 				return config
 			}(),
 			Valid: false,
 		},
 		{
-			Name: "UPF with empty interfaces",
-			UPNodeConfig: func() *factory.UPFConfig {
-				config := baseUPF()
-				config.Interfaces = []*factory.Interface{}
-				return config
-			}(),
-			Valid: false,
-		},
-		{
-			Name: "UPF with overlapping pools in DnnUpfInfoItem.Pools",
-			UPNodeConfig: func() *factory.UPFConfig {
-				config := baseUPF()
-				config.SNssaiInfos[0].DnnUpfInfoList = []*factory.DnnUpfInfoItem{
+			Name: "UPF with overlapping dynamic pools in DnnUpfInfoItem.Pools",
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["UPF1"].(*factory.UPFConfig).SNssaiInfos[0].DnnUpfInfoList = []*factory.DnnUpfInfoItem{
 					{
 						Dnn: "internet",
 						Pools: []*factory.UEIPPool{
@@ -147,10 +162,36 @@ func TestUPNodeConfigInterfaceValidation(t *testing.T) {
 			Valid: false,
 		},
 		{
+			Name: "UPF with overlapping static pools in DnnUpfInfoItem.Pools",
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["UPF1"].(*factory.UPFConfig).SNssaiInfos[0].DnnUpfInfoList = []*factory.DnnUpfInfoItem{
+					{
+						Dnn: "internet",
+						Pools: []*factory.UEIPPool{
+							{
+								Cidr: "10.80.0.0/16",
+							},
+						},
+						StaticPools: []*factory.UEIPPool{
+							{
+								Cidr: "10.60.0.0/16",
+							},
+							{
+								Cidr: "10.60.10.0/16",
+							},
+						},
+					},
+				}
+				return config
+			}(),
+			Valid: false,
+		},
+		{
 			Name: "UPF with overlapping pools in DnnUpfInfoItem.Pools and DnnUpfInfoItem.StaticPools",
-			UPNodeConfig: func() *factory.UPFConfig {
-				config := baseUPF()
-				config.SNssaiInfos[0].DnnUpfInfoList = []*factory.DnnUpfInfoItem{
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["UPF1"].(*factory.UPFConfig).SNssaiInfos[0].DnnUpfInfoList = []*factory.DnnUpfInfoItem{
 					{
 						Dnn: "internet",
 						Pools: []*factory.UEIPPool{
@@ -170,10 +211,103 @@ func TestUPNodeConfigInterfaceValidation(t *testing.T) {
 			Valid: false,
 		},
 		{
-			Name: "UPF without N3 interface",
-			UPNodeConfig: func() *factory.UPFConfig {
-				config := baseUPF()
-				config.Interfaces = []*factory.Interface{}
+			Name: "UPF with nil interfaces",
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["UPF1"].(*factory.UPFConfig).Interfaces = nil
+				return config
+			}(),
+			Valid: false,
+		},
+		{
+			Name: "UPF with empty interfaces",
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["UPF1"].(*factory.UPFConfig).Interfaces = []*factory.Interface{}
+				return config
+			}(),
+			Valid: false,
+		},
+		{
+			Name: "UPF with invalid interface",
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["UPF1"].(*factory.UPFConfig).Interfaces = []*factory.Interface{
+					{
+						InterfaceType: "N3",
+						Endpoints: []string{
+							"127.0.0.8",
+						},
+					},
+					{
+						InterfaceType: "N4",
+						Endpoints: []string{
+							"127.0.0.89",
+						},
+					},
+				}
+				return config
+			}(),
+			Valid: false,
+		},
+		{
+			Name: "UPF with only N9 interface",
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["UPF1"].(*factory.UPFConfig).Interfaces = []*factory.Interface{
+					{
+						InterfaceType: "N9",
+						Endpoints: []string{
+							"127.0.0.8",
+						},
+						NetworkInstances: []string{
+							"internet",
+						},
+					},
+				}
+				return config
+			}(),
+			Valid: true,
+		},
+		{
+			Name: "UPF with two N3 interfaces",
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["UPF1"].(*factory.UPFConfig).Interfaces = []*factory.Interface{
+					{
+						InterfaceType: "N3",
+						Endpoints: []string{
+							"127.0.0.8",
+						},
+						NetworkInstances: []string{
+							"internet",
+						},
+					},
+					{
+						InterfaceType: "N3",
+						Endpoints: []string{
+							"127.0.0.88",
+						},
+						NetworkInstances: []string{
+							"internet",
+						},
+					},
+				}
+				return config
+			}(),
+			Valid: false,
+		},
+		{
+			Name: "Link with non-existing node",
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.Links = []*factory.UPLink{
+					{
+						A: "gNB",
+						B: "UPF",
+					},
+				}
+				config.UPNodes["UPF1"].(*factory.UPFConfig).Interfaces = []*factory.Interface{}
 				return config
 			}(),
 			Valid: false,
@@ -182,58 +316,14 @@ func TestUPNodeConfigInterfaceValidation(t *testing.T) {
 
 	for _, tc := range testcase {
 		t.Run(tc.Name, func(t *testing.T) {
-			ok, err := tc.UPNodeConfig.Validate()
-			require.Equal(t, tc.Valid, ok)
-			require.Nil(t, err)
-		})
-	}
-}
-
-func TestUserplaneInformationValidation(t *testing.T) {
-	testcase := []struct {
-		Name  string
-		Upi   *factory.UserPlaneInformation
-		Valid bool
-	}{
-		{
-			Name: "Valid userPlaneInformation",
-			Upi: &factory.UserPlaneInformation{
-				UPNodes: map[string]factory.UPNodeConfigInterface{
-					"gNB":  baseGNB(),
-					"UPF1": baseUPF(),
-				},
-				Links: []*factory.UPLink{
-					{
-						A: "gNB",
-						B: "UPF1",
-					},
-				},
-			},
-			Valid: true,
-		},
-		{
-			Name: "Link with non-existing node",
-			Upi: &factory.UserPlaneInformation{
-				UPNodes: map[string]factory.UPNodeConfigInterface{
-					"gNB":  baseGNB(),
-					"UPF1": baseUPF(),
-				},
-				Links: []*factory.UPLink{
-					{
-						A: "gNB",
-						B: "UPF",
-					},
-				},
-			},
-			Valid: false,
-		},
-	}
-
-	for _, tc := range testcase {
-		t.Run(tc.Name, func(t *testing.T) {
 			ok, err := tc.Upi.Validate()
 			require.Equal(t, tc.Valid, ok)
-			require.Nil(t, err)
+			if !ok {
+				require.Error(t, err)
+				fmt.Println(err)
+			} else {
+				require.Nil(t, err)
+			}
 		})
 	}
 }
@@ -303,6 +393,11 @@ func TestSnssaiUpfInfoItem(t *testing.T) {
 			},
 			DnnInfos: []*factory.DnnUpfInfoItem{
 				{
+					Pools: []*factory.UEIPPool{
+						{
+							Cidr: "10.60.0.0/16",
+						},
+					},
 					Dnn: "internet",
 				},
 			},
@@ -314,6 +409,11 @@ func TestSnssaiUpfInfoItem(t *testing.T) {
 			},
 			DnnInfos: []*factory.DnnUpfInfoItem{
 				{
+					Pools: []*factory.UEIPPool{
+						{
+							Cidr: "10.60.0.0/16",
+						},
+					},
 					Dnn: "internet2",
 				},
 			},
@@ -328,6 +428,7 @@ func TestSnssaiUpfInfoItem(t *testing.T) {
 			}
 
 			ok, err := snssaiInfoItem.Validate()
+			fmt.Println("Error: ", err)
 			require.True(t, ok)
 			require.Nil(t, err)
 		})

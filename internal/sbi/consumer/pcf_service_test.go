@@ -27,6 +27,7 @@ var testConfig = factory.Config{
 			BindingIPv4:  "127.0.0.1",
 			Port:         8000,
 		},
+		UserPlaneInformation: &factory.UserPlaneInformation{},
 	},
 }
 

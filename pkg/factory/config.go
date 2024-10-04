@@ -464,17 +464,14 @@ func (u *UserPlaneInformation) Validate() (result bool, err error) {
 		return str == "N3" || str == "N9"
 	})
 
-	// register CIDR to govalidator
-	govalidator.TagMap["cidr"] = govalidator.Validator(func(str string) bool {
-		return govalidator.IsCIDR(str)
-	})
-
+	// collect all validation errors for UserPlaneInformation
+	var validationErrors govalidator.Errors
 	result = true
 
-	// validate struct field correctness recursively
+	// validate struct field correctness
 	if ok, errStruct := govalidator.ValidateStruct(u); !ok {
 		result = false
-		err = appendInvalid(errStruct)
+		validationErrors = append(validationErrors, appendInvalid(errStruct).(govalidator.Errors)...)
 	}
 
 	var upNodeNames []string
@@ -484,19 +481,19 @@ func (u *UserPlaneInformation) Validate() (result bool, err error) {
 		// call custom validation function (semantic validation)
 		if ok, errSemantic := upNode.Validate(); !ok {
 			result = false
-			err = appendInvalid(errSemantic)
+			validationErrors = append(validationErrors, errSemantic.(govalidator.Errors)...)
 		}
 	}
 
 	for _, link := range u.Links {
 		if !slices.Contains(upNodeNames, link.A) || !slices.Contains(upNodeNames, link.B) {
 			result = false
-			err = appendInvalid(fmt.Errorf("Link %s--%s contains unknown node name, check 'userplaneInformation'",
-				link.A, link.B))
+			validationErrors = append(validationErrors,
+				fmt.Errorf("Link %s--%s contains unknown node name", link.A, link.B))
 		}
 	}
 
-	return result, err
+	return result, error(validationErrors)
 }
 
 // UPNode represent the user plane node
@@ -521,6 +518,7 @@ type UPFConfig struct {
 }
 
 func (gNB *GNBConfig) Validate() (result bool, err error) {
+	// no semantic validation (yet) for GNBs
 	return true, nil
 }
 
@@ -529,15 +527,15 @@ func (gNB *GNBConfig) GetType() string {
 }
 
 func (upf *UPFConfig) Validate() (result bool, err error) {
+	var validationErrors govalidator.Errors
 	result = true
 
 	n3IfsNum := 0
 	n9IfsNum := 0
-
 	for _, iface := range upf.Interfaces {
 		if ok, errIface := iface.Validate(); !ok {
 			result = false
-			err = appendInvalid(errIface)
+			validationErrors = append(validationErrors, errIface.(govalidator.Errors)...)
 		}
 
 		if iface.InterfaceType == "N3" {
@@ -551,24 +549,26 @@ func (upf *UPFConfig) Validate() (result bool, err error) {
 
 	if n3IfsNum == 0 && n9IfsNum == 0 {
 		result = false
-		err = appendInvalid(fmt.Errorf("UPF %s must have a user plane interface (N3 or N9)", upf.NodeID))
+		validationErrors = append(validationErrors,
+			fmt.Errorf("UPF %s must have a user plane interface (N3 or N9)", upf.NodeID))
 	}
 
 	if n3IfsNum > 1 || n9IfsNum > 1 {
 		result = false
-		err = appendInvalid(fmt.Errorf(
-			"UPF %s: There is currently no support for multiple N3/ N9 interfaces: N3 number(%d), N9 number(%d)",
-			upf.NodeID, n3IfsNum, n9IfsNum))
+		validationErrors = append(validationErrors,
+			fmt.Errorf(
+				"UPF %s: There is currently no support for multiple N3/ N9 interfaces: N3 number(%d), N9 number(%d)",
+				upf.NodeID, n3IfsNum, n9IfsNum))
 	}
 
 	for _, snssaiInfo := range upf.SNssaiInfos {
 		if ok, errSNSSAI := snssaiInfo.Validate(); !ok {
 			result = false
-			err = appendInvalid(errSNSSAI)
+			validationErrors = append(validationErrors, errSNSSAI.(govalidator.Errors)...)
 		}
 	}
 
-	return result, err
+	return result, error(validationErrors)
 }
 
 func (upf *UPFConfig) GetNodeID() string {
@@ -586,14 +586,27 @@ type Interface struct {
 }
 
 func (i *Interface) Validate() (result bool, err error) {
+	var validationErrors govalidator.Errors
 	result = true
+
+	switch i.InterfaceType {
+	case "N3":
+	case "N9":
+	case "N6":
+	default:
+		result = false
+		validationErrors = append(validationErrors,
+			fmt.Errorf("Invalid interface type %s: must be N3 or N9.", i.InterfaceType))
+	}
 	for _, endpoint := range i.Endpoints {
 		if ok := govalidator.IsHost(endpoint); !ok {
 			result = false
-			err = appendInvalid(fmt.Errorf("Invalid endpoint: %s should be one of IPv4, IPv6, FQDN.", endpoint))
+			validationErrors = append(validationErrors,
+				fmt.Errorf("Invalid endpoint: %s should be one of IPv4, IPv6, FQDN.", endpoint))
 		}
 	}
-	return
+
+	return result, error(validationErrors)
 }
 
 type SnssaiUpfInfoItem struct {
@@ -602,20 +615,23 @@ type SnssaiUpfInfoItem struct {
 }
 
 func (s *SnssaiUpfInfoItem) Validate() (result bool, err error) {
+	var validationErrors govalidator.Errors
 	result = true
 
 	if s.SNssai != nil {
 		if ok := (s.SNssai.Sst >= 0 && s.SNssai.Sst <= 255); !ok {
 			result = false
-			err = appendInvalid(fmt.Errorf("Invalid sNssai.Sst: %s should be in range 0-255.",
-				strconv.Itoa(int(s.SNssai.Sst))))
+			validationErrors = append(validationErrors,
+				fmt.Errorf("Invalid sNssai.Sst: %s should be in range 0-255.",
+					strconv.Itoa(int(s.SNssai.Sst))))
 		}
 
 		if s.SNssai.Sd != "" {
 			if ok := govalidator.StringMatches(s.SNssai.Sd, "^[0-9A-Fa-f]{6}$"); !ok {
 				result = false
-				err = appendInvalid(fmt.Errorf(
-					"Invalid sNssai.Sd: %s should be 3 bytes hex string and in range 000000-FFFFFF.", s.SNssai.Sd))
+				validationErrors = append(validationErrors,
+					fmt.Errorf("Invalid sNssai.Sd: %s should be 3 bytes hex string and in range 000000-FFFFFF.",
+						s.SNssai.Sd))
 			}
 		}
 	}
@@ -623,11 +639,15 @@ func (s *SnssaiUpfInfoItem) Validate() (result bool, err error) {
 	for _, dnnInfo := range s.DnnUpfInfoList {
 		if ok, errDNNInfo := dnnInfo.Validate(); !ok {
 			result = false
-			err = appendInvalid(errDNNInfo)
+			validationErrors = append(validationErrors, errDNNInfo.(govalidator.Errors)...)
 		}
 	}
 
-	return
+	if len(validationErrors) > 0 {
+		return result, error(validationErrors)
+	}
+
+	return result, nil
 }
 
 type DnnUpfInfoItem struct {
@@ -639,40 +659,77 @@ type DnnUpfInfoItem struct {
 }
 
 func (d *DnnUpfInfoItem) Validate() (result bool, err error) {
+	// collect all errors
+	var validationErrors govalidator.Errors
 	result = true
 
 	if len(d.Dnn) == 0 {
 		result = false
-		err = appendInvalid(fmt.Errorf("Invalid DnnUpfInfoItem: dnn must not be empty."))
+		validationErrors = append(validationErrors,
+			fmt.Errorf("Invalid DnnUpfInfoItem: dnn must not be empty."))
 	}
 
 	if len(d.Pools) == 0 {
 		result = false
-		err = appendInvalid(fmt.Errorf("Invalid DnnUpfInfoItem: requires at least one dynamic IP pool."))
+		validationErrors = append(validationErrors,
+			fmt.Errorf("Invalid DnnUpfInfoItem: requires at least one dynamic IP pool."))
 	}
 
 	var prefixes []netaddr.IPPrefix
 	for _, pool := range d.Pools {
-		prefix, errCidrCheck := netaddr.ParseIPPrefix(pool.Cidr)
-		if errCidrCheck != nil {
+		// CIDR check
+		prefix, ok := netaddr.ParseIPPrefix(pool.Cidr)
+		if ok != nil {
 			result = false
-			err = appendInvalid(fmt.Errorf("Invalid CIDR: %s.", pool.Cidr))
+			validationErrors = append(validationErrors, fmt.Errorf("Invalid CIDR: %s.", pool.Cidr))
 		} else {
 			prefixes = append(prefixes, prefix)
 		}
 	}
 
-	// check overlap with dynamic and static pools
+	// check overlap within dynamic pools
 	for i := 0; i < len(prefixes); i++ {
 		for j := i + 1; j < len(prefixes); j++ {
 			if prefixes[i].Overlaps(prefixes[j]) {
 				result = false
-				err = appendInvalid(fmt.Errorf("overlap detected between pools %s and %s", prefixes[i], prefixes[j]))
+				validationErrors = append(validationErrors,
+					fmt.Errorf("overlap detected between dynamic pools %s and %s", prefixes[i], prefixes[j]))
 			}
 		}
 	}
 
-	return result, err
+	// check static pools CIDR and overlap with dynamic pools
+	var staticPrefixes []netaddr.IPPrefix
+	for _, staticPool := range d.StaticPools {
+		// CIDR check
+		staticPrefix, ok := netaddr.ParseIPPrefix(staticPool.Cidr)
+		if ok != nil {
+			result = false
+			validationErrors = append(validationErrors, fmt.Errorf("Invalid CIDR: %s.", staticPool.Cidr))
+		} else {
+			staticPrefixes = append(staticPrefixes, staticPrefix)
+			for _, prefix := range prefixes {
+				if staticPrefix.Overlaps(prefix) {
+					result = false
+					validationErrors = append(validationErrors,
+						fmt.Errorf("overlap detected between static pool %s and dynamic pool %s", staticPrefix, prefix))
+				}
+			}
+		}
+	}
+
+	// check overlap within static pools
+	for i := 0; i < len(staticPrefixes); i++ {
+		for j := i + 1; j < len(staticPrefixes); j++ {
+			if staticPrefixes[i].Overlaps(staticPrefixes[j]) {
+				result = false
+				validationErrors = append(validationErrors,
+					fmt.Errorf("overlap detected between static pools %s and %s", staticPrefixes[i], staticPrefixes[j]))
+			}
+		}
+	}
+
+	return result, error(validationErrors)
 }
 
 type UPLink struct {
