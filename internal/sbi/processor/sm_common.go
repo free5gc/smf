@@ -15,6 +15,15 @@ func (p *Processor) RemoveSMContextFromAllNF(smContext *smf_context.SMContext, s
 		}
 	}
 
+	if smf_context.GetSelf().Ues.UeExists(smContext.Supi) {
+		problemDetails, err := p.Consumer().UnSubscribe(smContext)
+		if problemDetails != nil {
+			smContext.Log.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
+		} else if err != nil {
+			smContext.Log.Errorf("SDM UnSubscription Error[%+v]", err)
+		}
+	}
+
 	// Because the amfUE who called this SMF API is being locked until the API Handler returns,
 	// sending SMContext Status Notification should run asynchronously
 	// so that this function returns immediately.
