@@ -3,6 +3,7 @@ package sbi
 import "github.com/gin-gonic/gin"
 
 type Route struct {
+	Name    string
 	Method  string
 	Pattern string
 	APIFunc gin.HandlerFunc

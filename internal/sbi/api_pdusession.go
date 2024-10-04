@@ -15,6 +15,7 @@ import (
 func (s *Server) getPDUSessionRoutes() []Route {
 	return []Route{
 		{
+			Name:    "Index",
 			Method:  http.MethodGet,
 			Pattern: "/",
 			APIFunc: func(c *gin.Context) {
@@ -22,58 +23,74 @@ func (s *Server) getPDUSessionRoutes() []Route {
 			},
 		},
 		{
+			Name:    "PostSmContexts",
 			Method:  http.MethodPost,
-			Pattern: "/pdu-sessions/:pduSessionRef/release",
-			APIFunc: s.ReleasePduSession,
+			Pattern: "/sm-contexts",
+			APIFunc: s.HTTPPostSmContexts,
 		},
 		{
-			Method:  http.MethodPost,
-			Pattern: "/pdu-sessions/:pduSessionRef/modify",
-			APIFunc: s.UpdatePduSession,
-		},
-		{
-			Method:  http.MethodPost,
-			Pattern: "/sm-contexts/:smContextRef/release",
-			APIFunc: s.HTTPReleaseSmContext,
-		},
-		{
-			Method:  http.MethodPost,
-			Pattern: "/sm-contexts/:smContextRef/retrieve",
-			APIFunc: s.RetrieveSmContext,
-		},
-		{
+			Name:    "UpdateSmContext",
 			Method:  http.MethodPost,
 			Pattern: "/sm-contexts/:smContextRef/modify",
 			APIFunc: s.HTTPUpdateSmContext,
 		},
 		{
-			Method:  http.MethodPatch,
-			Pattern: "/pdu-sessions",
-			APIFunc: s.PostPduSessions,
+			Name:    "RetrieveSmContext",
+			Method:  http.MethodPost,
+			Pattern: "/sm-contexts/:smContextRef/retrieve",
+			APIFunc: s.HTTPRetrieveSmContext,
 		},
 		{
+			Name:    "ReleaseSmContext",
 			Method:  http.MethodPost,
-			Pattern: "/sm-contexts",
-			APIFunc: s.HTTPPostSmContexts,
+			Pattern: "/sm-contexts/:smContextRef/release",
+			APIFunc: s.HTTPReleaseSmContext,
+		},
+		{
+			Name:    "SendMoData",
+			Method:  http.MethodPost,
+			Pattern: "/sm-contexts/:smContextRef/send-mo-data",
+			APIFunc: s.HTTPSendMoData,
+		},
+		{
+			Name:    "PostPduSessions",
+			Method:  http.MethodPatch,
+			Pattern: "/pdu-sessions",
+			APIFunc: s.HTTPPostPduSessions,
+		},
+		{
+			Name:    "UpdatePduSession",
+			Method:  http.MethodPost,
+			Pattern: "/pdu-sessions/:pduSessionRef/modify",
+			APIFunc: s.HTTPUpdatePduSession,
+		},
+		{
+			Name:    "ReleasePduSession",
+			Method:  http.MethodPost,
+			Pattern: "/pdu-sessions/:pduSessionRef/release",
+			APIFunc: s.HTTPReleasePduSession,
+		},
+		{
+			Name:    "RetrievePduSession",
+			Method:  http.MethodPost,
+			Pattern: "/pdu-sessions/:pduSessionRef/retrieve",
+			APIFunc: s.HTTPRetrievePduSession,
+		},
+		{
+			Name:    "TransferMoData",
+			Method:  http.MethodPost,
+			Pattern: "/pdu-sessions/:pduSessionRef/transfer-mo-data",
+			APIFunc: s.HTTPTransferMoData,
 		},
 	}
 }
 
-// ReleasePduSession - Release
-func (s *Server) ReleasePduSession(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{})
-}
+// HTTPPostSmContexts - Create SM Context
+func (s *Server) HTTPPostSmContexts(c *gin.Context) {
+	logger.PduSessLog.Info("Receive Create SM Context Request")
+	var request models.PostSmContextsRequest
 
-// UpdatePduSession - Update (initiated by V-SMF)
-func (s *Server) UpdatePduSession(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{})
-}
-
-// HTTPReleaseSmContext - Release SM Context
-func (s *Server) HTTPReleaseSmContext(c *gin.Context) {
-	logger.PduSessLog.Info("Receive Release SM Context Request")
-	var request models.ReleaseSmContextRequest
-	request.JsonData = new(models.SmContextReleaseData)
+	request.JsonData = new(models.SmfPduSessionSmContextCreateData)
 
 	contentType := strings.Split(c.GetHeader("Content-Type"), ";")
 	var err error
@@ -83,25 +100,23 @@ func (s *Server) HTTPReleaseSmContext(c *gin.Context) {
 	case MULTIPART_RELATED:
 		err = c.ShouldBindWith(&request, openapi.MultipartRelatedBinding{})
 	}
+
 	if err != nil {
-		log.Print(err)
+		problemDetail := "[Request Body] " + err.Error()
+		logger.PduSessLog.Errorln(problemDetail)
+		c.JSON(http.StatusBadRequest, openapi.ProblemDetailsMalformedReqSyntax(problemDetail))
 		return
 	}
 
-	smContextRef := c.Params.ByName("smContextRef")
-	s.Processor().HandlePDUSessionSMContextRelease(c, request, smContextRef)
-}
-
-// RetrieveSmContext - Retrieve SM Context
-func (s *Server) RetrieveSmContext(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{})
+	isDone := c.Done()
+	s.Processor().HandlePDUSessionSMContextCreate(c, request, isDone)
 }
 
 // HTTPUpdateSmContext - Update SM Context
 func (s *Server) HTTPUpdateSmContext(c *gin.Context) {
 	logger.PduSessLog.Info("Receive Update SM Context Request")
 	var request models.UpdateSmContextRequest
-	request.JsonData = new(models.SmContextUpdateData)
+	request.JsonData = new(models.SmfPduSessionSmContextUpdateData)
 
 	contentType := strings.Split(c.GetHeader("Content-Type"), ";")
 	var err error
@@ -120,17 +135,16 @@ func (s *Server) HTTPUpdateSmContext(c *gin.Context) {
 	s.Processor().HandlePDUSessionSMContextUpdate(c, request, smContextRef)
 }
 
-// PostPduSessions - Create
-func (s *Server) PostPduSessions(c *gin.Context) {
+// HTTPRetrieveSmContext - Retrieve SM Context
+func (s *Server) HTTPRetrieveSmContext(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
-// HTTPPostSmContexts - Create SM Context
-func (s *Server) HTTPPostSmContexts(c *gin.Context) {
-	logger.PduSessLog.Info("Receive Create SM Context Request")
-	var request models.PostSmContextsRequest
-
-	request.JsonData = new(models.SmContextCreateData)
+// HTTPReleaseSmContext - Release SM Context
+func (s *Server) HTTPReleaseSmContext(c *gin.Context) {
+	logger.PduSessLog.Info("Receive Release SM Context Request")
+	var request models.ReleaseSmContextRequest
+	request.JsonData = new(models.SmfPduSessionSmContextReleaseData)
 
 	contentType := strings.Split(c.GetHeader("Content-Type"), ";")
 	var err error
@@ -140,19 +154,38 @@ func (s *Server) HTTPPostSmContexts(c *gin.Context) {
 	case MULTIPART_RELATED:
 		err = c.ShouldBindWith(&request, openapi.MultipartRelatedBinding{})
 	}
-
 	if err != nil {
-		problemDetail := "[Request Body] " + err.Error()
-		rsp := models.ProblemDetails{
-			Title:  "Malformed request syntax",
-			Status: http.StatusBadRequest,
-			Detail: problemDetail,
-		}
-		logger.PduSessLog.Errorln(problemDetail)
-		c.JSON(http.StatusBadRequest, rsp)
+		log.Print(err)
 		return
 	}
 
-	isDone := c.Done()
-	s.Processor().HandlePDUSessionSMContextCreate(c, request, isDone)
+	smContextRef := c.Params.ByName("smContextRef")
+	s.Processor().HandlePDUSessionSMContextRelease(c, request, smContextRef)
+}
+
+func (s *Server) HTTPSendMoData(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{})
+}
+
+// HTTPPostPduSessions - Create
+func (s *Server) HTTPPostPduSessions(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{})
+}
+
+// HTTPUpdatePduSession - Update (initiated by V-SMF)
+func (s *Server) HTTPUpdatePduSession(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{})
+}
+
+// HTTPReleasePduSession - Release
+func (s *Server) HTTPReleasePduSession(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{})
+}
+
+func (s *Server) HTTPRetrievePduSession(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{})
+}
+
+func (s *Server) HTTPTransferMoData(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
