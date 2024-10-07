@@ -493,7 +493,11 @@ func (u *UserPlaneInformation) Validate() (result bool, err error) {
 		}
 	}
 
-	return result, error(validationErrors)
+	if len(validationErrors) > 0 {
+		return result, error(validationErrors)
+	} else {
+		return false, nil
+	}
 }
 
 // UPNode represent the user plane node
