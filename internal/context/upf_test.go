@@ -6,6 +6,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/google/uuid"
 	. "github.com/smartystreets/goconvey/convey"
 
 	"github.com/free5gc/nas/nasMessage"
@@ -14,12 +15,18 @@ import (
 	"github.com/free5gc/smf/pkg/factory"
 )
 
-var mockIPv4NodeID = &pfcpType.NodeID{
+var mockUPNode = &smf_context.UPNode{
+	Name: "UPF1",
+	Type: smf_context.UPNODE_UPF,
+	ID:   uuid.New(),
+}
+
+var mockNodeID = &pfcpType.NodeID{
 	NodeIdType: pfcpType.NodeIdTypeIpv4Address,
 	IP:         net.ParseIP("127.0.0.1"),
 }
 
-var mockIfaces = []*factory.InterfaceUpfInfoItem{
+var mockIfaces = []*factory.Interface{
 	{
 		InterfaceType:    "N3",
 		Endpoints:        []string{"127.0.0.1"},
@@ -144,12 +151,12 @@ func TestAddPDR(t *testing.T) {
 		expectedError error
 	}{
 		{
-			upf:           smf_context.NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddPDR should success",
 			expectedError: nil,
 		},
 		{
-			upf:           smf_context.NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddPDR should fail",
 			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
@@ -187,12 +194,12 @@ func TestAddFAR(t *testing.T) {
 		expectedError error
 	}{
 		{
-			upf:           smf_context.NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddFAR should success",
 			expectedError: nil,
 		},
 		{
-			upf:           smf_context.NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddFAR should fail",
 			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
@@ -230,12 +237,12 @@ func TestAddQER(t *testing.T) {
 		expectedError error
 	}{
 		{
-			upf:           smf_context.NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddQER should success",
 			expectedError: nil,
 		},
 		{
-			upf:           smf_context.NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddQER should fail",
 			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
@@ -273,12 +280,12 @@ func TestAddBAR(t *testing.T) {
 		expectedError error
 	}{
 		{
-			upf:           smf_context.NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddBAR should success",
 			expectedError: nil,
 		},
 		{
-			upf:           smf_context.NewUPF(mockIPv4NodeID, mockIfaces),
+			upf:           smf_context.NewUPF(mockUPNode, mockNodeID, mockIfaces),
 			resultStr:     "AddBAR should fail",
 			expectedError: fmt.Errorf("UPF[127.0.0.1] not associated with SMF"),
 		},
