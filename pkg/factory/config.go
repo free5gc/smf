@@ -496,7 +496,7 @@ func (u *UserPlaneInformation) Validate() (result bool, err error) {
 	if len(validationErrors) > 0 {
 		return result, error(validationErrors)
 	} else {
-		return false, nil
+		return true, nil
 	}
 }
 
