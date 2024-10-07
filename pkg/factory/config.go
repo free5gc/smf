@@ -118,7 +118,7 @@ type Configuration struct {
 	NrfCertPem           string                `yaml:"nrfCertPem,omitempty" valid:"optional"`
 	UserPlaneInformation *UserPlaneInformation `yaml:"userplaneInformation" valid:"required"`
 	// done
-	ServiceNameList []string `yaml:"serviceNameList" valid:"required,in(nsmf-pdusession,nsmf-event-exposure,nsmf-oam)"`
+	ServiceNameList []string `yaml:"serviceNameList" valid:"required,in(nsmf-pdusession|nsmf-event-exposure|nsmf-oam)"`
 	// done
 	SNssaiInfo         []*SnssaiInfoItem `yaml:"snssaiInfos" valid:"required"`
 	ULCL               bool              `yaml:"ulcl" valid:"type(bool),optional"`
@@ -267,7 +267,7 @@ type UserPlaneInformation struct {
 
 // UPNode represent the user plane node
 type UPNodeConfig struct {
-	Type string `json:"type" yaml:"type" valid:"required,in(AN,UPF)"`
+	Type string `json:"type" yaml:"type" valid:"required,in(AN|UPF)"`
 }
 
 type UPNodeConfigInterface interface {
@@ -330,7 +330,7 @@ func (upf *UPFConfig) GetType() string {
 }
 
 type Interface struct {
-	InterfaceType    models.UpInterfaceType `json:"interfaceType" yaml:"interfaceType" valid:"required,in(N3,N9)"`
+	InterfaceType    models.UpInterfaceType `json:"interfaceType" yaml:"interfaceType" valid:"required,in(N3|N9)"`
 	Endpoints        []string               `json:"endpoints" yaml:"endpoints" valid:"host,required"`
 	NetworkInstances []string               `json:"networkInstances" yaml:"networkInstances" valid:"optional"`
 }
@@ -343,7 +343,7 @@ type SnssaiUpfInfoItem struct {
 type DnnUpfInfoItem struct {
 	Dnn             string                  `json:"dnn" yaml:"dnn" valid:"minstringlength(1),required"`
 	DnaiList        []string                `json:"dnaiList" yaml:"dnaiList" valid:"optional"`
-	PduSessionTypes []models.PduSessionType `json:"pduSessionTypes" yaml:"pduSessionTypes" valid:"optional,in(IPv4,IPv6,IPV4V6,UNSTRUCTURED,ETHERNET)"`
+	PduSessionTypes []models.PduSessionType `json:"pduSessionTypes" yaml:"pduSessionTypes" valid:"optional,in(IPv4|IPv6|IPV4V6|UNSTRUCTURED|ETHERNET)"`
 	Pools           []*UEIPPool             `json:"pools" yaml:"pools" valid:"optional,poolValidator"`
 	StaticPools     []*UEIPPool             `json:"staticPools" yaml:"staticPools" valid:"optional,poolValidator"`
 }
