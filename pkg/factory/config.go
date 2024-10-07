@@ -114,9 +114,9 @@ type Configuration struct {
 	// done
 	PFCP *PFCP `yaml:"pfcp" valid:"required"`
 	// done
-	NrfUri               string               `yaml:"nrfUri" valid:"url,required"`
-	NrfCertPem           string               `yaml:"nrfCertPem,omitempty" valid:"optional"`
-	UserPlaneInformation UserPlaneInformation `yaml:"userplaneInformation" valid:"required"`
+	NrfUri               string                `yaml:"nrfUri" valid:"url,required"`
+	NrfCertPem           string                `yaml:"nrfCertPem,omitempty" valid:"optional"`
+	UserPlaneInformation *UserPlaneInformation `yaml:"userplaneInformation" valid:"required"`
 	// done
 	ServiceNameList []string `yaml:"serviceNameList" valid:"required,in(nsmf-pdusession,nsmf-event-exposure,nsmf-oam)"`
 	// done
@@ -166,8 +166,7 @@ type SnssaiDnnInfoItem struct {
 }
 
 type Sbi struct {
-	Scheme string `yaml:"scheme" valid:"scheme,required"`
-	//done
+	Scheme       string `yaml:"scheme" valid:"scheme,required"`
 	Tls          *Tls   `yaml:"tls" valid:"optional"`
 	RegisterIPv4 string `yaml:"registerIPv4,omitempty" valid:"host,optional"` // IP that is registered at NRF.
 	// IPv6Addr string `yaml:"ipv6Addr,omitempty"`
@@ -262,8 +261,8 @@ func (r *RoutingConfig) Validate() (bool, error) {
 
 // UserPlaneInformation describe core network userplane information
 type UserPlaneInformation struct {
-	UPNodes map[string]*UPNodeConfigInterface `json:"upNodes" yaml:"upNodes" valid:"required,upNodeValidator"`
-	Links   []*UPLink                         `json:"links" yaml:"links" valid:"required,linkValidator"`
+	UPNodes map[string]UPNodeConfigInterface `json:"upNodes" yaml:"upNodes" valid:"required,upNodeValidator"`
+	Links   []*UPLink                        `json:"links" yaml:"links" valid:"required,linkValidator"`
 }
 
 // UPNode represent the user plane node
@@ -411,21 +410,6 @@ func ValidateLink(link *UPLink, upNodeNames []string) (bool, error) {
 	return true, nil
 }
 
-func appendInvalid(err error) error {
-	var errs govalidator.Errors
-
-	if err == nil {
-		return nil
-	}
-
-	es := err.(govalidator.Errors).Errors()
-	for _, e := range es {
-		errs = append(errs, fmt.Errorf("invalid %w", e))
-	}
-
-	return error(errs)
-}
-
 type UEIPPool struct {
 	Cidr string `yaml:"cidr" valid:"cidr,required"`
 }
@@ -571,4 +555,19 @@ func (c *Config) GetCertKeyPath() string {
 	c.RLock()
 	defer c.RUnlock()
 	return c.Configuration.Sbi.Tls.Key
+}
+
+func appendInvalid(err error) error {
+	var errs govalidator.Errors
+
+	if err == nil {
+		return nil
+	}
+
+	es := err.(govalidator.Errors).Errors()
+	for _, e := range es {
+		errs = append(errs, fmt.Errorf("invalid %w", e))
+	}
+
+	return error(errs)
 }
