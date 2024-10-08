@@ -308,7 +308,17 @@ func TestUserplaneInformationValidation(t *testing.T) {
 						B: "UPF",
 					},
 				}
-				config.UPNodes["UPF1"].(*factory.UPFConfig).Interfaces = []*factory.Interface{}
+				return config
+			}(),
+			Valid: false,
+		},
+		{
+			Name: "Invalid SnssaiUpfInfoItem",
+			Upi: func() *factory.UserPlaneInformation {
+				config := baseUPI()
+				config.UPNodes["UPF1"].(*factory.UPFConfig).SNssaiInfos[0].SNssai = &models.Snssai{
+					Sst: int32(256),
+				}
 				return config
 			}(),
 			Valid: false,
@@ -317,11 +327,23 @@ func TestUserplaneInformationValidation(t *testing.T) {
 
 	for _, tc := range testcase {
 		t.Run(tc.Name, func(t *testing.T) {
+			// register custom semantic validators
+			factory.RegisterSNssaiValidator()
+			factory.RegisterUPNodeValidator()
+			factory.RegisterLinkValidator()
+			factory.RegisterPoolValidator()
+			factory.RegisterDnnUpfInfoItemValidator()
+
 			ok, err := govalidator.ValidateStruct(tc.Upi)
+			if err != nil {
+				errs := err.(govalidator.Errors).Errors()
+				for _, e := range errs {
+					fmt.Println(e.Error())
+				}
+			}
 			require.Equal(t, tc.Valid, ok)
 			if !ok {
 				require.Error(t, err)
-				fmt.Println(err)
 			} else {
 				require.Nil(t, err)
 			}
@@ -329,7 +351,7 @@ func TestUserplaneInformationValidation(t *testing.T) {
 	}
 }
 
-func TestSnssaiValidator(t *testing.T) {
+func TestSnssaiValidator_SnssaiInfoItem(t *testing.T) {
 	testcase := []struct {
 		Name   string
 		Snssai *models.Snssai
@@ -369,7 +391,90 @@ func TestSnssaiValidator(t *testing.T) {
 
 	for _, tc := range testcase {
 		t.Run(tc.Name, func(t *testing.T) {
-			ok, err := factory.ValidateSNssai(tc.Snssai)
+			factory.RegisterSNssaiValidator()
+			snssaiInfoItem := factory.SnssaiInfoItem{
+				SNssai: tc.Snssai,
+				DnnInfos: []*factory.SnssaiDnnInfoItem{
+					{
+						Dnn: "internet",
+						DNS: &factory.DNS{},
+					},
+				},
+			}
+			ok, err := govalidator.ValidateStruct(snssaiInfoItem)
+			// if err != nil {
+			// 	errs := err.(govalidator.Errors).Errors()
+			// 	for _, e := range errs {
+			// 		fmt.Println(e.Error())
+			// 	}
+			// }
+			require.Equal(t, tc.Valid, ok)
+			if !ok {
+				require.Error(t, err)
+			} else {
+				require.Nil(t, err)
+			}
+		})
+	}
+}
+
+func TestSnssaiValidator_SnssaiUpfInfoItem(t *testing.T) {
+	testcase := []struct {
+		Name   string
+		Snssai *models.Snssai
+		Valid  bool
+	}{
+		{
+			Name: "Valid SNssai with SST and SD",
+			Snssai: &models.Snssai{
+				Sst: int32(1),
+				Sd:  "010203",
+			},
+			Valid: true,
+		},
+		{
+			Name: "Valid SNssai without SD",
+			Snssai: &models.Snssai{
+				Sst: int32(1),
+			},
+			Valid: true,
+		},
+		{
+			Name: "Invalid SNssai: invalid SST",
+			Snssai: &models.Snssai{
+				Sst: int32(256),
+			},
+			Valid: false,
+		},
+		{
+			Name: "Invalid SNssai: invalid SD",
+			Snssai: &models.Snssai{
+				Sst: int32(1),
+				Sd:  "32",
+			},
+			Valid: false,
+		},
+	}
+
+	for _, tc := range testcase {
+		t.Run(tc.Name, func(t *testing.T) {
+			factory.RegisterDnnUpfInfoItemValidator()
+			factory.RegisterSNssaiValidator()
+			snssaiUpfInfoItem := factory.SnssaiUpfInfoItem{
+				SNssai: tc.Snssai,
+				DnnUpfInfoList: []*factory.DnnUpfInfoItem{
+					{
+						Dnn: "internet",
+					},
+				},
+			}
+			ok, err := govalidator.ValidateStruct(snssaiUpfInfoItem)
+			if err != nil {
+				errs := err.(govalidator.Errors).Errors()
+				for _, e := range errs {
+					fmt.Println(e.Error())
+				}
+			}
 			require.Equal(t, tc.Valid, ok)
 			if !ok {
 				require.Error(t, err)

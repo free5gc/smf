@@ -41,7 +41,7 @@ const (
 )
 
 type Config struct {
-	Info          *Info          `yaml:"info" valid:"required,configValidator"`
+	Info          *Info          `yaml:"info" valid:"required"`
 	Configuration *Configuration `yaml:"configuration" valid:"required"`
 	Logger        *Logger        `yaml:"logger" valid:"required"`
 	sync.RWMutex
@@ -54,41 +54,11 @@ func (c *Config) Validate() (bool, error) {
 	})
 
 	// register custom semantic validators
-	govalidator.CustomTypeTagMap.Set("snssaiValidator", func(i interface{}, context interface{}) bool {
-		// context == struct this field is in
-		// i == the validated field
-		sNssai := i.(models.Snssai)
-		ok, _ := ValidateSNssai(&sNssai)
-		return ok
-	})
-
-	govalidator.CustomTypeTagMap.Set("upNodeValidator", func(i interface{}, context interface{}) bool {
-		upNode := i.(UPNodeConfigInterface)
-		ok, _ := upNode.Validate()
-		return ok
-	})
-
-	govalidator.CustomTypeTagMap.Set("poolValidator", func(i interface{}, context interface{}) bool {
-		dnnUpfInfoItem := context.(*DnnUpfInfoItem)
-		ok, _ := ValidateUEIPPools(dnnUpfInfoItem.Pools, dnnUpfInfoItem.StaticPools)
-		return ok
-	})
-
-	govalidator.CustomTypeTagMap.Set("linkValidator", func(i interface{}, context interface{}) bool {
-		link := i.(UPLink)
-		var upNodeNames []string
-		for name, _ := range context.(UserPlaneInformation).UPNodes {
-			upNodeNames = append(upNodeNames, name)
-		}
-		ok, _ := ValidateLink(&link, upNodeNames)
-		return ok
-	})
-
-	govalidator.CustomTypeTagMap.Set("pathValidator", func(i interface{}, context interface{}) bool {
-		path := context.([]string)
-		ok, _ := ValidatePath(path)
-		return ok
-	})
+	RegisterSNssaiValidator()
+	RegisterUPNodeValidator()
+	RegisterLinkValidator()
+	RegisterPoolValidator()
+	RegisterDnnUpfInfoItemValidator()
 
 	result, err := govalidator.ValidateStruct(c)
 	return result, appendInvalid(err)
@@ -296,14 +266,26 @@ func (gNB *GNBConfig) GetType() string {
 }
 
 func (upf *UPFConfig) Validate() (result bool, err error) {
+	// direct call for nested struct validation necessary for slices containing pointers
+	// (too much nesting for govalidator)
+	for _, iface := range upf.Interfaces {
+		if result, err = govalidator.ValidateStruct(iface); !result {
+			return result, err
+		}
+	}
+	for _, sNssaiInfo := range upf.SNssaiInfos {
+		if result, err = govalidator.ValidateStruct(sNssaiInfo); !result {
+			return result, err
+		}
+	}
+
 	n3IfsNum := 0
 	n9IfsNum := 0
 	for _, iface := range upf.Interfaces {
-		if iface.InterfaceType == "N3" {
+		switch iface.InterfaceType {
+		case "N3":
 			n3IfsNum++
-		}
-
-		if iface.InterfaceType == "N9" {
+		case "N9":
 			n9IfsNum++
 		}
 	}
@@ -337,7 +319,7 @@ type Interface struct {
 
 type SnssaiUpfInfoItem struct {
 	SNssai         *models.Snssai    `json:"sNssai" yaml:"sNssai" valid:"snssaiValidator,required"`
-	DnnUpfInfoList []*DnnUpfInfoItem `json:"dnnUpfInfoList" yaml:"dnnUpfInfoList" valid:"required"`
+	DnnUpfInfoList []*DnnUpfInfoItem `json:"dnnUpfInfoList" yaml:"dnnUpfInfoList" valid:"required,dnnUpfInfoItemValidator"`
 }
 
 type DnnUpfInfoItem struct {
@@ -348,50 +330,36 @@ type DnnUpfInfoItem struct {
 	StaticPools     []*UEIPPool             `json:"staticPools" yaml:"staticPools" valid:"optional,poolValidator"`
 }
 
-func ValidateUEIPPools(dynamic []*UEIPPool, static []*UEIPPool) (bool, error) {
+func ValidateUEIPPool(poolToCheck *UEIPPool, dynamic []*UEIPPool, static []*UEIPPool) (bool, error) {
+	prefixToCheck, err := netaddr.ParseIPPrefix(poolToCheck.Cidr)
+	if err != nil {
+		return false, fmt.Errorf("Invalid pool CIDR: %s.", poolToCheck.Cidr)
+	}
+
 	var prefixes []netaddr.IPPrefix
 	for _, pool := range dynamic {
-		// CIDR check
+		if poolToCheck == pool {
+			continue
+		}
 		prefix, ok := netaddr.ParseIPPrefix(pool.Cidr)
 		if ok != nil {
-			return false, fmt.Errorf("Invalid pool CIDR: %s.", pool.Cidr)
-		} else {
-			prefixes = append(prefixes, prefix)
+			return false, fmt.Errorf("Invalid pool CIDR: %s.", poolToCheck.Cidr)
 		}
+		prefixes = append(prefixes, prefix)
 	}
 
-	// check overlap within dynamic pools
-	for i := 0; i < len(prefixes); i++ {
-		for j := i + 1; j < len(prefixes); j++ {
-			if prefixes[i].Overlaps(prefixes[j]) {
-				return false, fmt.Errorf("overlap detected between dynamic pools %s and %s", prefixes[i], prefixes[j])
-			}
-		}
-	}
-
-	// check static pools CIDR and overlap with dynamic pools
-	var staticPrefixes []netaddr.IPPrefix
 	for _, staticPool := range static {
-		// CIDR check
 		staticPrefix, ok := netaddr.ParseIPPrefix(staticPool.Cidr)
 		if ok != nil {
-			return false, fmt.Errorf("Invalid CIDR: %s.", staticPool.Cidr)
-		} else {
-			staticPrefixes = append(staticPrefixes, staticPrefix)
-			for _, prefix := range prefixes {
-				if staticPrefix.Overlaps(prefix) {
-					return false, fmt.Errorf("overlap detected between static pool %s and dynamic pool %s", staticPrefix, prefix)
-				}
-			}
+			return false, fmt.Errorf("Invalid pool CIDR: %s.", poolToCheck.Cidr)
 		}
+		prefixes = append(prefixes, staticPrefix)
 	}
 
-	// check overlap within static pools
-	for i := 0; i < len(staticPrefixes); i++ {
-		for j := i + 1; j < len(staticPrefixes); j++ {
-			if staticPrefixes[i].Overlaps(staticPrefixes[j]) {
-				return false, fmt.Errorf("overlap detected between static pools %s and %s", staticPrefixes[i], staticPrefixes[j])
-			}
+	// check overlap within other pools
+	for i := 0; i < len(prefixes); i++ {
+		if prefixToCheck.Overlaps(prefixes[i]) {
+			return false, fmt.Errorf("overlap detected between pools %s and %s", prefixToCheck, prefixes[i])
 		}
 	}
 
@@ -404,31 +372,20 @@ type UPLink struct {
 }
 
 func ValidateLink(link *UPLink, upNodeNames []string) (bool, error) {
-	if ok := !slices.Contains(upNodeNames, link.A) || !slices.Contains(upNodeNames, link.B); !ok {
-		return false, fmt.Errorf("Link %s--%s contains unknown node name", link.A, link.B)
+	if ok := slices.Contains(upNodeNames, link.A) && slices.Contains(upNodeNames, link.B); !ok {
+		return false, fmt.Errorf("Link %s -- %s contains unknown node name", link.A, link.B)
 	}
 	return true, nil
 }
 
 type UEIPPool struct {
-	Cidr string `yaml:"cidr" valid:"cidr,required"`
+	Cidr string `yaml:"cidr" valid:"required"`
 }
 
 type SpecificPath struct {
 	DestinationIP   string   `yaml:"dest,omitempty" valid:"cidr,required"`
 	DestinationPort string   `yaml:"DestinationPort,omitempty" valid:"port,optional"`
-	Path            []string `yaml:"path" valid:"pathValidator,required"`
-}
-
-func ValidatePath(path []string) (bool, error) {
-	for _, upf := range path {
-		if result := len(upf); result == 0 {
-			err := errors.New("Invalid UPF: " + upf + ", should not be empty")
-			return false, err
-		}
-	}
-
-	return true, nil
+	Path            []string `yaml:"path" valid:"required,"`
 }
 
 type PlmnID struct {
@@ -570,4 +527,122 @@ func appendInvalid(err error) error {
 	}
 
 	return error(errs)
+}
+
+// functions to make validators testable
+func RegisterSchemeValidator() {
+	govalidator.TagMap["scheme"] = govalidator.Validator(func(str string) bool {
+		return str == "https" || str == "http"
+	})
+}
+
+func RegisterSNssaiValidator() {
+	govalidator.CustomTypeTagMap.Set("snssaiValidator", func(i interface{}, context interface{}) bool {
+		valid := true
+		switch sNssai := i.(type) {
+		case *models.Snssai:
+			if ok, err := ValidateSNssai(sNssai); !ok {
+				fmt.Println(err)
+				valid = false
+			}
+		default:
+			fmt.Printf("Cannot use snssaiValidator on field of type %T", sNssai)
+			valid = false
+		}
+		return valid
+	})
+}
+
+func RegisterUPNodeValidator() {
+	govalidator.CustomTypeTagMap.Set("upNodeValidator", func(i interface{}, context interface{}) bool {
+		valid := true
+		switch upNodes := i.(type) {
+		case map[string]UPNodeConfigInterface:
+			for _, upNode := range upNodes {
+				if ok, err := upNode.Validate(); !ok {
+					fmt.Println(err)
+					valid = false
+				}
+			}
+		default:
+			fmt.Printf("Cannot use upNodeValidator on field of type %T", upNodes)
+			valid = false
+		}
+		return valid
+	})
+}
+
+func RegisterLinkValidator() {
+	govalidator.CustomTypeTagMap.Set("linkValidator", func(i interface{}, context interface{}) bool {
+		var upNodeNames []string
+		switch contextType := context.(type) {
+		case UserPlaneInformation:
+			for name := range contextType.UPNodes {
+				upNodeNames = append(upNodeNames, name)
+			}
+		default:
+			fmt.Printf("linkValidator can only be used on UserPlaneInformation links, got %T", context)
+			return false
+		}
+
+		valid := true
+		switch links := i.(type) {
+		case []*UPLink:
+			for _, link := range links {
+				if ok, err := ValidateLink(link, upNodeNames); !ok {
+					fmt.Println(err)
+					valid = false
+				}
+			}
+		default:
+			fmt.Printf("Cannot use linkValidator on field of type %T", links)
+			valid = false
+		}
+
+		return valid
+	})
+}
+
+func RegisterPoolValidator() {
+	govalidator.CustomTypeTagMap.Set("poolValidator", func(i interface{}, context interface{}) bool {
+		dnnUpfInfoItem, isType := context.(DnnUpfInfoItem)
+		if !isType {
+			fmt.Printf("poolValidator can only be used on DnnUpfInfoItem UE IP pools, got %T", context)
+			return false
+		}
+
+		valid := true
+		switch pools := i.(type) {
+		case []*UEIPPool:
+			for _, pool := range pools {
+				if ok, err := ValidateUEIPPool(pool, dnnUpfInfoItem.Pools, dnnUpfInfoItem.StaticPools); !ok {
+					fmt.Println(err)
+					valid = false
+				}
+			}
+		default:
+			fmt.Printf("Cannot use poolValidator on field of type %T", pools)
+			valid = false
+		}
+		return valid
+	})
+}
+
+func RegisterDnnUpfInfoItemValidator() {
+	govalidator.CustomTypeTagMap.Set("dnnUpfInfoItemValidator", func(i interface{}, context interface{}) bool {
+		valid := true
+		switch dnnUpfInfoItems := i.(type) {
+		case []*DnnUpfInfoItem:
+			for _, dnnUpfInfoItem := range dnnUpfInfoItems {
+				if ok, err := govalidator.ValidateStruct(dnnUpfInfoItem); !ok {
+					fmt.Println(err)
+					valid = false
+				}
+			}
+		default:
+			fmt.Printf("Cannot use dnnUpfInfoItemValidator on field of type %T", dnnUpfInfoItems)
+			valid = false
+		}
+		return valid
+	})
 }
