@@ -11,15 +11,18 @@ import (
 	"github.com/free5gc/smf/pkg/factory"
 )
 
-var userPlaneConfig = factory.UserPlaneInformation{
-	UPNodes: map[string]*factory.UPNode{
-		"GNodeB": {
-			Type: "AN",
+var userPlaneConfig = &factory.UserPlaneInformation{
+	UPNodes: map[string]factory.UPNodeConfigInterface{
+		"GNodeB": &factory.GNBConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "AN",
+			},
 		},
-		"UPF1": {
-			Type:   "UPF",
+		"UPF1": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "10.4.0.11",
-			Addr:   "10.4.0.11",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
 					SNssai: &models.Snssai{
@@ -34,7 +37,7 @@ var userPlaneConfig = factory.UserPlaneInformation{
 					},
 				},
 			},
-			InterfaceUpfInfoList: []*factory.InterfaceUpfInfoItem{
+			Interfaces: []*factory.Interface{
 				{
 					InterfaceType: "N3",
 					Endpoints: []string{
@@ -51,10 +54,11 @@ var userPlaneConfig = factory.UserPlaneInformation{
 				},
 			},
 		},
-		"UPF2": {
-			Type:   "UPF",
+		"UPF2": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "10.4.0.12",
-			Addr:   "10.4.0.12",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
 					SNssai: &models.Snssai{
@@ -71,7 +75,7 @@ var userPlaneConfig = factory.UserPlaneInformation{
 					},
 				},
 			},
-			InterfaceUpfInfoList: []*factory.InterfaceUpfInfoItem{
+			Interfaces: []*factory.Interface{
 				{
 					InterfaceType: "N9",
 					Endpoints: []string{
@@ -97,7 +101,7 @@ var userPlaneConfig = factory.UserPlaneInformation{
 var testConfig = factory.Config{
 	Info: &factory.Info{
 		Version:     "1.0.0",
-		Description: "SMF procdeure test configuration",
+		Description: "SMF procedure test configuration",
 	},
 	Configuration: &factory.Configuration{
 		Sbi: &factory.Sbi{
@@ -621,9 +625,9 @@ func TestApplyPccRules(t *testing.T) {
 	}
 
 	smfContext := smf_context.GetSelf()
-	smfContext.UserPlaneInformation = smf_context.NewUserPlaneInformation(&userPlaneConfig)
-	for _, n := range smfContext.UserPlaneInformation.UPFs {
-		n.UPF.AssociationContext = context.Background()
+	smfContext.UserPlaneInformation = smf_context.NewUserPlaneInformation(userPlaneConfig)
+	for _, upf := range smfContext.UserPlaneInformation.UPFs {
+		upf.AssociationContext = context.Background()
 	}
 
 	smctx := smf_context.NewSMContext("imsi-208930000000002", 10)
