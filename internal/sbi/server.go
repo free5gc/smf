@@ -32,6 +32,7 @@ type ServerSmf interface {
 
 	Consumer() *consumer.Consumer
 	Processor() *processor.Processor
+	CancelContext() context.Context
 }
 
 type Server struct {
@@ -107,13 +108,9 @@ func newRouter(s *Server) *gin.Engine {
 }
 
 func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {
-	err := s.Consumer().RegisterNFInstance(context.Background())
+	err := s.Consumer().RegisterNFInstance(s.CancelContext())
 	if err != nil {
-		retry_err := s.Consumer().RetrySendNFRegistration(10)
-		if retry_err != nil {
-			logger.InitLog.Errorln(retry_err)
-			return err
-		}
+		return err
 	}
 
 	wg.Add(1)
