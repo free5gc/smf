@@ -88,37 +88,43 @@ func (s *nnrfService) RegisterNFInstance(ctx context.Context) error {
 	}
 
 	// Check data (Use RESTful PUT)
-	for {
-		res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, registerNFInstanceRequest)
-		if err != nil || res == nil {
-			logger.ConsumerLog.Infof("SMF register to NRF Error[%s]", err.Error())
-			time.Sleep(2 * time.Second)
-			continue
-		}
-		nf = res.NrfNfManagementNfProfile
+	finish := false
+	for !finish {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("RegisterNFInstance context done")
+		default:
+			res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, registerNFInstanceRequest)
+			if err != nil || res == nil {
+				logger.ConsumerLog.Errorf("SMF register to NRF Error[%s]", err.Error())
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			nf = res.NrfNfManagementNfProfile
 
-		// http.StatusOK
-		if res.Location == "" {
-			// NFUpdate
-			break
-		} else { // http.StatusCreated
-			// NFRegister
-			resourceUri := res.Location
-			smfContext.NfInstanceID = resourceUri[strings.LastIndex(resourceUri, "/")+1:]
+			// http.StatusOK
+			if res.Location == "" {
+				// NFUpdate
+				finish = true
+			} else { // http.StatusCreated
+				// NFRegister
+				resourceUri := res.Location
+				smfContext.NfInstanceID = resourceUri[strings.LastIndex(resourceUri, "/")+1:]
 
-			oauth2 := false
-			if nf.CustomInfo != nil {
-				v, ok := nf.CustomInfo["oauth2"].(bool)
-				if ok {
-					oauth2 = v
-					logger.MainLog.Infoln("OAuth2 setting receive from NRF:", oauth2)
+				oauth2 := false
+				if nf.CustomInfo != nil {
+					v, ok := nf.CustomInfo["oauth2"].(bool)
+					if ok {
+						oauth2 = v
+						logger.MainLog.Infoln("OAuth2 setting receive from NRF:", oauth2)
+					}
 				}
+				smfContext.OAuth2Required = oauth2
+				if oauth2 && smfContext.NrfCertPem == "" {
+					logger.CfgLog.Error("OAuth2 enable but no nrfCertPem provided in config.")
+				}
+				finish = true
 			}
-			smfContext.OAuth2Required = oauth2
-			if oauth2 && smfContext.NrfCertPem == "" {
-				logger.CfgLog.Error("OAuth2 enable but no nrfCertPem provided in config.")
-			}
-			break
 		}
 	}
 
@@ -151,20 +157,6 @@ func (s *nnrfService) buildNfProfile(smfContext *smf_context.SMFContext) (
 		profile.Locality = smfContext.Locality
 	}
 	return profile, err
-}
-
-func (s *nnrfService) RetrySendNFRegistration(maxRetry int) error {
-	retryCount := 0
-	for retryCount < maxRetry {
-		err := s.RegisterNFInstance(context.Background())
-		if err == nil {
-			return nil
-		}
-		logger.ConsumerLog.Warnf("Send NFRegistration Failed by %v", err)
-		retryCount++
-	}
-
-	return fmt.Errorf("[SMF] Retry NF Registration has meet maximum")
 }
 
 func (s *nnrfService) SendDeregisterNFInstance() (err error) {
