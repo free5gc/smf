@@ -202,8 +202,7 @@ func (s *nudmService) GetSmData(ctx context.Context, supi string,
 	if err != nil {
 		return nil, err
 	}
-
-	sessSubData := rsp.SmSubsData.IndividualSmSubsData
+	sessSubData := rsp.SmSubsData
 
 	return sessSubData, err
 }
