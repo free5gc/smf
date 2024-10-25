@@ -274,9 +274,7 @@ func initGetSMDataStubUDM() {
 		Get("/sm-data").
 		MatchParam("dnn", "internet").
 		Reply(http.StatusOK).
-		JSON(models.SmSubsData{
-			IndividualSmSubsData: SMSubscriptionData,
-		})
+		JSON(SMSubscriptionData)
 }
 
 func initSMPoliciesPostStubPCF() {
