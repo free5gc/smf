@@ -62,7 +62,9 @@ func ActivateUPFSession(
 			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
 				pdrList = append(pdrList, node.DownLinkTunnel.PDR)
 				farList = append(farList, node.DownLinkTunnel.PDR.FAR)
-				urrList = append(urrList, node.DownLinkTunnel.PDR.URR...)
+				if node.DownLinkTunnel.PDR.URR != nil {
+					urrList = append(urrList, node.DownLinkTunnel.PDR.URR...)
+				}
 				// skip send QER because uplink and downlink shared one QER
 			}
 
