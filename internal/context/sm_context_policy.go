@@ -187,6 +187,9 @@ func (c *SMContext) ApplyPccRules(
 			if tgtQosID != "" {
 				finalQosDatas[tgtQosID] = tgtQosData
 			}
+			if tgtChgID != "" {
+				finalChgDatas[tgtChgID] = tgtChgData
+			}
 		}
 		if err := checkUpPathChangeEvt(c, srcTcData, tgtTcData); err != nil {
 			c.Log.Warnf("Check UpPathChgEvent err: %v", err)
