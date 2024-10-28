@@ -24,9 +24,8 @@ func TestSendPfcpSessionEstablishmentRequest(t *testing.T) {
 }
 
 func TestSendHeartbeatResponse(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	smf_context.GetSelf().Ctx = ctx
-	smf_context.GetSelf().PFCPCancelFunc = cancel
+	smfContext := smf_context.GetSelf()
+	smfContext.PfcpContext, smfContext.PfcpCancelFunc = context.WithCancel(context.Background())
 	udp.Run(smf_pfcp.Dispatch)
 
 	udp.ServerStartTime = time.Now()

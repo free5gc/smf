@@ -62,8 +62,8 @@ type SMFContext struct {
 	OAuth2Required         bool
 
 	UserPlaneInformation  *UserPlaneInformation
-	Ctx                   context.Context
-	PFCPCancelFunc        context.CancelFunc
+	PfcpContext           context.Context
+	PfcpCancelFunc        context.CancelFunc
 	PfcpHeartbeatInterval time.Duration
 
 	// Now only "IPv4" supported

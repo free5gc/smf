@@ -21,16 +21,16 @@ const testPfcpClientPort = 12345
 func TestRun(t *testing.T) {
 	// Set SMF Node ID
 
-	smf_context.GetSelf().CPNodeID = pfcpType.NodeID{
+	smfContext := smf_context.GetSelf()
+
+	smfContext.CPNodeID = pfcpType.NodeID{
 		NodeIdType: pfcpType.NodeIdTypeIpv4Address,
 		IP:         net.ParseIP("127.0.0.1").To4(),
 	}
-	smf_context.GetSelf().ExternalAddr = "127.0.0.1"
-	smf_context.GetSelf().ListenAddr = "127.0.0.1"
+	smfContext.ExternalAddr = "127.0.0.1"
+	smfContext.ListenAddr = "127.0.0.1"
 
-	ctx, cancel := context.WithCancel(context.Background())
-	smf_context.GetSelf().Ctx = ctx
-	smf_context.GetSelf().PFCPCancelFunc = cancel
+	smfContext.PfcpContext, smfContext.PfcpCancelFunc = context.WithCancel(context.Background())
 	udp.Run(smf_pfcp.Dispatch)
 
 	testPfcpReq := pfcp.Message{

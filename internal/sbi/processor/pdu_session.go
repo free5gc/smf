@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"reflect"
 
 	"github.com/gin-gonic/gin"
 
@@ -454,7 +455,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		smContext.UpCnxState = body.JsonData.UpCnxState
 		// UE location change is a charging event
 		// TODO: This is not tested yet
-		if smContext.UeLocation != body.JsonData.UeLocation {
+		if !reflect.DeepEqual(smContext.UeLocation, body.JsonData.UeLocation) {
 			// All rating group related to this Pdu session should send charging request
 			for _, dataPath := range tunnel.DataPathPool {
 				if dataPath.Activated {

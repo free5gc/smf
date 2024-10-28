@@ -1,7 +1,6 @@
 package udp
 
 import (
-	"context"
 	"errors"
 	"net"
 	"runtime/debug"
@@ -18,8 +17,6 @@ const MaxPfcpUdpDataSize = 1024
 
 var Server *pfcpUdp.PfcpServer
 
-var cancelFunc *context.CancelFunc
-
 var ServerStartTime time.Time
 
 func Run(dispatch func(*pfcpUdp.Message)) {
@@ -30,10 +27,9 @@ func Run(dispatch func(*pfcpUdp.Message)) {
 		}
 	}()
 
-	newCtx, newCancelFunc := context.WithCancel(smf_context.GetSelf().Ctx)
-	cancelFunc = &newCancelFunc
+	smfContext := smf_context.GetSelf()
 
-	serverIP := smf_context.GetSelf().ListenIP().To4()
+	serverIP := smfContext.ListenIP().To4()
 	Server = pfcpUdp.NewPfcpServer(serverIP.String())
 
 	err := Server.Listen()
@@ -61,7 +57,7 @@ func Run(dispatch func(*pfcpUdp.Message)) {
 				} else {
 					logger.PfcpLog.Warnf("Read PFCP error: %v, msg: [%v]", errReadFrom, msg)
 					select {
-					case <-newCtx.Done():
+					case <-smfContext.PfcpContext.Done():
 						// PFCP is closing
 						return
 					default:
@@ -94,7 +90,8 @@ func SendPfcpRequest(sndMsg *pfcp.Message, addr *net.UDPAddr) (rsvMsg *pfcpUdp.M
 }
 
 func ClosePfcp() error {
-	(*cancelFunc)()
+	smf_context.GetSelf().PfcpCancelFunc()
+
 	closeErr := Server.Close()
 	if closeErr != nil {
 		logger.PfcpLog.Errorf("Pfcp close err: %+v", closeErr)
