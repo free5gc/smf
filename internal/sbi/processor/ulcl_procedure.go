@@ -87,8 +87,8 @@ func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 			}
 
 			// According to 32.255 5.2.2.7, Addition of additional PDU Session Anchor is a charging event
-			p.UpdateChargingSession(smContext, chgUrrList, models.Trigger{
-				TriggerType:     models.TriggerType_ADDITION_OF_UPF,
+			p.UpdateChargingSession(smContext, chgUrrList, models.ChfConvergedChargingTrigger{
+				TriggerType:     models.ChfConvergedChargingTriggerType_ADDITION_OF_UPF,
 				TriggerCategory: models.TriggerCategory_IMMEDIATE_REPORT,
 			})
 

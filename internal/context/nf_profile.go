@@ -9,7 +9,7 @@ import (
 )
 
 type NFProfile struct {
-	NFServices       *[]models.NfService
+	NFServices       *[]models.NrfNfManagementNfService
 	NFServiceVersion *[]models.NfServiceVersion
 	SMFInfo          *models.SmfInfo
 	PLMNList         *[]models.PlmnId
@@ -30,12 +30,12 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 	}
 
 	// set NFServices
-	c.NfProfile.NFServices = new([]models.NfService)
+	c.NfProfile.NFServices = new([]models.NrfNfManagementNfService)
 	for _, serviceName := range nfProfileconfig.Configuration.ServiceNameList {
-		*c.NfProfile.NFServices = append(*c.NfProfile.NFServices, models.NfService{
+		*c.NfProfile.NFServices = append(*c.NfProfile.NFServices, models.NrfNfManagementNfService{
 			ServiceInstanceId: GetSelf().NfInstanceID + serviceName,
 			ServiceName:       models.ServiceName(serviceName),
-			Versions:          c.NfProfile.NFServiceVersion,
+			Versions:          *c.NfProfile.NFServiceVersion,
 			Scheme:            models.UriScheme_HTTPS,
 			NfServiceStatus:   models.NfServiceStatus_REGISTERED,
 			ApiPrefix:         fmt.Sprintf("%s://%s:%d", GetSelf().URIScheme, GetSelf().RegisterIPv4, GetSelf().SBIPort),
@@ -59,11 +59,11 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 	}
 }
 
-func SNssaiSmfInfo() *[]models.SnssaiSmfInfoItem {
+func SNssaiSmfInfo() []models.SnssaiSmfInfoItem {
 	snssaiInfo := make([]models.SnssaiSmfInfoItem, 0)
 	for _, snssai := range smfContext.SnssaiInfos {
 		var snssaiInfoModel models.SnssaiSmfInfoItem
-		snssaiInfoModel.SNssai = &models.Snssai{
+		snssaiInfoModel.SNssai = &models.ExtSnssai{
 			Sst: snssai.Snssai.Sst,
 			Sd:  snssai.Snssai.Sd,
 		}
@@ -75,10 +75,10 @@ func SNssaiSmfInfo() *[]models.SnssaiSmfInfoItem {
 			})
 		}
 
-		snssaiInfoModel.DnnSmfInfoList = &dnnModelList
+		snssaiInfoModel.DnnSmfInfoList = dnnModelList
 
 		snssaiInfo = append(snssaiInfo, snssaiInfoModel)
 	}
 
-	return &snssaiInfo
+	return snssaiInfo
 }

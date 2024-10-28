@@ -14,16 +14,19 @@ import (
 func (s *Server) getCallbackRoutes() []Route {
 	return []Route{
 		{
+			Name:    "SmPolicyUpdateNotification",
 			Method:  http.MethodPost,
 			Pattern: "/sm-policies/:smContextRef/update",
 			APIFunc: s.HTTPSmPolicyUpdateNotification,
 		},
 		{
+			Name:    "SmPolicyControlTerminationRequestNotification",
 			Method:  http.MethodPost,
 			Pattern: "/sm-policies/:smContextRef/terminate",
 			APIFunc: s.SmPolicyControlTerminationRequestNotification,
 		},
 		{
+			Name:    "ChargingNotification",
 			Method:  http.MethodPost,
 			Pattern: "/:notifyUri",
 			APIFunc: s.HTTPChargingNotification,

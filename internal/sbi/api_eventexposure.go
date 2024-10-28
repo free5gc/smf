@@ -18,6 +18,7 @@ import (
 func (s *Server) getEventExposureRoutes() []Route {
 	return []Route{
 		{
+			Name:    "Index",
 			Method:  http.MethodGet,
 			Pattern: "/",
 			APIFunc: func(c *gin.Context) {
@@ -25,44 +26,48 @@ func (s *Server) getEventExposureRoutes() []Route {
 			},
 		},
 		{
+			Name:    "CreateIndividualSubcription",
 			Method:  http.MethodPost,
-			Pattern: "subscriptions",
-			APIFunc: s.SubscriptionsPost,
+			Pattern: "/subscriptions",
+			APIFunc: s.HTTPCreateIndividualSubcription,
 		},
 		{
+			Name:    "DeleteIndividualSubcription",
 			Method:  http.MethodDelete,
-			Pattern: "subscriptions/:subId",
-			APIFunc: s.SubscriptionsSubIdDelete,
+			Pattern: "/subscriptions/:subId",
+			APIFunc: s.HTTPDeleteIndividualSubcription,
 		},
 		{
+			Name:    "GetIndividualSubcription",
 			Method:  http.MethodGet,
-			Pattern: "subscriptions/:subId",
-			APIFunc: s.SubscriptionsSubIdGet,
+			Pattern: "/subscriptions/:subId",
+			APIFunc: s.HTTPGetIndividualSubcription,
 		},
 		{
+			Name:    "ReplaceIndividualSubcription",
 			Method:  http.MethodPut,
-			Pattern: "subscriptions/:subId",
-			APIFunc: s.SubscriptionsSubIdPut,
+			Pattern: "/subscriptions/:subId",
+			APIFunc: s.HTTPReplaceIndividualSubcription,
 		},
 	}
 }
 
 // SubscriptionsPost -
-func (s *Server) SubscriptionsPost(c *gin.Context) {
+func (s *Server) HTTPCreateIndividualSubcription(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 // SubscriptionsSubIdDelete -
-func (s *Server) SubscriptionsSubIdDelete(c *gin.Context) {
+func (s *Server) HTTPDeleteIndividualSubcription(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 // SubscriptionsSubIdGet -
-func (s *Server) SubscriptionsSubIdGet(c *gin.Context) {
+func (s *Server) HTTPGetIndividualSubcription(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 // SubscriptionsSubIdPut -
-func (s *Server) SubscriptionsSubIdPut(c *gin.Context) {
+func (s *Server) HTTPReplaceIndividualSubcription(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{})
 }

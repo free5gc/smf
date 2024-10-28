@@ -12,10 +12,9 @@ import (
 
 	"github.com/free5gc/nas/nasConvert"
 	"github.com/free5gc/nas/nasType"
-	"github.com/free5gc/openapi/Npcf_SMPolicyControl"
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/openapi/pcf/SMPolicyControl"
 	smf_context "github.com/free5gc/smf/internal/context"
-	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/util/flowdesc"
 )
 
@@ -24,10 +23,10 @@ type npcfService struct {
 
 	SMPolicyControlMu sync.RWMutex
 
-	SMPolicyControlClients map[string]*Npcf_SMPolicyControl.APIClient
+	SMPolicyControlClients map[string]*SMPolicyControl.APIClient
 }
 
-func (s *npcfService) getSMPolicyControlClient(uri string) *Npcf_SMPolicyControl.APIClient {
+func (s *npcfService) getSMPolicyControlClient(uri string) *SMPolicyControl.APIClient {
 	if uri == "" {
 		return nil
 	}
@@ -38,9 +37,9 @@ func (s *npcfService) getSMPolicyControlClient(uri string) *Npcf_SMPolicyControl
 		return client
 	}
 
-	configuration := Npcf_SMPolicyControl.NewConfiguration()
+	configuration := SMPolicyControl.NewConfiguration()
 	configuration.SetBasePath(uri)
-	client = Npcf_SMPolicyControl.NewAPIClient(configuration)
+	client = SMPolicyControl.NewAPIClient(configuration)
 
 	s.SMPolicyControlMu.RUnlock()
 	s.SMPolicyControlMu.Lock()
@@ -53,10 +52,10 @@ func (s *npcfService) getSMPolicyControlClient(uri string) *Npcf_SMPolicyControl
 func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMContext) (
 	string, *models.SmPolicyDecision, error,
 ) {
-	var client *Npcf_SMPolicyControl.APIClient
+	var client *SMPolicyControl.APIClient
 
 	// Create SMPolicyControl Client for this SM Context
-	for _, service := range *smContext.SelectedPCFProfile.NfServices {
+	for _, service := range smContext.SelectedPCFProfile.NfServices {
 		if service.ServiceName == models.ServiceName_NPCF_SMPOLICYCONTROL {
 			client = s.getSMPolicyControlClient(service.ApiPrefix)
 		}
@@ -84,34 +83,31 @@ func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMCon
 	smPolicyData.SubsSessAmbr = smContext.DnnConfiguration.SessionAmbr
 	smPolicyData.SubsDefQos = smContext.DnnConfiguration.Var5gQosProfile
 	smPolicyData.SliceInfo = smContext.SNssai
-	smPolicyData.ServingNetwork = &models.NetworkId{
+	smPolicyData.ServingNetwork = &models.PlmnIdNid{
 		Mcc: smContext.ServingNetwork.Mcc,
 		Mnc: smContext.ServingNetwork.Mnc,
 	}
 	smPolicyData.SuppFeat = "F"
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
+	ctx, _, err := smf_context.GetSelf().
+		GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NrfNfManagementNfType_PCF)
 	if err != nil {
 		return "", nil, err
 	}
 
 	var smPolicyID string
 	var smPolicyDecision *models.SmPolicyDecision
-	smPolicyDecisionFromPCF, httpRsp, err := client.DefaultApi.
-		SmPoliciesPost(ctx, smPolicyData)
-	defer func() {
-		if httpRsp != nil {
-			if closeErr := httpRsp.Body.Close(); closeErr != nil {
-				logger.PduSessLog.Errorf("rsp body close err: %v", closeErr)
-			}
-		}
-	}()
-	if err != nil {
+	request := &SMPolicyControl.CreateSMPolicyRequest{
+		SmPolicyContextData: &smPolicyData,
+	}
+
+	smPolicyDecisionFromPCF, err := client.SMPoliciesCollectionApi.CreateSMPolicy(ctx, request)
+	if err != nil || smPolicyDecisionFromPCF == nil {
 		return "", nil, err
 	}
 
-	smPolicyDecision = &smPolicyDecisionFromPCF
-	loc := httpRsp.Header.Get("Location")
+	smPolicyDecision = &smPolicyDecisionFromPCF.SmPolicyDecision
+	loc := smPolicyDecisionFromPCF.Location
 	if smPolicyID = s.extractSMPolicyIDFromLocation(loc); len(smPolicyID) == 0 {
 		return "", nil, fmt.Errorf("SMPolicy ID parse failed")
 	}
@@ -198,34 +194,32 @@ func (s *npcfService) SendSMPolicyAssociationUpdateByUERequestModification(
 		}
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
+	ctx, _, err := smf_context.GetSelf().
+		GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NrfNfManagementNfType_PCF)
 	if err != nil {
 		return nil, err
 	}
 
-	var client *Npcf_SMPolicyControl.APIClient
+	var client *SMPolicyControl.APIClient
 
 	// Create SMPolicyControl Client for this SM Context
-	for _, service := range *smContext.SelectedPCFProfile.NfServices {
+	for _, service := range smContext.SelectedPCFProfile.NfServices {
 		if service.ServiceName == models.ServiceName_NPCF_SMPOLICYCONTROL {
 			client = s.getSMPolicyControlClient(service.ApiPrefix)
 		}
 	}
 
 	var smPolicyDecision *models.SmPolicyDecision
-	smPolicyDecisionFromPCF, rsp, err := client.
-		DefaultApi.SmPoliciesSmPolicyIdUpdatePost(ctx, smContext.SMPolicyID, updateSMPolicy)
-	defer func() {
-		if rsp != nil {
-			if closeErr := rsp.Body.Close(); closeErr != nil {
-				logger.PduSessLog.Errorf("rsp body close err: %v", closeErr)
-			}
-		}
-	}()
+	request := &SMPolicyControl.UpdateSMPolicyRequest{
+		SmPolicyId:                &smContext.SMPolicyID,
+		SmPolicyUpdateContextData: &updateSMPolicy,
+	}
+
+	smPolicyDecisionFromPCF, err := client.IndividualSMPolicyDocumentApi.UpdateSMPolicy(ctx, request)
 	if err != nil {
 		return nil, fmt.Errorf("update sm policy [%s] association failed: %s", smContext.SMPolicyID, err)
 	}
-	smPolicyDecision = &smPolicyDecisionFromPCF
+	smPolicyDecision = &smPolicyDecisionFromPCF.SmPolicyDecision
 	return smPolicyDecision, nil
 }
 
@@ -429,10 +423,10 @@ func (s *npcfService) buildPktFilterInfo(pf nasType.PacketFilter) (*models.Packe
 }
 
 func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.SMContext) error {
-	var client *Npcf_SMPolicyControl.APIClient
+	var client *SMPolicyControl.APIClient
 
 	// Create SMPolicyControl Client for this SM Context
-	for _, service := range *smContext.SelectedPCFProfile.NfServices {
+	for _, service := range smContext.SelectedPCFProfile.NfServices {
 		if service.ServiceName == models.ServiceName_NPCF_SMPOLICYCONTROL {
 			client = s.getSMPolicyControlClient(service.ApiPrefix)
 		}
@@ -442,20 +436,18 @@ func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.
 		return errors.Errorf("smContext not selected PCF")
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
+	ctx, _, err := smf_context.GetSelf().
+		GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NrfNfManagementNfType_PCF)
 	if err != nil {
 		return err
 	}
 
-	rsp, err := client.DefaultApi.SmPoliciesSmPolicyIdDeletePost(
-		ctx, smContext.SMPolicyID, models.SmPolicyDeleteData{})
-	defer func() {
-		if rsp != nil {
-			if closeErr := rsp.Body.Close(); closeErr != nil {
-				logger.PduSessLog.Errorf("rsp body close err: %v", closeErr)
-			}
-		}
-	}()
+	request := &SMPolicyControl.DeleteSMPolicyRequest{
+		SmPolicyId:         &smContext.SMPolicyID,
+		SmPolicyDeleteData: &models.SmPolicyDeleteData{},
+	}
+
+	_, err = client.IndividualSMPolicyDocumentApi.DeleteSMPolicy(ctx, request)
 	if err != nil {
 		return fmt.Errorf("SM Policy termination failed: %v", err)
 	}
