@@ -8,15 +8,14 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/free5gc/pfcp"
 	"github.com/sirupsen/logrus"
+	. "github.com/smartystreets/goconvey/convey"
 
+	"github.com/free5gc/pfcp"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/pfcp/pfcpUdp"
-
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/pfcp/handler"
-	. "github.com/smartystreets/goconvey/convey"
 )
 
 type LogCapture struct {

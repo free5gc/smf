@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/agiledragon/gomonkey"
+	. "github.com/smartystreets/goconvey/convey"
+	"github.com/stretchr/testify/require"
+
 	"github.com/free5gc/pfcp"
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/pfcp/pfcpUdp"
@@ -15,8 +18,6 @@ import (
 	smf_pfcp "github.com/free5gc/smf/internal/pfcp"
 	"github.com/free5gc/smf/internal/pfcp/udp"
 	"github.com/free5gc/smf/pkg/factory"
-	. "github.com/smartystreets/goconvey/convey"
-	"github.com/stretchr/testify/require"
 )
 
 const testPfcpClientPort = 12345
@@ -98,7 +99,7 @@ func initSmfContext() {
 }
 
 func TestSendPfcpRequest(t *testing.T) {
-	//init smf context
+	// init smf context
 	initSmfContext()
 	context.GetSelf().CPNodeID = pfcpType.NodeID{
 		NodeIdType: pfcpType.NodeIdTypeIpv4Address,
@@ -106,7 +107,7 @@ func TestSendPfcpRequest(t *testing.T) {
 	}
 	udp.Server = pfcpUdp.NewPfcpServer(net.ParseIP("127.0.0.1").To4().String())
 
-	//build message
+	// build message
 	pfcpMsg := &pfcp.PFCPAssociationSetupRequest{}
 	message := &pfcp.Message{
 		Header: pfcp.Header{

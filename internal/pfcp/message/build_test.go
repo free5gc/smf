@@ -4,12 +4,13 @@ import (
 	"net"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/pfcp/message"
 	"github.com/free5gc/smf/internal/pfcp/udp"
 	"github.com/free5gc/smf/pkg/factory"
-	"github.com/stretchr/testify/assert"
 )
 
 var testConfig = factory.Config{
@@ -42,7 +43,7 @@ func initSmfContext() {
 func initRuleList() ([]*context.PDR, []*context.FAR, []*context.BAR,
 	[]*context.QER, []*context.URR,
 ) {
-	var testPDR = &context.PDR{
+	testPDR := &context.PDR{
 		PDRID: uint16(1),
 		State: context.RULE_INITIAL,
 		OuterHeaderRemoval: &pfcpType.OuterHeaderRemoval{
@@ -53,7 +54,7 @@ func initRuleList() ([]*context.PDR, []*context.FAR, []*context.BAR,
 		QER: []*context.QER{},
 	}
 
-	var testFAR = &context.FAR{
+	testFAR := &context.FAR{
 		FARID: uint32(123),
 		// State Can be RULE_INITIAL or RULE_UPDATE or RULE_REMOVE
 		State: context.RULE_INITIAL,
@@ -64,19 +65,19 @@ func initRuleList() ([]*context.PDR, []*context.FAR, []*context.BAR,
 		BAR:                  &context.BAR{},
 	}
 
-	var testBAR = &context.BAR{
+	testBAR := &context.BAR{
 		BARID: uint8(124),
 		// State Can be RULE_INITIAL or RULE_UPDATE or RULE_REMOVE
 		State: context.RULE_INITIAL,
 	}
 
-	var testQER = &context.QER{
+	testQER := &context.QER{
 		QERID: uint32(123),
 		// State Can be RULE_INITIAL or RULE_UPDATE or RULE_REMOVE
 		State: context.RULE_INITIAL,
 	}
 
-	var testURR = &context.URR{
+	testURR := &context.URR{
 		URRID: uint32(123),
 		// State Can be RULE_INITIAL or RULE_UPDATE or RULE_REMOVE
 		State: context.RULE_INITIAL,
@@ -154,7 +155,7 @@ func TestBuildPfcpAssociationReleaseResponse(t *testing.T) {
 
 func TestBuildPfcpSessionEstablishmentRequest(t *testing.T) {
 	initSmfContext()
-	var smctx = context.NewSMContext("imsi-208930000000001", 10)
+	smctx := context.NewSMContext("imsi-208930000000001", 10)
 	pdrList, farList, barList, qerList, urrList := initRuleList()
 	smctx.PFCPContext["10.4.0.1"] = &context.PFCPSessionContext{}
 
@@ -178,7 +179,7 @@ func TestBuildPfcpSessionEstablishmentRequest(t *testing.T) {
 	assert.Equal(t, urrList[0].State, context.RULE_CREATE)
 
 	req2, err2 := message.BuildPfcpSessionEstablishmentRequest(
-        *testNodeID, "10.4.0.1", smctx, nil, nil, nil, nil, nil)
+		*testNodeID, "10.4.0.1", smctx, nil, nil, nil, nil, nil)
 	if err2 != nil {
 		t.Errorf("TestBuildPfcpSessionEstablishmentRequest failed: %v", err2)
 	}
@@ -206,7 +207,7 @@ func TestBuildPfcpSessionEstablishmentResponse(t *testing.T) {
 
 func TestBuildPfcpSessionModificationRequest(t *testing.T) {
 	initSmfContext()
-	var smctx = context.NewSMContext("imsi-208930000000001", 10)
+	smctx := context.NewSMContext("imsi-208930000000001", 10)
 	pdrList, farList, barList, qerList, urrList := initRuleList()
 	smctx.PFCPContext["10.4.0.1"] = &context.PFCPSessionContext{}
 
