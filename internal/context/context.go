@@ -79,6 +79,8 @@ type SMFContext struct {
 
 	// Each pdu session should have a unique charging id
 	ChargingIDGenerator *idgenerator.IDGenerator
+
+	Ues *Ues
 }
 
 func GenerateChargingID() int32 {
@@ -248,6 +250,8 @@ func InitSmfContext(config *factory.Config) {
 	smfContext.Locality = configuration.Locality
 
 	TeidGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
+
+	smfContext.Ues = InitSmfUeData()
 }
 
 func InitSMFUERouting(routingConfig *factory.RoutingConfig) {

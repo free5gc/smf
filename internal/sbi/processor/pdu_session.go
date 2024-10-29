@@ -122,6 +122,22 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		}
 	}
 
+	var doSubscribe bool = false
+	defer func() {
+		if doSubscribe {
+			if !p.Context().Ues.UeExists(smContext.Supi) {
+				if problemDetails, err := p.Consumer().
+					Subscribe(ctx, smContext, smPlmnID); problemDetails != nil {
+					smContext.Log.Errorln("SDM Subscription Failed Problem:", problemDetails)
+				} else if err != nil {
+					smContext.Log.Errorln("SDM Subscription Error:", err)
+				}
+			} else {
+				p.Context().Ues.IncrementPduSessionCount(smContext.Supi)
+			}
+		}
+	}()
+
 	establishmentRequest := m.PDUSessionEstablishmentRequest
 	if err := HandlePDUSessionEstablishmentRequest(smContext, establishmentRequest); err != nil {
 		smContext.Log.Errorf("PDU Session Establishment fail by %s", err)
@@ -238,6 +254,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		smContext.PostRemoveDataPath()
 	}()
 
+	doSubscribe = true
 	response.JsonData = smContext.BuildCreatedData()
 	c.Header("Location", smContext.Ref)
 	c.Render(http.StatusCreated, openapi.MultipartRelatedRender{Data: response})
@@ -323,6 +340,15 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					smContext.Log.Errorf("SM Policy Termination failed: %s", err)
 				} else {
 					smContext.SMPolicyID = ""
+				}
+			}
+
+			if smf_context.GetSelf().Ues.UeExists(smContext.Supi) {
+				problemDetails, clientErr := p.Consumer().UnSubscribe(smContext)
+				if problemDetails != nil {
+					logger.PduSessLog.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
+				} else if clientErr != nil {
+					logger.PduSessLog.Errorf("SDM UnSubscription Error[%+v]", err)
 				}
 			}
 
@@ -879,6 +905,15 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 		}
 	}
 
+	if p.Context().Ues.UeExists(smContext.Supi) {
+		problemDetails, err := p.Consumer().UnSubscribe(smContext)
+		if problemDetails != nil {
+			logger.PduSessLog.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
+		} else if err != nil {
+			logger.PduSessLog.Errorf("SDM UnSubscription Error[%+v]", err)
+		}
+	}
+
 	if smContext.UeCmRegistered {
 		problemDetails, err := p.Consumer().UeCmDeregistration(smContext)
 		if problemDetails != nil {
@@ -967,6 +1002,15 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 			logger.PduSessLog.Errorf("SM Policy Termination failed: %s", err)
 		} else {
 			smContext.SMPolicyID = ""
+		}
+	}
+
+	if p.Context().Ues.UeExists(smContext.Supi) {
+		problemDetails, err := p.Consumer().UnSubscribe(smContext)
+		if problemDetails != nil {
+			logger.PduSessLog.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
+		} else if err != nil {
+			logger.PduSessLog.Errorf("SDM UnSubscription Error[%+v]", err)
 		}
 	}
 
