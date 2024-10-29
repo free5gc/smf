@@ -121,16 +121,21 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		}
 	}
 
-	if !p.Context().Ues.UeExists(smContext.Supi) {
-		if problemDetails, err := p.Consumer().
-			Subscribe(ctx, smContext, smPlmnID); problemDetails != nil {
-			smContext.Log.Errorln("SDM Subscription Failed Problem:", problemDetails)
-		} else if err != nil {
-			smContext.Log.Errorln("SDM Subscription Error:", err)
+	var doSubscribe bool = false
+	defer func(){
+		if doSubscribe {
+			if !p.Context().Ues.UeExists(smContext.Supi) {
+				if problemDetails, err := p.Consumer().
+					Subscribe(ctx, smContext, smPlmnID); problemDetails != nil {
+					smContext.Log.Errorln("SDM Subscription Failed Problem:", problemDetails)
+				} else if err != nil {
+					smContext.Log.Errorln("SDM Subscription Error:", err)
+				}
+			} else {
+				p.Context().Ues.IncrementPduSessionCount(smContext.Supi)
+			}
 		}
-	} else {
-		p.Context().Ues.IncrementPduSessionCount(smContext.Supi)
-	}
+	}()
 
 	establishmentRequest := m.PDUSessionEstablishmentRequest
 	if err := HandlePDUSessionEstablishmentRequest(smContext, establishmentRequest); err != nil {
@@ -248,6 +253,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		smContext.PostRemoveDataPath()
 	}()
 
+	doSubscribe = true
 	response.JsonData = smContext.BuildCreatedData()
 	c.Header("Location", smContext.Ref)
 	c.Render(http.StatusCreated, openapi.MultipartRelatedRender{Data: response})
