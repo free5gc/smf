@@ -26,7 +26,6 @@ require (
 )
 
 require (
-	github.com/agiledragon/gomonkey v2.0.2+incompatible
 	github.com/antonfisher/nested-logrus-formatter v1.3.1 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
