@@ -124,12 +124,10 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
 		return
 	}
-	if upf.UPFStatus != smf_context.AssociatedSetUpSuccess {
-		logger.PfcpLog.Warnf("PFCP Session Report Request : Not Associated with UPF[%s], Request Rejected",
-			upfNodeIDtoIPStr)
+	if err := upf.IsAssociated(); err != nil {
+		logger.PfcpLog.Warnf("PFCP Session Report Request rejected: %+v", err)
 		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
 		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
-		return
 	}
 
 	if smContext.UpCnxState == models.UpCnxState_DEACTIVATED {
