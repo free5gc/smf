@@ -186,9 +186,10 @@ func (s *nudmService) GetSmData(ctx context.Context, supi string,
 	var client *SubscriberDataManagement.APIClient
 	for _, service := range s.consumer.Context().UDMProfile.NfServices {
 		if service.ServiceName == models.ServiceName_NUDM_SDM {
-			SDMConf := SubscriberDataManagement.NewConfiguration()
-			SDMConf.SetBasePath(service.ApiPrefix)
 			client = s.getSubscribeDataManagementClient(service.ApiPrefix)
+			if client != nil {
+				break
+			}
 		}
 	}
 
@@ -205,4 +206,116 @@ func (s *nudmService) GetSmData(ctx context.Context, supi string,
 	sessSubData := rsp.SmSubsData
 
 	return sessSubData, err
+}
+
+func (s *nudmService) Subscribe(ctx context.Context, smCtx *smf_context.SMContext, smPlmnID *models.PlmnIdNid) (
+	*models.ProblemDetails, error,
+) {
+	var client *SubscriberDataManagement.APIClient
+	for _, service := range s.consumer.Context().UDMProfile.NfServices {
+		if service.ServiceName == models.ServiceName_NUDM_SDM {
+			client = s.getSubscribeDataManagementClient(service.ApiPrefix)
+			if client != nil {
+				break
+			}
+		}
+	}
+
+	if client == nil {
+		return nil, fmt.Errorf("sdm client failed")
+	}
+
+	request := &SubscriberDataManagement.SubscribeRequest{
+		UeId: &smCtx.Supi,
+		SdmSubscription: &models.SdmSubscription{
+			NfInstanceId: s.consumer.Context().NfInstanceID,
+			PlmnId: &models.PlmnId{
+				Mcc: smPlmnID.Mcc,
+				Mnc: smPlmnID.Mnc,
+			},
+		},
+	}
+
+	res, localErr := client.SubscriptionCreationApi.Subscribe(ctx, request)
+
+	switch err := localErr.(type) {
+	case openapi.GenericOpenAPIError:
+		switch errModel := err.Model().(type) {
+		case SubscriberDataManagement.SubscribeError:
+			return &errModel.ProblemDetails, nil
+		case error:
+			return openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
+		default:
+			return nil, openapi.ReportError("openapi error")
+		}
+	case error:
+		return openapi.ProblemDetailsSystemFailure(err.Error()), nil
+	case nil:
+		s.consumer.Context().Ues.SetSubscriptionId(smCtx.Supi, res.SdmSubscription.SubscriptionId)
+		logger.PduSessLog.Infoln("SDM Subscription Successful UE:", smCtx.Supi, "SubscriptionId:",
+			res.SdmSubscription.SubscriptionId)
+		s.consumer.Context().Ues.IncrementPduSessionCount(smCtx.Supi)
+		return nil, nil
+	default:
+		return nil, openapi.ReportError("server no response")
+	}
+}
+
+func (s *nudmService) UnSubscribe(smCtx *smf_context.SMContext) (
+	*models.ProblemDetails, error,
+) {
+	ctx, _, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDM_SDM, models.NrfNfManagementNfType_UDM)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.consumer.Context().Ues.IsLastPduSession(smCtx.Supi) {
+		var client *SubscriberDataManagement.APIClient
+		for _, service := range s.consumer.Context().UDMProfile.NfServices {
+			if service.ServiceName == models.ServiceName_NUDM_SDM {
+				client = s.getSubscribeDataManagementClient(service.ApiPrefix)
+				if client != nil {
+					break
+				}
+			}
+		}
+
+		if client == nil {
+			return nil, fmt.Errorf("sdm client failed")
+		}
+
+		subscriptionId := s.consumer.Context().Ues.GetSubscriptionId(smCtx.Supi)
+
+		request := &SubscriberDataManagement.UnsubscribeRequest{
+			UeId:           &smCtx.Supi,
+			SubscriptionId: &subscriptionId,
+		}
+
+		_, localErr := client.SubscriptionDeletionApi.Unsubscribe(ctx, request)
+
+		switch err := localErr.(type) {
+		case openapi.GenericOpenAPIError:
+			switch errModel := err.Model().(type) {
+			case SubscriberDataManagement.UnsubscribeError:
+				return &errModel.ProblemDetails, nil
+			case error:
+				return openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
+			default:
+				return nil, openapi.ReportError("openapi error")
+			}
+		case error:
+			return openapi.ProblemDetailsSystemFailure(err.Error()), nil
+		case nil:
+			logger.PduSessLog.Infoln("SDM UnSubscription Successful UE:", smCtx.Supi, "SubscriptionId:",
+				subscriptionId)
+			s.consumer.Context().Ues.DeleteUe(smCtx.Supi)
+			return nil, nil
+		default:
+			return nil, openapi.ReportError("server no response")
+		}
+	} else {
+		s.consumer.Context().Ues.DecrementPduSessionCount(smCtx.Supi)
+	}
+
+	return nil, nil
 }
