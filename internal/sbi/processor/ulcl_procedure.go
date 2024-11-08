@@ -65,7 +65,7 @@ func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 	for node := activatingPath.FirstDPNode; node != nil; node = node.Next() {
 		if nodeAfterULCL {
 			addr := net.UDPAddr{
-				IP:   context.ResolveIP(node.UPF.Addr),
+				IP:   net.ParseIP(node.GetNodeIP()),
 				Port: pfcpUdp.PFCP_PORT,
 			}
 
@@ -108,7 +108,7 @@ func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 				urrList: urrList,
 			}
 
-			curDPNodeIP := node.UPF.NodeID.ResolveNodeIdToIp().String()
+			curDPNodeIP := node.GetNodeIP()
 			pendingUPFs = append(pendingUPFs, curDPNodeIP)
 
 			sessionContext, exist := smContext.PFCPContext[node.GetNodeIP()]
@@ -181,7 +181,7 @@ func EstablishULCL(smContext *context.SMContext) {
 				urrList: UPLinkPDR.URR,
 			}
 
-			curDPNodeIP := ulcl.NodeID.ResolveNodeIdToIp().String()
+			curDPNodeIP := ulcl.GetNodeIDString()
 			pendingUPFs = append(pendingUPFs, curDPNodeIP)
 			go modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
 			break
@@ -226,7 +226,7 @@ func UpdatePSA2DownLink(smContext *context.SMContext) {
 					urrList: urrList,
 				}
 
-				curDPNodeIP := node.UPF.NodeID.ResolveNodeIdToIp().String()
+				curDPNodeIP := node.GetNodeIP()
 				pendingUPFs = append(pendingUPFs, curDPNodeIP)
 				go modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
 				logger.PfcpLog.Info("[SMF] Update PSA2 downlink msg has been send")
@@ -339,7 +339,7 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 				urrList: UPLinkPDR.URR,
 			}
 
-			curDPNodeIP := curDPNode.UPF.NodeID.ResolveNodeIdToIp().String()
+			curDPNodeIP := curDPNode.GetNodeIP()
 			pendingUPFs = append(pendingUPFs, curDPNodeIP)
 			go modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
 		}

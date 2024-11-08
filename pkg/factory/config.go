@@ -7,12 +7,14 @@ package factory
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/davecgh/go-spew/spew"
+	"inet.af/netaddr"
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
@@ -46,11 +48,17 @@ type Config struct {
 }
 
 func (c *Config) Validate() (bool, error) {
-	if configuration := c.Configuration; configuration != nil {
-		if result, err := configuration.validate(); err != nil {
-			return result, err
-		}
-	}
+	// register custom tag validators
+	govalidator.TagMap["scheme"] = govalidator.Validator(func(str string) bool {
+		return str == "https" || str == "http"
+	})
+
+	// register custom semantic validators
+	RegisterSNssaiValidator()
+	RegisterUPNodeValidator()
+	RegisterLinkValidator()
+	RegisterPoolValidator()
+	RegisterDnnUpfInfoItemValidator()
 
 	result, err := govalidator.ValidateStruct(c)
 	return result, appendInvalid(err)
@@ -69,29 +77,29 @@ type Info struct {
 	Description string `yaml:"description,omitempty" valid:"type(string)"`
 }
 
-func (i *Info) validate() (bool, error) {
-	result, err := govalidator.ValidateStruct(i)
-	return result, appendInvalid(err)
-}
-
 type Configuration struct {
-	SmfName              string               `yaml:"smfName" valid:"type(string),required"`
-	Sbi                  *Sbi                 `yaml:"sbi" valid:"required"`
-	PFCP                 *PFCP                `yaml:"pfcp" valid:"required"`
-	NrfUri               string               `yaml:"nrfUri" valid:"url,required"`
-	NrfCertPem           string               `yaml:"nrfCertPem,omitempty" valid:"optional"`
-	UserPlaneInformation UserPlaneInformation `yaml:"userplaneInformation" valid:"required"`
-	ServiceNameList      []string             `yaml:"serviceNameList" valid:"required"`
-	SNssaiInfo           []*SnssaiInfoItem    `yaml:"snssaiInfos" valid:"required"`
-	ULCL                 bool                 `yaml:"ulcl" valid:"type(bool),optional"`
-	PLMNList             []PlmnID             `yaml:"plmnList"  valid:"optional"`
-	Locality             string               `yaml:"locality" valid:"type(string),optional"`
-	UrrPeriod            uint16               `yaml:"urrPeriod,omitempty" valid:"optional"`
-	UrrThreshold         uint64               `yaml:"urrThreshold,omitempty" valid:"optional"`
-	T3591                *TimerValue          `yaml:"t3591" valid:"required"`
-	T3592                *TimerValue          `yaml:"t3592" valid:"required"`
-	NwInstFqdnEncoding   bool                 `yaml:"nwInstFqdnEncoding" valid:"type(bool),optional"`
-	RequestedUnit        int32                `yaml:"requestedUnit,omitempty" valid:"optional"`
+	SmfName string `yaml:"smfName" valid:"type(string),required"`
+	// done
+	Sbi *Sbi `yaml:"sbi" valid:"required"`
+	// done
+	PFCP *PFCP `yaml:"pfcp" valid:"required"`
+	// done
+	NrfUri               string                `yaml:"nrfUri" valid:"url,required"`
+	NrfCertPem           string                `yaml:"nrfCertPem,omitempty" valid:"optional"`
+	UserPlaneInformation *UserPlaneInformation `yaml:"userplaneInformation" valid:"required"`
+	// done
+	ServiceNameList []string `yaml:"serviceNameList" valid:"required,in(nsmf-pdusession|nsmf-event-exposure|nsmf-oam)"`
+	// done
+	SNssaiInfo         []*SnssaiInfoItem `yaml:"snssaiInfos" valid:"required"`
+	ULCL               bool              `yaml:"ulcl" valid:"type(bool),optional"`
+	PLMNList           []PlmnID          `yaml:"plmnList"  valid:"optional"`
+	Locality           string            `yaml:"locality" valid:"type(string),optional"`
+	UrrPeriod          uint16            `yaml:"urrPeriod,omitempty" valid:"optional"`
+	UrrThreshold       uint64            `yaml:"urrThreshold,omitempty" valid:"optional"`
+	T3591              *TimerValue       `yaml:"t3591" valid:"required"`
+	T3592              *TimerValue       `yaml:"t3592" valid:"required"`
+	NwInstFqdnEncoding bool              `yaml:"nwInstFqdnEncoding" valid:"type(bool),optional"`
+	RequestedUnit      int32             `yaml:"requestedUnit,omitempty" valid:"optional"`
 }
 
 type Logger struct {
@@ -100,118 +108,31 @@ type Logger struct {
 	ReportCaller bool   `yaml:"reportCaller" valid:"type(bool)"`
 }
 
-func (c *Configuration) validate() (bool, error) {
-	if sbi := c.Sbi; sbi != nil {
-		if result, err := sbi.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	if pfcp := c.PFCP; pfcp != nil {
-		if result, err := pfcp.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	if userPlaneInformation := &c.UserPlaneInformation; userPlaneInformation != nil {
-		if result, err := userPlaneInformation.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	for index, serviceName := range c.ServiceNameList {
-		switch {
-		case serviceName == "nsmf-pdusession":
-		case serviceName == "nsmf-event-exposure":
-		case serviceName == "nsmf-oam":
-		default:
-			err := errors.New("Invalid serviceNameList[" + strconv.Itoa(index) + "]: " +
-				serviceName + ", should be nsmf-pdusession, nsmf-event-exposure or nsmf-oam.")
-			return false, err
-		}
-	}
-
-	for _, snssaiInfo := range c.SNssaiInfo {
-		if result, err := snssaiInfo.Validate(); err != nil {
-			return result, err
-		}
-	}
-
-	if c.PLMNList != nil {
-		for _, plmnId := range c.PLMNList {
-			if result, err := plmnId.validate(); err != nil {
-				return result, err
-			}
-		}
-	}
-
-	if t3591 := c.T3591; t3591 != nil {
-		if result, err := t3591.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	if t3592 := c.T3592; t3592 != nil {
-		if result, err := t3592.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	result, err := govalidator.ValidateStruct(c)
-	return result, appendInvalid(err)
-}
-
 type SnssaiInfoItem struct {
-	SNssai   *models.Snssai       `yaml:"sNssai" valid:"required"`
+	SNssai   *models.Snssai       `yaml:"sNssai" valid:"required,snssaiValidator"`
 	DnnInfos []*SnssaiDnnInfoItem `yaml:"dnnInfos" valid:"required"`
 }
 
-func (s *SnssaiInfoItem) Validate() (bool, error) {
-	if snssai := s.SNssai; snssai != nil {
-		if result := (snssai.Sst >= 0 && snssai.Sst <= 255); !result {
-			err := errors.New("Invalid sNssai.Sst: " + strconv.Itoa(int(snssai.Sst)) + ", should be in range 0~255.")
+func ValidateSNssai(sNssai *models.Snssai) (bool, error) {
+	if result := (sNssai.Sst >= 0 && sNssai.Sst <= 255); !result {
+		err := errors.New("Invalid sNssai.Sst: " + strconv.Itoa(int(sNssai.Sst)) + ", should be in range 0~255.")
+		return false, err
+	}
+
+	if sNssai.Sd != "" {
+		if result := govalidator.StringMatches(sNssai.Sd, "^[0-9A-Fa-f]{6}$"); !result {
+			err := errors.New("Invalid sNssai.Sd: " + sNssai.Sd +
+				", should be 3 bytes hex string and in range 000000~FFFFFF.")
 			return false, err
 		}
-
-		if snssai.Sd != "" {
-			if result := govalidator.StringMatches(snssai.Sd, "^[0-9A-Fa-f]{6}$"); !result {
-				err := errors.New("Invalid sNssai.Sd: " + snssai.Sd +
-					", should be 3 bytes hex string and in range 000000~FFFFFF.")
-				return false, err
-			}
-		}
 	}
-
-	for _, dnnInfo := range s.DnnInfos {
-		if result, err := dnnInfo.validate(); err != nil {
-			return result, err
-		}
-	}
-	result, err := govalidator.ValidateStruct(s)
-	return result, appendInvalid(err)
+	return true, nil
 }
 
 type SnssaiDnnInfoItem struct {
 	Dnn   string `yaml:"dnn" valid:"type(string),minstringlength(1),required"`
 	DNS   *DNS   `yaml:"dns" valid:"required"`
 	PCSCF *PCSCF `yaml:"pcscf,omitempty" valid:"optional"`
-}
-
-func (s *SnssaiDnnInfoItem) validate() (bool, error) {
-	if dns := s.DNS; dns != nil {
-		if result, err := dns.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	if pcscf := s.PCSCF; pcscf != nil {
-		if result, err := pcscf.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	result, err := govalidator.ValidateStruct(s)
-	return result, appendInvalid(err)
 }
 
 type Sbi struct {
@@ -223,29 +144,9 @@ type Sbi struct {
 	Port        int    `yaml:"port,omitempty" valid:"port,optional"`
 }
 
-func (s *Sbi) validate() (bool, error) {
-	govalidator.TagMap["scheme"] = govalidator.Validator(func(str string) bool {
-		return str == "https" || str == "http"
-	})
-
-	if tls := s.Tls; tls != nil {
-		if result, err := tls.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	result, err := govalidator.ValidateStruct(s)
-	return result, appendInvalid(err)
-}
-
 type Tls struct {
 	Pem string `yaml:"pem,omitempty" valid:"type(string),minstringlength(1),required"`
 	Key string `yaml:"key,omitempty" valid:"type(string),minstringlength(1),required"`
-}
-
-func (t *Tls) validate() (bool, error) {
-	result, err := govalidator.ValidateStruct(t)
-	return result, appendInvalid(err)
 }
 
 type PFCP struct {
@@ -258,28 +159,13 @@ type PFCP struct {
 	HeartbeatInterval      time.Duration `yaml:"heartbeatInterval,omitempty" valid:"type(time.Duration),optional"`
 }
 
-func (p *PFCP) validate() (bool, error) {
-	result, err := govalidator.ValidateStruct(p)
-	return result, appendInvalid(err)
-}
-
 type DNS struct {
 	IPv4Addr string `yaml:"ipv4,omitempty" valid:"ipv4,required"`
 	IPv6Addr string `yaml:"ipv6,omitempty" valid:"ipv6,optional"`
 }
 
-func (d *DNS) validate() (bool, error) {
-	result, err := govalidator.ValidateStruct(d)
-	return result, appendInvalid(err)
-}
-
 type PCSCF struct {
 	IPv4Addr string `yaml:"ipv4,omitempty" valid:"ipv4,required"`
-}
-
-func (p *PCSCF) validate() (bool, error) {
-	result, err := govalidator.ValidateStruct(p)
-	return result, appendInvalid(err)
 }
 
 type Path struct {
@@ -288,54 +174,12 @@ type Path struct {
 	UPF             []string `yaml:"UPF,omitempty" valid:"required"`
 }
 
-func (p *Path) validate() (bool, error) {
-	for _, upf := range p.UPF {
-		if result := len(upf); result == 0 {
-			err := errors.New("Invalid UPF: " + upf + ", should not be empty")
-			return false, err
-		}
-	}
-
-	result, err := govalidator.ValidateStruct(p)
-	return result, appendInvalid(err)
-}
-
 type UERoutingInfo struct {
-	Members       []string       `yaml:"members" valid:"required"`
+	Members       []string       `yaml:"members" valid:"required,matches(imsi-[0-9]{5,15}$)-Invalid member (SUPI)"`
 	AN            string         `yaml:"AN,omitempty" valid:"ipv4,optional"`
 	PathList      []Path         `yaml:"PathList,omitempty" valid:"optional"`
-	Topology      []UPLink       `yaml:"topology" valid:"required"`
+	Topology      []UPLink       `yaml:"topology" valid:"required"` // TODO: validation with topology names
 	SpecificPaths []SpecificPath `yaml:"specificPath,omitempty" valid:"optional"`
-}
-
-func (u *UERoutingInfo) validate() (bool, error) {
-	for _, member := range u.Members {
-		if result := govalidator.StringMatches(member, "imsi-[0-9]{5,15}$"); !result {
-			err := errors.New("Invalid member (SUPI): " + member)
-			return false, err
-		}
-	}
-
-	for _, path := range u.PathList {
-		if result, err := path.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	for _, link := range u.Topology {
-		if result, err := link.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	for _, path := range u.SpecificPaths {
-		if result, err := path.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	result, err := govalidator.ValidateStruct(u)
-	return result, appendInvalid(err)
 }
 
 // RouteProfID is string providing a Route Profile identifier.
@@ -347,50 +191,19 @@ type RouteProfile struct {
 	ForwardingPolicyID string `yaml:"forwardingPolicyID,omitempty" valid:"type(string),stringlength(1|255),required"`
 }
 
-func (r *RouteProfile) validate() (bool, error) {
-	result, err := govalidator.ValidateStruct(r)
-	return result, appendInvalid(err)
-}
-
 // PfdContent represents the flow of the application
 type PfdContent struct {
 	// Identifies a PFD of an application identifier.
 	PfdID string `yaml:"pfdID,omitempty" valid:"type(string),minstringlength(1),required"`
 	// Represents a 3-tuple with protocol, server ip and server port for
 	// UL/DL application traffic.
-	FlowDescriptions []string `yaml:"flowDescriptions,omitempty" valid:"optional"`
+	FlowDescriptions []string `yaml:"flowDescriptions,omitempty" valid:"minstringlen(1),optional"`
 	// Indicates a URL or a regular expression which is used to match the
 	// significant parts of the URL.
-	Urls []string `yaml:"urls,omitempty" valid:"optional"`
+	Urls []string `yaml:"urls,omitempty" valid:"url,optional"`
 	// Indicates an FQDN or a regular expression as a domain name matching
 	// criteria.
-	DomainNames []string `yaml:"domainNames,omitempty" valid:"optional"`
-}
-
-func (p *PfdContent) validate() (bool, error) {
-	for _, flowDescription := range p.FlowDescriptions {
-		if result := len(flowDescription) > 0; !result {
-			err := errors.New("Invalid FlowDescription: " + flowDescription + ", should not be empty.")
-			return false, err
-		}
-	}
-
-	for _, url := range p.Urls {
-		if result := govalidator.IsURL(url); !result {
-			err := errors.New("Invalid Url: " + url + ", should be url.")
-			return false, err
-		}
-	}
-
-	for _, domainName := range p.DomainNames {
-		if result := govalidator.IsDNSName(domainName); !result {
-			err := errors.New("Invalid DomainName: " + domainName + ", should be domainName.")
-			return false, err
-		}
-	}
-
-	result, err := govalidator.ValidateStruct(p)
-	return result, appendInvalid(err)
+	DomainNames []string `yaml:"domainNames,omitempty" valid:"dns,optional"`
 }
 
 // PfdDataForApp represents the PFDs for an application identifier
@@ -403,17 +216,6 @@ type PfdDataForApp struct {
 	CachingTime *time.Time `yaml:"cachingTime,omitempty" valid:"optional"`
 }
 
-func (p *PfdDataForApp) validate() (bool, error) {
-	for _, pfd := range p.Pfds {
-		if result, err := pfd.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	result, err := govalidator.ValidateStruct(p)
-	return result, appendInvalid(err)
-}
-
 type RoutingConfig struct {
 	Info          *Info                        `yaml:"info" valid:"required"`
 	UERoutingInfo map[string]UERoutingInfo     `yaml:"ueRoutingInfo" valid:"optional"`
@@ -423,180 +225,145 @@ type RoutingConfig struct {
 }
 
 func (r *RoutingConfig) Validate() (bool, error) {
-	if info := r.Info; info != nil {
-		if result, err := info.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	for _, ueRoutingInfo := range r.UERoutingInfo {
-		if result, err := ueRoutingInfo.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	for _, routeProf := range r.RouteProf {
-		if result, err := routeProf.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	for _, pfdData := range r.PfdDatas {
-		if result, err := pfdData.validate(); err != nil {
-			return result, err
-		}
-	}
-
 	result, err := govalidator.ValidateStruct(r)
 	return result, appendInvalid(err)
 }
 
 // UserPlaneInformation describe core network userplane information
 type UserPlaneInformation struct {
-	UPNodes map[string]*UPNode `json:"upNodes" yaml:"upNodes" valid:"required"`
-	Links   []*UPLink          `json:"links" yaml:"links" valid:"required"`
-}
-
-func (u *UserPlaneInformation) validate() (bool, error) {
-	for _, upNode := range u.UPNodes {
-		if result, err := upNode.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	for _, link := range u.Links {
-		if result, err := link.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	result, err := govalidator.ValidateStruct(u)
-	return result, appendInvalid(err)
+	UPNodes map[string]UPNodeConfigInterface `json:"upNodes" yaml:"upNodes" valid:"required,upNodeValidator"`
+	Links   []*UPLink                        `json:"links" yaml:"links" valid:"required,linkValidator"`
 }
 
 // UPNode represent the user plane node
-type UPNode struct {
-	Type                 string                  `json:"type" yaml:"type" valid:"upNodeType,required"`
-	NodeID               string                  `json:"nodeID" yaml:"nodeID" valid:"host,optional"`
-	Addr                 string                  `json:"addr" yaml:"addr" valid:"host,optional"`
-	ANIP                 string                  `json:"anIP" yaml:"anIP" valid:"host,optional"`
-	Dnn                  string                  `json:"dnn" yaml:"dnn" valid:"type(string),minstringlength(1),optional"`
-	SNssaiInfos          []*SnssaiUpfInfoItem    `json:"sNssaiUpfInfos" yaml:"sNssaiUpfInfos,omitempty" valid:"optional"`
-	InterfaceUpfInfoList []*InterfaceUpfInfoItem `json:"interfaces" yaml:"interfaces,omitempty" valid:"optional"`
+type UPNodeConfig struct {
+	Type string `json:"type" yaml:"type" valid:"required,in(AN|UPF)"`
 }
 
-func (u *UPNode) validate() (bool, error) {
-	govalidator.TagMap["upNodeType"] = govalidator.Validator(func(str string) bool {
-		return str == "AN" || str == "UPF"
-	})
+type UPNodeConfigInterface interface {
+	Validate() (result bool, err error)
+	GetType() string
+}
 
-	for _, snssaiInfo := range u.SNssaiInfos {
-		if result, err := snssaiInfo.Validate(); err != nil {
+type GNBConfig struct {
+	*UPNodeConfig
+}
+
+type UPFConfig struct {
+	*UPNodeConfig
+	NodeID      string               `json:"nodeID" yaml:"nodeID" valid:"host,required"`
+	SNssaiInfos []*SnssaiUpfInfoItem `json:"sNssaiUpfInfos" yaml:"sNssaiUpfInfos" valid:"required"`
+	Interfaces  []*Interface         `json:"interfaces" yaml:"interfaces" valid:"required"`
+}
+
+func (gNB *GNBConfig) Validate() (result bool, err error) {
+	// no semantic validation (yet) for GNBs
+	return true, nil
+}
+
+func (gNB *GNBConfig) GetType() string {
+	return gNB.Type
+}
+
+func (upf *UPFConfig) Validate() (result bool, err error) {
+	// direct call for nested struct validation necessary for slices containing pointers
+	// (too much nesting for govalidator)
+	for _, iface := range upf.Interfaces {
+		if result, err = govalidator.ValidateStruct(iface); !result {
+			return result, err
+		}
+	}
+	for _, sNssaiInfo := range upf.SNssaiInfos {
+		if result, err = govalidator.ValidateStruct(sNssaiInfo); !result {
 			return result, err
 		}
 	}
 
 	n3IfsNum := 0
 	n9IfsNum := 0
-	for _, interfaceUpfInfo := range u.InterfaceUpfInfoList {
-		if result, err := interfaceUpfInfo.validate(); err != nil {
-			return result, err
-		}
-		if interfaceUpfInfo.InterfaceType == "N3" {
+	for _, iface := range upf.Interfaces {
+		switch iface.InterfaceType {
+		case "N3":
 			n3IfsNum++
-		}
-
-		if interfaceUpfInfo.InterfaceType == "N9" {
+		case "N9":
 			n9IfsNum++
 		}
-
-		if n3IfsNum > 1 || n9IfsNum > 1 {
-			return false, fmt.Errorf(
-				"Not support multiple InterfaceUpfInfo for the same type: N3 number(%d), N9 number(%d)",
-				n3IfsNum, n9IfsNum)
-		}
 	}
-	result, err := govalidator.ValidateStruct(u)
-	return result, appendInvalid(err)
+
+	if n3IfsNum == 0 && n9IfsNum == 0 {
+		return false, fmt.Errorf("UPF %s must have a user plane interface (N3 or N9)", upf.NodeID)
+	}
+
+	if n3IfsNum > 1 || n9IfsNum > 1 {
+		return false, fmt.Errorf(
+			"UPF %s: There is currently no support for multiple N3/ N9 interfaces: N3 number(%d), N9 number(%d)",
+			upf.NodeID, n3IfsNum, n9IfsNum)
+	}
+
+	return true, nil
 }
 
-type InterfaceUpfInfoItem struct {
-	InterfaceType    models.UpInterfaceType `json:"interfaceType" yaml:"interfaceType" valid:"required"`
-	Endpoints        []string               `json:"endpoints" yaml:"endpoints" valid:"required"`
-	NetworkInstances []string               `json:"networkInstances" yaml:"networkInstances" valid:"required"`
+func (upf *UPFConfig) GetNodeID() string {
+	return upf.NodeID
 }
 
-func (i *InterfaceUpfInfoItem) validate() (bool, error) {
-	interfaceType := i.InterfaceType
-	if result := (interfaceType == "N3" || interfaceType == "N9"); !result {
-		err := errors.New("Invalid interfaceType: " + string(interfaceType) + ", should be N3 or N9.")
-		return false, err
-	}
+func (upf *UPFConfig) GetType() string {
+	return upf.Type
+}
 
-	for _, endpoint := range i.Endpoints {
-		if result := govalidator.IsHost(endpoint); !result {
-			err := errors.New("Invalid endpoint:" + endpoint + ", should be IPv4.")
-			return false, err
-		}
-	}
-
-	result, err := govalidator.ValidateStruct(i)
-	return result, appendInvalid(err)
+type Interface struct {
+	InterfaceType    models.UpInterfaceType `json:"interfaceType" yaml:"interfaceType" valid:"required,in(N3|N9)"`
+	Endpoints        []string               `json:"endpoints" yaml:"endpoints" valid:"host,required"`
+	NetworkInstances []string               `json:"networkInstances" yaml:"networkInstances" valid:"optional"`
 }
 
 type SnssaiUpfInfoItem struct {
-	SNssai         *models.Snssai    `json:"sNssai" yaml:"sNssai" valid:"required"`
-	DnnUpfInfoList []*DnnUpfInfoItem `json:"dnnUpfInfoList" yaml:"dnnUpfInfoList" valid:"required"`
-}
-
-func (s *SnssaiUpfInfoItem) Validate() (bool, error) {
-	if s.SNssai != nil {
-		if result := (s.SNssai.Sst >= 0 && s.SNssai.Sst <= 255); !result {
-			err := errors.New("Invalid sNssai.Sst: " + strconv.Itoa(int(s.SNssai.Sst)) + ", should be in range 0~255.")
-			return false, err
-		}
-
-		if s.SNssai.Sd != "" {
-			if result := govalidator.StringMatches(s.SNssai.Sd, "^[0-9A-Fa-f]{6}$"); !result {
-				err := errors.New("Invalid sNssai.Sd: " + s.SNssai.Sd +
-					", should be 3 bytes hex string and in range 000000~FFFFFF.")
-				return false, err
-			}
-		}
-	}
-
-	for _, dnnInfo := range s.DnnUpfInfoList {
-		if result, err := dnnInfo.validate(); err != nil {
-			return result, err
-		}
-	}
-
-	result, err := govalidator.ValidateStruct(s)
-	return result, appendInvalid(err)
+	SNssai         *models.Snssai    `json:"sNssai" yaml:"sNssai" valid:"snssaiValidator,required"`
+	DnnUpfInfoList []*DnnUpfInfoItem `json:"dnnUpfInfoList" yaml:"dnnUpfInfoList" valid:"required,dnnUpfInfoItemValidator"`
 }
 
 type DnnUpfInfoItem struct {
-	Dnn             string                  `json:"dnn" yaml:"dnn" valid:"required"`
+	Dnn             string                  `json:"dnn" yaml:"dnn" valid:"minstringlength(1),required"`
 	DnaiList        []string                `json:"dnaiList" yaml:"dnaiList" valid:"optional"`
-	PduSessionTypes []models.PduSessionType `json:"pduSessionTypes" yaml:"pduSessionTypes" valid:"optional"`
-	Pools           []*UEIPPool             `json:"pools" yaml:"pools" valid:"optional"`
-	StaticPools     []*UEIPPool             `json:"staticPools" yaml:"staticPools" valid:"optional"`
+	PduSessionTypes []models.PduSessionType `json:"pduSessionTypes" yaml:"pduSessionTypes" valid:"optional,in(IPv4|IPv6|IPV4V6|UNSTRUCTURED|ETHERNET)"`
+	Pools           []*UEIPPool             `json:"pools" yaml:"pools" valid:"optional,poolValidator"`
+	StaticPools     []*UEIPPool             `json:"staticPools" yaml:"staticPools" valid:"optional,poolValidator"`
 }
 
-func (d *DnnUpfInfoItem) validate() (bool, error) {
-	if result := len(d.Dnn); result == 0 {
-		err := errors.New("Invalid DnnUpfInfoItem.dnn: " + d.Dnn + ", should not be empty.")
-		return false, err
+func ValidateUEIPPool(poolToCheck *UEIPPool, dynamic []*UEIPPool, static []*UEIPPool) (bool, error) {
+	prefixToCheck, err := netaddr.ParseIPPrefix(poolToCheck.Cidr)
+	if err != nil {
+		return false, fmt.Errorf("Invalid pool CIDR: %s.", poolToCheck.Cidr)
 	}
 
-	for _, pool := range d.Pools {
-		if result, err := pool.validate(); err != nil {
-			return result, err
+	var prefixes []netaddr.IPPrefix
+	for _, pool := range dynamic {
+		if poolToCheck == pool {
+			continue
+		}
+		prefix, ok := netaddr.ParseIPPrefix(pool.Cidr)
+		if ok != nil {
+			return false, fmt.Errorf("Invalid pool CIDR: %s.", poolToCheck.Cidr)
+		}
+		prefixes = append(prefixes, prefix)
+	}
+
+	for _, staticPool := range static {
+		staticPrefix, ok := netaddr.ParseIPPrefix(staticPool.Cidr)
+		if ok != nil {
+			return false, fmt.Errorf("Invalid pool CIDR: %s.", poolToCheck.Cidr)
+		}
+		prefixes = append(prefixes, staticPrefix)
+	}
+
+	// check overlap within other pools
+	for i := 0; i < len(prefixes); i++ {
+		if prefixToCheck.Overlaps(prefixes[i]) {
+			return false, fmt.Errorf("overlap detected between pools %s and %s", prefixToCheck, prefixes[i])
 		}
 	}
 
-	result, err := govalidator.ValidateStruct(d)
-	return result, appendInvalid(err)
+	return true, nil
 }
 
 type UPLink struct {
@@ -604,92 +371,32 @@ type UPLink struct {
 	B string `json:"B" yaml:"B" valid:"required"`
 }
 
-func (u *UPLink) validate() (bool, error) {
-	result, err := govalidator.ValidateStruct(u)
-	return result, appendInvalid(err)
-}
-
-func appendInvalid(err error) error {
-	var errs govalidator.Errors
-
-	if err == nil {
-		return nil
+func ValidateLink(link *UPLink, upNodeNames []string) (bool, error) {
+	if ok := slices.Contains(upNodeNames, link.A) && slices.Contains(upNodeNames, link.B); !ok {
+		return false, fmt.Errorf("Link %s -- %s contains unknown node name", link.A, link.B)
 	}
-
-	es := err.(govalidator.Errors).Errors()
-	for _, e := range es {
-		errs = append(errs, fmt.Errorf("invalid %w", e))
-	}
-
-	return error(errs)
+	return true, nil
 }
 
 type UEIPPool struct {
-	Cidr string `yaml:"cidr" valid:"cidr,required"`
-}
-
-func (u *UEIPPool) validate() (bool, error) {
-	govalidator.TagMap["cidr"] = govalidator.Validator(func(str string) bool {
-		isCIDR := govalidator.IsCIDR(str)
-		return isCIDR
-	})
-
-	result, err := govalidator.ValidateStruct(u)
-	return result, appendInvalid(err)
+	Cidr string `yaml:"cidr" valid:"required"`
 }
 
 type SpecificPath struct {
 	DestinationIP   string   `yaml:"dest,omitempty" valid:"cidr,required"`
 	DestinationPort string   `yaml:"DestinationPort,omitempty" valid:"port,optional"`
-	Path            []string `yaml:"path" valid:"required"`
-}
-
-func (p *SpecificPath) validate() (bool, error) {
-	govalidator.TagMap["cidr"] = govalidator.Validator(func(str string) bool {
-		isCIDR := govalidator.IsCIDR(str)
-		return isCIDR
-	})
-
-	for _, upf := range p.Path {
-		if result := len(upf); result == 0 {
-			err := errors.New("Invalid UPF: " + upf + ", should not be empty")
-			return false, err
-		}
-	}
-
-	result, err := govalidator.ValidateStruct(p)
-	return result, appendInvalid(err)
+	Path            []string `yaml:"path" valid:"required,"`
 }
 
 type PlmnID struct {
-	Mcc string `yaml:"mcc"`
-	Mnc string `yaml:"mnc"`
-}
-
-func (p *PlmnID) validate() (bool, error) {
-	mcc := p.Mcc
-	if result := govalidator.StringMatches(mcc, "^[0-9]{3}$"); !result {
-		err := fmt.Errorf("Invalid mcc: %s, should be a 3-digit number", mcc)
-		return false, err
-	}
-
-	mnc := p.Mnc
-	if result := govalidator.StringMatches(mnc, "^[0-9]{2,3}$"); !result {
-		err := fmt.Errorf("Invalid mnc: %s, should be a 2 or 3-digit number", mnc)
-		return false, err
-	}
-	return true, nil
+	Mcc string `yaml:"mcc" valid:"matches(^[0-9]{3}$),required"`
+	Mnc string `yaml:"mnc" valid:"matches(^[0-9]{2,3}$),required"`
 }
 
 type TimerValue struct {
 	Enable        bool          `yaml:"enable" valid:"type(bool)"`
 	ExpireTime    time.Duration `yaml:"expireTime" valid:"type(time.Duration)"`
 	MaxRetryTimes int           `yaml:"maxRetryTimes,omitempty" valid:"type(int)"`
-}
-
-func (t *TimerValue) validate() (bool, error) {
-	result, err := govalidator.ValidateStruct(t)
-	return result, err
 }
 
 func (c *Config) GetVersion() string {
@@ -805,4 +512,137 @@ func (c *Config) GetCertKeyPath() string {
 	c.RLock()
 	defer c.RUnlock()
 	return c.Configuration.Sbi.Tls.Key
+}
+
+func appendInvalid(err error) error {
+	var errs govalidator.Errors
+
+	if err == nil {
+		return nil
+	}
+
+	es := err.(govalidator.Errors).Errors()
+	for _, e := range es {
+		errs = append(errs, fmt.Errorf("invalid %w", e))
+	}
+
+	return error(errs)
+}
+
+// functions to make validators testable
+func RegisterSchemeValidator() {
+	govalidator.TagMap["scheme"] = govalidator.Validator(func(str string) bool {
+		return str == "https" || str == "http"
+	})
+}
+
+func RegisterSNssaiValidator() {
+	govalidator.CustomTypeTagMap.Set("snssaiValidator", func(i interface{}, context interface{}) bool {
+		valid := true
+		switch sNssai := i.(type) {
+		case *models.Snssai:
+			if ok, err := ValidateSNssai(sNssai); !ok {
+				fmt.Println(err)
+				valid = false
+			}
+		default:
+			fmt.Printf("Cannot use snssaiValidator on field of type %T", sNssai)
+			valid = false
+		}
+		return valid
+	})
+}
+
+func RegisterUPNodeValidator() {
+	govalidator.CustomTypeTagMap.Set("upNodeValidator", func(i interface{}, context interface{}) bool {
+		valid := true
+		switch upNodes := i.(type) {
+		case map[string]UPNodeConfigInterface:
+			for _, upNode := range upNodes {
+				if ok, err := upNode.Validate(); !ok {
+					fmt.Println(err)
+					valid = false
+				}
+			}
+		default:
+			fmt.Printf("Cannot use upNodeValidator on field of type %T", upNodes)
+			valid = false
+		}
+		return valid
+	})
+}
+
+func RegisterLinkValidator() {
+	govalidator.CustomTypeTagMap.Set("linkValidator", func(i interface{}, context interface{}) bool {
+		var upNodeNames []string
+		switch contextType := context.(type) {
+		case UserPlaneInformation:
+			for name := range contextType.UPNodes {
+				upNodeNames = append(upNodeNames, name)
+			}
+		default:
+			fmt.Printf("linkValidator can only be used on UserPlaneInformation links, got %T", context)
+			return false
+		}
+
+		valid := true
+		switch links := i.(type) {
+		case []*UPLink:
+			for _, link := range links {
+				if ok, err := ValidateLink(link, upNodeNames); !ok {
+					fmt.Println(err)
+					valid = false
+				}
+			}
+		default:
+			fmt.Printf("Cannot use linkValidator on field of type %T", links)
+			valid = false
+		}
+
+		return valid
+	})
+}
+
+func RegisterPoolValidator() {
+	govalidator.CustomTypeTagMap.Set("poolValidator", func(i interface{}, context interface{}) bool {
+		dnnUpfInfoItem, isType := context.(DnnUpfInfoItem)
+		if !isType {
+			fmt.Printf("poolValidator can only be used on DnnUpfInfoItem UE IP pools, got %T", context)
+			return false
+		}
+
+		valid := true
+		switch pools := i.(type) {
+		case []*UEIPPool:
+			for _, pool := range pools {
+				if ok, err := ValidateUEIPPool(pool, dnnUpfInfoItem.Pools, dnnUpfInfoItem.StaticPools); !ok {
+					fmt.Println(err)
+					valid = false
+				}
+			}
+		default:
+			fmt.Printf("Cannot use poolValidator on field of type %T", pools)
+			valid = false
+		}
+		return valid
+	})
+}
+
+func RegisterDnnUpfInfoItemValidator() {
+	govalidator.CustomTypeTagMap.Set("dnnUpfInfoItemValidator", func(i interface{}, context interface{}) bool {
+		valid := true
+		switch dnnUpfInfoItems := i.(type) {
+		case []*DnnUpfInfoItem:
+			for _, dnnUpfInfoItem := range dnnUpfInfoItems {
+				if ok, err := govalidator.ValidateStruct(dnnUpfInfoItem); !ok {
+					fmt.Println(err)
+					valid = false
+				}
+			}
+		default:
+			fmt.Printf("Cannot use dnnUpfInfoItemValidator on field of type %T", dnnUpfInfoItems)
+			valid = false
+		}
+		return valid
+	})
 }

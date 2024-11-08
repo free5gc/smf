@@ -18,9 +18,9 @@ import (
 func (p *Processor) ToBeAssociatedWithUPF(smfPfcpContext context.Context, upf *smf_context.UPF) {
 	var upfStr string
 	if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
-		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.NodeID.ResolveNodeIdToIp().String())
+		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.GetNodeIDString())
 	} else {
-		upfStr = fmt.Sprintf("[%s]", upf.NodeID.ResolveNodeIdToIp().String())
+		upfStr = fmt.Sprintf("[%s]", upf.GetNodeIDString())
 	}
 
 	for {
@@ -46,9 +46,9 @@ func (p *Processor) ToBeAssociatedWithUPF(smfPfcpContext context.Context, upf *s
 func (p *Processor) ReleaseAllResourcesOfUPF(upf *smf_context.UPF) {
 	var upfStr string
 	if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
-		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.NodeID.ResolveNodeIdToIp().String())
+		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.GetNodeIDString())
 	} else {
-		upfStr = fmt.Sprintf("[%s]", upf.NodeID.ResolveNodeIdToIp().String())
+		upfStr = fmt.Sprintf("[%s]", upf.GetNodeIDString())
 	}
 	p.releaseAllResourcesOfUPF(upf, upfStr)
 }
@@ -109,7 +109,7 @@ func setupPfcpAssociation(upf *smf_context.UPF, upfStr string) error {
 		upf.UPIPInfo = *rsp.UserPlaneIPResourceInformation
 
 		logger.MainLog.Infof("UPF(%s)[%s] setup association",
-			upf.NodeID.ResolveNodeIdToIp().String(), upf.UPIPInfo.NetworkInstance.NetworkInstance)
+			upf.GetNodeIDString(), upf.UPIPInfo.NetworkInstance.NetworkInstance)
 	}
 
 	return nil

@@ -15,7 +15,7 @@ func (smContext *SMContext) HandleReports(
 ) {
 	var usageReport UsageReport
 	upf := RetrieveUPFNodeByNodeID(nodeId)
-	upfId := upf.UUID()
+	upfId := upf.GetID()
 
 	for _, report := range usageReportRequest {
 		usageReport.UrrId = report.URRID.UrrIdValue
