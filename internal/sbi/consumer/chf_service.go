@@ -148,8 +148,6 @@ func (s *nchfService) SendConvergedChargingRequest(
 		case openapi.GenericOpenAPIError:
 			switch errModel := err.Model().(type) {
 			case ConvergedCharging.PostChargingDataError:
-				chargingDataRef := strings.Split(errModel.Location, "/")
-				smContext.ChargingDataRef = chargingDataRef[len(chargingDataRef)-1]
 				return nil, &errModel.ProblemDetails, nil
 			case error:
 				return nil, openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
@@ -159,6 +157,8 @@ func (s *nchfService) SendConvergedChargingRequest(
 		case error:
 			return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
 		case nil:
+			chargingDataRef := strings.Split(rspPost.Location, "/")
+			smContext.ChargingDataRef = chargingDataRef[len(chargingDataRef)-1]
 			return &rspPost.ChfConvergedChargingChargingDataResponse, nil, nil
 		default:
 			return nil, nil, openapi.ReportError("server no response")
