@@ -18,7 +18,7 @@ import (
 var testConfig = factory.Config{
 	Info: &factory.Info{
 		Version:     "1.0.0",
-		Description: "SMF procdeure test configuration",
+		Description: "SMF procedure test configuration",
 	},
 	Configuration: &factory.Configuration{
 		Sbi: &factory.Sbi{
@@ -27,6 +27,7 @@ var testConfig = factory.Config{
 			BindingIPv4:  "127.0.0.1",
 			Port:         8000,
 		},
+		UserPlaneInformation: &factory.UserPlaneInformation{},
 	},
 }
 

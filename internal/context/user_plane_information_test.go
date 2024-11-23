@@ -6,21 +6,26 @@ import (
 	"net"
 	"testing"
 
+	. "github.com/smartystreets/goconvey/convey"
 	"github.com/stretchr/testify/require"
 
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/pfcp/pfcpType"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
 var configuration = &factory.UserPlaneInformation{
-	UPNodes: map[string]*factory.UPNode{
-		"GNodeB": {
-			Type:   "AN",
-			NodeID: "192.168.179.100",
+	UPNodes: map[string]factory.UPNodeConfigInterface{
+		"GNodeB": &factory.GNBConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "AN",
+			},
 		},
-		"UPF1": {
-			Type:   "UPF",
+		"UPF1": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.1",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -62,8 +67,10 @@ var configuration = &factory.UserPlaneInformation{
 				},
 			},
 		},
-		"UPF2": {
-			Type:   "UPF",
+		"UPF2": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.2",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -84,8 +91,10 @@ var configuration = &factory.UserPlaneInformation{
 				},
 			},
 		},
-		"UPF3": {
-			Type:   "UPF",
+		"UPF3": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.3",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -106,8 +115,10 @@ var configuration = &factory.UserPlaneInformation{
 				},
 			},
 		},
-		"UPF4": {
-			Type:   "UPF",
+		"UPF4": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.4",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -270,7 +281,7 @@ func TestSelectUPFAndAllocUEIP(t *testing.T) {
 
 	userplaneInformation := smf_context.NewUserPlaneInformation(configuration)
 	for _, upf := range userplaneInformation.UPFs {
-		upf.UPF.AssociationContext = context.Background()
+		upf.AssociationContext = context.Background()
 	}
 
 	for i := 0; i <= 100; i++ {
@@ -288,13 +299,16 @@ func TestSelectUPFAndAllocUEIP(t *testing.T) {
 }
 
 var configForIPPoolAllocate = &factory.UserPlaneInformation{
-	UPNodes: map[string]*factory.UPNode{
-		"GNodeB": {
-			Type:   "AN",
-			NodeID: "192.168.179.100",
+	UPNodes: map[string]factory.UPNodeConfigInterface{
+		"GNodeB": &factory.GNBConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "AN",
+			},
 		},
-		"UPF1": {
-			Type:   "UPF",
+		"UPF1": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.1",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -320,8 +334,10 @@ var configForIPPoolAllocate = &factory.UserPlaneInformation{
 				},
 			},
 		},
-		"UPF2": {
-			Type:   "UPF",
+		"UPF2": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.2",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -347,8 +363,10 @@ var configForIPPoolAllocate = &factory.UserPlaneInformation{
 				},
 			},
 		},
-		"UPF3": {
-			Type:   "UPF",
+		"UPF3": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.3",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -487,7 +505,7 @@ var testCasesOfGetUEIPPool = []struct {
 func TestGetUEIPPool(t *testing.T) {
 	userplaneInformation := smf_context.NewUserPlaneInformation(configForIPPoolAllocate)
 	for _, upf := range userplaneInformation.UPFs {
-		upf.UPF.AssociationContext = context.Background()
+		upf.AssociationContext = context.Background()
 	}
 
 	for ci, tc := range testCasesOfGetUEIPPool {
@@ -499,7 +517,7 @@ func TestGetUEIPPool(t *testing.T) {
 				}
 			}
 
-			var upf *smf_context.UPNode
+			var upf *smf_context.UPF
 			var allocatedIP net.IP
 			var useStatic bool
 			for times := 1; times <= tc.allocateTimes; times++ {
@@ -517,4 +535,109 @@ func TestGetUEIPPool(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConfigToNodeID(t *testing.T) {
+	testCases := []struct {
+		name           string
+		configNodeID   string
+		expectedNodeID pfcpType.NodeID
+		expectedError  error
+	}{
+		{
+			name:         "IPv4",
+			configNodeID: "192.168.179.100",
+			expectedNodeID: pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+				IP:         net.ParseIP("192.168.179.100").To4(),
+			},
+			expectedError: nil,
+		},
+		{
+			name:         "IPv4 CIDR",
+			configNodeID: "192.168.179.100/24",
+			expectedNodeID: pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+				IP:         net.ParseIP("192.168.179.100").To4(),
+			},
+			expectedError: nil,
+		},
+		{
+			name:           "IPv4 error",
+			configNodeID:   "192.168.179.1111",
+			expectedNodeID: pfcpType.NodeID{},
+			expectedError:  fmt.Errorf("input %s is not a valid IP address or resolvable FQDN", "192.168.179.1111"),
+		},
+		{
+			name:         "IPv6",
+			configNodeID: "2001:41b8:810:20:df55:785b:e4ed:15b8",
+			expectedNodeID: pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeIpv6Address,
+				IP:         net.ParseIP("2001:41b8:810:20:df55:785b:e4ed:15b8"),
+			},
+			expectedError: nil,
+		},
+		{
+			name:         "IPv6 CIDR",
+			configNodeID: "2001:41b8:810:20:df55:785b:e4ed:15b8/64",
+			expectedNodeID: pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeIpv6Address,
+				IP:         net.ParseIP("2001:41b8:810:20:df55:785b:e4ed:15b8"),
+			},
+			expectedError: nil,
+		},
+		{
+			name:           "IPv6 error",
+			configNodeID:   "2001:810:20:df55:785b:e4ed:15b8",
+			expectedNodeID: pfcpType.NodeID{},
+			expectedError: fmt.Errorf("input %s is not a valid IP address or resolvable FQDN",
+				"2001:810:20:df55:785b:e4ed:15b8"),
+		},
+		{
+			name:         "IPv6 short",
+			configNodeID: "::1",
+			expectedNodeID: pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeIpv6Address,
+				IP:         net.ParseIP("::1"),
+			},
+			expectedError: nil,
+		},
+		{
+			name:         "FQDN",
+			configNodeID: "example.com",
+			expectedNodeID: pfcpType.NodeID{
+				NodeIdType: pfcpType.NodeIdTypeFqdn,
+				FQDN:       "example.com",
+			},
+			expectedError: nil,
+		},
+		{
+			name:           "FQDN error",
+			configNodeID:   "notresolving.example.com",
+			expectedNodeID: pfcpType.NodeID{},
+			expectedError:  fmt.Errorf("input %s is not a valid IP address or resolvable FQDN", "notresolving.example.com"),
+		},
+	}
+
+	Convey("Should convert config input string to valid NodeID or throw error", t, func() {
+		for i, testcase := range testCases {
+			infoStr := fmt.Sprintf("testcase[%d]: %s", i, testcase.name)
+
+			Convey(infoStr, func() {
+				nodeID, err := smf_context.ConfigToNodeID(testcase.configNodeID)
+
+				if testcase.expectedError == nil {
+					So(err, ShouldBeNil)
+					So(nodeID.NodeIdType, ShouldEqual, testcase.expectedNodeID.NodeIdType)
+					So(nodeID.IP, ShouldEqual, testcase.expectedNodeID.IP)
+					So(nodeID.FQDN, ShouldEqual, testcase.expectedNodeID.FQDN)
+				} else {
+					So(err, ShouldNotBeNil)
+					if err != nil {
+						So(err.Error(), ShouldEqual, testcase.expectedError.Error())
+					}
+				}
+			})
+		}
+	})
 }

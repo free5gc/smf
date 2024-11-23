@@ -30,13 +30,17 @@ import (
 	"github.com/free5gc/util/httpwrapper"
 )
 
-var userPlaneConfig = factory.UserPlaneInformation{
-	UPNodes: map[string]*factory.UPNode{
-		"GNodeB": {
-			Type: "AN",
+var userPlaneConfig = &factory.UserPlaneInformation{
+	UPNodes: map[string]factory.UPNodeConfigInterface{
+		"GNodeB": &factory.GNBConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "AN",
+			},
 		},
-		"UPF1": {
-			Type:   "UPF",
+		"UPF1": &factory.UPFConfig{
+			UPNodeConfig: &factory.UPNodeConfig{
+				Type: "UPF",
+			},
 			NodeID: "192.168.179.1",
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{
 				{
@@ -54,7 +58,7 @@ var userPlaneConfig = factory.UserPlaneInformation{
 					},
 				},
 			},
-			InterfaceUpfInfoList: []*factory.InterfaceUpfInfoItem{
+			Interfaces: []*factory.Interface{
 				{
 					InterfaceType: "N3",
 					Endpoints: []string{
@@ -76,7 +80,7 @@ var userPlaneConfig = factory.UserPlaneInformation{
 var testConfig = factory.Config{
 	Info: &factory.Info{
 		Version:     "1.0.0",
-		Description: "SMF procdeure test configuration",
+		Description: "SMF procedure test configuration",
 	},
 	Configuration: &factory.Configuration{
 		SmfName: "SMF Procedure Test",
@@ -446,9 +450,8 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 	initStubPFCP()
 
 	// modify associate setup status
-	allUPFs := smf_context.GetSelf().UserPlaneInformation.UPFs
-	for _, upfNode := range allUPFs {
-		upfNode.UPF.AssociationContext = context.Background()
+	for _, upf := range smf_context.GetSelf().UserPlaneInformation.UPFs {
+		upf.AssociationContext = context.Background()
 	}
 
 	testCases := []struct {
