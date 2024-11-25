@@ -212,8 +212,9 @@ func (a *SmfApp) terminateProcedure() {
 		case error:
 			logger.MainLog.Errorf("Deregister NF instance Error[%+v]", err)
 		}
+	} else {
+		logger.MainLog.Infof("Deregister from NRF successfully")
 	}
-	logger.MainLog.Infof("Deregister from NRF successfully")
 
 	a.sbiServer.Stop()
 	logger.MainLog.Infof("SMF SBI Server terminated")
