@@ -167,11 +167,11 @@ func createNasPacketFilter(
 	smCtx.PacketFilterIDToNASPFID[pfInfo.PackFiltId] = uint8(pfId)
 
 	switch pfInfo.FlowDirection {
-	case models.FlowDirectionRm_DOWNLINK:
+	case models.FlowDirection_DOWNLINK:
 		pf.Direction = nasType.PacketFilterDirectionDownlink
-	case models.FlowDirectionRm_UPLINK:
+	case models.FlowDirection_UPLINK:
 		pf.Direction = nasType.PacketFilterDirectionUplink
-	case models.FlowDirectionRm_BIDIRECTIONAL:
+	case models.FlowDirection_BIDIRECTIONAL:
 		pf.Direction = nasType.PacketFilterDirectionBidirectional
 	}
 

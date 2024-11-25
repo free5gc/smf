@@ -12,6 +12,7 @@ import (
 func (s *Server) getUPIRoutes() []Route {
 	return []Route{
 		{
+			Name:    "Index",
 			Method:  http.MethodGet,
 			Pattern: "/",
 			APIFunc: func(c *gin.Context) {
@@ -19,16 +20,19 @@ func (s *Server) getUPIRoutes() []Route {
 			},
 		},
 		{
+			Name:    "GetUpNodesLinks",
 			Method:  http.MethodGet,
 			Pattern: "/upNodesLinks",
 			APIFunc: s.GetUpNodesLinks,
 		},
 		{
+			Name:    "AddUpNodesLinks",
 			Method:  http.MethodPost,
 			Pattern: "/upNodesLinks",
 			APIFunc: s.PostUpNodesLinks,
 		},
 		{
+			Name:    "DeleteUpNodeLink",
 			Method:  http.MethodDelete,
 			Pattern: "/upNodesLinks/:upNodeRef",
 			APIFunc: s.DeleteUpNodeLink,

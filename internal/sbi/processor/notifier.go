@@ -7,8 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/free5gc/openapi/Nsmf_EventExposure"
+	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/openapi/smf/EventExposure"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 )
@@ -56,16 +57,12 @@ func (p *Processor) chargingNotificationProcedure(
 				logger.ChargingLog.Warnf("Cound not find upf %s", upfId)
 				continue
 			}
-			QueryReport(smContext, upf, urrList, models.TriggerType_FORCED_REAUTHORISATION)
+			QueryReport(smContext, upf, urrList, models.ChfConvergedChargingTriggerType_FORCED_REAUTHORISATION)
 		}
 		p.ReportUsageAndUpdateQuota(smContext)
 	} else {
-		problemDetails := &models.ProblemDetails{
-			Status: http.StatusNotFound,
-			Cause:  CONTEXT_NOT_FOUND,
-			Detail: fmt.Sprintf("SM Context [%s] Not Found ", smContextRef),
-		}
-		return problemDetails
+		detail := fmt.Sprintf("SM Context [%s] Not Found ", smContextRef)
+		return openapi.ProblemDetailsDataNotFound(detail)
 	}
 
 	return nil
@@ -128,30 +125,23 @@ func (p *Processor) HandleSMPolicyUpdateNotify(
 func SendUpPathChgEventExposureNotification(
 	uri string, notification *models.NsmfEventExposureNotification,
 ) {
-	configuration := Nsmf_EventExposure.NewConfiguration()
-	client := Nsmf_EventExposure.NewAPIClient(configuration)
-	_, httpResponse, err := client.
-		DefaultCallbackApi.
-		SmfEventExposureNotification(context.Background(), uri, *notification)
-	if err != nil {
-		if httpResponse != nil {
-			logger.PduSessLog.Warnf("SMF Event Exposure Notification Error[%s]", httpResponse.Status)
-		} else {
-			logger.PduSessLog.Warnf("SMF Event Exposure Notification Failed[%s]", err.Error())
-		}
-		return
-	} else if httpResponse == nil {
-		logger.PduSessLog.Warnln("SMF Event Exposure Notification Failed[HTTP Response is nil]")
-		return
+	configuration := EventExposure.NewConfiguration()
+	client := EventExposure.NewAPIClient(configuration)
+	request := &EventExposure.CreateIndividualSubcriptionMyNotificationPostRequest{
+		NsmfEventExposureNotification: notification,
 	}
-	defer func() {
-		if rspCloseErr := httpResponse.Body.Close(); rspCloseErr != nil {
-			logger.PduSessLog.Errorf("SmfEventExposureNotification response body cannot close: %+v", rspCloseErr)
-		}
-	}()
-	if httpResponse.StatusCode != http.StatusOK && httpResponse.StatusCode != http.StatusNoContent {
-		logger.PduSessLog.Warnf("SMF Event Exposure Notification Failed")
-	} else {
+	_, err := client.
+		SubscriptionsCollectionApi.
+		CreateIndividualSubcriptionMyNotificationPost(context.Background(), uri, request)
+
+	switch err := err.(type) {
+	case openapi.GenericOpenAPIError:
+		logger.PduSessLog.Warnf("SMF Event Exposure Notification Error[%s]", err.Error())
+	case error:
+		logger.PduSessLog.Warnf("SMF Event Exposure Notification Failed[%s]", err.Error())
+	case nil:
 		logger.PduSessLog.Tracef("SMF Event Exposure Notification Success")
+	default:
+		logger.PduSessLog.Warnf("SMF Event Exposure Notification Unknown Error: %+v", err)
 	}
 }
