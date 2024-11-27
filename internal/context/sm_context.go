@@ -300,8 +300,11 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 	smContext.Tunnel = NewUPTunnel()
 
 	smContext.QoSRuleIDGenerator = idgenerator.NewGenerator(1, 255)
-	defRuleID, _ := smContext.QoSRuleIDGenerator.Allocate()
-	smContext.defRuleID = uint8(defRuleID)
+	if defRuleID, err := smContext.QoSRuleIDGenerator.Allocate(); err != nil {
+		logger.CtxLog.Warnln("Create Default QoS rule error ", err)
+	} else {
+		smContext.defRuleID = uint8(defRuleID)
+	}
 
 	smContext.PacketFilterIDGenerator = idgenerator.NewGenerator(1, 255)
 	smContext.QFIGenerator = idgenerator.NewGenerator(2, 63) // 1 always reserve for default Qos
