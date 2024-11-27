@@ -36,9 +36,12 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	pDUSessionEstablishmentAccept.SessionAMBR = nasConvert.ModelsToSessionAMBR(sessRule.AuthSessAmbr)
 	pDUSessionEstablishmentAccept.SessionAMBR.SetLen(uint8(len(pDUSessionEstablishmentAccept.SessionAMBR.Octet)))
 
-	qoSRules := nasType.QoSRules{
-		{
-			Identifier: 0x01,
+	qoSRules := nasType.QoSRules{}
+	if defRuleID, err := smContext.QoSRuleIDGenerator.Allocate(); err != nil {
+		return nil, err
+	} else {
+		qosRule := nasType.QoSRule{
+			Identifier: uint8(defRuleID),
 			DQR:        true,
 			Operation:  nasType.OperationCodeCreateNewQoSRule,
 			Precedence: 255,
@@ -52,7 +55,8 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 					},
 				},
 			},
-		},
+		}
+		qoSRules = append(qoSRules, qosRule)
 	}
 
 	for _, pccRule := range smContext.PCCRules {
