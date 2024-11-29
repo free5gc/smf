@@ -579,6 +579,8 @@ func (c *SMContext) SelectDefaultDataPath() error {
 	if GetSelf().ULCLSupport && CheckUEHasPreConfig(c.Supi) {
 		c.Log.Infof("Has pre-config default path")
 		uePreConfigPaths := GetUEPreConfigPaths(c.Supi, c.SelectedUPF.Name)
+		c.Tunnel.DataPathPool = uePreConfigPaths.DataPathPool
+		c.Tunnel.PathIDGenerator = uePreConfigPaths.PathIDGenerator
 		defaultPath = uePreConfigPaths.DataPathPool.GetDefaultPath()
 	} else if c.Tunnel.DataPathPool.GetDefaultPath() == nil {
 		// UE has no pre-config path and default path
