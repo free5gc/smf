@@ -38,7 +38,7 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 
 	qoSRules := nasType.QoSRules{
 		{
-			Identifier: 0x01,
+			Identifier: smContext.defRuleID,
 			DQR:        true,
 			Operation:  nasType.OperationCodeCreateNewQoSRule,
 			Precedence: 255,
