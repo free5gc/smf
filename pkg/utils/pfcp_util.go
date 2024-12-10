@@ -23,8 +23,8 @@ func InitPFCPFunc(pCtx context.Context) (func(a *service.SmfApp), func()) {
 		// Wait for PFCP start
 		time.Sleep(1000 * time.Millisecond)
 
-		for _, upNode := range smf_context.GetSelf().UserPlaneInformation.UPFs {
-			go a.Processor().ToBeAssociatedWithUPF(smfContext.PfcpContext, upNode.UPF)
+		for _, upf := range smf_context.GetSelf().UserPlaneInformation.UPFs {
+			go a.Processor().ToBeAssociatedWithUPF(smfContext.PfcpContext, upf)
 		}
 	}
 

@@ -209,7 +209,7 @@ func buildMultiUnitUsageFromUsageReport(smContext *smf_context.SMContext) []mode
 
 				ratingGroupUnitUsagesMap[rg] = models.MultipleUnitUsage{
 					RatingGroup:       rg,
-					UPFID:             ur.UpfId,
+					UPFID:             ur.UpfId.String(),
 					UsedUnitContainer: []models.UsedUnitContainer{uu},
 					RequestedUnit:     requestUnit,
 				}
