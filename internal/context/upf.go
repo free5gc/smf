@@ -68,7 +68,6 @@ type UPF struct {
 	uuid              uuid.UUID
 	NodeID            pfcpType.NodeID
 	Addr              string
-	UPIPInfo          pfcpType.UserPlaneIPResourceInformation
 	RecoveryTimeStamp time.Time
 
 	AssociationContext context.Context
@@ -351,19 +350,6 @@ func RemoveUPFNodeByNodeID(nodeID pfcpType.NodeID) bool {
 		return true
 	}
 	return false
-}
-
-func SelectUPFByDnn(dnn string) *UPF {
-	var upf *UPF
-	upfPool.Range(func(key, value interface{}) bool {
-		upf = value.(*UPF)
-		if upf.UPIPInfo.Assoni && upf.UPIPInfo.NetworkInstance.NetworkInstance == dnn {
-			return false
-		}
-		upf = nil
-		return true
-	})
-	return upf
 }
 
 func (upf *UPF) GetUPFIP() string {
