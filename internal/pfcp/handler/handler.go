@@ -39,8 +39,6 @@ func HandlePfcpAssociationSetupRequest(msg *pfcpUdp.Message) {
 		return
 	}
 
-	upf.UPIPInfo = *req.UserPlaneIPResourceInformation
-
 	// Response with PFCP Association Setup Response
 	cause := pfcpType.Cause{
 		CauseValue: pfcpType.CauseRequestAccepted,
