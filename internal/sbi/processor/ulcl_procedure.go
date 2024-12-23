@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"fmt"
 	"net"
 	"reflect"
 
@@ -14,7 +13,7 @@ import (
 	"github.com/free5gc/util/flowdesc"
 )
 
-func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) error {
+func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
 	smContext.Log.Infoln("In AddPDUSessionAnchorAndULCL")
 	bpMGR := smContext.BPManager
 
@@ -30,7 +29,8 @@ func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) err
 			// select an upf as ULCL
 			err := bpMGR.FindULCL(smContext)
 			if err != nil {
-				return err
+				logger.PduSessLog.Errorln(err)
+				return
 			}
 
 			// Allocate Path PDR and TEID
@@ -42,10 +42,7 @@ func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) err
 
 			EstablishRANTunnelInfo(smContext)
 			// Establish ULCL
-			err = EstablishULCL(smContext)
-			if err != nil {
-				return err
-			}
+			EstablishULCL(smContext)
 
 			UpdatePSA2DownLink(smContext)
 
@@ -54,7 +51,6 @@ func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) err
 	default:
 		logger.CtxLog.Warnln("unexpected status")
 	}
-	return nil
 }
 
 func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
@@ -134,7 +130,7 @@ func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 	logger.PduSessLog.Traceln("End of EstablishPSA2")
 }
 
-func EstablishULCL(smContext *context.SMContext) error {
+func EstablishULCL(smContext *context.SMContext) {
 	logger.PduSessLog.Infoln("In EstablishULCL")
 
 	bpMGR := smContext.BPManager
@@ -159,46 +155,6 @@ func EstablishULCL(smContext *context.SMContext) error {
 					pduLevelChargingUrrs = pccRule.Datapath.GetChargingUrr(smContext)
 					break
 				}
-			}
-
-			// For online charging, create new URR
-			urrId := pduLevelChargingUrrs[0].URRID
-			if smContext.ChargingInfo[urrId].ChargingMethod == models.QuotaManagementIndicator_ONLINE_CHARGING {
-				var urr *context.URR
-				newChgInfo := &context.ChargingInfo{
-					RatingGroup:   smContext.ChargingInfo[urrId].RatingGroup,
-					ChargingLevel: smContext.ChargingInfo[urrId].ChargingLevel,
-					UpfId:         curDPNode.UPF.UUID(),
-				}
-
-				newUrrId, err := smContext.UrrIDGenerator.Allocate()
-				if err != nil {
-					logger.PduSessLog.Errorln("Generate URR Id failed")
-					return err
-				}
-
-				currentUUID := curDPNode.UPF.UUID()
-				id := fmt.Sprintf("%s:%d", currentUUID, newUrrId)
-
-				if oldURR, ok := smContext.UrrUpfMap[id]; !ok {
-					if newURR, err2 := curDPNode.UPF.AddURR(uint32(newUrrId),
-						context.NewMeasureInformation(false, false),
-						context.SetStartOfSDFTrigger()); err2 != nil {
-						logger.PduSessLog.Errorln("new URR failed")
-						return fmt.Errorf("new URR failed for up node [%s]", currentUUID)
-					} else {
-						urr = newURR
-						newChgInfo.ChargingMethod = models.QuotaManagementIndicator_ONLINE_CHARGING
-						smContext.UrrUpfMap[id] = urr
-					}
-				} else {
-					urr = oldURR
-				}
-				smContext.Log.Tracef("Successfully add URR %d for Rating group %d",
-					urr.URRID, smContext.ChargingInfo[urrId].RatingGroup)
-				smContext.ChargingInfo[urr.URRID] = newChgInfo
-				pduLevelChargingUrrs = pduLevelChargingUrrs[:0]
-				pduLevelChargingUrrs = append(pduLevelChargingUrrs, urr)
 			}
 
 			// Append URRs to anchor UPF
@@ -261,7 +217,6 @@ func EstablishULCL(smContext *context.SMContext) error {
 
 	waitAllPfcpRsp(smContext, len(pendingUPFs), resChan, nil)
 	close(resChan)
-	return nil
 }
 
 func UpdatePSA2DownLink(smContext *context.SMContext) {
