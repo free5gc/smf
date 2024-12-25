@@ -370,7 +370,7 @@ func checkUpPathChangeEvt(c *SMContext,
 			return fmt.Errorf("No RouteToLocs in srcTcData")
 		}
 		// TODO: Fix always choosing the first RouteToLocs as source Route
-		srcRoute = srcTcData.RouteToLocs[0]
+		srcRoute = *srcTcData.RouteToLocs[0]
 		// If no target TcData, the default UpPathChgEvent will be the one in source TcData
 		upPathChgEvt = srcTcData.UpPathChgEvent
 	} else {
@@ -385,7 +385,7 @@ func checkUpPathChangeEvt(c *SMContext,
 			return fmt.Errorf("No RouteToLocs in tgtTcData")
 		}
 		// TODO: Fix always choosing the first RouteToLocs as target Route
-		tgtRoute = tgtTcData.RouteToLocs[0]
+		tgtRoute = *tgtTcData.RouteToLocs[0]
 		// If target TcData is available, change UpPathChgEvent to the one in target TcData
 		upPathChgEvt = tgtTcData.UpPathChgEvent
 	} else {
