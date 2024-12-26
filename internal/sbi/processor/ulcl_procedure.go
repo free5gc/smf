@@ -142,6 +142,30 @@ func EstablishULCL(smContext *context.SMContext) {
 
 	// find updatedUPF in activatingPath
 	for curDPNode := activatingPath.FirstDPNode; curDPNode != nil; curDPNode = curDPNode.Next() {
+		smContext.Log.Traceln("Current DP Node IP: ", curDPNode.UPF.NodeID.ResolveNodeIdToIp().String())
+
+		if curDPNode.IsAnchorUPF() {
+			var pduLevelChargingUrrs []*context.URR
+
+			// Select PDU session level charging URRs from pcc rule
+			for _, pccRule := range smContext.PCCRules {
+				if chargingLevel, err := pccRule.IdentifyChargingLevel(); err != nil {
+					continue
+				} else if chargingLevel == context.PduSessionCharging {
+					pduLevelChargingUrrs = pccRule.Datapath.GetChargingUrr(smContext)
+					break
+				}
+			}
+
+			// Append URRs to anchor UPF
+			if curDPNode.UpLinkTunnel != nil && curDPNode.UpLinkTunnel.PDR != nil {
+				curDPNode.UpLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
+			}
+			if curDPNode.DownLinkTunnel != nil && curDPNode.DownLinkTunnel.PDR != nil {
+				curDPNode.DownLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
+			}
+		}
+
 		if reflect.DeepEqual(ulcl.NodeID, curDPNode.UPF.NodeID) {
 			UPLinkPDR := curDPNode.UpLinkTunnel.PDR
 			DownLinkPDR := curDPNode.DownLinkTunnel.PDR
