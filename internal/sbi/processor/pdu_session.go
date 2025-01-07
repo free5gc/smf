@@ -376,13 +376,16 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				p.sendGSMPDUSessionReleaseCommand(smContext, buf)
 			}
 
-			if buf, err = smf_context.
-				BuildPDUSessionResourceReleaseCommandTransfer(smContext); err != nil {
-				smContext.Log.Errorf("Build PDUSessionResourceReleaseCommandTransfer failed: %+v", err)
-			} else {
-				response.JsonData.N2SmInfoType = models.N2SmInfoType_PDU_RES_REL_CMD
-				response.BinaryDataN2SmInformation = buf
-				response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "PDUResourceReleaseCommand"}
+			// Only send N2 PDU Session Resource Release when UP connection is active
+			if smContext.UpCnxState == models.UpCnxState_ACTIVATED {
+				if buf, err = smf_context.
+					BuildPDUSessionResourceReleaseCommandTransfer(smContext); err != nil {
+					smContext.Log.Errorf("Build PDUSessionResourceReleaseCommandTransfer failed: %+v", err)
+				} else {
+					response.JsonData.N2SmInfoType = models.N2SmInfoType_PDU_RES_REL_CMD
+					response.BinaryDataN2SmInformation = buf
+					response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "PDUResourceReleaseCommand"}
+				}
 			}
 
 			smContext.SetState(smf_context.PFCPModification)
