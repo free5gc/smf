@@ -191,7 +191,8 @@ func EstablishULCL(smContext *context.SMContext) {
 				} else {
 					urr = oldURR
 				}
-				smContext.Log.Tracef("Successfully add URR %d for Rating group %d", urr.URRID, smContext.ChargingInfo[urrId].RatingGroup)
+				smContext.Log.Tracef("Successfully add URR %d for Rating group %d",
+					urr.URRID, smContext.ChargingInfo[urrId].RatingGroup)
 				smContext.ChargingInfo[urr.URRID] = newChgInfo
 				pduLevelChargingUrrs = pduLevelChargingUrrs[:0]
 				pduLevelChargingUrrs = append(pduLevelChargingUrrs, urr)
