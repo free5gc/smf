@@ -3,9 +3,11 @@ package processor
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"reflect"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -253,7 +255,22 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 
 	doSubscribe = true
 	response.JsonData = smContext.BuildCreatedData()
-	c.Header("Location", smContext.Ref)
+
+	// default location value will only be used in test environment
+	// in real environment, location value will be formatted as a full URI
+	location := smContext.Ref // this is the default location value
+	if c.Request != nil {
+		protocol := "http"
+		if c.Request.TLS != nil {
+			protocol += "s"
+		}
+		location = fmt.Sprintf("%s://%s%s/%s",
+			protocol,
+			c.Request.Host,
+			strings.TrimSuffix(c.Request.URL.Path, "/"),
+			strings.Split(smContext.Ref, ":")[2])
+	}
+	c.Header("Location", location)
 	c.JSON(http.StatusCreated, response)
 }
 
