@@ -661,8 +661,10 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData)
 	}
 
-	pccRule.Datapath.AddQoS(c, pccRule.QFI, qosData)
-	c.AddQosFlow(pccRule.QFI, qosData)
+	if pccRule.RefQosDataID() != "" {
+		pccRule.Datapath.AddQoS(c, pccRule.QFI, qosData)
+		c.AddQosFlow(pccRule.QFI, qosData)
+	}
 	return nil
 }
 
