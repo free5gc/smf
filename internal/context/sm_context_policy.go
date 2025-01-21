@@ -163,7 +163,11 @@ func (c *SMContext) ApplyPccRules(
 
 			tgtQosID := tgtPcc.RefQosDataID()
 			_, tgtQosData := c.getSrcTgtQosData(decision.QosDecs, tgtQosID)
-			tgtPcc.SetQFI(c.AssignQFI(tgtQosID))
+
+			// only assign the QFI when there is tgtQoSID (i.e. there is QoSData)
+			if tgtQosID != "" {
+				tgtPcc.SetQFI(c.AssignQFI(tgtQosID))
+			}
 
 			// Create Data path for targetPccRule
 			if err := c.CreatePccRuleDataPath(tgtPcc, tgtTcData, tgtQosData, tgtChgData); err != nil {
@@ -180,11 +184,12 @@ func (c *SMContext) ApplyPccRules(
 			if err := applyFlowInfoOrPFD(tgtPcc); err != nil {
 				return err
 			}
-			finalPccRules[id] = tgtPcc
+
 			if tgtTcID != "" {
 				finalTcDatas[tgtTcID] = tgtTcData
 			}
 			if tgtQosID != "" {
+				finalPccRules[id] = tgtPcc
 				finalQosDatas[tgtQosID] = tgtQosData
 			}
 			if tgtChgID != "" {
