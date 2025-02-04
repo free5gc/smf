@@ -576,6 +576,24 @@ func (c *SMContext) AllocUeIP() error {
 	return nil
 }
 
+// This function create ULCL data paths.
+func (c *SMContext) SelectULCLDataPaths() error {
+	if c.SelectionParam == nil || c.SelectedUPF == nil {
+		return fmt.Errorf("SelectDefaultDataPath err: SelectionParam or SelectedUPF is nil")
+	}
+
+	if GetSelf().ULCLSupport && CheckUEHasPreConfig(c.Supi) {
+		c.Log.Infof("Has pre-config ULCL paths")
+		uePreConfigPaths := GetUEPreConfigPaths(c.Supi, c.SelectedUPF.Name)
+		for _, dp := range uePreConfigPaths.DataPathPool {
+			if !dp.IsDefaultPath {
+				c.Tunnel.AddDataPath(dp)
+			}
+		}
+	}
+	return nil
+}
+
 // This function create a data path to be default data path.
 func (c *SMContext) SelectDefaultDataPath() error {
 	if c.SelectionParam == nil || c.SelectedUPF == nil {
@@ -587,7 +605,7 @@ func (c *SMContext) SelectDefaultDataPath() error {
 		c.Log.Infof("Has pre-config default path")
 		uePreConfigPaths := GetUEPreConfigPaths(c.Supi, c.SelectedUPF.Name)
 		for _, dp := range uePreConfigPaths.DataPathPool {
-			if !dp.IsDefaultPath {
+			if dp.IsDefaultPath {
 				c.Tunnel.AddDataPath(dp)
 			}
 		}
