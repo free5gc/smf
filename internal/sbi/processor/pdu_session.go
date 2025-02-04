@@ -235,6 +235,16 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		return
 	}
 
+	// SelectULCLDataPaths() will create other paths if ULCL is enabled.
+	if err = smContext.SelectULCLDataPaths(); err != nil {
+		smContext.SetState(smf_context.InActive)
+		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
+		p.makeEstRejectResAndReleaseSMContext(c, smContext,
+			nasMessage.Cause5GSMInsufficientResourcesForSpecificSliceAndDNN,
+			&Nsmf_PDUSession.InsufficientResourceSliceDnn)
+		return
+	}
+
 	// generate goroutine to handle PFCP and
 	// reply PDUSessionSMContextCreate rsp immediately
 	needUnlock = false
