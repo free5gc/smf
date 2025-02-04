@@ -632,12 +632,15 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 							Ipv4Address: upIP,
 							Teid:        curDLTunnel.TEID,
 						},
-
-						// TODO: Should Uncomment this after FR5GC-1029 is solved
-						// UEIPAddress: &pfcpType.UEIPAddress{
-						// 	V4:          true,
-						// 	Ipv4Address: smContext.PDUAddress.To4(),
-						// },
+						NetworkInstance: &pfcpType.NetworkInstance{
+							NetworkInstance: smContext.Dnn,
+							FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
+						},
+						UEIPAddress: &pfcpType.UEIPAddress{
+							V4:          true,
+							Sd:          true,
+							Ipv4Address: smContext.PDUAddress.To4(),
+						},
 					}
 				}
 			}
