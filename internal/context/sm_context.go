@@ -576,23 +576,43 @@ func (c *SMContext) AllocUeIP() error {
 	return nil
 }
 
-// This function create a data path to be default data path.
-func (c *SMContext) SelectDefaultDataPath() error {
+// This function create ULCL data paths.
+func (c *SMContext) SelectULCLDataPaths() error {
 	if c.SelectionParam == nil || c.SelectedUPF == nil {
-		return fmt.Errorf("SelectDefaultDataPath err: SelectionParam or SelectedUPF is nil")
+		return fmt.Errorf("SelectULCLDataPath err: SelectionParam or SelectedUPF is nil")
 	}
 
-	var defaultPath *DataPath
 	if GetSelf().ULCLSupport && CheckUEHasPreConfig(c.Supi) {
-		c.Log.Infof("Has pre-config default path")
+		c.Log.Infof("Has pre-config ULCL paths")
 		uePreConfigPaths := GetUEPreConfigPaths(c.Supi, c.SelectedUPF.Name)
 		for _, dp := range uePreConfigPaths.DataPathPool {
 			if !dp.IsDefaultPath {
 				c.Tunnel.AddDataPath(dp)
 			}
 		}
+	}
+	return nil
+}
+
+// This function create a data path to be default data path.
+func (c *SMContext) SelectDefaultDataPath() error {
+	if c.SelectionParam == nil || c.SelectedUPF == nil {
+		return fmt.Errorf("SelectDefaultDataPath err: SelectionParam or SelectedUPF is nil")
+	}
+
+	defaultPath := c.Tunnel.DataPathPool.GetDefaultPath()
+	if defaultPath != nil {
+		// A default path already exists.
+		// Use this one.
+		c.Log.Infof("Has default path")
+		defaultPath = c.Tunnel.DataPathPool.GetDefaultPath()
+	} else if GetSelf().ULCLSupport && CheckUEHasPreConfig(c.Supi) {
+		// Fallback on pre-config default path
+		c.Log.Infof("Has pre-config default path")
+		uePreConfigPaths := GetUEPreConfigPaths(c.Supi, c.SelectedUPF.Name)
 		defaultPath = uePreConfigPaths.DataPathPool.GetDefaultPath()
-	} else if c.Tunnel.DataPathPool.GetDefaultPath() == nil {
+		c.Tunnel.AddDataPath(defaultPath)
+	} else {
 		// UE has no pre-config path and default path
 		// Use default route
 		c.Log.Infof("Has no pre-config route. Has no default path")
@@ -603,9 +623,6 @@ func (c *SMContext) SelectDefaultDataPath() error {
 			defaultPath.IsDefaultPath = true
 			c.Tunnel.AddDataPath(defaultPath)
 		}
-	} else {
-		c.Log.Infof("Has no pre-config route. Has default path")
-		defaultPath = c.Tunnel.DataPathPool.GetDefaultPath()
 	}
 
 	if defaultPath == nil {
