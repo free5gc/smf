@@ -373,8 +373,10 @@ func (p *Processor) updateAnUpfPfcpSession(
 	if smf_context.GetSelf().ULCLSupport && smContext.BPManager != nil {
 		if smContext.BPManager.BPStatus == smf_context.UnInitialized {
 			logger.PfcpLog.Infoln("Add PSAAndULCL")
-			// TODO: handle error cases
-			p.AddPDUSessionAnchorAndULCL(smContext)
+			if err = p.AddPDUSessionAnchorAndULCL(smContext); err != nil {
+				logger.PfcpLog.Error(err)
+				return smf_context.SessionUpdateFailed
+			}
 			smContext.BPManager.BPStatus = smf_context.AddingPSA
 		}
 	}
