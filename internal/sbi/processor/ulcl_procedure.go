@@ -14,7 +14,7 @@ import (
 	"github.com/free5gc/util/flowdesc"
 )
 
-func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
+func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) error {
 	smContext.Log.Infoln("In AddPDUSessionAnchorAndULCL")
 	bpMGR := smContext.BPManager
 
@@ -30,8 +30,7 @@ func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
 			// select an upf as ULCL
 			err := bpMGR.FindULCL(smContext)
 			if err != nil {
-				logger.PduSessLog.Errorln(err)
-				return
+				return err
 			}
 
 			// Allocate Path PDR and TEID
@@ -43,7 +42,10 @@ func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
 
 			EstablishRANTunnelInfo(smContext)
 			// Establish ULCL
-			EstablishULCL(smContext)
+			err = EstablishULCL(smContext)
+			if err != nil {
+				return err
+			}
 
 			UpdatePSA2DownLink(smContext)
 
@@ -52,6 +54,7 @@ func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) {
 	default:
 		logger.CtxLog.Warnln("unexpected status")
 	}
+	return nil
 }
 
 func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
@@ -131,7 +134,7 @@ func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 	logger.PduSessLog.Traceln("End of EstablishPSA2")
 }
 
-func EstablishULCL(smContext *context.SMContext) {
+func EstablishULCL(smContext *context.SMContext) error {
 	logger.PduSessLog.Infoln("In EstablishULCL")
 
 	bpMGR := smContext.BPManager
@@ -171,7 +174,7 @@ func EstablishULCL(smContext *context.SMContext) {
 				newUrrId, err := smContext.UrrIDGenerator.Allocate()
 				if err != nil {
 					logger.PduSessLog.Errorln("Generate URR Id failed")
-					return
+					return err
 				}
 
 				currentUUID := curDPNode.UPF.UUID()
@@ -182,7 +185,7 @@ func EstablishULCL(smContext *context.SMContext) {
 						context.NewMeasureInformation(false, false),
 						context.SetStartOfSDFTrigger()); err2 != nil {
 						logger.PduSessLog.Errorln("new URR failed")
-						urr = pduLevelChargingUrrs[0]
+						return fmt.Errorf("new URR failed for up node [%s]", currentUUID)
 					} else {
 						urr = newURR
 						newChgInfo.ChargingMethod = models.QuotaManagementIndicator_ONLINE_CHARGING
@@ -258,6 +261,7 @@ func EstablishULCL(smContext *context.SMContext) {
 
 	waitAllPfcpRsp(smContext, len(pendingUPFs), resChan, nil)
 	close(resChan)
+	return nil
 }
 
 func UpdatePSA2DownLink(smContext *context.SMContext) {
