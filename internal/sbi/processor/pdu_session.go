@@ -3,9 +3,11 @@ package processor
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"reflect"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -253,7 +255,27 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 
 	doSubscribe = true
 	response.JsonData = smContext.BuildCreatedData()
-	c.Header("Location", smContext.Ref)
+
+	// default location value will only be used in test environment
+	// in real environment, location value will be formatted as a full URI
+	location := smContext.Ref // this is the default location value
+	if c.Request != nil {
+		protocol := "http"
+		if c.Request.TLS != nil {
+			protocol += "s"
+		}
+		smContextRefParts := strings.Split(smContext.Ref, ":")
+		if len(smContextRefParts) > 2 {
+			location = fmt.Sprintf("%s://%s%s/%s",
+				protocol,
+				c.Request.Host,
+				strings.TrimSuffix(c.Request.URL.Path, "/"),
+				smContextRefParts[2])
+		} else {
+			logger.PduSessLog.Errorln("smContext.Ref(uuid) format is incorrect")
+		}
+	}
+	c.Header("Location", location)
 	c.JSON(http.StatusCreated, response)
 }
 
