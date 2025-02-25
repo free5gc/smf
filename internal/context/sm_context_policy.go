@@ -185,11 +185,11 @@ func (c *SMContext) ApplyPccRules(
 				return err
 			}
 
+			finalPccRules[id] = tgtPcc
 			if tgtTcID != "" {
 				finalTcDatas[tgtTcID] = tgtTcData
 			}
 			if tgtQosID != "" {
-				finalPccRules[id] = tgtPcc
 				finalQosDatas[tgtQosID] = tgtQosData
 			}
 			if tgtChgID != "" {
