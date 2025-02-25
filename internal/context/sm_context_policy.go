@@ -240,7 +240,7 @@ func (c *SMContext) ApplyPccRules(
 	}
 	// For PCC rule that is for Pdu session level charging, add the created session rules to all other flow
 	// so that all volume in the Pdu session could be recorded and charged for the Pdu session
-	// FIXME: This function may add URR which is unrelated to certain UpNode, e.g. TI online charging
+	// FIX ME: This function may add URR which is unrelated to certain UpNode, e.g. TI online charging
 	c.addPduLevelChargingRuleToFlow(finalPccRules)
 
 	c.PCCRules = finalPccRules
