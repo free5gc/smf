@@ -264,11 +264,16 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		if c.Request.TLS != nil {
 			protocol += "s"
 		}
-		location = fmt.Sprintf("%s://%s%s/%s",
-			protocol,
-			c.Request.Host,
-			strings.TrimSuffix(c.Request.URL.Path, "/"),
-			strings.Split(smContext.Ref, ":")[2])
+		smContextRefParts := strings.Split(smContext.Ref, ":")
+		if len(smContextRefParts) > 2 {
+			location = fmt.Sprintf("%s://%s%s/%s",
+				protocol,
+				c.Request.Host,
+				strings.TrimSuffix(c.Request.URL.Path, "/"),
+				smContextRefParts[2])
+		} else {
+			logger.PduSessLog.Errorln("smContext.Ref(uuid) format is incorrect")
+		}
 	}
 	c.Header("Location", location)
 	c.JSON(http.StatusCreated, response)
