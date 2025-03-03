@@ -14,7 +14,7 @@ import (
 	"github.com/free5gc/smf/internal/pfcp/message"
 )
 
-func (p *Processor) ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.UPF) {
+func (p *Processor) ToBeAssociatedWithUPF(smfPfcpContext context.Context, upf *smf_context.UPF) {
 	var upfStr string
 	if upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn {
 		upfStr = fmt.Sprintf("[%s](%s)", upf.NodeID.FQDN, upf.NodeID.ResolveNodeIdToIp().String())
@@ -23,24 +23,21 @@ func (p *Processor) ToBeAssociatedWithUPF(ctx context.Context, upf *smf_context.
 	}
 
 	for {
-		ensureSetupPfcpAssociation(ctx, upf, upfStr)
-		if isDone(ctx, upf) {
-			break
-		}
-
-		if smf_context.GetSelf().PfcpHeartbeatInterval == 0 {
+		// check if SMF PFCP context (parent) was canceled
+		// note: UPF AssociationContexts are children of smfPfcpContext
+		select {
+		case <-smfPfcpContext.Done():
+			logger.MainLog.Infoln("Canceled SMF PFCP context")
 			return
-		}
+		default:
+			ensureSetupPfcpAssociation(smfPfcpContext, upf, upfStr)
+			if smf_context.GetSelf().PfcpHeartbeatInterval == 0 {
+				return
+			}
+			keepHeartbeatTo(upf, upfStr)
+			// returns when UPF heartbeat loss is detected or association is canceled
 
-		keepHeartbeatTo(ctx, upf, upfStr)
-		// return when UPF heartbeat lost is detected or association is canceled
-		if isDone(ctx, upf) {
-			break
-		}
-
-		p.releaseAllResourcesOfUPF(upf, upfStr)
-		if isDone(ctx, upf) {
-			break
+			p.releaseAllResourcesOfUPF(upf, upfStr)
 		}
 	}
 }
@@ -55,41 +52,30 @@ func (p *Processor) ReleaseAllResourcesOfUPF(upf *smf_context.UPF) {
 	p.releaseAllResourcesOfUPF(upf, upfStr)
 }
 
-func isDone(ctx context.Context, upf *smf_context.UPF) bool {
-	select {
-	case <-ctx.Done():
-		return true
-	case <-upf.Ctx.Done():
-		return true
-	default:
-		return false
-	}
-}
-
-func ensureSetupPfcpAssociation(ctx context.Context, upf *smf_context.UPF, upfStr string) {
+func ensureSetupPfcpAssociation(parentContext context.Context, upf *smf_context.UPF, upfStr string) {
 	alertTime := time.Now()
 	alertInterval := smf_context.GetSelf().AssocFailAlertInterval
 	retryInterval := smf_context.GetSelf().AssocFailRetryInterval
 	for {
-		timer := time.After(retryInterval)
 		err := setupPfcpAssociation(upf, upfStr)
 		if err == nil {
+			// success
+			// assign UPF an AssociationContext, with SMF PFCP Context as parent
+			upf.AssociationContext, upf.CancelAssociation = context.WithCancel(parentContext)
 			return
 		}
-		logger.MainLog.Warnf("Failed to setup an association with UPF%s, error:%+v", upfStr, err)
+		logger.MainLog.Warnf("Failed to setup an association with UPF[%s], error:%+v", upfStr, err)
 		now := time.Now()
 		logger.MainLog.Debugf("now %+v, alertTime %+v", now, alertTime)
 		if now.After(alertTime.Add(alertInterval)) {
-			logger.MainLog.Errorf("ALERT for UPF%s", upfStr)
+			logger.MainLog.Errorf("ALERT for UPF[%s]", upfStr)
 			alertTime = now
 		}
-		logger.MainLog.Debugf("Wait %+v (or less) until next retry attempt", retryInterval)
-		select {
-		case <-ctx.Done():
-			logger.MainLog.Infof("Canceled association request to UPF%s", upfStr)
-			return
-		case <-upf.Ctx.Done():
-			logger.MainLog.Infof("Canceled association request to this UPF%s only", upfStr)
+		logger.MainLog.Debugf("Wait %+v until next retry attempt", retryInterval)
+		timer := time.After(retryInterval)
+		select { // no default case, either case needs to be true to continue
+		case <-parentContext.Done():
+			logger.MainLog.Infoln("Canceled SMF PFCP context")
 			return
 		case <-timer:
 			continue
@@ -117,20 +103,12 @@ func setupPfcpAssociation(upf *smf_context.UPF, upfStr string) error {
 	}
 
 	logger.MainLog.Infof("Received PFCP Association Setup Accepted Response from UPF%s", upfStr)
-
-	upf.UPFStatus = smf_context.AssociatedSetUpSuccess
-
-	if rsp.UserPlaneIPResourceInformation != nil {
-		upf.UPIPInfo = *rsp.UserPlaneIPResourceInformation
-
-		logger.MainLog.Infof("UPF(%s)[%s] setup association",
-			upf.NodeID.ResolveNodeIdToIp().String(), upf.UPIPInfo.NetworkInstance.NetworkInstance)
-	}
+	logger.MainLog.Infof("UPF(%s) setup association", upf.NodeID.ResolveNodeIdToIp().String())
 
 	return nil
 }
 
-func keepHeartbeatTo(ctx context.Context, upf *smf_context.UPF, upfStr string) {
+func keepHeartbeatTo(upf *smf_context.UPF, upfStr string) {
 	for {
 		err := doPfcpHeartbeat(upf, upfStr)
 		if err != nil {
@@ -140,11 +118,8 @@ func keepHeartbeatTo(ctx context.Context, upf *smf_context.UPF, upfStr string) {
 
 		timer := time.After(smf_context.GetSelf().PfcpHeartbeatInterval)
 		select {
-		case <-ctx.Done():
-			logger.MainLog.Infof("Canceled Heartbeat with UPF%s", upfStr)
-			return
-		case <-upf.Ctx.Done():
-			logger.MainLog.Infof("Canceled Heartbeat to this UPF%s only", upfStr)
+		case <-upf.AssociationContext.Done():
+			logger.MainLog.Infof("Canceled association to UPF[%s]", upfStr)
 			return
 		case <-timer:
 			continue
@@ -153,15 +128,15 @@ func keepHeartbeatTo(ctx context.Context, upf *smf_context.UPF, upfStr string) {
 }
 
 func doPfcpHeartbeat(upf *smf_context.UPF, upfStr string) error {
-	if upf.UPFStatus != smf_context.AssociatedSetUpSuccess {
-		return fmt.Errorf("invalid status of UPF%s: %d", upfStr, upf.UPFStatus)
+	if err := upf.IsAssociated(); err != nil {
+		return fmt.Errorf("Cancel heartbeat: %+v", err)
 	}
 
 	logger.MainLog.Debugf("Sending PFCP Heartbeat Request to UPF%s", upfStr)
 
 	resMsg, err := message.SendPfcpHeartbeatRequest(upf)
 	if err != nil {
-		upf.UPFStatus = smf_context.NotAssociated
+		upf.CancelAssociation()
 		upf.RecoveryTimeStamp = time.Time{}
 		return fmt.Errorf("SendPfcpHeartbeatRequest error: %w", err)
 	}
@@ -178,7 +153,7 @@ func doPfcpHeartbeat(upf *smf_context.UPF, upfStr string) error {
 		upf.RecoveryTimeStamp = rsp.RecoveryTimeStamp.RecoveryTimeStamp
 	} else if upf.RecoveryTimeStamp.Before(rsp.RecoveryTimeStamp.RecoveryTimeStamp) {
 		// received a newer recovery timestamp
-		upf.UPFStatus = smf_context.NotAssociated
+		upf.CancelAssociation()
 		upf.RecoveryTimeStamp = time.Time{}
 		return fmt.Errorf("received PFCP Heartbeat Response RecoveryTimeStamp has been updated")
 	}
