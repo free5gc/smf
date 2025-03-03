@@ -104,13 +104,13 @@ type UsageReport struct {
 	UplinkPktNum   uint64
 	DownlinkPktNum uint64
 
-	ReportTpye models.TriggerType
+	ReportTpye models.ChfConvergedChargingTriggerType
 }
 
 var TeidGenerator *idgenerator.IDGenerator
 
 type SMContext struct {
-	*models.SmContextCreateData
+	*models.SmfPduSessionSmContextCreateData
 
 	Ref string
 
@@ -154,9 +154,9 @@ type SMContext struct {
 	// Client
 	CommunicationClientApiPrefix string
 
-	AMFProfile         models.NfProfile
-	SelectedPCFProfile models.NfProfile
-	SelectedCHFProfile models.NfProfile
+	AMFProfile         models.NrfNfDiscoveryNfProfile
+	SelectedPCFProfile models.NrfNfDiscoveryNfProfile
+	SelectedCHFProfile models.NrfNfDiscoveryNfProfile
 	SmStatusNotifyUri  string
 
 	Tunnel      *UPTunnel
@@ -429,8 +429,8 @@ func (smContext *SMContext) GenerateUrrId() {
 	}
 }
 
-func (smContext *SMContext) BuildCreatedData() *models.SmContextCreatedData {
-	return &models.SmContextCreatedData{
+func (smContext *SMContext) BuildCreatedData() *models.SmfPduSessionSmContextCreatedData {
+	return &models.SmfPduSessionSmContextCreatedData{
 		SNssai: smContext.SNssai,
 	}
 }
@@ -576,23 +576,43 @@ func (c *SMContext) AllocUeIP() error {
 	return nil
 }
 
-// This function create a data path to be default data path.
-func (c *SMContext) SelectDefaultDataPath() error {
+// This function create ULCL data paths.
+func (c *SMContext) SelectULCLDataPaths() error {
 	if c.SelectionParam == nil || c.SelectedUPF == nil {
-		return fmt.Errorf("SelectDefaultDataPath err: SelectionParam or SelectedUPF is nil")
+		return fmt.Errorf("SelectULCLDataPath err: SelectionParam or SelectedUPF is nil")
 	}
 
-	var defaultPath *DataPath
 	if GetSelf().ULCLSupport && CheckUEHasPreConfig(c.Supi) {
-		c.Log.Infof("Has pre-config default path")
+		c.Log.Infof("Has pre-config ULCL paths")
 		uePreConfigPaths := GetUEPreConfigPaths(c.Supi, c.SelectedUPF.Name)
 		for _, dp := range uePreConfigPaths.DataPathPool {
 			if !dp.IsDefaultPath {
 				c.Tunnel.AddDataPath(dp)
 			}
 		}
+	}
+	return nil
+}
+
+// This function create a data path to be default data path.
+func (c *SMContext) SelectDefaultDataPath() error {
+	if c.SelectionParam == nil || c.SelectedUPF == nil {
+		return fmt.Errorf("SelectDefaultDataPath err: SelectionParam or SelectedUPF is nil")
+	}
+
+	defaultPath := c.Tunnel.DataPathPool.GetDefaultPath()
+	if defaultPath != nil {
+		// A default path already exists.
+		// Use this one.
+		c.Log.Infof("Has default path")
+		defaultPath = c.Tunnel.DataPathPool.GetDefaultPath()
+	} else if GetSelf().ULCLSupport && CheckUEHasPreConfig(c.Supi) {
+		// Fallback on pre-config default path
+		c.Log.Infof("Has pre-config default path")
+		uePreConfigPaths := GetUEPreConfigPaths(c.Supi, c.SelectedUPF.Name)
 		defaultPath = uePreConfigPaths.DataPathPool.GetDefaultPath()
-	} else if c.Tunnel.DataPathPool.GetDefaultPath() == nil {
+		c.Tunnel.AddDataPath(defaultPath)
+	} else {
 		// UE has no pre-config path and default path
 		// Use default route
 		c.Log.Infof("Has no pre-config route. Has no default path")
@@ -603,9 +623,6 @@ func (c *SMContext) SelectDefaultDataPath() error {
 			defaultPath.IsDefaultPath = true
 			c.Tunnel.AddDataPath(defaultPath)
 		}
-	} else {
-		c.Log.Infof("Has no pre-config route. Has default path")
-		defaultPath = c.Tunnel.DataPathPool.GetDefaultPath()
 	}
 
 	if defaultPath == nil {
@@ -626,7 +643,7 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 ) error {
 	var targetRoute models.RouteToLocation
 	if tcData != nil && len(tcData.RouteToLocs) > 0 {
-		targetRoute = tcData.RouteToLocs[0]
+		targetRoute = *tcData.RouteToLocs[0]
 	}
 	param := &UPFSelectionParams{
 		Dnn: c.Dnn,
@@ -680,7 +697,7 @@ func (c *SMContext) BuildUpPathChgEventExposureNotification(
 		return
 	}
 
-	en := models.EventNotification{
+	en := models.SmfEventExposureEventNotification{
 		Event:            models.SmfEvent_UP_PATH_CH,
 		SourceTraRouting: srcRoute,
 		TargetTraRouting: tgtRoute,
@@ -699,7 +716,7 @@ func (c *SMContext) BuildUpPathChgEventExposureNotification(
 			v.EventNotifs = append(v.EventNotifs, en)
 		} else {
 			c.UpPathChgEarlyNotification[k] = newEventExposureNotification(
-				chgEvent.NotificationUri, chgEvent.NotifCorreId, en)
+				chgEvent.NotificationUri, chgEvent.NotifCorreId, &en)
 		}
 	}
 	if strings.Contains(string(chgEvent.DnaiChgType), "LATE") {
@@ -709,19 +726,19 @@ func (c *SMContext) BuildUpPathChgEventExposureNotification(
 			v.EventNotifs = append(v.EventNotifs, en)
 		} else {
 			c.UpPathChgLateNotification[k] = newEventExposureNotification(
-				chgEvent.NotificationUri, chgEvent.NotifCorreId, en)
+				chgEvent.NotificationUri, chgEvent.NotifCorreId, &en)
 		}
 	}
 }
 
 func newEventExposureNotification(
 	uri, id string,
-	en models.EventNotification,
+	en *models.SmfEventExposureEventNotification,
 ) *EventExposureNotification {
 	return &EventExposureNotification{
 		NsmfEventExposureNotification: &models.NsmfEventExposureNotification{
 			NotifId:     id,
-			EventNotifs: []models.EventNotification{en},
+			EventNotifs: []models.SmfEventExposureEventNotification{*en},
 		},
 		Uri: uri,
 	}
