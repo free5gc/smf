@@ -123,8 +123,11 @@ type SMContext struct {
 	Identifier   string
 	PDUSessionID int32
 
-	LocalULTeid uint32
-	LocalDLTeid uint32
+	LocalULTeid                    uint32
+	LocalDLTeid                    uint32
+	LocalULTeidRedundant           uint32
+	LocalDLTeidRedundant           uint32
+	HasRedundantPathAKANRDCSupport bool
 
 	UpCnxState models.UpCnxState
 
@@ -346,6 +349,19 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 		return nil
 	}
 
+	// TODO: maybe do something to check if the UE has redundant path support, now we assume default true
+	smContext.HasRedundantPathAKANRDCSupport = true
+
+	smContext.LocalULTeidRedundant, err = GenerateTEID()
+	if err != nil {
+		return nil
+	}
+
+	smContext.LocalDLTeidRedundant, err = GenerateTEID()
+	if err != nil {
+		return nil
+	}
+
 	return smContext
 }
 
@@ -393,6 +409,8 @@ func RemoveSMContext(ref string) {
 
 	ReleaseTEID(smContext.LocalULTeid)
 	ReleaseTEID(smContext.LocalDLTeid)
+	ReleaseTEID(smContext.LocalULTeidRedundant)
+	ReleaseTEID(smContext.LocalDLTeidRedundant)
 
 	smContextPool.Delete(ref)
 	canonicalRef.Delete(canonicalName(smContext.Supi, smContext.PDUSessionID))
