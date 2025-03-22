@@ -349,9 +349,6 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 		return nil
 	}
 
-	// TODO: maybe do something to check if the UE has redundant path support, now we assume default true
-	smContext.HasRedundantPathAKANRDCSupport = true
-
 	smContext.LocalULTeidRedundant, err = GenerateTEID()
 	if err != nil {
 		return nil
@@ -361,6 +358,8 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 	if err != nil {
 		return nil
 	}
+
+	smContext.HasRedundantPathAKANRDCSupport = false
 
 	return smContext
 }
@@ -411,6 +410,8 @@ func RemoveSMContext(ref string) {
 	ReleaseTEID(smContext.LocalDLTeid)
 	ReleaseTEID(smContext.LocalULTeidRedundant)
 	ReleaseTEID(smContext.LocalDLTeidRedundant)
+
+	smContext.HasRedundantPathAKANRDCSupport = false
 
 	smContextPool.Delete(ref)
 	canonicalRef.Delete(canonicalName(smContext.Supi, smContext.PDUSessionID))
