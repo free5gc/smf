@@ -16,7 +16,9 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 	ANUPF := ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
 	UpNode := ANUPF.UPF
 	teidOct := make([]byte, 4)
+	teidOctForSplitPDUSession := make([]byte, 4)
 	binary.BigEndian.PutUint32(teidOct, ctx.LocalULTeid)
+	binary.BigEndian.PutUint32(teidOctForSplitPDUSession, ctx.LocalULTeidForSplitPDUSession)
 
 	resourceSetupRequestTransfer := ngapType.PDUSessionResourceSetupRequestTransfer{}
 
@@ -62,6 +64,24 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 						},
 					},
 					GTPTEID: ngapType.GTPTEID{Value: teidOct},
+				},
+			},
+			AdditionalULNGUUPTNLInformation: &ngapType.UPTransportLayerInformationList{
+				List: []ngapType.UPTransportLayerInformationItem{
+					{
+						NGUUPTNLInformation: ngapType.UPTransportLayerInformation{
+							Present: ngapType.UPTransportLayerInformationPresentGTPTunnel,
+							GTPTunnel: &ngapType.GTPTunnel{
+								TransportLayerAddress: ngapType.TransportLayerAddress{
+									Value: aper.BitString{
+										Bytes:     n3IP,
+										BitLength: uint64(len(n3IP) * 8),
+									},
+								},
+								GTPTEID: ngapType.GTPTEID{Value: teidOctForSplitPDUSession},
+							},
+						},
+					},
 				},
 			},
 		}
