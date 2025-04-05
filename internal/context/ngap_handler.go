@@ -239,6 +239,7 @@ func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) error {
 	DLForwardingInfo := handoverRequestAcknowledgeTransfer.DLForwardingUPTNLInformation
 
 	if DLForwardingInfo == nil {
+		ctx.DLForwardingType = NoForwarding
 		return errors.New("DL Forwarding Info not provision")
 	}
 
