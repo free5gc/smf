@@ -239,7 +239,9 @@ func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) error {
 	DLForwardingInfo := handoverRequestAcknowledgeTransfer.DLForwardingUPTNLInformation
 
 	if DLForwardingInfo == nil {
-		return errors.New("DL Forwarding Info not provision")
+		ctx.DLForwardingType = NoForwarding
+		logger.PduSessLog.Warnf("Handle HandoverRequestAcknowledgeTransfer warned: %+v", "DL Forwarding Info not provision")
+		return nil
 	}
 
 	if ctx.DLForwardingType == IndirectForwarding {
