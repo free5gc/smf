@@ -250,6 +250,49 @@ func (c *SMContext) ApplyPccRules(
 	return nil
 }
 
+func (c *SMContext) ApplyPccRulesOnDctunnel() error {
+	if c.DCTunnel == nil {
+		c.Log.Errorf("DCTunnel is nil")
+		return fmt.Errorf("DCTunnel is nil")
+	}
+
+	for id, pcc := range c.PCCRules {
+		if pcc == nil {
+			c.Log.Warnf("PCCRule[%s] is nil", id)
+			continue
+		}
+
+		tcID := pcc.RefTcDataID()
+		tcData := c.TrafficControlDatas[tcID]
+
+		chgID := pcc.RefChgDataID()
+		chgData := c.ChargingData[chgID]
+
+		qosID := pcc.RefQosDataID()
+		qosData := c.QosDatas[qosID]
+
+		if pcc.Datapath != nil {
+			c.PreRemoveDataPath(pcc.Datapath)
+		}
+
+		if err := c.CreatePccRuleDataPathOnDctunnel(pcc, tcData, qosData, chgData); err != nil {
+			c.Log.Errorf("CreatePccRuleDataPathOnDCTunnel for PCCRule[%s] failed: %v", id, err)
+			continue
+		}
+
+		if err := applyFlowInfoOrPFD(pcc); err != nil {
+			c.Log.Errorf("applyFlowInfoOrPFD for PCCRule[%s] failed: %v", id, err)
+			continue
+		}
+
+		c.Log.Infof("Applied PCCRule[%s] to DCTunnel", id)
+	}
+
+	c.addPduLevelChargingRuleToFlow(c.PCCRules)
+
+	return nil
+}
+
 func (c *SMContext) getSrcTgtTcData(
 	decisionTcDecs map[string]*models.TrafficControlData,
 	tcID string,
