@@ -597,6 +597,10 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		if err = smf_context.
 			HandlePDUSessionResourceSetupResponseTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			smContext.Log.Errorf("Handle PDUSessionResourceSetupResponseTransfer failed: %+v", err)
+		} else {
+			if err := smContext.ApplyPccRulesOnDctunnel(); err != nil {
+				smContext.Log.Errorf("ApplyPccRulesOnDctunnel failed: %+v", err)
+			}
 		}
 		sendPFCPModification = true
 		smContext.SetState(smf_context.PFCPModification)
@@ -1100,6 +1104,15 @@ func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionRes
 	smContext.SetState(smf_context.PFCPModification)
 
 	for _, res := range ReleaseTunnel(smContext) {
+		if res.Status != smf_context.SessionReleaseSuccess {
+			return res.Status
+		}
+	}
+	if !smContext.HasNRDCSupport {
+		return smf_context.SessionReleaseSuccess
+	}
+
+	for _, res := range ReleaseDctunnel(smContext) {
 		if res.Status != smf_context.SessionReleaseSuccess {
 			return res.Status
 		}
