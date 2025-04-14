@@ -62,7 +62,8 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) err
 	}
 	if ctx.HasNRDCSupport && DCQosFlowPerTNLInfomationItem.QosFlowPerTNLInformation.UPTransportLayerInformation.Present !=
 		ngapType.UPTransportLayerInformationPresentGTPTunnel {
-		return errors.New("resourceSetupResponseTransfer.AdditionalQosFlowPerTNLInformation.QosFlowPerTNLInformation.UPTransportLayerInformation.Present")
+		return errors.New(
+			"resourceSetupResponseTransfer.AdditionalQosFlowPerTNLInformation.QosFlowPerTNLInformation.UPTransportLayerInformation.Present")
 	}
 
 	GTPTunnel := QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
