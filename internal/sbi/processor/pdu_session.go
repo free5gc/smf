@@ -597,11 +597,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		if err = smf_context.
 			HandlePDUSessionResourceSetupResponseTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			smContext.Log.Errorf("Handle PDUSessionResourceSetupResponseTransfer failed: %+v", err)
-		} else {
-			if smContext.HasNRDCSupport {
-				if err = smContext.ApplyPccRulesOnDctunnel(); err != nil {
-					smContext.Log.Errorf("ApplyPccRulesOnDctunnel failed: %+v", err)
-				}
+		} else if err == nil && smContext.HasNRDCSupport {
+			if err = smContext.ApplyPccRulesOnDctunnel(); err != nil {
+				smContext.Log.Errorf("ApplyPccRulesOnDctunnel failed: %+v", err)
 			}
 		}
 		sendPFCPModification = true
