@@ -66,6 +66,20 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 					GTPTEID: ngapType.GTPTEID{Value: teidOct},
 				},
 			},
+		}
+	}
+
+	resourceSetupRequestTransfer.ProtocolIEs.List = append(resourceSetupRequestTransfer.ProtocolIEs.List, ie)
+
+	// Additional UL NG-U UP TNL Information
+	ie = ngapType.PDUSessionResourceSetupRequestTransferIEs{}
+	ie.Id.Value = ngapType.ProtocolIEIDAdditionalULNGUUPTNLInformation
+	ie.Criticality.Value = ngapType.CriticalityPresentIgnore
+	if n3IP, err := UpNode.N3Interfaces[0].IP(ctx.SelectedPDUSessionType); err != nil {
+		return nil, err
+	} else {
+		ie.Value = ngapType.PDUSessionResourceSetupRequestTransferIEsValue{
+			Present: ngapType.PDUSessionResourceSetupRequestTransferIEsPresentAdditionalULNGUUPTNLInformation,
 			AdditionalULNGUUPTNLInformation: &ngapType.UPTransportLayerInformationList{
 				List: []ngapType.UPTransportLayerInformationItem{
 					{
@@ -86,7 +100,6 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 			},
 		}
 	}
-
 	resourceSetupRequestTransfer.ProtocolIEs.List = append(resourceSetupRequestTransfer.ProtocolIEs.List, ie)
 
 	// PDU Session Type
