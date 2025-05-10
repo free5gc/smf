@@ -174,6 +174,7 @@ type SMContext struct {
 
 	// SM Policy related
 	PCCRules            map[string]*PCCRule
+	DCPCCRules          map[string]*PCCRule
 	SessionRules        map[string]*SessionRule
 	TrafficControlDatas map[string]*TrafficControlData
 	ChargingData        map[string]*models.ChargingData
@@ -291,6 +292,7 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 
 	// initialize SM Policy Data
 	smContext.PCCRules = make(map[string]*PCCRule)
+	smContext.DCPCCRules = make(map[string]*PCCRule)
 	smContext.SessionRules = make(map[string]*SessionRule)
 	smContext.TrafficControlDatas = make(map[string]*TrafficControlData)
 	smContext.QosDatas = make(map[string]*models.QosData)
@@ -706,7 +708,7 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	return nil
 }
 
-func (c *SMContext) CreatePccRuleDataPathOnDctunnel(pccRule *PCCRule,
+func (c *SMContext) CreateDcPccRuleDataPathOnDctunnel(pccRule *PCCRule,
 	tcData *TrafficControlData, qosData *models.QosData,
 	chgData *models.ChargingData,
 ) error {

@@ -472,6 +472,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	}
 
 	tunnel := smContext.Tunnel
+	dcTunnel := smContext.DCTunnel
 	pdrList := []*smf_context.PDR{}
 	farList := []*smf_context.FAR{}
 	barList := []*smf_context.BAR{}
@@ -598,8 +599,60 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			HandlePDUSessionResourceSetupResponseTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			smContext.Log.Errorf("Handle PDUSessionResourceSetupResponseTransfer failed: %+v", err)
 		} else if smContext.HasNRDCSupport {
-			if err = smContext.ApplyPccRulesOnDctunnel(); err != nil {
+			if err = smContext.ApplyDcPccRulesOnDctunnel(); err != nil {
 				smContext.Log.Errorf("ApplyPccRulesOnDctunnel failed: %+v", err)
+			}
+			for _, dataPath := range dcTunnel.DataPathPool {
+				if dataPath.Activated {
+					ANUPF := dataPath.FirstDPNode
+					ULPDR := ANUPF.UpLinkTunnel.PDR
+					DLPDR := ANUPF.DownLinkTunnel.PDR
+
+					ULPDR.FAR.ApplyAction = pfcpType.ApplyAction{
+						Buff: false,
+						Drop: false,
+						Dupl: false,
+						Forw: true,
+						Nocp: false,
+					}
+					DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{
+						Buff: false,
+						Drop: false,
+						Dupl: false,
+						Forw: true,
+						Nocp: false,
+					}
+
+					ULPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
+						DestinationInterface: pfcpType.DestinationInterface{
+							InterfaceValue: pfcpType.DestinationInterfaceCore,
+						},
+						NetworkInstance: &pfcpType.NetworkInstance{
+							NetworkInstance: smContext.Dnn,
+							FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
+						},
+					}
+					DLPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
+						DestinationInterface: pfcpType.DestinationInterface{
+							InterfaceValue: pfcpType.DestinationInterfaceAccess,
+						},
+						NetworkInstance: &pfcpType.NetworkInstance{
+							NetworkInstance: smContext.Dnn,
+							FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
+						},
+					}
+
+					DLPDR.State = smf_context.RULE_INITIAL
+					DLPDR.FAR.State = smf_context.RULE_INITIAL
+					ULPDR.State = smf_context.RULE_INITIAL
+					ULPDR.FAR.State = smf_context.RULE_INITIAL
+
+					pdrList = append(pdrList, DLPDR)
+					farList = append(farList, DLPDR.FAR)
+
+					pdrList = append(pdrList, ULPDR)
+					farList = append(farList, ULPDR.FAR)
+				}
 			}
 		}
 		sendPFCPModification = true
