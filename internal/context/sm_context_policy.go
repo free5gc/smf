@@ -292,18 +292,18 @@ func (c *SMContext) ApplyDcPccRulesOnDctunnel() error {
 
 		if pcc.TscaiInputDl != nil {
 			newPcc.TscaiInputDl = &models.TscaiInputContainer{
-				Periodicity: pcc.TscaiInputDl.Periodicity,
+				Periodicity:      pcc.TscaiInputDl.Periodicity,
 				BurstArrivalTime: pcc.TscaiInputDl.BurstArrivalTime,
-				SurTimeInNumMsg: pcc.TscaiInputDl.SurTimeInNumMsg,
-				SurTimeInTime: pcc.TscaiInputDl.SurTimeInTime,
+				SurTimeInNumMsg:  pcc.TscaiInputDl.SurTimeInNumMsg,
+				SurTimeInTime:    pcc.TscaiInputDl.SurTimeInTime,
 			}
 		}
 		if pcc.TscaiInputUl != nil {
 			newPcc.TscaiInputUl = &models.TscaiInputContainer{
-				Periodicity: pcc.TscaiInputUl.Periodicity,
+				Periodicity:      pcc.TscaiInputUl.Periodicity,
 				BurstArrivalTime: pcc.TscaiInputUl.BurstArrivalTime,
-				SurTimeInNumMsg: pcc.TscaiInputUl.SurTimeInNumMsg,
-				SurTimeInTime: pcc.TscaiInputUl.SurTimeInTime,
+				SurTimeInNumMsg:  pcc.TscaiInputUl.SurTimeInNumMsg,
+				SurTimeInTime:    pcc.TscaiInputUl.SurTimeInTime,
 			}
 		}
 		copy(newPcc.FlowInfos, pcc.FlowInfos)
@@ -319,7 +319,7 @@ func (c *SMContext) ApplyDcPccRulesOnDctunnel() error {
 		if pcc.DdNotifCtrl != nil {
 			newPcc.DdNotifCtrl = &models.DownlinkDataNotificationControl{
 				NotifCtrlInds: make([]models.NotificationControlIndication, len(pcc.DdNotifCtrl.NotifCtrlInds)),
-				TypesOfNotif:  make([]models.DlDataDeliveryStatus , len(pcc.DdNotifCtrl.TypesOfNotif)),
+				TypesOfNotif:  make([]models.DlDataDeliveryStatus, len(pcc.DdNotifCtrl.TypesOfNotif)),
 			}
 			copy(newPcc.DdNotifCtrl.NotifCtrlInds, pcc.DdNotifCtrl.NotifCtrlInds)
 			copy(newPcc.DdNotifCtrl.TypesOfNotif, pcc.DdNotifCtrl.TypesOfNotif)
@@ -327,7 +327,7 @@ func (c *SMContext) ApplyDcPccRulesOnDctunnel() error {
 		if pcc.DdNotifCtrl2 != nil {
 			newPcc.DdNotifCtrl2 = &models.DownlinkDataNotificationControlRm{
 				NotifCtrlInds: make([]models.NotificationControlIndication, len(pcc.DdNotifCtrl2.NotifCtrlInds)),
-				TypesOfNotif:  make([]models.DlDataDeliveryStatus , len(pcc.DdNotifCtrl2.TypesOfNotif)),
+				TypesOfNotif:  make([]models.DlDataDeliveryStatus, len(pcc.DdNotifCtrl2.TypesOfNotif)),
 			}
 			copy(newPcc.DdNotifCtrl2.NotifCtrlInds, pcc.DdNotifCtrl2.NotifCtrlInds)
 			copy(newPcc.DdNotifCtrl2.TypesOfNotif, pcc.DdNotifCtrl2.TypesOfNotif)
