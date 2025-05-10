@@ -416,6 +416,37 @@ func ReleaseTunnel(smContext *smf_context.SMContext) []SendPfcpResult {
 	return resList
 }
 
+func ReleaseDctunnel(smContext *smf_context.SMContext) []SendPfcpResult {
+	resChan := make(chan SendPfcpResult)
+
+	deletedPFCPNode := make(map[string]bool)
+	for _, dataPath := range smContext.DCTunnel.DataPathPool {
+		var targetNodes []*smf_context.DataPathNode
+		for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
+			targetNodes = append(targetNodes, node)
+		}
+		dataPath.DeactivateDctunnelAndPDR(smContext)
+		for _, node := range targetNodes {
+			curUPFID, err := node.GetUPFID()
+			if err != nil {
+				logger.PduSessLog.Error(err)
+				continue
+			}
+			if _, exist := deletedPFCPNode[curUPFID]; !exist {
+				go deletePfcpSession(node.UPF, smContext, resChan)
+				deletedPFCPNode[curUPFID] = true
+			}
+		}
+	}
+
+	resList := make([]SendPfcpResult, 0, len(deletedPFCPNode))
+	for i := 0; i < len(deletedPFCPNode); i++ {
+		resList = append(resList, <-resChan)
+	}
+
+	return resList
+}
+
 func deletePfcpSession(upf *smf_context.UPF, ctx *smf_context.SMContext, resCh chan<- SendPfcpResult) {
 	logger.PduSessLog.Infoln("Sending PFCP Session Deletion Request")
 
