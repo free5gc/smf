@@ -1034,7 +1034,7 @@ func (dataPath *DataPath) ActivateDctunnelAndPDR(smContext *SMContext, precedenc
 
 				iface = DLDestUPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
 				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
-					logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
+					logger.CtxLog.Errorln("ActivateDctunnelAndPDR failed", err)
 					return
 				} else {
 					DLPDR.PDI = PDI{
@@ -1074,7 +1074,7 @@ func (dataPath *DataPath) ActivateDctunnelAndPDR(smContext *SMContext, precedenc
 				iface = nextDLDest.UPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
 
 				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
-					logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
+					logger.CtxLog.Errorln("ActivateDctunnelAndPDR failed", err)
 					return
 				} else {
 					DLFAR.ForwardingParameters = &ForwardingParameters{
@@ -1093,7 +1093,7 @@ func (dataPath *DataPath) ActivateDctunnelAndPDR(smContext *SMContext, precedenc
 				DLFAR.ForwardingParameters = new(ForwardingParameters)
 				DLFAR.ForwardingParameters.DestinationInterface.InterfaceValue = pfcpType.DestinationInterfaceAccess
 
-				if anIP := smContext.Tunnel.ANInformation.IPAddress; anIP != nil {
+				if anIP := smContext.DCTunnel.ANInformation.IPAddress; anIP != nil {
 					DLFAR.ForwardingParameters.NetworkInstance = &pfcpType.NetworkInstance{
 						NetworkInstance: smContext.Dnn,
 						FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
@@ -1102,8 +1102,8 @@ func (dataPath *DataPath) ActivateDctunnelAndPDR(smContext *SMContext, precedenc
 
 					dlOuterHeaderCreation := DLFAR.ForwardingParameters.OuterHeaderCreation
 					dlOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
-					dlOuterHeaderCreation.Teid = smContext.Tunnel.ANInformation.TEID
-					dlOuterHeaderCreation.Ipv4Address = smContext.Tunnel.ANInformation.IPAddress.To4()
+					dlOuterHeaderCreation.Teid = smContext.DCTunnel.ANInformation.TEID
+					dlOuterHeaderCreation.Ipv4Address = smContext.DCTunnel.ANInformation.IPAddress.To4()
 				}
 			}
 		}
