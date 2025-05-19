@@ -599,6 +599,12 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			HandlePDUSessionResourceSetupResponseTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			smContext.Log.Errorf("Handle PDUSessionResourceSetupResponseTransfer failed: %+v", err)
 		} else if smContext.HasNRDCSupport {
+			for _, pdr := range pdrList {
+				// Remove all PDRs except the default PDR
+				if pdr.Precedence != 255 {
+					pdr.State = smf_context.RULE_REMOVE
+				}
+			}
 			if err = smContext.ApplyDcPccRulesOnDctunnel(); err != nil {
 				smContext.Log.Errorf("ApplyPccRulesOnDctunnel failed: %+v", err)
 			}
@@ -623,24 +629,24 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 						Nocp: false,
 					}
 
-					ULPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
-						DestinationInterface: pfcpType.DestinationInterface{
-							InterfaceValue: pfcpType.DestinationInterfaceCore,
-						},
-						NetworkInstance: &pfcpType.NetworkInstance{
-							NetworkInstance: smContext.Dnn,
-							FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
-						},
-					}
-					DLPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
-						DestinationInterface: pfcpType.DestinationInterface{
-							InterfaceValue: pfcpType.DestinationInterfaceAccess,
-						},
-						NetworkInstance: &pfcpType.NetworkInstance{
-							NetworkInstance: smContext.Dnn,
-							FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
-						},
-					}
+					// ULPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
+					// 	DestinationInterface: pfcpType.DestinationInterface{
+					// 		InterfaceValue: pfcpType.DestinationInterfaceCore,
+					// 	},
+					// 	NetworkInstance: &pfcpType.NetworkInstance{
+					// 		NetworkInstance: smContext.Dnn,
+					// 		FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
+					// 	},
+					// }
+					// DLPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
+					// 	DestinationInterface: pfcpType.DestinationInterface{
+					// 		InterfaceValue: pfcpType.DestinationInterfaceAccess,
+					// 	},
+					// 	NetworkInstance: &pfcpType.NetworkInstance{
+					// 		NetworkInstance: smContext.Dnn,
+					// 		FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
+					// 	},
+					// }
 
 					DLPDR.State = smf_context.RULE_INITIAL
 					DLPDR.FAR.State = smf_context.RULE_INITIAL
