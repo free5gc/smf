@@ -147,11 +147,15 @@ func (s *nnrfService) buildNfProfile(smfContext *smf_context.SMFContext) (
 		NfInstanceId:  smfContext.NfInstanceID,
 		NfType:        models.NrfNfManagementNfType_SMF,
 		NfStatus:      models.NrfNfManagementNfStatus_REGISTERED,
-		Ipv4Addresses: []string{smfContext.RegisterIPv4},
 		NfServices:    *smfProfile.NFServices,
 		SmfInfo:       smfProfile.SMFInfo,
 		SNssais:       sNssais,
 		PlmnList:      *smfProfile.PLMNList,
+	}
+	if smfContext.RegisterIP.Is6() {
+		profile.Ipv6Addresses = []string{smfContext.RegisterIP.String()}
+	} else if smfContext.RegisterIP.Is4() {
+		profile.Ipv4Addresses = []string{smfContext.RegisterIP.String()}
 	}
 	if smfContext.Locality != "" {
 		profile.Locality = smfContext.Locality
