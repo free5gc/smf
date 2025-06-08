@@ -605,8 +605,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					pdr.State = smf_context.RULE_REMOVE
 				}
 			}
-			if err = smContext.ApplyDcPccRulesOnDctunnel(); err != nil {
-				smContext.Log.Errorf("ApplyPccRulesOnDctunnel failed: %+v", err)
+			if err = smContext.ApplyDcPccRulesOnDcTunnel(); err != nil {
+				smContext.Log.Errorf("ApplyPccRulesOnDcTunnel failed: %+v", err)
 			}
 			for _, dataPath := range dcTunnel.DataPathPool {
 				if dataPath.Activated {
@@ -1171,7 +1171,7 @@ func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionRes
 		return smf_context.SessionReleaseSuccess
 	}
 
-	for _, res := range ReleaseDctunnel(smContext) {
+	for _, res := range ReleaseDcTunnel(smContext) {
 		if res.Status != smf_context.SessionReleaseSuccess {
 			return res.Status
 		}

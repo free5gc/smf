@@ -250,7 +250,7 @@ func (c *SMContext) ApplyPccRules(
 	return nil
 }
 
-func (c *SMContext) ApplyDcPccRulesOnDctunnel() error {
+func (c *SMContext) ApplyDcPccRulesOnDcTunnel() error {
 	if c.DCTunnel == nil {
 		c.Log.Errorf("DCTunnel is nil")
 		return fmt.Errorf("DCTunnel is nil")

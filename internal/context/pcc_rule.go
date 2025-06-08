@@ -129,7 +129,7 @@ func (r *PCCRule) AddDataPathForwardingParameters(c *SMContext,
 	}
 }
 
-func (r *PCCRule) AddDataPathForwardingParametersOnDctunnel(c *SMContext,
+func (r *PCCRule) AddDataPathForwardingParametersOnDcTunnel(c *SMContext,
 	tgtRoute *models.RouteToLocation,
 ) {
 	if tgtRoute == nil {
@@ -137,7 +137,7 @@ func (r *PCCRule) AddDataPathForwardingParametersOnDctunnel(c *SMContext,
 	}
 
 	if r.Datapath == nil {
-		logger.CtxLog.Warnf("AddDataPathForwardingParametersOnDctunnel pcc[%s]: no data path", r.PccRuleId)
+		logger.CtxLog.Warnf("AddDataPathForwardingParametersOnDcTunnel pcc[%s]: no data path", r.PccRuleId)
 		return
 	}
 

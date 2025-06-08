@@ -150,7 +150,7 @@ func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) error {
 	return nil
 }
 
-func (node *DataPathNode) ActivateUpLinkDctunnel(smContext *SMContext) error {
+func (node *DataPathNode) ActivateUpLinkDcTunnel(smContext *SMContext) error {
 	logger.CtxLog.Traceln("In ActivateUpLinkDctunnel")
 
 	var err error
@@ -198,7 +198,7 @@ func (node *DataPathNode) ActivateDownLinkTunnel(smContext *SMContext) error {
 	return nil
 }
 
-func (node *DataPathNode) ActivateDownLinkDctunnel(smContext *SMContext) error {
+func (node *DataPathNode) ActivateDownLinkDcTunnel(smContext *SMContext) error {
 	logger.CtxLog.Traceln("In ActivateDownLinkDctunnel")
 
 	var err error
@@ -257,7 +257,7 @@ func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 	}
 }
 
-func (node *DataPathNode) DeactivateUpLinkDctunnel(smContext *SMContext) {
+func (node *DataPathNode) DeactivateUpLinkDcTunnel(smContext *SMContext) {
 	if pdr := node.UpLinkTunnel.PDR; pdr != nil {
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
 		err := node.UPF.RemovePDR(pdr)
@@ -327,7 +327,7 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 	}
 }
 
-func (node *DataPathNode) DeactivateDownLinkDctunnel(smContext *SMContext) {
+func (node *DataPathNode) DeactivateDownLinkDcTunnel(smContext *SMContext) {
 	if pdr := node.DownLinkTunnel.PDR; pdr != nil {
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
 		err := node.UPF.RemovePDR(pdr)
@@ -818,20 +818,20 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 	dataPath.Activated = true
 }
 
-func (dataPath *DataPath) ActivateDctunnelAndPDR(smContext *SMContext, precedence uint32) {
+func (dataPath *DataPath) ActivateDcTunnelAndPDR(smContext *SMContext, precedence uint32) {
 	smContext.AllocateLocalSEIDForDataPath(dataPath)
 
 	firstDPNode := dataPath.FirstDPNode
-	logger.PduSessLog.Traceln("In ActivateDctunnelAndPDR")
+	logger.PduSessLog.Traceln("In ActivateDcTunnelAndPDR")
 	logger.PduSessLog.Traceln(dataPath.String())
 	// Activate DCTunnels
 	for node := firstDPNode; node != nil; node = node.Next() {
 		logger.PduSessLog.Traceln("Current DP Node IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
-		if err := node.ActivateUpLinkDctunnel(smContext); err != nil {
-			logger.PduSessLog.Errorln("ActivateUpLinkDctunnel failed", err)
+		if err := node.ActivateUpLinkDcTunnel(smContext); err != nil {
+			logger.PduSessLog.Errorln("ActivateUpLinkDcTunnel failed", err)
 		}
-		if err := node.ActivateDownLinkDctunnel(smContext); err != nil {
-			logger.PduSessLog.Errorln("ActivateDownLinkDctunnel failed", err)
+		if err := node.ActivateDownLinkDcTunnel(smContext); err != nil {
+			logger.PduSessLog.Errorln("ActivateDownLinkDcTunnel failed", err)
 		}
 	}
 
@@ -1034,7 +1034,7 @@ func (dataPath *DataPath) ActivateDctunnelAndPDR(smContext *SMContext, precedenc
 
 				iface = DLDestUPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
 				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
-					logger.CtxLog.Errorln("ActivateDctunnelAndPDR failed", err)
+					logger.CtxLog.Errorln("ActivateDcTunnelAndPDR failed", err)
 					return
 				} else {
 					DLPDR.PDI = PDI{
@@ -1074,7 +1074,7 @@ func (dataPath *DataPath) ActivateDctunnelAndPDR(smContext *SMContext, precedenc
 				iface = nextDLDest.UPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
 
 				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
-					logger.CtxLog.Errorln("ActivateDctunnelAndPDR failed", err)
+					logger.CtxLog.Errorln("ActivateDcTunnelAndPDR failed", err)
 					return
 				} else {
 					DLFAR.ForwardingParameters = &ForwardingParameters{
@@ -1128,7 +1128,7 @@ func (dataPath *DataPath) DeactivateTunnelAndPDR(smContext *SMContext) {
 	dataPath.Activated = false
 }
 
-func (dataPath *DataPath) DeactivateDctunnelAndPDR(smContext *SMContext) {
+func (dataPath *DataPath) DeactivateDcTunnelAndPDR(smContext *SMContext) {
 	firstDPNode := dataPath.FirstDPNode
 
 	var targetNodes []*DataPathNode
@@ -1137,8 +1137,8 @@ func (dataPath *DataPath) DeactivateDctunnelAndPDR(smContext *SMContext) {
 	}
 	// Deactivate Tunnels
 	for _, node := range targetNodes {
-		node.DeactivateUpLinkDctunnel(smContext)
-		node.DeactivateDownLinkDctunnel(smContext)
+		node.DeactivateUpLinkDcTunnel(smContext)
+		node.DeactivateDownLinkDcTunnel(smContext)
 	}
 
 	dataPath.Activated = false

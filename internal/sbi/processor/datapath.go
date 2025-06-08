@@ -387,7 +387,7 @@ func (p *Processor) updateAnUpfPfcpSession(
 func ReleaseTunnel(smContext *smf_context.SMContext) []SendPfcpResult {
 	resChan := make(chan SendPfcpResult)
 
-	deletedPFCPNode := make(map[string]bool)
+	deletedPfcpNode := make(map[string]bool)
 	for _, dataPath := range smContext.Tunnel.DataPathPool {
 		var targetNodes []*smf_context.DataPathNode
 		for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
@@ -400,47 +400,47 @@ func ReleaseTunnel(smContext *smf_context.SMContext) []SendPfcpResult {
 				logger.PduSessLog.Error(err)
 				continue
 			}
-			if _, exist := deletedPFCPNode[curUPFID]; !exist {
+			if _, exist := deletedPfcpNode[curUPFID]; !exist {
 				go deletePfcpSession(node.UPF, smContext, resChan)
-				deletedPFCPNode[curUPFID] = true
+				deletedPfcpNode[curUPFID] = true
 			}
 		}
 	}
 
 	// collect all responses
-	resList := make([]SendPfcpResult, 0, len(deletedPFCPNode))
-	for i := 0; i < len(deletedPFCPNode); i++ {
+	resList := make([]SendPfcpResult, 0, len(deletedPfcpNode))
+	for i := 0; i < len(deletedPfcpNode); i++ {
 		resList = append(resList, <-resChan)
 	}
 
 	return resList
 }
 
-func ReleaseDctunnel(smContext *smf_context.SMContext) []SendPfcpResult {
+func ReleaseDcTunnel(smContext *smf_context.SMContext) []SendPfcpResult {
 	resChan := make(chan SendPfcpResult)
 
-	deletedPFCPNode := make(map[string]bool)
+	deletedPfcpNode := make(map[string]bool)
 	for _, dataPath := range smContext.DCTunnel.DataPathPool {
 		var targetNodes []*smf_context.DataPathNode
 		for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
 			targetNodes = append(targetNodes, node)
 		}
-		dataPath.DeactivateDctunnelAndPDR(smContext)
+		dataPath.DeactivateDcTunnelAndPDR(smContext)
 		for _, node := range targetNodes {
 			curUPFID, err := node.GetUPFID()
 			if err != nil {
 				logger.PduSessLog.Error(err)
 				continue
 			}
-			if _, exist := deletedPFCPNode[curUPFID]; !exist {
+			if _, exist := deletedPfcpNode[curUPFID]; !exist {
 				go deletePfcpSession(node.UPF, smContext, resChan)
-				deletedPFCPNode[curUPFID] = true
+				deletedPfcpNode[curUPFID] = true
 			}
 		}
 	}
 
-	resList := make([]SendPfcpResult, 0, len(deletedPFCPNode))
-	for i := 0; i < len(deletedPFCPNode); i++ {
+	resList := make([]SendPfcpResult, 0, len(deletedPfcpNode))
+	for i := 0; i < len(deletedPfcpNode); i++ {
 		resList = append(resList, <-resChan)
 	}
 

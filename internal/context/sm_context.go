@@ -738,10 +738,10 @@ func (c *SMContext) CreateDcPccRuleDataPathOnDctunnel(pccRule *PCCRule,
 	}
 
 	createdDataPath.GBRFlow = isGBRFlow(qosData)
-	createdDataPath.ActivateDctunnelAndPDR(c, uint32(pccRule.Precedence))
+	createdDataPath.ActivateDcTunnelAndPDR(c, uint32(pccRule.Precedence))
 	c.DCTunnel.AddDataPath(createdDataPath)
 	pccRule.Datapath = createdDataPath
-	pccRule.AddDataPathForwardingParametersOnDctunnel(c, &targetRoute)
+	pccRule.AddDataPathForwardingParametersOnDcTunnel(c, &targetRoute)
 
 	if chgLevel, err := pccRule.IdentifyChargingLevel(); err != nil {
 		c.Log.Warnf("fail to identify charging level[%+v] for pcc rule[%s]", err, pccRule.PccRuleId)
