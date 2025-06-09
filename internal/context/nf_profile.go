@@ -66,7 +66,7 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 func (context *SMFContext) GetIPUri() string {
 	addr := context.RegisterIP
 	port := uint16(context.SBIPort)
-	scheme := string(context.URIScheme)
+	scheme := string(context.UriScheme)
 
 	bind := netip.AddrPortFrom(addr, port).String()
 
