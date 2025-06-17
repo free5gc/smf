@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"github.com/free5gc/util/metrics"
+	"github.com/free5gc/util/metrics/utils"
+	"github.com/prometheus/client_golang/prometheus"
 	"io"
 	"os"
 	"runtime/debug"
@@ -37,10 +40,11 @@ type SmfApp struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	sbiServer *sbi.Server
-	consumer  *consumer.Consumer
-	processor *processor.Processor
-	wg        sync.WaitGroup
+	sbiServer     *sbi.Server
+	metricsServer *metrics.Server
+	consumer      *consumer.Consumer
+	processor     *processor.Processor
+	wg            sync.WaitGroup
 
 	pfcpStart     func(*SmfApp)
 	pfcpTerminate func()
@@ -87,6 +91,14 @@ func NewApp(
 	}
 	smf.sbiServer = sbiServer
 
+	features := map[utils.MetricTypeEnabled]bool{}
+	customMetrics := make(map[utils.MetricTypeEnabled][]prometheus.Collector)
+	if cfg.AreMetricsEnabled() {
+		if smf.metricsServer, err = metrics.NewServer(getInitMetrics(cfg, features, customMetrics), tlsKeyLogPath, logger.InitLog); err != nil {
+			return nil, err
+		}
+	}
+
 	smf.ctx, smf.cancel = context.WithCancel(ctx)
 
 	// for PFCP
@@ -96,6 +108,21 @@ func NewApp(
 	SMF = smf
 
 	return smf, nil
+}
+
+func getInitMetrics(cfg *factory.Config, features map[utils.MetricTypeEnabled]bool, customMetrics map[utils.MetricTypeEnabled][]prometheus.Collector) metrics.InitMetrics {
+	metricsInfo := metrics.Metrics{
+		BindingIPv4: cfg.GetMetricsBindingAddr(),
+		Scheme:      cfg.GetMetricsScheme(),
+		Namespace:   cfg.GetMetricsNamespace(),
+		Port:        cfg.GetMetricsPort(),
+		Tls: metrics.Tls{
+			Key: cfg.GetMetricsCertKeyPath(),
+			Pem: cfg.GetMetricsCertPemPath(),
+		},
+	}
+
+	return metrics.NewInitMetrics(metricsInfo, "smf", features, customMetrics)
 }
 
 func (a *SmfApp) Config() *factory.Config {
@@ -171,6 +198,12 @@ func (a *SmfApp) Start() {
 	a.wg.Add(1)
 	go a.listenShutDownEvent()
 
+	if a.cfg.AreMetricsEnabled() && a.metricsServer != nil {
+		go func() {
+			a.metricsServer.Run(&a.wg)
+		}()
+	}
+
 	// Initialize PFCP server
 	a.pfcpStart(a)
 
@@ -218,6 +251,10 @@ func (a *SmfApp) terminateProcedure() {
 
 	a.sbiServer.Stop()
 	logger.MainLog.Infof("SMF SBI Server terminated")
+	if a.metricsServer != nil {
+		a.metricsServer.Stop()
+		logger.MainLog.Infof("SMF Metrics Server terminated")
+	}
 }
 
 func (a *SmfApp) WaitRoutineStopped() {
