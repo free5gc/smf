@@ -8,6 +8,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/smf/PDUSession"
 	"github.com/free5gc/smf/internal/logger"
+	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 )
 
 type nsmfService struct {
@@ -31,6 +32,7 @@ func (s *nsmfService) getPDUSessionClient(uri string) *PDUSession.APIClient {
 
 	configuration := PDUSession.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = PDUSession.NewAPIClient(configuration)
 
 	s.PDUSessionMu.RUnlock()

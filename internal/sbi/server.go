@@ -20,6 +20,7 @@ import (
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/httpwrapper"
 	logger_util "github.com/free5gc/util/logger"
+	"github.com/free5gc/util/metrics"
 )
 
 const (
@@ -67,6 +68,7 @@ func NewServer(smf ServerSmf, tlsKeyLogPath string) (*Server, error) {
 func newRouter(s *Server) *gin.Engine {
 	router := logger_util.NewGinWithLogrus(logger.GinLog)
 
+	router.Use(metrics.InboundMetrics())
 	smfCallbackGroup := router.Group(factory.SmfCallbackUriPrefix)
 	smfCallbackRoutes := s.getCallbackRoutes()
 	applyRoutes(smfCallbackGroup, smfCallbackRoutes)
