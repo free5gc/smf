@@ -10,6 +10,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/util/metrics/sbi"
 )
 
 func (s *Server) getPDUSessionRoutes() []Route {
@@ -104,7 +105,9 @@ func (s *Server) HTTPPostSmContexts(c *gin.Context) {
 	if err != nil {
 		problemDetail := "[Request Body] " + err.Error()
 		logger.PduSessLog.Errorln(problemDetail)
-		c.JSON(http.StatusBadRequest, openapi.ProblemDetailsMalformedReqSyntax(problemDetail))
+		problemDetails := openapi.ProblemDetailsMalformedReqSyntax(problemDetail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(problemDetails.Status)))
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 

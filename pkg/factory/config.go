@@ -242,7 +242,7 @@ type Metrics struct {
 	Enable      bool   `yaml:"enable" valid:"optional"`
 	Scheme      string `yaml:"scheme" valid:"required,scheme"`
 	BindingIPv4 string `yaml:"bindingIPv4,omitempty" valid:"required,host"` // IP used to run the server in the node.
-	Port        int    `yaml:"port,omitempty" valid:"required,port"`
+	Port        int    `yaml:"port,omitempty" valid:"optional,port"`
 	Tls         *Tls   `yaml:"tls,omitempty" valid:"optional"`
 	Namespace   string `yaml:"namespace" valid:"optional"`
 }
