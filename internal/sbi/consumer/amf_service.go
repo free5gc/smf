@@ -7,6 +7,7 @@ import (
 
 	"github.com/free5gc/openapi/amf/Communication"
 	"github.com/free5gc/openapi/models"
+	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 )
 
 type namfService struct {
@@ -30,6 +31,7 @@ func (s *namfService) getCommunicationClient(uri string) *Communication.APIClien
 
 	configuration := Communication.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = Communication.NewAPIClient(configuration)
 
 	s.CommunicationMu.RUnlock()

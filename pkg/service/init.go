@@ -91,7 +91,7 @@ func NewApp(
 	}
 	smf.sbiServer = sbiServer
 
-	features := map[utils.MetricTypeEnabled]bool{}
+	features := map[utils.MetricTypeEnabled]bool{utils.SBI: true}
 	customMetrics := make(map[utils.MetricTypeEnabled][]prometheus.Collector)
 	if cfg.AreMetricsEnabled() {
 		if smf.metricsServer, err = metrics.NewServer(
