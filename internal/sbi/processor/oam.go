@@ -9,6 +9,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/factory"
+	"github.com/free5gc/util/metrics/sbi"
 )
 
 type PDUSessionInfo struct {
@@ -27,7 +28,9 @@ type PDUSessionInfo struct {
 func (p *Processor) HandleOAMGetUEPDUSessionInfo(c *gin.Context, smContextRef string) {
 	smContext := context.GetSMContextByRef(smContextRef)
 	if smContext == nil {
-		c.JSON(http.StatusNotFound, nil)
+		statusCode := http.StatusNotFound
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(statusCode))
+		c.JSON(statusCode, nil)
 		return
 	}
 

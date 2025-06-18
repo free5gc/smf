@@ -7,6 +7,7 @@ import (
 
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/factory"
+	"github.com/free5gc/util/metrics/sbi"
 )
 
 func (s *Server) getUPIRoutes() []Route {
@@ -63,6 +64,7 @@ func (s *Server) PostUpNodesLinks(c *gin.Context) {
 
 	var json factory.UserPlaneInformation
 	if err := c.ShouldBindJSON(&json); err != nil {
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(http.StatusBadRequest)))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -82,6 +84,7 @@ func (s *Server) PostUpNodesLinks(c *gin.Context) {
 func (s *Server) DeleteUpNodeLink(c *gin.Context) {
 	// current version does not allow node deletions when ulcl is enabled
 	if smf_context.GetSelf().ULCLSupport {
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(http.StatusForbidden)))
 		c.JSON(http.StatusForbidden, gin.H{})
 	} else {
 		upNodeRef := c.Params.ByName("upNodeRef")
@@ -96,7 +99,9 @@ func (s *Server) DeleteUpNodeLink(c *gin.Context) {
 			upNode.UPF.CancelAssociation()
 			c.JSON(http.StatusOK, gin.H{"status": "OK"})
 		} else {
-			c.JSON(http.StatusNotFound, gin.H{})
+			statusCode := http.StatusNotFound
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(statusCode))
+			c.JSON(statusCode, gin.H{})
 		}
 	}
 }

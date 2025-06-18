@@ -12,6 +12,7 @@ import (
 	"github.com/free5gc/openapi/smf/EventExposure"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/util/metrics/sbi"
 )
 
 func (p *Processor) HandleChargingNotification(
@@ -26,6 +27,7 @@ func (p *Processor) HandleChargingNotification(
 		c.Status(http.StatusNoContent)
 		return
 	}
+	c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 	c.JSON(int(problemDetails.Status), problemDetails)
 }
 
