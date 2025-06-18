@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"context"
+	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 	"sync"
 
 	"github.com/free5gc/openapi"
@@ -31,6 +32,7 @@ func (s *nsmfService) getPDUSessionClient(uri string) *PDUSession.APIClient {
 
 	configuration := PDUSession.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = PDUSession.NewAPIClient(configuration)
 
 	s.PDUSessionMu.RUnlock()

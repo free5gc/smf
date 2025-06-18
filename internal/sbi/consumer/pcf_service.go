@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"fmt"
+	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 	"net"
 	"regexp"
 	"strconv"
@@ -39,6 +40,7 @@ func (s *npcfService) getSMPolicyControlClient(uri string) *SMPolicyControl.APIC
 
 	configuration := SMPolicyControl.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = SMPolicyControl.NewAPIClient(configuration)
 
 	s.SMPolicyControlMu.RUnlock()

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/free5gc/util/metrics/sbi"
 	"net"
 	"net/http"
 	"reflect"
@@ -44,6 +45,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 				Error: &smf_errors.N1SmError,
 			},
 		}
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, postSmContextsError.JsonData.Error.Cause)
 		c.JSON(http.StatusForbidden, postSmContextsError)
 		return
 	}
@@ -320,6 +322,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				},
 			},
 		}
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, updateSmContextError.JsonData.Error.Title)
 		c.JSON(http.StatusNotFound, updateSmContextError)
 		return
 	}
@@ -345,6 +348,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					Error: &smf_errors.N1SmError,
 				},
 			} // Depends on the reason why N4 fail
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, updateSmContextError.JsonData.Error.Cause)
 			c.JSON(http.StatusForbidden, updateSmContextError)
 			return
 		}
@@ -844,6 +848,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					Error: &smf_errors.N1SmError,
 				},
 			} // Depends on the reason why N4 fail
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, updateSmContextError.JsonData.Error.Cause)
 			c.JSON(http.StatusForbidden, updateSmContextError)
 
 		case smf_context.SessionReleaseSuccess:
@@ -875,6 +880,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					errResponse.JsonData.N1SmMsg = &models.RefToBinaryData{ContentId: "PDUSessionReleaseReject"}
 				}
 			}
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, errResponse.JsonData.Error.Cause)
 			c.JSON(int(problemDetail.Status), errResponse)
 		}
 		smContext.PostRemoveDataPath()
@@ -918,6 +924,7 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 				},
 			},
 		}
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, updateSmContextError.JsonData.Error.Title)
 		c.JSON(http.StatusNotFound, updateSmContextError)
 		return
 	}
@@ -993,6 +1000,7 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 			errResponse.JsonData.N1SmMsg = &models.RefToBinaryData{ContentId: "PDUSessionReleaseReject"}
 		}
 
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, errResponse.JsonData.Error.Cause)
 		c.JSON(int(problemDetail.Status), errResponse)
 
 	default:
@@ -1015,7 +1023,7 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 			errResponse.BinaryDataN1SmMessage = buf
 			errResponse.JsonData.N1SmMsg = &models.RefToBinaryData{ContentId: "PDUSessionReleaseReject"}
 		}
-
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, errResponse.JsonData.Error.Cause)
 		c.JSON(int(problemDetail.Status), errResponse)
 	}
 
@@ -1242,12 +1250,15 @@ func (p *Processor) nasErrorResponse(
 			rspBody, contentType, err := openapi.MultipartSerialize(errBody)
 			if err != nil {
 				logger.SBILog.Infof("MultipartSerialize error: %v", err)
-				c.JSON(http.StatusInternalServerError, openapi.ProblemDetailsSystemFailure(err.Error()))
+				problemDetails := openapi.ProblemDetailsSystemFailure(err.Error())
+				c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
+				c.JSON(http.StatusInternalServerError, problemDetails)
 			} else {
 				c.Data(status, contentType, rspBody)
 			}
 			return
 		}
 	}
+	c.Set(sbi.IN_PB_DETAILS_CTX_STR, errBody.JsonData.Error.Cause)
 	c.JSON(status, errBody)
 }

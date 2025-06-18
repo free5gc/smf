@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"fmt"
+	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 	"strings"
 	"sync"
 	"time"
@@ -41,6 +42,7 @@ func (s *nnrfService) getNFManagementClient(uri string) *NFManagement.APIClient 
 
 	configuration := NFManagement.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = NFManagement.NewAPIClient(configuration)
 
 	s.NFManagementgMu.RUnlock()
@@ -63,6 +65,7 @@ func (s *nnrfService) getNFDiscoveryClient(uri string) *NFDiscovery.APIClient {
 
 	configuration := NFDiscovery.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = NFDiscovery.NewAPIClient(configuration)
 
 	s.NFDiscoveryMu.RUnlock()

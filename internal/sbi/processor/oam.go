@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"github.com/free5gc/util/metrics/sbi"
 	"net/http"
 	"strconv"
 
@@ -27,7 +28,9 @@ type PDUSessionInfo struct {
 func (p *Processor) HandleOAMGetUEPDUSessionInfo(c *gin.Context, smContextRef string) {
 	smContext := context.GetSMContextByRef(smContextRef)
 	if smContext == nil {
-		c.JSON(http.StatusNotFound, nil)
+		statusCode := http.StatusNotFound
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(statusCode))
+		c.JSON(statusCode, nil)
 		return
 	}
 

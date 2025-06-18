@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"fmt"
+	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,7 @@ func (s *nchfService) getConvergedChargingClient(uri string) *ConvergedCharging.
 
 	configuration := ConvergedCharging.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = ConvergedCharging.NewAPIClient(configuration)
 
 	s.ConvergedChargingMu.RUnlock()

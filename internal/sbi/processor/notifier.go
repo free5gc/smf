@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"fmt"
+	"github.com/free5gc/util/metrics/sbi"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -26,6 +27,7 @@ func (p *Processor) HandleChargingNotification(
 		c.Status(http.StatusNoContent)
 		return
 	}
+	c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 	c.JSON(int(problemDetails.Status), problemDetails)
 }
 
