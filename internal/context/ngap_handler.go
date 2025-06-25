@@ -49,18 +49,18 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) err
 	}
 
 	QosFlowPerTNLInformation := resourceSetupResponseTransfer.DLQosFlowPerTNLInformation
-	var DCQosFlowPerTNLInfomationItem ngapType.QosFlowPerTNLInformationItem
+	var DCQosFlowPerTNLInformationItem ngapType.QosFlowPerTNLInformationItem
 	DCQosFlowPerTNLInformation := resourceSetupResponseTransfer.AdditionalDLQosFlowPerTNLInformation
 	if DCQosFlowPerTNLInformation != nil && len(DCQosFlowPerTNLInformation.List) > 0 {
 		ctx.HasNRDCSupport = true
-		DCQosFlowPerTNLInfomationItem = DCQosFlowPerTNLInformation.List[0]
+		DCQosFlowPerTNLInformationItem = DCQosFlowPerTNLInformation.List[0]
 	}
 
 	if QosFlowPerTNLInformation.UPTransportLayerInformation.Present !=
 		ngapType.UPTransportLayerInformationPresentGTPTunnel {
 		return errors.New("resourceSetupResponseTransfer.QosFlowPerTNLInformation.UPTransportLayerInformation.Present")
 	}
-	if ctx.HasNRDCSupport && DCQosFlowPerTNLInfomationItem.QosFlowPerTNLInformation.UPTransportLayerInformation.Present !=
+	if ctx.HasNRDCSupport && DCQosFlowPerTNLInformationItem.QosFlowPerTNLInformation.UPTransportLayerInformation.Present !=
 		ngapType.UPTransportLayerInformationPresentGTPTunnel {
 		return errors.New(
 			"resourceSetupResponseTransfer.AdditionalQosFlowPerTNLInformation." +
@@ -70,7 +70,7 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) err
 	GTPTunnel := QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
 	DCGTPTunnel := &ngapType.GTPTunnel{}
 	if ctx.HasNRDCSupport {
-		DCGTPTunnel = DCQosFlowPerTNLInfomationItem.QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
+		DCGTPTunnel = DCQosFlowPerTNLInformationItem.QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
 	}
 
 	ctx.Tunnel.UpdateANInformation(

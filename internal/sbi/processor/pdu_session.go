@@ -606,7 +606,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				}
 			}
 			if err = smContext.ApplyDcPccRulesOnDcTunnel(); err != nil {
-				smContext.Log.Errorf("ApplyPccRulesOnDcTunnel failed: %+v", err)
+				smContext.Log.Errorf("ApplyDcPccRulesOnDcTunnel failed: %+v", err)
 			}
 			for _, dataPath := range dcTunnel.DataPathPool {
 				if dataPath.Activated {
