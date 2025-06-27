@@ -250,6 +250,129 @@ func (c *SMContext) ApplyPccRules(
 	return nil
 }
 
+func (c *SMContext) ApplyDcPccRulesOnDcTunnel() error {
+	if c.DCTunnel == nil {
+		c.Log.Errorf("DCTunnel is nil")
+		return fmt.Errorf("DCTunnel is nil")
+	}
+
+	for id, pcc := range c.PCCRules {
+		if pcc == nil {
+			continue
+		}
+
+		newPcc := &PCCRule{
+			PccRule: &models.PccRule{
+				FlowInfos:       make([]models.FlowInformation, len(pcc.FlowInfos)),
+				AppId:           pcc.AppId,
+				AppDescriptor:   pcc.AppDescriptor,
+				ContVer:         pcc.ContVer,
+				PccRuleId:       pcc.PccRuleId,
+				Precedence:      pcc.Precedence,
+				AfSigProtocol:   pcc.AfSigProtocol,
+				AppReloc:        pcc.AppReloc,
+				EasRedisInd:     pcc.EasRedisInd,
+				RefQosData:      make([]string, len(pcc.RefQosData)),
+				RefTcData:       make([]string, len(pcc.RefTcData)),
+				RefChgData:      make([]string, len(pcc.RefChgData)),
+				RefChgN3gData:   make([]string, len(pcc.RefChgN3gData)),
+				RefUmData:       make([]string, len(pcc.RefUmData)),
+				RefUmN3gData:    make([]string, len(pcc.RefUmN3gData)),
+				RefCondData:     pcc.RefCondData,
+				RefQosMon:       make([]string, len(pcc.RefQosMon)),
+				AddrPreserInd:   pcc.AddrPreserInd,
+				TscaiTimeDom:    pcc.TscaiTimeDom,
+				DisUeNotif:      pcc.DisUeNotif,
+				PackFiltAllPrec: pcc.PackFiltAllPrec,
+				RefAltQosParams: make([]string, len(pcc.RefAltQosParams)),
+			},
+			QFI:      pcc.QFI,
+			Datapath: nil,
+		}
+
+		if pcc.TscaiInputDl != nil {
+			newPcc.TscaiInputDl = &models.TscaiInputContainer{
+				Periodicity:      pcc.TscaiInputDl.Periodicity,
+				BurstArrivalTime: pcc.TscaiInputDl.BurstArrivalTime,
+				SurTimeInNumMsg:  pcc.TscaiInputDl.SurTimeInNumMsg,
+				SurTimeInTime:    pcc.TscaiInputDl.SurTimeInTime,
+			}
+		}
+		if pcc.TscaiInputUl != nil {
+			newPcc.TscaiInputUl = &models.TscaiInputContainer{
+				Periodicity:      pcc.TscaiInputUl.Periodicity,
+				BurstArrivalTime: pcc.TscaiInputUl.BurstArrivalTime,
+				SurTimeInNumMsg:  pcc.TscaiInputUl.SurTimeInNumMsg,
+				SurTimeInTime:    pcc.TscaiInputUl.SurTimeInTime,
+			}
+		}
+		copy(newPcc.FlowInfos, pcc.FlowInfos)
+		copy(newPcc.RefQosData, pcc.RefQosData)
+		copy(newPcc.RefTcData, pcc.RefTcData)
+		copy(newPcc.RefChgData, pcc.RefChgData)
+		copy(newPcc.RefChgN3gData, pcc.RefChgN3gData)
+		copy(newPcc.RefUmData, pcc.RefUmData)
+		copy(newPcc.RefUmN3gData, pcc.RefUmN3gData)
+		copy(newPcc.RefQosMon, pcc.RefQosMon)
+		copy(newPcc.RefAltQosParams, pcc.RefAltQosParams)
+
+		if pcc.DdNotifCtrl != nil {
+			newPcc.DdNotifCtrl = &models.DownlinkDataNotificationControl{
+				NotifCtrlInds: make([]models.NotificationControlIndication, len(pcc.DdNotifCtrl.NotifCtrlInds)),
+				TypesOfNotif:  make([]models.DlDataDeliveryStatus, len(pcc.DdNotifCtrl.TypesOfNotif)),
+			}
+			copy(newPcc.DdNotifCtrl.NotifCtrlInds, pcc.DdNotifCtrl.NotifCtrlInds)
+			copy(newPcc.DdNotifCtrl.TypesOfNotif, pcc.DdNotifCtrl.TypesOfNotif)
+		}
+		if pcc.DdNotifCtrl2 != nil {
+			newPcc.DdNotifCtrl2 = &models.DownlinkDataNotificationControlRm{
+				NotifCtrlInds: make([]models.NotificationControlIndication, len(pcc.DdNotifCtrl2.NotifCtrlInds)),
+				TypesOfNotif:  make([]models.DlDataDeliveryStatus, len(pcc.DdNotifCtrl2.TypesOfNotif)),
+			}
+			copy(newPcc.DdNotifCtrl2.NotifCtrlInds, pcc.DdNotifCtrl2.NotifCtrlInds)
+			copy(newPcc.DdNotifCtrl2.TypesOfNotif, pcc.DdNotifCtrl2.TypesOfNotif)
+		}
+
+		c.DCPCCRules[id] = newPcc
+	}
+
+	for id, pcc := range c.DCPCCRules {
+		if pcc == nil {
+			c.Log.Warnf("PCCRule[%s] is nil", id)
+			continue
+		}
+
+		tcID := pcc.RefTcDataID()
+		tcData := c.TrafficControlDatas[tcID]
+
+		chgID := pcc.RefChgDataID()
+		chgData := c.ChargingData[chgID]
+
+		qosID := pcc.RefQosDataID()
+		qosData := c.QosDatas[qosID]
+
+		if pcc.Datapath != nil {
+			c.PreRemoveDataPath(pcc.Datapath)
+		}
+
+		if err := c.CreateDcPccRuleDataPathOnDcTunnel(pcc, tcData, qosData, chgData); err != nil {
+			c.Log.Errorf("CreatePccRuleDataPathOnDcTunnel for PCCRule[%s] failed: %v", id, err)
+			continue
+		}
+
+		if err := applyFlowInfoOrPFD(pcc); err != nil {
+			c.Log.Errorf("applyFlowInfoOrPFD for PCCRule[%s] failed: %v", id, err)
+			continue
+		}
+
+		c.Log.Infof("Applied PCCRule[%s] to DCTunnel", id)
+	}
+
+	c.addPduLevelChargingRuleToFlow(c.DCPCCRules)
+
+	return nil
+}
+
 func (c *SMContext) getSrcTgtTcData(
 	decisionTcDecs map[string]*models.TrafficControlData,
 	tcID string,

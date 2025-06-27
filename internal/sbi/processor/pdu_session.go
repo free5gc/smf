@@ -472,6 +472,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	}
 
 	tunnel := smContext.Tunnel
+	dcTunnel := smContext.DCTunnel
 	pdrList := []*smf_context.PDR{}
 	farList := []*smf_context.FAR{}
 	barList := []*smf_context.BAR{}
@@ -597,6 +598,68 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		if err = smf_context.
 			HandlePDUSessionResourceSetupResponseTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			smContext.Log.Errorf("Handle PDUSessionResourceSetupResponseTransfer failed: %+v", err)
+		} else if smContext.NrdcIndicator {
+			for _, pdr := range pdrList {
+				// Remove all PDRs except the default PDR
+				if pdr.Precedence != 255 {
+					pdr.State = smf_context.RULE_REMOVE
+				}
+			}
+			if err = smContext.ApplyDcPccRulesOnDcTunnel(); err != nil {
+				smContext.Log.Errorf("ApplyDcPccRulesOnDcTunnel failed: %+v", err)
+			}
+			for _, dataPath := range dcTunnel.DataPathPool {
+				if dataPath.Activated {
+					ANUPF := dataPath.FirstDPNode
+					ULPDR := ANUPF.UpLinkTunnel.PDR
+					DLPDR := ANUPF.DownLinkTunnel.PDR
+
+					ULPDR.FAR.ApplyAction = pfcpType.ApplyAction{
+						Buff: false,
+						Drop: false,
+						Dupl: false,
+						Forw: true,
+						Nocp: false,
+					}
+					DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{
+						Buff: false,
+						Drop: false,
+						Dupl: false,
+						Forw: true,
+						Nocp: false,
+					}
+
+					// ULPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
+					// 	DestinationInterface: pfcpType.DestinationInterface{
+					// 		InterfaceValue: pfcpType.DestinationInterfaceCore,
+					// 	},
+					// 	NetworkInstance: &pfcpType.NetworkInstance{
+					// 		NetworkInstance: smContext.Dnn,
+					// 		FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
+					// 	},
+					// }
+					// DLPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
+					// 	DestinationInterface: pfcpType.DestinationInterface{
+					// 		InterfaceValue: pfcpType.DestinationInterfaceAccess,
+					// 	},
+					// 	NetworkInstance: &pfcpType.NetworkInstance{
+					// 		NetworkInstance: smContext.Dnn,
+					// 		FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
+					// 	},
+					// }
+
+					DLPDR.State = smf_context.RULE_INITIAL
+					DLPDR.FAR.State = smf_context.RULE_INITIAL
+					ULPDR.State = smf_context.RULE_INITIAL
+					ULPDR.FAR.State = smf_context.RULE_INITIAL
+
+					pdrList = append(pdrList, DLPDR)
+					farList = append(farList, DLPDR.FAR)
+
+					pdrList = append(pdrList, ULPDR)
+					farList = append(farList, ULPDR.FAR)
+				}
+			}
 		}
 		sendPFCPModification = true
 		smContext.SetState(smf_context.PFCPModification)
@@ -1100,6 +1163,15 @@ func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionRes
 	smContext.SetState(smf_context.PFCPModification)
 
 	for _, res := range ReleaseTunnel(smContext) {
+		if res.Status != smf_context.SessionReleaseSuccess {
+			return res.Status
+		}
+	}
+	if !smContext.NrdcIndicator {
+		return smf_context.SessionReleaseSuccess
+	}
+
+	for _, res := range ReleaseDcTunnel(smContext) {
 		if res.Status != smf_context.SessionReleaseSuccess {
 			return res.Status
 		}
