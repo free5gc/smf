@@ -355,8 +355,8 @@ func (c *SMContext) ApplyDcPccRulesOnDcTunnel() error {
 			c.PreRemoveDataPath(pcc.Datapath)
 		}
 
-		if err := c.CreateDcPccRuleDataPathOnDctunnel(pcc, tcData, qosData, chgData); err != nil {
-			c.Log.Errorf("CreatePccRuleDataPathOnDCTunnel for PCCRule[%s] failed: %v", id, err)
+		if err := c.CreateDcPccRuleDataPathOnDcTunnel(pcc, tcData, qosData, chgData); err != nil {
+			c.Log.Errorf("CreatePccRuleDataPathOnDcTunnel for PCCRule[%s] failed: %v", id, err)
 			continue
 		}
 

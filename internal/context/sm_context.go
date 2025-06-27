@@ -708,7 +708,7 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	return nil
 }
 
-func (c *SMContext) CreateDcPccRuleDataPathOnDctunnel(pccRule *PCCRule,
+func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
 	tcData *TrafficControlData, qosData *models.QosData,
 	chgData *models.ChargingData,
 ) error {
