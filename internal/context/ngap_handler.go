@@ -52,7 +52,7 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) err
 	var DCQosFlowPerTNLInformationItem ngapType.QosFlowPerTNLInformationItem
 	DCQosFlowPerTNLInformation := resourceSetupResponseTransfer.AdditionalDLQosFlowPerTNLInformation
 	if DCQosFlowPerTNLInformation != nil && len(DCQosFlowPerTNLInformation.List) > 0 {
-		ctx.HasNRDCSupport = true
+		ctx.NrdcIndicator = true
 		DCQosFlowPerTNLInformationItem = DCQosFlowPerTNLInformation.List[0]
 	}
 
@@ -60,7 +60,7 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) err
 		ngapType.UPTransportLayerInformationPresentGTPTunnel {
 		return errors.New("resourceSetupResponseTransfer.QosFlowPerTNLInformation.UPTransportLayerInformation.Present")
 	}
-	if ctx.HasNRDCSupport && DCQosFlowPerTNLInformationItem.QosFlowPerTNLInformation.UPTransportLayerInformation.Present !=
+	if ctx.NrdcIndicator && DCQosFlowPerTNLInformationItem.QosFlowPerTNLInformation.UPTransportLayerInformation.Present !=
 		ngapType.UPTransportLayerInformationPresentGTPTunnel {
 		return errors.New(
 			"resourceSetupResponseTransfer.AdditionalQosFlowPerTNLInformation." +
@@ -69,14 +69,14 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) err
 
 	GTPTunnel := QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
 	DCGTPTunnel := &ngapType.GTPTunnel{}
-	if ctx.HasNRDCSupport {
+	if ctx.NrdcIndicator {
 		DCGTPTunnel = DCQosFlowPerTNLInformationItem.QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
 	}
 
 	ctx.Tunnel.UpdateANInformation(
 		GTPTunnel.TransportLayerAddress.Value.Bytes,
 		binary.BigEndian.Uint32(GTPTunnel.GTPTEID.Value))
-	if ctx.HasNRDCSupport {
+	if ctx.NrdcIndicator {
 		ctx.DCTunnel.UpdateANInformation(
 			DCGTPTunnel.TransportLayerAddress.Value.Bytes,
 			binary.BigEndian.Uint32(DCGTPTunnel.GTPTEID.Value))

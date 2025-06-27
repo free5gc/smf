@@ -127,7 +127,7 @@ type SMContext struct {
 	LocalDLTeid                   uint32
 	LocalULTeidForSplitPDUSession uint32
 	LocalDLTeidForSplitPDUSession uint32
-	HasNRDCSupport                bool
+	NrdcIndicator                 bool
 
 	UpCnxState models.UpCnxState
 
@@ -363,7 +363,7 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 		return nil
 	}
 
-	smContext.HasNRDCSupport = false
+	smContext.NrdcIndicator = false
 
 	return smContext
 }
@@ -415,7 +415,7 @@ func RemoveSMContext(ref string) {
 	ReleaseTEID(smContext.LocalULTeidForSplitPDUSession)
 	ReleaseTEID(smContext.LocalDLTeidForSplitPDUSession)
 
-	smContext.HasNRDCSupport = false
+	smContext.NrdcIndicator = false
 
 	smContextPool.Delete(ref)
 	canonicalRef.Delete(canonicalName(smContext.Supi, smContext.PDUSessionID))

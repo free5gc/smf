@@ -598,7 +598,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		if err = smf_context.
 			HandlePDUSessionResourceSetupResponseTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			smContext.Log.Errorf("Handle PDUSessionResourceSetupResponseTransfer failed: %+v", err)
-		} else if smContext.HasNRDCSupport {
+		} else if smContext.NrdcIndicator {
 			for _, pdr := range pdrList {
 				// Remove all PDRs except the default PDR
 				if pdr.Precedence != 255 {
@@ -1167,7 +1167,7 @@ func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionRes
 			return res.Status
 		}
 	}
-	if !smContext.HasNRDCSupport {
+	if !smContext.NrdcIndicator {
 		return smf_context.SessionReleaseSuccess
 	}
 
