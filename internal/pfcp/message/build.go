@@ -263,10 +263,6 @@ func pdrToUpdatePDR(pdr *context.PDR) *pfcp.UpdatePDR {
 		FarIdValue: pdr.FAR.FARID,
 	}
 
-	updatePDR.FARID = &pfcpType.FARID{
-		FarIdValue: pdr.FAR.FARID,
-	}
-
 	for _, urr := range pdr.URR {
 		if urr != nil {
 			updatePDR.URRID = append(updatePDR.URRID, &pfcpType.URRID{
