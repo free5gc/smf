@@ -263,6 +263,14 @@ func pdrToUpdatePDR(pdr *context.PDR) *pfcp.UpdatePDR {
 		FarIdValue: pdr.FAR.FARID,
 	}
 
+	for _, qer := range pdr.QER {
+		if qer != nil {
+			updatePDR.QERID = append(updatePDR.QERID, &pfcpType.QERID{
+				QERID: qer.QERID,
+			})
+		}
+	}
+
 	for _, urr := range pdr.URR {
 		if urr != nil {
 			updatePDR.URRID = append(updatePDR.URRID, &pfcpType.URRID{
