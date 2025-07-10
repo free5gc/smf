@@ -150,6 +150,30 @@ func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) error {
 	return nil
 }
 
+func (node *DataPathNode) ActivateUpLinkDcTunnel(smContext *SMContext) error {
+	logger.CtxLog.Traceln("In ActivateUpLinkDctunnel")
+
+	var err error
+	node.UpLinkTunnel.SrcEndPoint = node.Prev()
+	node.UpLinkTunnel.DestEndPoint = node
+
+	destUPF := node.UPF
+	if node.UpLinkTunnel.PDR, err = destUPF.AddPDR(); err != nil {
+		logger.CtxLog.Errorln("In ActivateUpLinkDctunnel UPF IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
+		logger.CtxLog.Errorln("Allocate PDR Error: ", err)
+		return fmt.Errorf("Add PDR failed: %s", err)
+	}
+
+	if err = smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.UpLinkTunnel.PDR); err != nil {
+		logger.CtxLog.Errorln("Put PDR Error: ", err)
+		return err
+	}
+
+	node.UpLinkTunnel.TEID = smContext.LocalULTeidForSplitPDUSession
+
+	return nil
+}
+
 func (node *DataPathNode) ActivateDownLinkTunnel(smContext *SMContext) error {
 	logger.CtxLog.Traceln("In ActivateDownLinkTunnel")
 
@@ -170,6 +194,30 @@ func (node *DataPathNode) ActivateDownLinkTunnel(smContext *SMContext) error {
 	}
 
 	node.DownLinkTunnel.TEID = smContext.LocalDLTeid
+
+	return nil
+}
+
+func (node *DataPathNode) ActivateDownLinkDcTunnel(smContext *SMContext) error {
+	logger.CtxLog.Traceln("In ActivateDownLinkDctunnel")
+
+	var err error
+	node.DownLinkTunnel.SrcEndPoint = node.Next()
+	node.DownLinkTunnel.DestEndPoint = node
+
+	destUPF := node.UPF
+	if node.DownLinkTunnel.PDR, err = destUPF.AddPDR(); err != nil {
+		logger.CtxLog.Errorln("In ActivateDownLinkDctunnel UPF IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
+		logger.CtxLog.Errorln("Allocate PDR Error: ", err)
+		return fmt.Errorf("Add PDR failed: %s", err)
+	}
+
+	if err = smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.DownLinkTunnel.PDR); err != nil {
+		logger.CtxLog.Errorln("Put PDR Error: ", err)
+		return err
+	}
+
+	node.DownLinkTunnel.TEID = smContext.LocalDLTeidForSplitPDUSession
 
 	return nil
 }
@@ -209,6 +257,41 @@ func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 	}
 }
 
+func (node *DataPathNode) DeactivateUpLinkDcTunnel(smContext *SMContext) {
+	if pdr := node.UpLinkTunnel.PDR; pdr != nil {
+		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
+		err := node.UPF.RemovePDR(pdr)
+		if err != nil {
+			logger.CtxLog.Warnln("Deactivated UpLinkDctunnel", err)
+		}
+
+		if far := pdr.FAR; far != nil {
+			err = node.UPF.RemoveFAR(far)
+			if err != nil {
+				logger.CtxLog.Warnln("Deactivated UpLinkDctunnel", err)
+			}
+
+			bar := far.BAR
+			if bar != nil {
+				err = node.UPF.RemoveBAR(bar)
+				if err != nil {
+					logger.CtxLog.Warnln("Deactivated UpLinkDctunnel", err)
+				}
+			}
+		}
+		if qerList := pdr.QER; qerList != nil {
+			for _, qer := range qerList {
+				if qer != nil {
+					err = node.UPF.RemoveQER(qer)
+					if err != nil {
+						logger.CtxLog.Warnln("Deactivated UpLinkDctunnel", err)
+					}
+				}
+			}
+		}
+	}
+}
+
 func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 	if pdr := node.DownLinkTunnel.PDR; pdr != nil {
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
@@ -237,6 +320,41 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 					err = node.UPF.RemoveQER(qer)
 					if err != nil {
 						logger.CtxLog.Warnln("Deactivated UpLinkTunnel", err)
+					}
+				}
+			}
+		}
+	}
+}
+
+func (node *DataPathNode) DeactivateDownLinkDcTunnel(smContext *SMContext) {
+	if pdr := node.DownLinkTunnel.PDR; pdr != nil {
+		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
+		err := node.UPF.RemovePDR(pdr)
+		if err != nil {
+			logger.CtxLog.Warnln("Deactivated DownLinkDctunnel", err)
+		}
+
+		if far := pdr.FAR; far != nil {
+			err = node.UPF.RemoveFAR(far)
+			if err != nil {
+				logger.CtxLog.Warnln("Deactivated DownLinkDctunnel", err)
+			}
+
+			bar := far.BAR
+			if bar != nil {
+				err = node.UPF.RemoveBAR(bar)
+				if err != nil {
+					logger.CtxLog.Warnln("Deactivated DownLinkDctunnel", err)
+				}
+			}
+		}
+		if qerList := pdr.QER; qerList != nil {
+			for _, qer := range qerList {
+				if qer != nil {
+					err = node.UPF.RemoveQER(qer)
+					if err != nil {
+						logger.CtxLog.Warnln("Deactivated DownLinkDctunnel", err)
 					}
 				}
 			}
@@ -703,6 +821,300 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 	dataPath.Activated = true
 }
 
+func (dataPath *DataPath) ActivateDcTunnelAndPDR(smContext *SMContext, precedence uint32) {
+	smContext.AllocateLocalSEIDForDataPath(dataPath)
+
+	firstDPNode := dataPath.FirstDPNode
+	logger.PduSessLog.Traceln("In ActivateDcTunnelAndPDR")
+	logger.PduSessLog.Traceln(dataPath.String())
+	// Activate DCTunnels
+	for node := firstDPNode; node != nil; node = node.Next() {
+		logger.PduSessLog.Traceln("Current DP Node IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
+		if err := node.ActivateUpLinkDcTunnel(smContext); err != nil {
+			logger.PduSessLog.Errorln("ActivateUpLinkDcTunnel failed", err)
+		}
+		if err := node.ActivateDownLinkDcTunnel(smContext); err != nil {
+			logger.PduSessLog.Errorln("ActivateDownLinkDcTunnel failed", err)
+		}
+	}
+
+	// Note: This should be after Activate Tunnels
+	if smContext.UrrReportTime != 0 || smContext.UrrReportThreshold != 0 {
+		dataPath.addUrrToPath(smContext)
+		logger.PduSessLog.Tracef("Create URR: UrrReportTime [%v],  UrrReportThreshold: [%v]",
+			smContext.UrrReportTime, smContext.UrrReportThreshold)
+	} else {
+		logger.PduSessLog.Warn("No Create URR")
+	}
+
+	sessionRule := smContext.SelectedSessionRule()
+
+	// Activate PDR
+	for curDataPathNode := firstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
+		var defaultQER *QER
+		var ambrQER *QER
+		currentUUID := curDataPathNode.UPF.uuid
+		if qerId, okCurrentId := smContext.AMBRQerMap[currentUUID]; !okCurrentId {
+			if newQER, err := curDataPathNode.UPF.AddQER(); err != nil {
+				logger.PduSessLog.Errorln("new QER failed")
+				return
+			} else {
+				var bitRateKbpsULMBR uint64
+				var bitRateKbpsDLMBR uint64
+				var bitRateConvertErr error
+				bitRateKbpsULMBR, bitRateConvertErr = util.BitRateTokbps(sessionRule.AuthSessAmbr.Uplink)
+				if bitRateConvertErr != nil {
+					logger.PduSessLog.Errorln("Cannot get the unit of ULMBR, please check the settings in web console")
+					return
+				}
+				bitRateKbpsDLMBR, bitRateConvertErr = util.BitRateTokbps(sessionRule.AuthSessAmbr.Downlink)
+				if bitRateConvertErr != nil {
+					logger.PduSessLog.Errorln("Cannot get the unit of DLMBR, please check the settings in web console")
+					return
+				}
+				newQER.QFI.QFI = sessionRule.DefQosQFI
+				newQER.GateStatus = &pfcpType.GateStatus{
+					ULGate: pfcpType.GateOpen,
+					DLGate: pfcpType.GateOpen,
+				}
+				newQER.MBR = &pfcpType.MBR{
+					ULMBR: bitRateKbpsULMBR,
+					DLMBR: bitRateKbpsDLMBR,
+				}
+				ambrQER = newQER
+			}
+			smContext.AMBRQerMap[currentUUID] = ambrQER.QERID
+		} else if oldQER, okQerId := curDataPathNode.UPF.qerPool.Load(qerId); okQerId {
+			ambrQER = oldQER.(*QER)
+		}
+
+		if dataPath.IsDefaultPath {
+			id := getQosIdKey(currentUUID, sessionRule.DefQosQFI)
+			if qerId, okId := smContext.QerUpfMap[id]; !okId {
+				if newQER, err := curDataPathNode.UPF.AddQER(); err != nil {
+					logger.PduSessLog.Errorln("new QER failed")
+					return
+				} else {
+					newQER.QFI.QFI = sessionRule.DefQosQFI
+					newQER.GateStatus = &pfcpType.GateStatus{
+						ULGate: pfcpType.GateOpen,
+						DLGate: pfcpType.GateOpen,
+					}
+					defaultQER = newQER
+				}
+				smContext.QerUpfMap[id] = defaultQER.QERID
+			} else if oldQER, okQerId := curDataPathNode.UPF.qerPool.Load(qerId); okQerId {
+				defaultQER = oldQER.(*QER)
+			}
+		}
+
+		logger.CtxLog.Traceln("Calculate ", curDataPathNode.UPF.PFCPAddr().String())
+		curULTunnel := curDataPathNode.UpLinkTunnel
+		curDLTunnel := curDataPathNode.DownLinkTunnel
+
+		// Setup UpLink PDR
+		if curULTunnel != nil {
+			ULPDR := curULTunnel.PDR
+			ULDestUPF := curULTunnel.DestEndPoint.UPF
+			if defaultQER != nil {
+				ULPDR.QER = append(ULPDR.QER, defaultQER)
+			}
+			if ambrQER != nil && !dataPath.GBRFlow {
+				ULPDR.QER = append(ULPDR.QER, ambrQER)
+			}
+
+			ULPDR.Precedence = precedence
+
+			var iface *UPFInterfaceInfo
+			if curDataPathNode.IsANUPF() {
+				iface = ULDestUPF.GetInterface(models.UpInterfaceType_N3, smContext.Dnn)
+			} else {
+				iface = ULDestUPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
+			}
+
+			if iface == nil {
+				logger.CtxLog.Errorln("Can not get interface")
+				return
+			}
+
+			if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
+				logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
+				return
+			} else {
+				ULPDR.PDI = PDI{
+					SourceInterface: pfcpType.SourceInterface{InterfaceValue: pfcpType.SourceInterfaceAccess},
+					LocalFTeid: &pfcpType.FTEID{
+						V4:          true,
+						Ipv4Address: upIP,
+						Teid:        curULTunnel.TEID,
+					},
+					NetworkInstance: &pfcpType.NetworkInstance{
+						NetworkInstance: smContext.Dnn,
+						FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
+					},
+					UEIPAddress: &pfcpType.UEIPAddress{
+						V4:          true,
+						Ipv4Address: smContext.PDUAddress.To4(),
+					},
+				}
+			}
+
+			ULPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{
+				OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4,
+			}
+
+			ULFAR := ULPDR.FAR
+			// If the flow is disable, the tunnel and the session rules will not be created
+
+			ULFAR.ApplyAction = pfcpType.ApplyAction{
+				Buff: false,
+				Drop: false,
+				Dupl: false,
+				Forw: true,
+				Nocp: false,
+			}
+
+			ULFAR.ForwardingParameters = &ForwardingParameters{
+				DestinationInterface: pfcpType.DestinationInterface{
+					InterfaceValue: pfcpType.DestinationInterfaceCore,
+				},
+				NetworkInstance: &pfcpType.NetworkInstance{
+					NetworkInstance: smContext.Dnn,
+					FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
+				},
+			}
+
+			if nextULDest := curDataPathNode.Next(); nextULDest != nil {
+				nextULTunnel := nextULDest.UpLinkTunnel
+				iface = nextULTunnel.DestEndPoint.UPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
+
+				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
+					logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
+					return
+				} else {
+					ULFAR.ForwardingParameters.OuterHeaderCreation = &pfcpType.OuterHeaderCreation{
+						OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
+						Ipv4Address:                    upIP,
+						Teid:                           nextULTunnel.TEID,
+					}
+				}
+			}
+		}
+
+		// Setup DownLink
+		if curDLTunnel != nil {
+			var iface *UPFInterfaceInfo
+			DLPDR := curDLTunnel.PDR
+			DLDestUPF := curDLTunnel.DestEndPoint.UPF
+			if defaultQER != nil {
+				DLPDR.QER = append(DLPDR.QER, defaultQER)
+			}
+			if ambrQER != nil && !dataPath.GBRFlow {
+				DLPDR.QER = append(DLPDR.QER, ambrQER)
+			}
+
+			DLPDR.Precedence = precedence
+
+			if curDataPathNode.IsAnchorUPF() {
+				DLPDR.PDI = PDI{
+					SourceInterface: pfcpType.SourceInterface{
+						InterfaceValue: pfcpType.SourceInterfaceCore,
+					},
+					NetworkInstance: &pfcpType.NetworkInstance{
+						NetworkInstance: smContext.Dnn,
+						FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
+					},
+					UEIPAddress: &pfcpType.UEIPAddress{
+						V4:          true,
+						Sd:          true,
+						Ipv4Address: smContext.PDUAddress.To4(),
+					},
+				}
+			} else {
+				DLPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{
+					OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4,
+				}
+
+				iface = DLDestUPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
+				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
+					logger.CtxLog.Errorln("ActivateDcTunnelAndPDR failed", err)
+					return
+				} else {
+					DLPDR.PDI = PDI{
+						SourceInterface: pfcpType.SourceInterface{InterfaceValue: pfcpType.SourceInterfaceCore},
+						LocalFTeid: &pfcpType.FTEID{
+							V4:          true,
+							Ipv4Address: upIP,
+							Teid:        curDLTunnel.TEID,
+						},
+
+						// TODO: Should Uncomment this after FR5GC-1029 is solved
+						// UEIPAddress: &pfcpType.UEIPAddress{
+						// 	V4:          true,
+						// 	Ipv4Address: smContext.PDUAddress.To4(),
+						// },
+					}
+				}
+			}
+
+			DLFAR := DLPDR.FAR
+
+			logger.PduSessLog.Traceln("Current DP Node IP: ", curDataPathNode.UPF.NodeID.ResolveNodeIdToIp().String())
+			logger.PduSessLog.Traceln("Before DLPDR OuterHeaderCreation")
+			if nextDLDest := curDataPathNode.Prev(); nextDLDest != nil {
+				logger.PduSessLog.Traceln("In DLPDR OuterHeaderCreation")
+				nextDLTunnel := nextDLDest.DownLinkTunnel
+				// If the flow is disable, the tunnel and the session rules will not be created
+
+				DLFAR.ApplyAction = pfcpType.ApplyAction{
+					Buff: false,
+					Drop: false,
+					Dupl: false,
+					Forw: true,
+					Nocp: false,
+				}
+
+				iface = nextDLDest.UPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
+
+				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
+					logger.CtxLog.Errorln("ActivateDcTunnelAndPDR failed", err)
+					return
+				} else {
+					DLFAR.ForwardingParameters = &ForwardingParameters{
+						DestinationInterface: pfcpType.DestinationInterface{InterfaceValue: pfcpType.DestinationInterfaceAccess},
+						OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
+							OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
+							Ipv4Address:                    upIP,
+							Teid:                           nextDLTunnel.TEID,
+						},
+					}
+				}
+			} else {
+				ANUPF := dataPath.FirstDPNode
+				DLPDR = ANUPF.DownLinkTunnel.PDR
+				DLFAR = DLPDR.FAR
+				DLFAR.ForwardingParameters = new(ForwardingParameters)
+				DLFAR.ForwardingParameters.DestinationInterface.InterfaceValue = pfcpType.DestinationInterfaceAccess
+
+				if anIP := smContext.DCTunnel.ANInformation.IPAddress; anIP != nil {
+					DLFAR.ForwardingParameters.NetworkInstance = &pfcpType.NetworkInstance{
+						NetworkInstance: smContext.Dnn,
+						FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
+					}
+					DLFAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
+
+					dlOuterHeaderCreation := DLFAR.ForwardingParameters.OuterHeaderCreation
+					dlOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+					dlOuterHeaderCreation.Teid = smContext.DCTunnel.ANInformation.TEID
+					dlOuterHeaderCreation.Ipv4Address = smContext.DCTunnel.ANInformation.IPAddress.To4()
+				}
+			}
+		}
+	}
+
+	dataPath.Activated = true
+}
+
 func (dataPath *DataPath) DeactivateTunnelAndPDR(smContext *SMContext) {
 	firstDPNode := dataPath.FirstDPNode
 
@@ -714,6 +1126,22 @@ func (dataPath *DataPath) DeactivateTunnelAndPDR(smContext *SMContext) {
 	for _, node := range targetNodes {
 		node.DeactivateUpLinkTunnel(smContext)
 		node.DeactivateDownLinkTunnel(smContext)
+	}
+
+	dataPath.Activated = false
+}
+
+func (dataPath *DataPath) DeactivateDcTunnelAndPDR(smContext *SMContext) {
+	firstDPNode := dataPath.FirstDPNode
+
+	var targetNodes []*DataPathNode
+	for node := firstDPNode; node != nil; node = node.Next() {
+		targetNodes = append(targetNodes, node)
+	}
+	// Deactivate Tunnels
+	for _, node := range targetNodes {
+		node.DeactivateUpLinkDcTunnel(smContext)
+		node.DeactivateDownLinkDcTunnel(smContext)
 	}
 
 	dataPath.Activated = false

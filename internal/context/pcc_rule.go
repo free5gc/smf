@@ -129,6 +129,37 @@ func (r *PCCRule) AddDataPathForwardingParameters(c *SMContext,
 	}
 }
 
+func (r *PCCRule) AddDataPathForwardingParametersOnDcTunnel(c *SMContext,
+	tgtRoute *models.RouteToLocation,
+) {
+	if tgtRoute == nil {
+		return
+	}
+
+	if r.Datapath == nil {
+		logger.CtxLog.Warnf("AddDataPathForwardingParametersOnDcTunnel pcc[%s]: no data path", r.PccRuleId)
+		return
+	}
+
+	var routeProf factory.RouteProfile
+	routeProfExist := false
+	// specify N6 routing information
+	if tgtRoute.RouteProfId != "" {
+		routeProf, routeProfExist = factory.UERoutingConfig.RouteProf[factory.RouteProfID(tgtRoute.RouteProfId)]
+		if !routeProfExist {
+			logger.CtxLog.Warnf("Route Profile ID [%s] is not support on DCTunnel", tgtRoute.RouteProfId)
+			return
+		}
+	}
+
+	if c.DCTunnel.DataPathPool.GetDefaultPath() == nil {
+		logger.CtxLog.Infoln("No Default Data Path")
+	} else {
+		r.Datapath.AddForwardingParameters(routeProf.ForwardingPolicyID,
+			c.DCTunnel.DataPathPool.GetDefaultPath().FirstDPNode.GetUpLinkPDR().PDI.LocalFTeid.Teid)
+	}
+}
+
 func (r *PCCRule) BuildNasQoSRule(smCtx *SMContext,
 	opCode nasType.QoSRuleOperationCode,
 ) (*nasType.QoSRule, error) {

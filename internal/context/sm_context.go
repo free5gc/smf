@@ -123,8 +123,11 @@ type SMContext struct {
 	Identifier   string
 	PDUSessionID int32
 
-	LocalULTeid uint32
-	LocalDLTeid uint32
+	LocalULTeid                   uint32
+	LocalDLTeid                   uint32
+	LocalULTeidForSplitPDUSession uint32
+	LocalDLTeidForSplitPDUSession uint32
+	NrdcIndicator                 bool
 
 	UpCnxState models.UpCnxState
 
@@ -160,6 +163,7 @@ type SMContext struct {
 	SmStatusNotifyUri  string
 
 	Tunnel      *UPTunnel
+	DCTunnel    *UPTunnel
 	SelectedUPF *UPNode
 	BPManager   *BPManager
 	// NodeID(string form) to PFCP Session Context
@@ -170,6 +174,7 @@ type SMContext struct {
 
 	// SM Policy related
 	PCCRules            map[string]*PCCRule
+	DCPCCRules          map[string]*PCCRule
 	SessionRules        map[string]*SessionRule
 	TrafficControlDatas map[string]*TrafficControlData
 	ChargingData        map[string]*models.ChargingData
@@ -287,6 +292,7 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 
 	// initialize SM Policy Data
 	smContext.PCCRules = make(map[string]*PCCRule)
+	smContext.DCPCCRules = make(map[string]*PCCRule)
 	smContext.SessionRules = make(map[string]*SessionRule)
 	smContext.TrafficControlDatas = make(map[string]*TrafficControlData)
 	smContext.QosDatas = make(map[string]*models.QosData)
@@ -298,6 +304,7 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 
 	smContext.BPManager = NewBPManager(id)
 	smContext.Tunnel = NewUPTunnel()
+	smContext.DCTunnel = NewUPTunnel()
 
 	smContext.QoSRuleIDGenerator = idgenerator.NewGenerator(1, 255)
 	if defRuleID, err := smContext.QoSRuleIDGenerator.Allocate(); err != nil {
@@ -346,6 +353,18 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 		return nil
 	}
 
+	smContext.LocalULTeidForSplitPDUSession, err = GenerateTEID()
+	if err != nil {
+		return nil
+	}
+
+	smContext.LocalDLTeidForSplitPDUSession, err = GenerateTEID()
+	if err != nil {
+		return nil
+	}
+
+	smContext.NrdcIndicator = false
+
 	return smContext
 }
 
@@ -393,6 +412,10 @@ func RemoveSMContext(ref string) {
 
 	ReleaseTEID(smContext.LocalULTeid)
 	ReleaseTEID(smContext.LocalDLTeid)
+	ReleaseTEID(smContext.LocalULTeidForSplitPDUSession)
+	ReleaseTEID(smContext.LocalDLTeidForSplitPDUSession)
+
+	smContext.NrdcIndicator = false
 
 	smContextPool.Delete(ref)
 	canonicalRef.Delete(canonicalName(smContext.Supi, smContext.PDUSessionID))
@@ -682,6 +705,55 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 		pccRule.Datapath.AddQoS(c, pccRule.QFI, qosData)
 		c.AddQosFlow(pccRule.QFI, qosData)
 	}
+	return nil
+}
+
+func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
+	tcData *TrafficControlData, qosData *models.QosData,
+	chgData *models.ChargingData,
+) error {
+	var targetRoute models.RouteToLocation
+	if tcData != nil && len(tcData.RouteToLocs) > 0 {
+		targetRoute = *tcData.RouteToLocs[0]
+	}
+	param := &UPFSelectionParams{
+		Dnn: c.Dnn,
+		SNssai: &SNssai{
+			Sst: c.SNssai.Sst,
+			Sd:  c.SNssai.Sd,
+		},
+		Dnai: targetRoute.Dnai,
+	}
+	createdUpPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(param)
+	createdDataPath := GenerateDataPath(createdUpPath)
+	if createdDataPath == nil {
+		return fmt.Errorf("fail to create data path on DCTunnel for pcc rule[%s]", pccRule.PccRuleId)
+	}
+	c.Log.Infof("CreatePccRuleDataPathOnDctunnel: pcc rule: %+v", pccRule)
+
+	// Try to use a default pcc rule as default data path
+	if c.DCTunnel.DataPathPool.GetDefaultPath() == nil &&
+		pccRule.Precedence == 255 {
+		createdDataPath.IsDefaultPath = true
+	}
+
+	createdDataPath.GBRFlow = isGBRFlow(qosData)
+	createdDataPath.ActivateDcTunnelAndPDR(c, uint32(pccRule.Precedence))
+	c.DCTunnel.AddDataPath(createdDataPath)
+	pccRule.Datapath = createdDataPath
+	pccRule.AddDataPathForwardingParametersOnDcTunnel(c, &targetRoute)
+
+	if chgLevel, err := pccRule.IdentifyChargingLevel(); err != nil {
+		c.Log.Warnf("fail to identify charging level[%+v] for pcc rule[%s]", err, pccRule.PccRuleId)
+	} else {
+		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData)
+	}
+
+	if pccRule.RefQosDataID() != "" {
+		pccRule.Datapath.AddQoS(c, pccRule.QFI, qosData)
+		c.AddQosFlow(pccRule.QFI, qosData)
+	}
+
 	return nil
 }
 
