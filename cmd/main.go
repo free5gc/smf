@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
@@ -35,17 +35,20 @@ func main() {
 	app.Usage = "5G Session Management Function (SMF)"
 	app.Action = action
 	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:  "config, c",
-			Usage: "Load configuration from `FILE`",
+		&cli.StringFlag{
+			Name:    "config",
+			Aliases: []string{"c"},
+			Usage:   "Load configuration from `FILE`",
 		},
-		cli.StringFlag{
-			Name:  "uerouting, u",
-			Usage: "Load uerouting configuration from `FILE`",
+		&cli.StringFlag{
+			Name:    "uerouting",
+			Aliases: []string{"u"},
+			Usage:   "Load uerouting configuration from `FILE`",
 		},
-		cli.StringSliceFlag{
-			Name:  "log, l",
-			Usage: "Output NF log to `FILE`",
+		&cli.StringSliceFlag{
+			Name:    "log",
+			Aliases: []string{"l"},
+			Usage:   "Output NF log to `FILE`",
 		},
 	}
 	rand.New(rand.NewSource(time.Now().UnixNano()))
