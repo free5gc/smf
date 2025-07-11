@@ -3,6 +3,7 @@ package sbi
 import (
 	"context"
 	"fmt"
+	"github.com/free5gc/util/metrics"
 	"net/http"
 	"runtime/debug"
 	"sync"
@@ -67,6 +68,7 @@ func NewServer(smf ServerSmf, tlsKeyLogPath string) (*Server, error) {
 func newRouter(s *Server) *gin.Engine {
 	router := logger_util.NewGinWithLogrus(logger.GinLog)
 
+	router.Use(metrics.InboundMetrics())
 	smfCallbackGroup := router.Group(factory.SmfCallbackUriPrefix)
 	smfCallbackRoutes := s.getCallbackRoutes()
 	applyRoutes(smfCallbackGroup, smfCallbackRoutes)

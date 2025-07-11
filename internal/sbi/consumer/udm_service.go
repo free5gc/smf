@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"fmt"
+	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -39,6 +40,7 @@ func (s *nudmService) getSubscribeDataManagementClient(uri string) *SubscriberDa
 
 	configuration := SubscriberDataManagement.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = SubscriberDataManagement.NewAPIClient(configuration)
 
 	s.SubscriberDataManagementMu.RUnlock()
@@ -61,6 +63,7 @@ func (s *nudmService) getUEContextManagementClient(uri string) *UEContextManagem
 
 	configuration := UEContextManagement.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = UEContextManagement.NewAPIClient(configuration)
 
 	s.UEContextManagementMu.RUnlock()
