@@ -16,7 +16,9 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 	ANUPF := ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
 	UpNode := ANUPF.UPF
 	teidOct := make([]byte, 4)
+	teidOctForSplitPDUSession := make([]byte, 4)
 	binary.BigEndian.PutUint32(teidOct, ctx.LocalULTeid)
+	binary.BigEndian.PutUint32(teidOctForSplitPDUSession, ctx.LocalULTeidForSplitPDUSession)
 
 	resourceSetupRequestTransfer := ngapType.PDUSessionResourceSetupRequestTransfer{}
 
@@ -67,6 +69,37 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 		}
 	}
 
+	resourceSetupRequestTransfer.ProtocolIEs.List = append(resourceSetupRequestTransfer.ProtocolIEs.List, ie)
+
+	// Additional UL NG-U UP TNL Information
+	ie = ngapType.PDUSessionResourceSetupRequestTransferIEs{}
+	ie.Id.Value = ngapType.ProtocolIEIDAdditionalULNGUUPTNLInformation
+	ie.Criticality.Value = ngapType.CriticalityPresentIgnore
+	if n3IP, err := UpNode.N3Interfaces[0].IP(ctx.SelectedPDUSessionType); err != nil {
+		return nil, err
+	} else {
+		ie.Value = ngapType.PDUSessionResourceSetupRequestTransferIEsValue{
+			Present: ngapType.PDUSessionResourceSetupRequestTransferIEsPresentAdditionalULNGUUPTNLInformation,
+			AdditionalULNGUUPTNLInformation: &ngapType.UPTransportLayerInformationList{
+				List: []ngapType.UPTransportLayerInformationItem{
+					{
+						NGUUPTNLInformation: ngapType.UPTransportLayerInformation{
+							Present: ngapType.UPTransportLayerInformationPresentGTPTunnel,
+							GTPTunnel: &ngapType.GTPTunnel{
+								TransportLayerAddress: ngapType.TransportLayerAddress{
+									Value: aper.BitString{
+										Bytes:     n3IP,
+										BitLength: uint64(len(n3IP) * 8),
+									},
+								},
+								GTPTEID: ngapType.GTPTEID{Value: teidOctForSplitPDUSession},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
 	resourceSetupRequestTransfer.ProtocolIEs.List = append(resourceSetupRequestTransfer.ProtocolIEs.List, ie)
 
 	// PDU Session Type

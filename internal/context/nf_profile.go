@@ -39,6 +39,12 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 			Scheme:            models.UriScheme_HTTPS,
 			NfServiceStatus:   models.NfServiceStatus_REGISTERED,
 			ApiPrefix:         fmt.Sprintf("%s://%s:%d", GetSelf().URIScheme, GetSelf().RegisterIPv4, GetSelf().SBIPort),
+			IpEndPoints: []models.IpEndPoint{
+				{
+					Ipv4Address: GetSelf().RegisterIPv4,
+					Port:        int32(GetSelf().SBIPort),
+				},
+			},
 		})
 	}
 
@@ -79,6 +85,5 @@ func SNssaiSmfInfo() []models.SnssaiSmfInfoItem {
 
 		snssaiInfo = append(snssaiInfo, snssaiInfoModel)
 	}
-
 	return snssaiInfo
 }
