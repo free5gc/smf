@@ -12,6 +12,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 )
 
 type nchfService struct {
@@ -35,6 +36,7 @@ func (s *nchfService) getConvergedChargingClient(uri string) *ConvergedCharging.
 
 	configuration := ConvergedCharging.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = ConvergedCharging.NewAPIClient(configuration)
 
 	s.ConvergedChargingMu.RUnlock()
@@ -121,7 +123,7 @@ func (s *nchfService) SendConvergedChargingRequest(
 
 	if smContext.SelectedCHFProfile.NfServices == nil {
 		errMsg := "no CHF found"
-		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf(errMsg)
+		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf("%s", errMsg)
 	}
 
 	var client *ConvergedCharging.APIClient
@@ -133,7 +135,7 @@ func (s *nchfService) SendConvergedChargingRequest(
 	}
 	if client == nil {
 		errMsg := "no CONVERGEDCHARGING-CHF found"
-		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf(errMsg)
+		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf("%s", errMsg)
 	}
 
 	// select the appropriate converged charging service based on trigger type
