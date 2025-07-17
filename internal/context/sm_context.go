@@ -545,7 +545,7 @@ func (smContext *SMContext) PutPDRtoPFCPSession(nodeID pfcpType.NodeID, pdr *PDR
 		smContext.Log.Tracef("PutPDRtoPFCPSession [%+v]", pdr)
 		pfcpSessCtx.PDRs[pdr.PDRID] = pdr
 	} else {
-		return fmt.Errorf("Can't find PFCPContext[%s] to put PDR(%d)", NodeIDtoIP, pdr.PDRID)
+		return fmt.Errorf("can't find PFCPContext[%s] to put PDR(%d)", NodeIDtoIP, pdr.PDRID)
 	}
 	return nil
 }
@@ -821,11 +821,12 @@ type NotifCallback func(uri string,
 
 func (c *SMContext) SendUpPathChgNotification(chgType string, notifCb NotifCallback) {
 	var notifications map[string]*EventExposureNotification
-	if chgType == "EARLY" {
+	switch chgType {
+	case "EARLY":
 		notifications = c.UpPathChgEarlyNotification
-	} else if chgType == "LATE" {
+	case "LATE":
 		notifications = c.UpPathChgLateNotification
-	} else {
+	default:
 		return
 	}
 	for k, n := range notifications {
@@ -870,7 +871,7 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 	case "IPv4":
 		if !allowIPv4 {
 			return fmt.Errorf(
-				"No SupportedPDUSessionType[%q] in DNN[%s] configuration",
+				"no SupportedPDUSessionType[%q] in DNN[%s] configuration",
 				supportedPDUSessionType,
 				smContext.Dnn,
 			)
@@ -878,7 +879,7 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 	case "IPv6":
 		if !allowIPv6 {
 			return fmt.Errorf(
-				"No SupportedPDUSessionType[%q] in DNN[%s] configuration",
+				"no SupportedPDUSessionType[%q] in DNN[%s] configuration",
 				supportedPDUSessionType,
 				smContext.Dnn,
 			)
@@ -886,7 +887,7 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 	case "IPv4v6":
 		if !allowIPv4 && !allowIPv6 {
 			return fmt.Errorf(
-				"No SupportedPDUSessionType[%q] in DNN[%s] configuration",
+				"no SupportedPDUSessionType[%q] in DNN[%s] configuration",
 				supportedPDUSessionType,
 				smContext.Dnn,
 			)
@@ -894,7 +895,7 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 	case "Ethernet":
 		if !allowEthernet {
 			return fmt.Errorf(
-				"No SupportedPDUSessionType[%q] in DNN[%s] configuration",
+				"no SupportedPDUSessionType[%q] in DNN[%s] configuration",
 				supportedPDUSessionType,
 				smContext.Dnn,
 			)
@@ -934,7 +935,7 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 			return fmt.Errorf("PduSessionType_ETHERNET is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	default:
-		return fmt.Errorf("Requested PDU Sesstion type[%d] is not supported", requestedPDUSessionType)
+		return fmt.Errorf("requested PDU Sesstion type[%d] is not supported", requestedPDUSessionType)
 	}
 	return nil
 }

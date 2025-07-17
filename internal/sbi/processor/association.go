@@ -129,7 +129,7 @@ func keepHeartbeatTo(upf *smf_context.UPF, upfStr string) {
 
 func doPfcpHeartbeat(upf *smf_context.UPF, upfStr string) error {
 	if err := upf.IsAssociated(); err != nil {
-		return fmt.Errorf("Cancel heartbeat: %+v", err)
+		return fmt.Errorf("cancel heartbeat: %+v", err)
 	}
 
 	logger.MainLog.Debugf("Sending PFCP Heartbeat Request to UPF%s", upfStr)
@@ -233,17 +233,18 @@ func (p *Processor) requestAMFToReleasePDUResources(
 		// keep SM Context to avoid inconsistency with AMF
 		smContext.SetState(smf_context.InActive)
 	} else {
-		if rspData.Cause == models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
+		switch rspData.Cause {
+		case models.N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED:
 			// the PDU Session Release Command was not transferred to the UE since it is in CM-IDLE state.
 			//   ref. step3b of "4.3.4.2 UE or network requested PDU Session Release for Non-Roaming and
 			//        Roaming with Local Breakout" in TS23.502
 			// it is needed to remove both AMF's and SMF's SM Contexts immediately
 			smContext.SetState(smf_context.InActive)
 			return true, true
-		} else if rspData.Cause == models.N1N2MessageTransferCause_N1_N2_TRANSFER_INITIATED {
+		case models.N1N2MessageTransferCause_N1_N2_TRANSFER_INITIATED:
 			// wait for N2 PDU Session Release Response
 			smContext.SetState(smf_context.InActivePending)
-		} else {
+		default:
 			// other causes are unexpected.
 			// keep SM Context to avoid inconsistency with AMF
 			smContext.SetState(smf_context.InActive)

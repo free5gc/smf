@@ -446,7 +446,7 @@ func applyFlowInfoOrPFD(pcc *PCCRule) error {
 	appID := pcc.AppId
 
 	if len(pcc.FlowInfos) == 0 && appID == "" {
-		return fmt.Errorf("No FlowInfo and AppID")
+		return fmt.Errorf("no FlowInfo and AppID")
 	}
 
 	// Apply flow description if it presents
@@ -473,7 +473,7 @@ func applyFlowInfoOrPFD(pcc *PCCRule) error {
 	if matchedPFD == nil ||
 		len(matchedPFD.Pfds) == 0 ||
 		len(matchedPFD.Pfds[0].FlowDescriptions) == 0 {
-		return fmt.Errorf("No PFD matched for AppID [%s]", appID)
+		return fmt.Errorf("no PFD matched for AppID [%s]", appID)
 	}
 	if err := pcc.UpdateDataPathFlowDescription(
 		matchedPFD.Pfds[0].FlowDescriptions[0]); err != nil {
@@ -496,7 +496,7 @@ func checkUpPathChangeEvt(c *SMContext,
 	// Set reference to traffic control data
 	if srcTcData != nil {
 		if len(srcTcData.RouteToLocs) == 0 {
-			return fmt.Errorf("No RouteToLocs in srcTcData")
+			return fmt.Errorf("no RouteToLocs in srcTcData")
 		}
 		// TODO: Fix always choosing the first RouteToLocs as source Route
 		srcRoute = *srcTcData.RouteToLocs[0]
@@ -511,7 +511,7 @@ func checkUpPathChangeEvt(c *SMContext,
 
 	if tgtTcData != nil {
 		if len(tgtTcData.RouteToLocs) == 0 {
-			return fmt.Errorf("No RouteToLocs in tgtTcData")
+			return fmt.Errorf("no RouteToLocs in tgtTcData")
 		}
 		// TODO: Fix always choosing the first RouteToLocs as target Route
 		tgtRoute = *tgtTcData.RouteToLocs[0]

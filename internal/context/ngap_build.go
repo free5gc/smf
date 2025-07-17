@@ -30,7 +30,7 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 	ie.Criticality.Value = ngapType.CriticalityPresentReject
 	sessRule := ctx.SelectedSessionRule()
 	if sessRule == nil || sessRule.AuthSessAmbr == nil {
-		return nil, fmt.Errorf("No PDU Session AMBR")
+		return nil, fmt.Errorf("no PDU Session AMBR")
 	}
 	ie.Value = ngapType.PDUSessionResourceSetupRequestTransferIEsValue{
 		Present: ngapType.PDUSessionResourceSetupRequestTransferIEsPresentPDUSessionAggregateMaximumBitRate,
@@ -393,7 +393,8 @@ func BuildPDUSessionResourceReleaseCommandTransfer(ctx *SMContext) (buf []byte, 
 func BuildHandoverCommandTransfer(ctx *SMContext) ([]byte, error) {
 	handoverCommandTransfer := ngapType.HandoverCommandTransfer{}
 
-	if ctx.DLForwardingType == IndirectForwarding {
+	switch ctx.DLForwardingType {
+	case IndirectForwarding:
 		ANUPF := ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
 		UpNode := ANUPF.UPF
 		teidOct := make([]byte, 4)
@@ -413,7 +414,7 @@ func BuildHandoverCommandTransfer(ctx *SMContext) ([]byte, error) {
 				BitLength: uint64(len(n3IP) * 8),
 			}
 		}
-	} else if ctx.DLForwardingType == DirectForwarding {
+	case DirectForwarding:
 		handoverCommandTransfer.DLForwardingUPTNLInformation = ctx.DLDirectForwardingTunnel
 	}
 

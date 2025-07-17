@@ -140,7 +140,7 @@ func calcAddrRange(ipNet *net.IPNet) (minAddr, maxAddr uint32, err error) {
 	minAddr = (baseIPVal & maskVal)
 	maxAddr = (baseIPVal | ^maskVal)
 	if minAddr > maxAddr {
-		return minAddr, maxAddr, errors.New("Mask is invalid.")
+		return minAddr, maxAddr, errors.New("mask is invalid")
 	}
 	return minAddr, maxAddr, nil
 }

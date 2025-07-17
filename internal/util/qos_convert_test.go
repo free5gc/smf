@@ -7,8 +7,8 @@ import (
 )
 
 func TestBitRateToKbpsWithValidBpsBitRateShouldReturnValidKbpsBitRate(t *testing.T) {
-	var bitrate string = "1000 bps"
-	var correctBitRateKbps uint64 = 1
+	bitrate := "1000 bps"
+	correctBitRateKbps := uint64(1)
 
 	bitrateKbps, err := util.BitRateTokbps(bitrate)
 
@@ -24,8 +24,8 @@ func TestBitRateToKbpsWithValidBpsBitRateShouldReturnValidKbpsBitRate(t *testing
 }
 
 func TestBitRateToKbpsWithValidKbpsBitRateShouldReturnValidKbpsBitRate(t *testing.T) {
-	var bitrate string = "1000 Kbps"
-	var correctBitRateKbps uint64 = 1000
+	bitrate := "1000 Kbps"
+	correctBitRateKbps := uint64(1000)
 
 	bitrateKbps, err := util.BitRateTokbps(bitrate)
 
@@ -41,8 +41,8 @@ func TestBitRateToKbpsWithValidKbpsBitRateShouldReturnValidKbpsBitRate(t *testin
 }
 
 func TestBitRateToKbpsWithValidMbpsBitRateShouldReturnValidKbpsBitRate(t *testing.T) {
-	var bitrate string = "1000 Mbps"
-	var correctBitRateKbps uint64 = 1000000
+	bitrate := "1000 Mbps"
+	correctBitRateKbps := uint64(1000000)
 
 	bitrateKbps, err := util.BitRateTokbps(bitrate)
 
@@ -58,8 +58,8 @@ func TestBitRateToKbpsWithValidMbpsBitRateShouldReturnValidKbpsBitRate(t *testin
 }
 
 func TestBitRateToKbpsWithValidGbpsBitRateShouldReturnValidKbpsBitRate(t *testing.T) {
-	var bitrate string = "1000 Gbps"
-	var correctBitRateKbps uint64 = 1000000000
+	bitrate := "1000 Gbps"
+	correctBitRateKbps := uint64(1000000000)
 
 	bitrateKbps, err := util.BitRateTokbps(bitrate)
 
@@ -75,8 +75,8 @@ func TestBitRateToKbpsWithValidGbpsBitRateShouldReturnValidKbpsBitRate(t *testin
 }
 
 func TestBitRateToKbpsWithValidTbpsBitRateShouldReturnValidKbpsBitRate(t *testing.T) {
-	var bitrate string = "1000 Tbps"
-	var correctBitRateKbps uint64 = 1000000000000
+	bitrate := "1000 Tbps"
+	correctBitRateKbps := uint64(1000000000000)
 
 	bitrateKbps, err := util.BitRateTokbps(bitrate)
 
@@ -92,7 +92,7 @@ func TestBitRateToKbpsWithValidTbpsBitRateShouldReturnValidKbpsBitRate(t *testin
 }
 
 func TestBitRateToKbpsWithInvalidBitRateShouldReturnError(t *testing.T) {
-	var bitrate string = "1000" // The unit is absent. It should raise error for `BitRateToKbps`.
+	bitrate := "1000" // The unit is absent. It should raise error for `BitRateToKbps`.
 
 	_, err := util.BitRateTokbps(bitrate)
 

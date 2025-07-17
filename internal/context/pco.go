@@ -1,4 +1,3 @@
-// ProtocolConfigurationOptions
 package context
 
 type ProtocolConfigurationOptions struct {

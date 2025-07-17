@@ -121,7 +121,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		}
 	}
 
-	var doSubscribe bool = false
+	doSubscribe := false
 	defer func() {
 		if doSubscribe {
 			if !p.Context().Ues.UeExists(smContext.Supi) {

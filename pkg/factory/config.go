@@ -120,13 +120,13 @@ func (c *Configuration) validate() (bool, error) {
 	}
 
 	for index, serviceName := range c.ServiceNameList {
-		switch {
-		case serviceName == "nsmf-pdusession":
-		case serviceName == "nsmf-event-exposure":
-		case serviceName == "nsmf-oam":
+		switch serviceName {
+		case "nsmf-pdusession":
+		case "nsmf-event-exposure":
+		case "nsmf-oam":
 		default:
-			err := errors.New("Invalid serviceNameList[" + strconv.Itoa(index) + "]: " +
-				serviceName + ", should be nsmf-pdusession, nsmf-event-exposure or nsmf-oam.")
+			err := errors.New("invalid serviceNameList[" + strconv.Itoa(index) + "]: " +
+				serviceName + ", should be nsmf-pdusession, nsmf-event-exposure or nsmf-oam")
 			return false, err
 		}
 	}
@@ -512,7 +512,7 @@ func (u *UPNode) validate() (bool, error) {
 
 		if n3IfsNum > 1 || n9IfsNum > 1 {
 			return false, fmt.Errorf(
-				"Not support multiple InterfaceUpfInfo for the same type: N3 number(%d), N9 number(%d)",
+				"not support multiple InterfaceUpfInfo for the same type: N3 number(%d), N9 number(%d)",
 				n3IfsNum, n9IfsNum)
 		}
 	}
@@ -669,13 +669,13 @@ type PlmnID struct {
 func (p *PlmnID) validate() (bool, error) {
 	mcc := p.Mcc
 	if result := govalidator.StringMatches(mcc, "^[0-9]{3}$"); !result {
-		err := fmt.Errorf("Invalid mcc: %s, should be a 3-digit number", mcc)
+		err := fmt.Errorf("invalid mcc: %s, should be a 3-digit number", mcc)
 		return false, err
 	}
 
 	mnc := p.Mnc
 	if result := govalidator.StringMatches(mnc, "^[0-9]{2,3}$"); !result {
-		err := fmt.Errorf("Invalid mnc: %s, should be a 2 or 3-digit number", mnc)
+		err := fmt.Errorf("invalid mnc: %s, should be a 2 or 3-digit number", mnc)
 		return false, err
 	}
 	return true, nil
