@@ -60,7 +60,7 @@ func findSourceInTopology(upi *UserPlaneInformation, topology []factory.UPLink) 
 			}
 		}
 	}
-	return "", errors.New("Not found AN node in topology")
+	return "", errors.New("not found AN node in topology")
 }
 
 func extractAnchorUPFForULCL(upi *UserPlaneInformation, source string, topology []factory.UPLink) ([]string, error) {
@@ -108,7 +108,7 @@ func extractAnchorUPFForULCL(upi *UserPlaneInformation, source string, topology 
 		}
 	}
 	if len(upList) == 0 {
-		return nil, errors.New("Not found Anchor UPF in topology")
+		return nil, errors.New("not found Anchor UPF in topology")
 	}
 	sort.Strings(upList)
 	return upList, nil
@@ -117,7 +117,7 @@ func extractAnchorUPFForULCL(upi *UserPlaneInformation, source string, topology 
 func generateDefaultDataPath(source string, destination string, topology []factory.UPLink) (*DataPath, error) {
 	allPaths, _ := getAllPathByNodeName(source, destination, topology)
 	if len(allPaths) == 0 {
-		return nil, fmt.Errorf("Path not exist: %s to %s", source, destination)
+		return nil, fmt.Errorf("path not exist: %s to %s", source, destination)
 	}
 
 	dataPath := NewDataPath()

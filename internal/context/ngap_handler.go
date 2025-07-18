@@ -265,7 +265,8 @@ func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) error {
 		return nil
 	}
 
-	if ctx.DLForwardingType == IndirectForwarding {
+	switch ctx.DLForwardingType {
+	case IndirectForwarding:
 		DLForwardingGTPTunnel := DLForwardingInfo.GTPTunnel
 
 		ctx.IndirectForwardingTunnel = NewDataPath()
@@ -313,7 +314,7 @@ func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) error {
 				},
 			}
 		}
-	} else if ctx.DLForwardingType == DirectForwarding {
+	case DirectForwarding:
 		ctx.DLDirectForwardingTunnel = DLForwardingInfo
 	}
 

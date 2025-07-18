@@ -18,7 +18,7 @@ func NewUEDataPathNode(name string) (node *DataPathNode, err error) {
 	upNodes := smfContext.UserPlaneInformation.UPNodes
 
 	if _, exist := upNodes[name]; !exist {
-		err = fmt.Errorf("UPNode %s isn't exist in smfcfg.yaml, but in UERouting.yaml!", name)
+		err = fmt.Errorf("UPNode %s isn't exist in smfcfg.yaml, but in UERouting.yaml", name)
 		return nil, err
 	}
 

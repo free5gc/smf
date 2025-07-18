@@ -137,11 +137,11 @@ func (node *DataPathNode) ActivateUpLinkTunnel(smContext *SMContext) error {
 	if node.UpLinkTunnel.PDR, err = destUPF.AddPDR(); err != nil {
 		logger.CtxLog.Errorln("In ActivateUpLinkTunnel UPF IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
 		logger.CtxLog.Errorln("Allocate PDR Error: ", err)
-		return fmt.Errorf("Add PDR failed: %s", err)
+		return fmt.Errorf("add PDR failed: %s", err)
 	}
 
 	if err = smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.UpLinkTunnel.PDR); err != nil {
-		logger.CtxLog.Errorln("Put PDR Error: ", err)
+		logger.CtxLog.Errorln("put PDR Error: ", err)
 		return err
 	}
 
@@ -161,11 +161,11 @@ func (node *DataPathNode) ActivateUpLinkDcTunnel(smContext *SMContext) error {
 	if node.UpLinkTunnel.PDR, err = destUPF.AddPDR(); err != nil {
 		logger.CtxLog.Errorln("In ActivateUpLinkDctunnel UPF IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
 		logger.CtxLog.Errorln("Allocate PDR Error: ", err)
-		return fmt.Errorf("Add PDR failed: %s", err)
+		return fmt.Errorf("add PDR failed: %s", err)
 	}
 
 	if err = smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.UpLinkTunnel.PDR); err != nil {
-		logger.CtxLog.Errorln("Put PDR Error: ", err)
+		logger.CtxLog.Errorln("put PDR Error: ", err)
 		return err
 	}
 
@@ -185,11 +185,11 @@ func (node *DataPathNode) ActivateDownLinkTunnel(smContext *SMContext) error {
 	if node.DownLinkTunnel.PDR, err = destUPF.AddPDR(); err != nil {
 		logger.CtxLog.Errorln("In ActivateDownLinkTunnel UPF IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
 		logger.CtxLog.Errorln("Allocate PDR Error: ", err)
-		return fmt.Errorf("Add PDR failed: %s", err)
+		return fmt.Errorf("add PDR failed: %s", err)
 	}
 
 	if err = smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.DownLinkTunnel.PDR); err != nil {
-		logger.CtxLog.Errorln("Put PDR Error: ", err)
+		logger.CtxLog.Errorln("put PDR Error: ", err)
 		return err
 	}
 
@@ -209,11 +209,11 @@ func (node *DataPathNode) ActivateDownLinkDcTunnel(smContext *SMContext) error {
 	if node.DownLinkTunnel.PDR, err = destUPF.AddPDR(); err != nil {
 		logger.CtxLog.Errorln("In ActivateDownLinkDctunnel UPF IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
 		logger.CtxLog.Errorln("Allocate PDR Error: ", err)
-		return fmt.Errorf("Add PDR failed: %s", err)
+		return fmt.Errorf("add PDR failed: %s", err)
 	}
 
 	if err = smContext.PutPDRtoPFCPSession(destUPF.NodeID, node.DownLinkTunnel.PDR); err != nil {
-		logger.CtxLog.Errorln("Put PDR Error: ", err)
+		logger.CtxLog.Errorln("put PDR Error: ", err)
 		return err
 	}
 

@@ -121,7 +121,7 @@ func (s *nchfService) SendConvergedChargingRequest(
 
 	if smContext.SelectedCHFProfile.NfServices == nil {
 		errMsg := "no CHF found"
-		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf(errMsg)
+		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf("%s", errMsg)
 	}
 
 	var client *ConvergedCharging.APIClient
@@ -133,7 +133,7 @@ func (s *nchfService) SendConvergedChargingRequest(
 	}
 	if client == nil {
 		errMsg := "no CONVERGEDCHARGING-CHF found"
-		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf(errMsg)
+		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf("%s", errMsg)
 	}
 
 	// select the appropriate converged charging service based on trigger type

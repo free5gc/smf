@@ -157,11 +157,12 @@ func (i *UPFInterfaceInfo) IP(pduSessType uint8) (net.IP, error) {
 		if resolvedAddr, err := net.ResolveIPAddr("ip", i.EndpointFQDN); err != nil {
 			logger.CtxLog.Errorf("resolve addr [%s] failed", i.EndpointFQDN)
 		} else {
-			if pduSessType == nasMessage.PDUSessionTypeIPv4 {
+			switch pduSessType {
+			case nasMessage.PDUSessionTypeIPv4:
 				return resolvedAddr.IP.To4(), nil
-			} else if pduSessType == nasMessage.PDUSessionTypeIPv6 {
+			case nasMessage.PDUSessionTypeIPv6:
 				return resolvedAddr.IP.To16(), nil
-			} else {
+			default:
 				v4addr := resolvedAddr.IP.To4()
 				if v4addr != nil {
 					return v4addr, nil
