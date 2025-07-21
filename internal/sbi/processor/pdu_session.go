@@ -677,23 +677,6 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 						continue
 					}
 
-					DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{
-						Buff: false,
-						Drop: false,
-						Dupl: false,
-						Forw: true,
-						Nocp: false,
-					}
-					DLPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
-						DestinationInterface: pfcpType.DestinationInterface{
-							InterfaceValue: pfcpType.DestinationInterfaceAccess,
-						},
-						NetworkInstance: &pfcpType.NetworkInstance{
-							NetworkInstance: smContext.Dnn,
-							FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
-						},
-					}
-
 					DLPDR.State = smf_context.RULE_INITIAL
 					DLPDR.FAR.State = smf_context.RULE_INITIAL
 
@@ -708,6 +691,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					ANUPF := dataPath.FirstDPNode
 					ULPDR := ANUPF.UpLinkTunnel.PDR
 					DLPDR := ANUPF.DownLinkTunnel.PDR
+					if DLPDR.Precedence == 255 {
+						continue
+					}
 
 					ULPDR.State = smf_context.RULE_REMOVE
 					ULPDR.FAR.State = smf_context.RULE_REMOVE
@@ -748,6 +734,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 							ANUPF := dataPath.FirstDPNode
 							ULPDR := ANUPF.UpLinkTunnel.PDR
 							DLPDR := ANUPF.DownLinkTunnel.PDR
+							if DLPDR.Precedence == 255 {
+								continue
+							}
 
 							ULPDR.FAR.ApplyAction = pfcpType.ApplyAction{
 								Buff: false,
