@@ -802,6 +802,24 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 		if sendPFCPModification {
 			smContext.SetState(smf_context.PFCPModification)
+			switch smContext.NrdcIndicator {
+			case true:
+				response.BinaryDataN2SmInformation, err = smf_context.BuildPDUSessionResourceModifyConfirmTransfer(smContext, smContext.DCTunnel)
+				if err != nil {
+					smContext.Log.Errorf("Build PDUSessionResourceModifyConfirmSuccess failed: %+v", err)
+				} else {
+					response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "PDU_RES_MOD_CFM"}
+					response.JsonData.N2SmInfoType = models.N2SmInfoType_PDU_RES_MOD_CFM
+				}
+			case false:
+				response.BinaryDataN2SmInformation, err = smf_context.BuildPDUSessionResourceModifyConfirmTransfer(smContext, smContext.Tunnel)
+				if err != nil {
+					smContext.Log.Errorf("Build PDUSessionResourceModifyConfirmSuccess failed: %+v", err)
+				} else {
+					response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "PDU_RES_MOD_CFM"}
+					response.JsonData.N2SmInfoType = models.N2SmInfoType_PDU_RES_MOD_CFM
+				}
+			}
 		} else {
 			smContext.SetState(smf_context.Active)
 		}
