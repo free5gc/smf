@@ -793,6 +793,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 							farList = append(farList, DLPDR.FAR)
 						}
 					}
+					smContext.NrdcIndicator, sendPFCPModification = true, true
 
 					smContext.Log.Infoln("Activate DCTunnel")
 				}
