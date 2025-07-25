@@ -14,6 +14,7 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/util"
+	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 )
 
 type nudmService struct {
@@ -39,6 +40,7 @@ func (s *nudmService) getSubscribeDataManagementClient(uri string) *SubscriberDa
 
 	configuration := SubscriberDataManagement.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = SubscriberDataManagement.NewAPIClient(configuration)
 
 	s.SubscriberDataManagementMu.RUnlock()
@@ -61,6 +63,7 @@ func (s *nudmService) getUEContextManagementClient(uri string) *UEContextManagem
 
 	configuration := UEContextManagement.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = UEContextManagement.NewAPIClient(configuration)
 
 	s.UEContextManagementMu.RUnlock()
