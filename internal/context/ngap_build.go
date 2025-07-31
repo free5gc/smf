@@ -267,6 +267,8 @@ func BuildPDUSessionResourceModifyConfirmTransfer(ctx *SMContext, tunnel *UPTunn
 		if dataPath.Activated {
 			ANUPF := dataPath.FirstDPNode
 			DLPDR := ANUPF.DownLinkTunnel.PDR
+			// The flow we move to secondary gNB will not include precedence=255(default flow).
+			// So we do not need to send the flow QFI to RAN
 			if DLPDR.Precedence == 255 {
 				continue
 			}
