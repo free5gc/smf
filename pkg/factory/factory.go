@@ -77,7 +77,6 @@ func ReadConfig(cfgPath string) (*Config, error) {
 		return nil, fmt.Errorf("Config validate Error")
 	}
 
-
 	return cfg, nil
 }
 
