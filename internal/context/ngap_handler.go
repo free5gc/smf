@@ -149,13 +149,11 @@ func HandlePDUSessionResourceModifyIndicationTransfer(b []byte, ctx *SMContext) 
 	DCGTPTunnel := &ngapType.GTPTunnel{}
 	if ctx.NrdcIndicator {
 		DCGTPTunnel = DCQosFlowPerTNLInformationItem.QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
-	}
-
-	if ctx.NrdcIndicator {
 		ctx.DCTunnel.UpdateANInformation(
 			DCGTPTunnel.TransportLayerAddress.Value.Bytes,
 			binary.BigEndian.Uint32(DCGTPTunnel.GTPTEID.Value))
 	}
+
 	return nil
 }
 
