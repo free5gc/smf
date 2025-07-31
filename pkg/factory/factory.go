@@ -57,14 +57,22 @@ func InitRoutingConfigFactory(f string, cfg *RoutingConfig) error {
 
 func ReadConfig(cfgPath string) (*Config, error) {
 	cfg := &Config{}
+
 	if err := InitConfigFactory(cfgPath, cfg); err != nil {
 		return nil, fmt.Errorf("ReadConfig [%s] Error: %+v", cfgPath, err)
 	}
+
 	if _, err := cfg.Validate(); err != nil {
-		validErrs := err.(govalidator.Errors).Errors()
-		for _, validErr := range validErrs {
-			logger.CfgLog.Errorf("%+v", validErr)
+		switch e := err.(type) {
+		case govalidator.Errors:
+			validErrs := e.Errors()
+			for _, validErr := range validErrs {
+				logger.CfgLog.Errorf("%+v", validErr)
+			}
+		default:
+			logger.CfgLog.Errorf("%+v", e.Error())
 		}
+
 		logger.CfgLog.Errorf("[-- PLEASE REFER TO SAMPLE CONFIG FILE COMMENTS --]")
 		return nil, fmt.Errorf("Config validate Error")
 	}
