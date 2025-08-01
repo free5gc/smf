@@ -16,6 +16,7 @@ import (
 	"github.com/free5gc/openapi/udm/SubscriberDataManagement"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 )
 
 type nnrfService struct {
@@ -41,6 +42,7 @@ func (s *nnrfService) getNFManagementClient(uri string) *NFManagement.APIClient 
 
 	configuration := NFManagement.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = NFManagement.NewAPIClient(configuration)
 
 	s.NFManagementgMu.RUnlock()
@@ -63,6 +65,7 @@ func (s *nnrfService) getNFDiscoveryClient(uri string) *NFDiscovery.APIClient {
 
 	configuration := NFDiscovery.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = NFDiscovery.NewAPIClient(configuration)
 
 	s.NFDiscoveryMu.RUnlock()
