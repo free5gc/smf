@@ -125,6 +125,38 @@ func HandlePDUSessionResourceModifyResponseTransfer(b []byte, ctx *SMContext) er
 	return nil
 }
 
+func HandlePDUSessionResourceModifyIndicationTransfer(b []byte, ctx *SMContext) error {
+	resourceModifyIndicationTransfer := ngapType.PDUSessionResourceModifyIndicationTransfer{}
+
+	if err := aper.UnmarshalWithParams(b, &resourceModifyIndicationTransfer, "valueExt"); err != nil {
+		return err
+	}
+
+	var DCQosFlowPerTNLInformationItem ngapType.QosFlowPerTNLInformationItem
+	DCQosFlowPerTNLInformation := resourceModifyIndicationTransfer.AdditionalDLQosFlowPerTNLInformation
+	if DCQosFlowPerTNLInformation != nil && len(DCQosFlowPerTNLInformation.List) > 0 {
+		ctx.NrdcIndicator = true
+		DCQosFlowPerTNLInformationItem = DCQosFlowPerTNLInformation.List[0]
+	}
+
+	if ctx.NrdcIndicator && DCQosFlowPerTNLInformationItem.QosFlowPerTNLInformation.UPTransportLayerInformation.Present !=
+		ngapType.UPTransportLayerInformationPresentGTPTunnel {
+		return errors.New(
+			"resourceModifyIndicationTransfer.AdditionalQosFlowPerTNLInformation." +
+				"QosFlowPerTNLInformation.UPTransportLayerInformation.Present")
+	}
+
+	DCGTPTunnel := &ngapType.GTPTunnel{}
+	if ctx.NrdcIndicator {
+		DCGTPTunnel = DCQosFlowPerTNLInformationItem.QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
+		ctx.DCTunnel.UpdateANInformation(
+			DCGTPTunnel.TransportLayerAddress.Value.Bytes,
+			binary.BigEndian.Uint32(DCGTPTunnel.GTPTEID.Value))
+	}
+
+	return nil
+}
+
 func HandlePDUSessionResourceSetupUnsuccessfulTransfer(b []byte, ctx *SMContext) error {
 	resourceSetupUnsuccessfulTransfer := ngapType.PDUSessionResourceSetupUnsuccessfulTransfer{}
 

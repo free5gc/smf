@@ -629,25 +629,6 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 						Nocp: false,
 					}
 
-					// ULPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
-					// 	DestinationInterface: pfcpType.DestinationInterface{
-					// 		InterfaceValue: pfcpType.DestinationInterfaceCore,
-					// 	},
-					// 	NetworkInstance: &pfcpType.NetworkInstance{
-					// 		NetworkInstance: smContext.Dnn,
-					// 		FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
-					// 	},
-					// }
-					// DLPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
-					// 	DestinationInterface: pfcpType.DestinationInterface{
-					// 		InterfaceValue: pfcpType.DestinationInterfaceAccess,
-					// 	},
-					// 	NetworkInstance: &pfcpType.NetworkInstance{
-					// 		NetworkInstance: smContext.Dnn,
-					// 		FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
-					// 	},
-					// }
-
 					DLPDR.State = smf_context.RULE_INITIAL
 					DLPDR.FAR.State = smf_context.RULE_INITIAL
 					ULPDR.State = smf_context.RULE_INITIAL
@@ -672,6 +653,165 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		if err = smf_context.
 			HandlePDUSessionResourceModifyResponseTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
 			smContext.Log.Errorf("Handle PDUSessionResourceModifyResponseTransfer failed: %+v", err)
+		}
+	case models.N2SmInfoType_PDU_RES_MOD_IND:
+		// This handler only processes changes in the number of tunnels:
+		// 1. Single tunnel to dual tunnels (1->2)
+		// 2. Dual tunnels to single tunnel (2->1)
+		// Does NOT handle modifications between same number of tunnels (1->1 or 2->2). It doesn't make sense.
+
+		// After check the smContext is active, change it to modification pending
+		smContext.CheckState(smf_context.Active)
+		smContext.SetState(smf_context.ModificationPending)
+
+		if smContext.NrdcIndicator {
+			smContext.Log.Infof("Both tunnels are active - Tunnel TEID: %d, DCTunnel TEID: %d",
+				smContext.Tunnel.ANInformation.TEID, smContext.DCTunnel.ANInformation.TEID)
+
+			// avtivate the rules for specified QoS traffic on Tunnel
+			for _, dataPath := range tunnel.DataPathPool {
+				if dataPath.Activated {
+					ANUPF := dataPath.FirstDPNode
+					DLPDR := ANUPF.DownLinkTunnel.PDR
+					if DLPDR.Precedence == 255 {
+						continue
+					}
+
+					DLPDR.State = smf_context.RULE_INITIAL
+					DLPDR.FAR.State = smf_context.RULE_INITIAL
+
+					pdrList = append(pdrList, DLPDR)
+					farList = append(farList, DLPDR.FAR)
+				}
+			}
+
+			// remove the rules on DCTunnel
+			for _, dataPath := range dcTunnel.DataPathPool {
+				if dataPath.Activated {
+					ANUPF := dataPath.FirstDPNode
+					ULPDR := ANUPF.UpLinkTunnel.PDR
+					DLPDR := ANUPF.DownLinkTunnel.PDR
+					if DLPDR.Precedence == 255 {
+						continue
+					}
+
+					ULPDR.State = smf_context.RULE_REMOVE
+					ULPDR.FAR.State = smf_context.RULE_REMOVE
+					DLPDR.State = smf_context.RULE_REMOVE
+					DLPDR.FAR.State = smf_context.RULE_REMOVE
+
+					pdrList = append(pdrList, ULPDR)
+					farList = append(farList, ULPDR.FAR)
+
+					pdrList = append(pdrList, DLPDR)
+					farList = append(farList, DLPDR.FAR)
+				}
+			}
+
+			// re-initialize DCTunnel
+			smf_context.ReleaseTEID(dcTunnel.ANInformation.TEID)
+			smContext.DCTunnel = smf_context.NewUPTunnel()
+			smContext.NrdcIndicator, sendPFCPModification = false, true
+
+			smContext.Log.Infoln("Release DCTunnel")
+		} else {
+			smContext.Log.Infof("Only master tunnel is active - Tunnel TEID: %d", smContext.Tunnel.ANInformation.TEID)
+
+			// handle the PDU session resource modify indication transfer message
+			if err = smf_context.
+				HandlePDUSessionResourceModifyIndicationTransfer(body.BinaryDataN2SmInformation, smContext); err != nil {
+				smContext.Log.Errorf("Handle PDUSessionResourceModifyIndicationTransfer failed: %+v", err)
+				sendPFCPModification = false
+			} else {
+				// apply the rules on DCTunnel
+				if err = smContext.ApplyDcPccRulesOnDcTunnel(); err != nil {
+					smContext.Log.Errorf("ApplyDcPccRulesOnDcTunnel failed: %+v", err)
+					sendPFCPModification = false
+				} else {
+					// append the rules on DCTunnel
+					for _, dataPath := range dcTunnel.DataPathPool {
+						if dataPath.Activated {
+							ANUPF := dataPath.FirstDPNode
+							ULPDR := ANUPF.UpLinkTunnel.PDR
+							DLPDR := ANUPF.DownLinkTunnel.PDR
+							if DLPDR.Precedence == 255 {
+								continue
+							}
+
+							ULPDR.FAR.ApplyAction = pfcpType.ApplyAction{
+								Buff: false,
+								Drop: false,
+								Dupl: false,
+								Forw: true,
+								Nocp: false,
+							}
+							DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{
+								Buff: false,
+								Drop: false,
+								Dupl: false,
+								Forw: true,
+								Nocp: false,
+							}
+
+							DLPDR.State = smf_context.RULE_INITIAL
+							DLPDR.FAR.State = smf_context.RULE_INITIAL
+							ULPDR.State = smf_context.RULE_INITIAL
+							ULPDR.FAR.State = smf_context.RULE_INITIAL
+
+							pdrList = append(pdrList, DLPDR)
+							farList = append(farList, DLPDR.FAR)
+
+							pdrList = append(pdrList, ULPDR)
+							farList = append(farList, ULPDR.FAR)
+						}
+					}
+
+					// remove the rules for specified QoS traffic on Tunnel
+					for _, dataPath := range tunnel.DataPathPool {
+						if dataPath.Activated {
+							ANUPF := dataPath.FirstDPNode
+							DLPDR := ANUPF.DownLinkTunnel.PDR
+							if DLPDR.Precedence == 255 {
+								continue
+							}
+
+							DLPDR.State = smf_context.RULE_REMOVE
+							DLPDR.FAR.State = smf_context.RULE_REMOVE
+
+							pdrList = append(pdrList, DLPDR)
+							farList = append(farList, DLPDR.FAR)
+						}
+					}
+					smContext.NrdcIndicator, sendPFCPModification = true, true
+
+					smContext.Log.Infoln("Activate DCTunnel")
+				}
+			}
+		}
+
+		if sendPFCPModification {
+			smContext.SetState(smf_context.PFCPModification)
+			if smContext.NrdcIndicator {
+				response.BinaryDataN2SmInformation, err = smf_context.
+					BuildPDUSessionResourceModifyConfirmTransfer(smContext, smContext.DCTunnel)
+				if err != nil {
+					smContext.Log.Errorf("Build PDUSessionResourceModifyConfirmSuccess failed: %+v", err)
+				} else {
+					response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "PDU_RES_MOD_CFM"}
+					response.JsonData.N2SmInfoType = models.N2SmInfoType_PDU_RES_MOD_CFM
+				}
+			} else {
+				response.BinaryDataN2SmInformation, err = smf_context.
+					BuildPDUSessionResourceModifyConfirmTransfer(smContext, smContext.Tunnel)
+				if err != nil {
+					smContext.Log.Errorf("Build PDUSessionResourceModifyConfirmSuccess failed: %+v", err)
+				} else {
+					response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "PDU_RES_MOD_CFM"}
+					response.JsonData.N2SmInfoType = models.N2SmInfoType_PDU_RES_MOD_CFM
+				}
+			}
+		} else {
+			smContext.SetState(smf_context.Active)
 		}
 	case models.N2SmInfoType_PDU_RES_REL_RSP:
 		// remove an tunnel info

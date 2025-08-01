@@ -258,6 +258,53 @@ func BuildPDUSessionResourceModifyRequestTransfer(ctx *SMContext) ([]byte, error
 	}
 }
 
+func BuildPDUSessionResourceModifyConfirmTransfer(ctx *SMContext, tunnel *UPTunnel) ([]byte, error) {
+	confirmTransfer := ngapType.PDUSessionResourceModifyConfirmTransfer{}
+
+	// QoS Flow Modify Confirm List
+	qosList := &confirmTransfer.QosFlowModifyConfirmList
+	for _, dataPath := range tunnel.DataPathPool {
+		if dataPath.Activated {
+			ANUPF := dataPath.FirstDPNode
+			DLPDR := ANUPF.DownLinkTunnel.PDR
+			// The flow we move to secondary gNB will not include precedence=255(default flow).
+			// So we do not need to send the flow QFI to RAN
+			if DLPDR.Precedence == 255 {
+				continue
+			}
+
+			for _, qer := range DLPDR.QER {
+				qosList.List = append(qosList.List, ngapType.QosFlowModifyConfirmItem{
+					QosFlowIdentifier: ngapType.QosFlowIdentifier{
+						Value: int64(qer.QFI.QFI),
+					},
+				})
+			}
+		}
+	}
+
+	// UL NG-U UP TNL Information
+	ANUPF := tunnel.DataPathPool.GetDefaultPath().FirstDPNode
+	teidOct := make([]byte, 4)
+	binary.BigEndian.PutUint32(teidOct, ctx.LocalULTeid)
+
+	confirmTransfer.ULNGUUPTNLInformation = ngapType.UPTransportLayerInformation{
+		Present: ngapType.UPTransportLayerInformationPresentGTPTunnel,
+		GTPTunnel: &ngapType.GTPTunnel{
+			TransportLayerAddress: ngapConvert.IPAddressToNgap(ANUPF.UPF.NodeID.ResolveNodeIdToIp().String(), ""),
+			GTPTEID: ngapType.GTPTEID{
+				Value: teidOct,
+			},
+		},
+	}
+
+	if buf, err := aper.MarshalWithParams(confirmTransfer, "valueExt"); err != nil {
+		return nil, fmt.Errorf("encode confirmTransfer failed: %s", err)
+	} else {
+		return buf, nil
+	}
+}
+
 // TS 38.413 9.3.4.9
 func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 	ANUPF := ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
