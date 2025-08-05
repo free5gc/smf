@@ -56,6 +56,9 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	}
 
 	for _, pccRule := range smContext.PCCRules {
+		if pccRule.QFI == 0 {
+			continue
+		}
 		if qosRule, err1 := pccRule.BuildNasQoSRule(smContext,
 			nasType.OperationCodeCreateNewQoSRule); err1 != nil {
 			logger.GsmLog.Warnln("Create QoS rule from pcc error ", err1)
