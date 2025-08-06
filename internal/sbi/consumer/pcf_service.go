@@ -16,6 +16,7 @@ import (
 	"github.com/free5gc/openapi/pcf/SMPolicyControl"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/util/flowdesc"
+	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 )
 
 type npcfService struct {
@@ -39,6 +40,7 @@ func (s *npcfService) getSMPolicyControlClient(uri string) *SMPolicyControl.APIC
 
 	configuration := SMPolicyControl.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = SMPolicyControl.NewAPIClient(configuration)
 
 	s.SMPolicyControlMu.RUnlock()
