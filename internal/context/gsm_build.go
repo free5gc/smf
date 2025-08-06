@@ -56,6 +56,11 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	}
 
 	for _, pccRule := range smContext.PCCRules {
+		// QFI = 0 is ignored because it is invalid QFI
+		// If real UE receives QFI = 0, it will be rejected by NAS. Then the session will be released.
+		if pccRule.QFI == 0 {
+			continue
+		}
 		if qosRule, err1 := pccRule.BuildNasQoSRule(smContext,
 			nasType.OperationCodeCreateNewQoSRule); err1 != nil {
 			logger.GsmLog.Warnln("Create QoS rule from pcc error ", err1)
