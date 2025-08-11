@@ -810,7 +810,8 @@ func (upi *UserPlaneInformation) selectAnchorUPF(source *UPNode, selection *UPFS
 				if link.MatchedSelection(selectionForIUPF) {
 					queue = append(queue, link)
 					findNewNode = true
-					break
+					// if here we break, we will not check next links
+					// break
 				}
 			}
 		}
@@ -862,6 +863,7 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionPa
 		return nil, nil, false
 	}
 	UPFList := upi.selectAnchorUPF(source, selection)
+	logger.CtxLog.Debug("UPFList: ", UPFList)
 	listLength := len(UPFList)
 	if listLength == 0 {
 		logger.CtxLog.Warnf("Can't find UPF with DNN[%s] S-NSSAI[sst: %d sd: %s] DNAI[%s]\n", selection.Dnn,
