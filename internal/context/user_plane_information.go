@@ -574,7 +574,9 @@ func (upi *UserPlaneInformation) GetUPFIDByIP(ip string) string {
 	return upi.UPFsIPtoID[ip]
 }
 
-func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNN(selection *UPFSelectionParams, userPlaneUPF *UPNode) (path UPPath) {
+func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNN(selection *UPFSelectionParams,
+	userPlaneUPF *UPNode,
+) (path UPPath) {
 	path, pathExist := upi.DefaultUserPlanePath[selection.String()]
 	logger.CtxLog.Traceln("In GetDefaultUserPlanePathByDNN")
 	logger.CtxLog.Traceln("selection: ", selection.String())
@@ -679,7 +681,6 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(selection *UPFSelectionPara
 		}
 		// check the selected UPF should be associated with SMF
 		for _, upf := range destinations {
-
 			if err := upf.UPF.IsAssociated(); err != nil {
 				logger.CtxLog.Infoln(err)
 				continue
@@ -688,7 +689,6 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(selection *UPFSelectionPara
 			destination = upf
 			break
 		}
-
 	} else {
 		// select the user plane UPF in default
 		destination = userPlaneUPF
