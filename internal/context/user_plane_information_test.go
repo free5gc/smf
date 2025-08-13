@@ -252,7 +252,7 @@ func TestGenerateDefaultPath(t *testing.T) {
 	userplaneInformation := smf_context.NewUserPlaneInformation(&config1)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			pathExist := userplaneInformation.GenerateDefaultPath(tc.param)
+			pathExist := userplaneInformation.GenerateDefaultPath(tc.param, nil)
 			require.Equal(t, tc.expected, pathExist)
 		})
 	}
