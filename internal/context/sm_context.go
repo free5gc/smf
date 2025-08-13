@@ -676,7 +676,7 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 		},
 		Dnai: targetRoute.Dnai,
 	}
-	createdUpPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(param)
+	createdUpPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(param, c.SelectedUPF)
 	createdDataPath := GenerateDataPath(createdUpPath)
 	if createdDataPath == nil {
 		return fmt.Errorf("fail to create data path for pcc rule[%s]", pccRule.PccRuleId)
@@ -724,7 +724,7 @@ func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
 		},
 		Dnai: targetRoute.Dnai,
 	}
-	createdUpPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(param)
+	createdUpPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(param, c.SelectedUPF)
 	createdDataPath := GenerateDataPath(createdUpPath)
 	if createdDataPath == nil {
 		return fmt.Errorf("fail to create data path on DCTunnel for pcc rule[%s]", pccRule.PccRuleId)
