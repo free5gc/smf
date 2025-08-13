@@ -677,8 +677,20 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(selection *UPFSelectionPara
 			logger.CtxLog.Tracef("Find UPF with DNN[%s] S-NSSAI[sst: %d sd: %s] DNAI[%s]\n", selection.Dnn,
 				selection.SNssai.Sst, selection.SNssai.Sd, selection.Dnai)
 		}
-		destination = destinations[0]
+		// check the selected UPF should be associated with SMF
+		for _, upf := range destinations {
+
+			if err := upf.UPF.IsAssociated(); err != nil {
+				logger.CtxLog.Infoln(err)
+				continue
+			}
+			// select the first matching and associated UPF in destinations
+			destination = upf
+			break
+		}
+
 	} else {
+		// select the user plane UPF in default
 		destination = userPlaneUPF
 	}
 
