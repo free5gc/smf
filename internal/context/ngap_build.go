@@ -259,7 +259,10 @@ func BuildPDUSessionResourceModifyRequestTransfer(ctx *SMContext) ([]byte, error
 }
 
 func BuildPDUSessionResourceModifyConfirmTransfer(
-	ctx *SMContext, tunnel *UPTunnel, localULTeid uint32) ([]byte, error) {
+	ctx *SMContext,
+	tunnel *UPTunnel,
+	localULTeid uint32,
+) ([]byte, error) {
 	confirmTransfer := ngapType.PDUSessionResourceModifyConfirmTransfer{}
 
 	// QoS Flow Modify Confirm List
