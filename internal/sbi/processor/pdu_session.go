@@ -796,7 +796,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			smContext.SetState(smf_context.PFCPModification)
 			if smContext.NrdcIndicator {
 				response.BinaryDataN2SmInformation, err = smf_context.
-					BuildPDUSessionResourceModifyConfirmTransfer(smContext, smContext.DCTunnel, smContext.LocalULTeidForSplitPDUSession)
+					BuildPDUSessionResourceModifyConfirmTransfer(
+						smContext, smContext.DCTunnel, smContext.LocalULTeidForSplitPDUSession)
 				if err != nil {
 					smContext.Log.Errorf("Build PDUSessionResourceModifyConfirmSuccess failed: %+v", err)
 				} else {
@@ -805,7 +806,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				}
 			} else {
 				response.BinaryDataN2SmInformation, err = smf_context.
-					BuildPDUSessionResourceModifyConfirmTransfer(smContext, smContext.Tunnel, smContext.LocalULTeid)
+					BuildPDUSessionResourceModifyConfirmTransfer(
+						smContext, smContext.Tunnel, smContext.LocalULTeid)
 				if err != nil {
 					smContext.Log.Errorf("Build PDUSessionResourceModifyConfirmSuccess failed: %+v", err)
 				} else {
