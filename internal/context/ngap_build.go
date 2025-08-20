@@ -258,7 +258,11 @@ func BuildPDUSessionResourceModifyRequestTransfer(ctx *SMContext) ([]byte, error
 	}
 }
 
-func BuildPDUSessionResourceModifyConfirmTransfer(ctx *SMContext, tunnel *UPTunnel) ([]byte, error) {
+func BuildPDUSessionResourceModifyConfirmTransfer(
+	ctx *SMContext,
+	tunnel *UPTunnel,
+	localULTeid uint32,
+) ([]byte, error) {
 	confirmTransfer := ngapType.PDUSessionResourceModifyConfirmTransfer{}
 
 	// QoS Flow Modify Confirm List
@@ -286,7 +290,7 @@ func BuildPDUSessionResourceModifyConfirmTransfer(ctx *SMContext, tunnel *UPTunn
 	// UL NG-U UP TNL Information
 	ANUPF := tunnel.DataPathPool.GetDefaultPath().FirstDPNode
 	teidOct := make([]byte, 4)
-	binary.BigEndian.PutUint32(teidOct, ctx.LocalULTeid)
+	binary.BigEndian.PutUint32(teidOct, localULTeid)
 
 	confirmTransfer.ULNGUUPTNLInformation = ngapType.UPTransportLayerInformation{
 		Present: ngapType.UPTransportLayerInformationPresentGTPTunnel,
