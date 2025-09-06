@@ -177,8 +177,13 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		return
 	}
 
-	if err := p.Consumer().PCFSelection(smContext); err != nil {
-		smContext.Log.Errorln("pcf selection error:", err)
+	// BSF-aware PCF selection: first check BSF for existing PCF binding
+	if err := p.Consumer().BSFAwarePCFSelection(smContext); err != nil {
+		smContext.Log.Errorln("PCF selection error (with BSF integration):", err)
+		// Fallback to traditional PCF selection if BSF integration fails
+		if err := p.Consumer().PCFSelection(smContext); err != nil {
+			smContext.Log.Errorln("fallback PCF selection error:", err)
+		}
 	}
 
 	smPolicyID, smPolicyDecision, err := p.Consumer().SendSMPolicyAssociationCreate(smContext)
