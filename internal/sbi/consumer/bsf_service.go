@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -100,8 +101,8 @@ func (s *nbsfService) QueryPCFBinding(smContext *smf_context.SMContext) (*models
 		queryURL += "?" + params.Encode()
 	}
 
-	// Create HTTP request
-	req, err := http.NewRequest("GET", queryURL, nil)
+	// Create HTTP request with context
+	req, err := http.NewRequestWithContext(context.Background(), "GET", queryURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -117,7 +118,11 @@ func (s *nbsfService) QueryPCFBinding(smContext *smf_context.SMContext) (*models
 		logger.ConsumerLog.Warnf("BSF query failed: %v", err)
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			logger.ConsumerLog.Warnf("Failed to close response body: %v", closeErr)
+		}
+	}()
 
 	if resp.StatusCode == http.StatusNoContent {
 		logger.ConsumerLog.Tracef("No existing PCF binding found for SUPI: %s, DNN: %s", smContext.Supi, smContext.Dnn)
@@ -126,8 +131,8 @@ func (s *nbsfService) QueryPCFBinding(smContext *smf_context.SMContext) (*models
 
 	if resp.StatusCode == http.StatusOK {
 		var pcfBinding models.PcfBinding
-		if err := json.NewDecoder(resp.Body).Decode(&pcfBinding); err != nil {
-			return nil, fmt.Errorf("failed to decode response: %w", err)
+		if decodeErr := json.NewDecoder(resp.Body).Decode(&pcfBinding); decodeErr != nil {
+			return nil, fmt.Errorf("failed to decode response: %w", decodeErr)
 		}
 		logger.ConsumerLog.Infof("Found existing PCF binding for SUPI: %s, DNN: %s", smContext.Supi, smContext.Dnn)
 		return &pcfBinding, nil
@@ -149,9 +154,9 @@ func (s *nbsfService) PCFSelectionWithBSF(smContext *smf_context.SMContext) erro
 		logger.ConsumerLog.Infof("Using existing PCF from BSF binding: %s", pcfBinding.PcfId)
 
 		// Discover the specific PCF instance from NRF
-		ctx, _, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NrfNfManagementNfType_NRF)
-		if err != nil {
-			logger.ConsumerLog.Warnf("Failed to get token context for PCF discovery: %v", err)
+		ctx, _, tokenErr := s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NrfNfManagementNfType_NRF)
+		if tokenErr != nil {
+			logger.ConsumerLog.Warnf("Failed to get token context for PCF discovery: %v", tokenErr)
 			return s.consumer.nnrfService.PCFSelection(smContext)
 		}
 
@@ -164,10 +169,10 @@ func (s *nbsfService) PCFSelectionWithBSF(smContext *smf_context.SMContext) erro
 		}
 
 		client := s.consumer.nnrfService.getNFDiscoveryClient(s.consumer.Context().NrfUri)
-		res, err := client.NFInstancesStoreApi.SearchNFInstances(ctx, request)
-		if err != nil || res == nil || len(res.SearchResult.NfInstances) == 0 {
+		res, searchErr := client.NFInstancesStoreApi.SearchNFInstances(ctx, request)
+		if searchErr != nil || res == nil || len(res.SearchResult.NfInstances) == 0 {
 			logger.ConsumerLog.Warnf("Failed to discover PCF %s from NRF, falling back to general PCF selection: %v",
-				pcfBinding.PcfId, err)
+				pcfBinding.PcfId, searchErr)
 			return s.consumer.nnrfService.PCFSelection(smContext)
 		}
 
