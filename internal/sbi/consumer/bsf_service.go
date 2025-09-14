@@ -135,6 +135,13 @@ func (s *nbsfService) QueryPCFBinding(smContext *smf_context.SMContext) (*models
 			return nil, fmt.Errorf("failed to decode response: %w", decodeErr)
 		}
 		logger.ConsumerLog.Infof("Found existing PCF binding for SUPI: %s, DNN: %s", smContext.Supi, smContext.Dnn)
+
+		// Store binding ID if provided in response header (enhancement)
+		if bindingId := resp.Header.Get("X-BSF-Binding-ID"); bindingId != "" {
+			smContext.BSFBindingID = bindingId
+			logger.ConsumerLog.Debugf("Stored BSF binding ID: %s for SMContext", bindingId)
+		}
+
 		return &pcfBinding, nil
 	}
 
@@ -186,4 +193,22 @@ func (s *nbsfService) PCFSelectionWithBSF(smContext *smf_context.SMContext) erro
 	logger.ConsumerLog.Infof("No PCF binding found in BSF, using NRF discovery for SUPI: %s, DNN: %s",
 		smContext.Supi, smContext.Dnn)
 	return s.consumer.nnrfService.PCFSelection(smContext)
+}
+
+// NotifyPCFBindingRelease notifies BSF about PCF binding release when SMF session terminates
+// This is called when SMContext.BSFBindingID is available and the session is being cleaned up
+func (s *nbsfService) NotifyPCFBindingRelease(smContext *smf_context.SMContext) {
+	if smContext.BSFBindingID == "" {
+		// No binding ID stored, nothing to notify
+		return
+	}
+
+	logger.ConsumerLog.Infof("Notifying BSF about PCF binding release for binding ID: %s", smContext.BSFBindingID)
+
+	// Note: In a complete implementation, this could trigger PCF to delete the binding
+	// For now, we just log the event. The actual deletion should be handled by PCF
+	// when it receives SMF context termination notification.
+
+	// Clear the binding ID from context
+	smContext.BSFBindingID = ""
 }

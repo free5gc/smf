@@ -6,6 +6,12 @@ import (
 
 func (p *Processor) RemoveSMContextFromAllNF(smContext *smf_context.SMContext, sendNotification bool) {
 	smContext.SetState(smf_context.InActive)
+
+	// Notify BSF about PCF binding release if we have a binding ID
+	if smContext.BSFBindingID != "" {
+		p.Consumer().NotifyBSFBindingRelease(smContext)
+	}
+
 	// remove SM Policy Association
 	if smContext.SMPolicyID != "" {
 		if err := p.Consumer().SendSMPolicyAssociationTermination(smContext); err != nil {

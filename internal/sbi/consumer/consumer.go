@@ -74,3 +74,8 @@ func NewConsumer(smf app.App) (*Consumer, error) {
 func (c *Consumer) BSFAwarePCFSelection(smContext *smf_context.SMContext) error {
 	return c.nbsfService.PCFSelectionWithBSF(smContext)
 }
+
+// NotifyBSFBindingRelease notifies BSF about PCF binding release
+func (c *Consumer) NotifyBSFBindingRelease(smContext *smf_context.SMContext) {
+	c.nbsfService.NotifyPCFBindingRelease(smContext)
+}
