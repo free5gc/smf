@@ -227,6 +227,9 @@ type SMContext struct {
 	ProtocolConfigurationOptions *ProtocolConfigurationOptions
 
 	// State
+	// BSF Integration
+	BSFBindingID string // PCF binding ID in BSF for this session
+
 	state SMContextState
 
 	UeCmRegistered bool
