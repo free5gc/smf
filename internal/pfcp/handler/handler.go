@@ -150,10 +150,7 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 				PduSessionId: smContext.PDUSessionID,
 				// Temporarily assign SMF itself,
 				// TODO: TS 23.502 4.2.3.3 5. Namf_Communication_N1N2TransferFailureNotification
-				N1n2FailureTxfNotifURI: fmt.Sprintf("%s://%s:%d",
-					smf_context.GetSelf().URIScheme,
-					smf_context.GetSelf().RegisterIPv4,
-					smf_context.GetSelf().SBIPort),
+				N1n2FailureTxfNotifURI: fmt.Sprintf("%s", smf_context.GetSelf().GetIPUri()),
 				N2InfoContainer: &models.N2InfoContainer{
 					N2InformationClass: models.N2InformationClass_SM,
 					SmInfo: &models.N2SmInformation{

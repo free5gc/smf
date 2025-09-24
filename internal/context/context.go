@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"net/netip"
 	"os"
 	"sync/atomic"
 	"time"
@@ -35,10 +36,10 @@ type SMFContext struct {
 	Name         string
 	NfInstanceID string
 
-	URIScheme    models.UriScheme
-	BindingIPv4  string
-	RegisterIPv4 string
-	SBIPort      int
+	UriScheme  models.UriScheme
+	BindingIP  netip.Addr // IP register to NRF
+	RegisterIP netip.Addr
+	SBIPort    int
 
 	// N4 interface-related
 	CPNodeID     pfcpType.NodeID
@@ -138,39 +139,35 @@ func InitSmfContext(config *factory.Config) {
 	if sbi == nil {
 		logger.CtxLog.Errorln("Configuration needs \"sbi\" value")
 		return
-	} else {
-		smfContext.URIScheme = models.UriScheme(sbi.Scheme)
-		smfContext.RegisterIPv4 = factory.SmfSbiDefaultIPv4 // default localhost
-		smfContext.SBIPort = factory.SmfSbiDefaultPort      // default port
-		if sbi.RegisterIPv4 != "" {
-			smfContext.RegisterIPv4 = sbi.RegisterIPv4
-		}
-		if sbi.Port != 0 {
-			smfContext.SBIPort = sbi.Port
-		}
+	}
 
-		if tls := sbi.Tls; tls != nil {
-			smfContext.Key = tls.Key
-			smfContext.PEM = tls.Pem
-		}
+	smfContext.SBIPort = sbi.Port
 
-		smfContext.BindingIPv4 = os.Getenv(sbi.BindingIPv4)
-		if smfContext.BindingIPv4 != "" {
-			logger.CtxLog.Info("Parsing ServerIPv4 address from ENV Variable.")
-		} else {
-			smfContext.BindingIPv4 = sbi.BindingIPv4
-			if smfContext.BindingIPv4 == "" {
-				logger.CtxLog.Warn("Error parsing ServerIPv4 address as string. Using the 0.0.0.0 address as default.")
-				smfContext.BindingIPv4 = "0.0.0.0"
-			}
-		}
+	smfContext.UriScheme = models.UriScheme(sbi.Scheme)
+
+	if bindingIP := os.Getenv(sbi.BindingIP); bindingIP != "" {
+		logger.UtilLog.Info("Parsing BindingIP address from ENV Variable.")
+		sbi.BindingIP = bindingIP
+	}
+	if registerIP := os.Getenv(sbi.RegisterIP); registerIP != "" {
+		logger.UtilLog.Info("Parsing RegisterIP address from ENV Variable.")
+		sbi.RegisterIP = registerIP
+	}
+	smfContext.BindingIP = resolveIP(sbi.BindingIP)
+	smfContext.RegisterIP = resolveIP(sbi.RegisterIP)
+
+	smfContext.UriScheme = models.UriScheme(sbi.Scheme)
+
+	if tls := sbi.Tls; tls != nil {
+		smfContext.Key = tls.Key
+		smfContext.PEM = tls.Pem
 	}
 
 	if configuration.NrfUri != "" {
 		smfContext.NrfUri = configuration.NrfUri
 	} else {
 		logger.CtxLog.Warn("NRF Uri is empty! Using localhost as NRF IPv4 address.")
-		smfContext.NrfUri = fmt.Sprintf("%s://%s:%d", smfContext.URIScheme, "127.0.0.1", 29510)
+		smfContext.NrfUri = fmt.Sprintf("%s://%s:%d", smfContext.UriScheme, "127.0.0.1", 29510)
 	}
 	smfContext.NrfCertPem = configuration.NrfCertPem
 
@@ -288,6 +285,21 @@ func InitSMFUERouting(routingConfig *factory.RoutingConfig) {
 			smfContext.UEDefaultPathPool[groupName] = ueDefaultPaths
 		}
 	}
+}
+
+func resolveIP(ip string) netip.Addr {
+	var addr netip.Addr
+
+	resolvedIPs, err := net.DefaultResolver.LookupNetIP(context.Background(), "ip", ip)
+	if err != nil {
+		logger.InitLog.Errorf("Lookup failed with %s: %+v", ip, err)
+		return addr
+	}
+	resolvedIP := resolvedIPs[0].Unmap()
+	if resolvedIP := resolvedIP.String(); resolvedIP != ip {
+		logger.UtilLog.Infof("Lookup revolved %s into %s", ip, resolvedIP)
+	}
+	return resolvedIP
 }
 
 func GetSelf() *SMFContext {

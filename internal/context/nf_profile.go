@@ -3,6 +3,7 @@ package context
 import (
 	"fmt"
 	"time"
+	"net/netip"
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/pkg/factory"
@@ -16,6 +17,8 @@ type NFProfile struct {
 }
 
 func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
+	IPUri := netip.AddrPortFrom(c.RegisterIP, uint16(c.SBIPort)).String()
+
 	// Set time
 	nfSetupTime := time.Now()
 
@@ -24,7 +27,7 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 		{
 			ApiVersionInUri: "v1",
 			ApiFullVersion: fmt.
-				Sprintf("https://%s:%d"+factory.SmfPdusessionResUriPrefix, GetSelf().RegisterIPv4, GetSelf().SBIPort),
+				Sprintf("https://%s"+factory.SmfPdusessionResUriPrefix, IPUri),
 			Expiry: &nfSetupTime,
 		},
 	}
@@ -33,18 +36,13 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 	c.NfProfile.NFServices = new([]models.NrfNfManagementNfService)
 	for _, serviceName := range nfProfileconfig.Configuration.ServiceNameList {
 		*c.NfProfile.NFServices = append(*c.NfProfile.NFServices, models.NrfNfManagementNfService{
-			ServiceInstanceId: GetSelf().NfInstanceID + serviceName,
+			ServiceInstanceId: c.NfInstanceID + serviceName,
 			ServiceName:       models.ServiceName(serviceName),
 			Versions:          *c.NfProfile.NFServiceVersion,
 			Scheme:            models.UriScheme_HTTPS,
 			NfServiceStatus:   models.NfServiceStatus_REGISTERED,
-			ApiPrefix:         fmt.Sprintf("%s://%s:%d", GetSelf().URIScheme, GetSelf().RegisterIPv4, GetSelf().SBIPort),
-			IpEndPoints: []models.IpEndPoint{
-				{
-					Ipv4Address: GetSelf().RegisterIPv4,
-					Port:        int32(GetSelf().SBIPort),
-				},
-			},
+			ApiPrefix:         fmt.Sprintf(c.GetIPUri()),
+			IpEndPoints:       c.GetIpEndPoint(),
 		})
 	}
 
@@ -63,6 +61,37 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 			})
 		}
 	}
+}
+
+func (context *SMFContext) GetIPUri() string {
+	addr := context.RegisterIP
+	port := uint16(context.SBIPort)
+	scheme := string(context.UriScheme)
+
+	bind := netip.AddrPortFrom(addr, port).String()
+
+	return scheme + "://" + bind
+}
+
+func (context *SMFContext) GetIpEndPoint() []models.IpEndPoint {
+	if context.RegisterIP.Is6() {
+		return []models.IpEndPoint{
+			{
+				Ipv6Address: context.RegisterIP.String(),
+				Transport:   models.NrfNfManagementTransportProtocol_TCP,
+				Port:        int32(context.SBIPort),
+			},
+		}
+	} else if context.RegisterIP.Is4() {
+		return []models.IpEndPoint{
+			{
+				Ipv4Address: context.RegisterIP.String(),
+				Transport:   models.NrfNfManagementTransportProtocol_TCP,
+				Port:        int32(context.SBIPort),
+			},
+		}
+	}
+	return nil
 }
 
 func SNssaiSmfInfo() []models.SnssaiSmfInfoItem {
