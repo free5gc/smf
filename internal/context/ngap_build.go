@@ -387,6 +387,54 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 			}
 		}
 	}
+
+	// Additional DL NG-U UP TNL Information(optional) TS 38.413 9.3.4.9
+	if ctx.NrdcIndicator {
+		dcANUPF := ctx.DCTunnel.DataPathPool.GetDefaultPath().FirstDPNode
+		dcUpNode := dcANUPF.UPF
+		dcUlTeidOct := make([]byte, 4)
+		binary.BigEndian.PutUint32(dcUlTeidOct, dcANUPF.UpLinkTunnel.TEID)
+		dcDlTeidOct := make([]byte, 4)
+		binary.BigEndian.PutUint32(dcDlTeidOct, ctx.DCTunnel.ANInformation.TEID)
+		pathSwitchRequestAcknowledgeTransfer.AdditionalNGUUPTNLInformation = new(ngapType.UPTransportLayerInformationPairList)
+
+		if n3IP, err := dcUpNode.N3Interfaces[0].IP(ctx.SelectedPDUSessionType); err != nil {
+			return nil, err
+		} else {
+			upTransportLayerInformationPairItem := ngapType.UPTransportLayerInformationPairItem{
+				ULNGUUPTNLInformation: ngapType.UPTransportLayerInformation{
+					Present: ngapType.UPTransportLayerInformationPresentGTPTunnel,
+					GTPTunnel: &ngapType.GTPTunnel{
+						GTPTEID: ngapType.GTPTEID{
+							Value: dcUlTeidOct,
+						},
+						TransportLayerAddress: ngapType.TransportLayerAddress{
+							Value: aper.BitString{
+								Bytes:     n3IP,
+								BitLength: uint64(len(n3IP) * 8),
+							},
+						},
+					},
+				},
+				DLNGUUPTNLInformation: ngapType.UPTransportLayerInformation{
+					Present: ngapType.UPTransportLayerInformationPresentGTPTunnel,
+					GTPTunnel: &ngapType.GTPTunnel{
+						GTPTEID: ngapType.GTPTEID{
+							Value: dcDlTeidOct,
+						},
+						TransportLayerAddress: ngapType.TransportLayerAddress{
+							Value: aper.BitString{
+								Bytes:     ctx.DCTunnel.ANInformation.IPAddress,
+								BitLength: uint64(len(ctx.DCTunnel.ANInformation.IPAddress) * 8),
+							},
+						},
+					},
+				},
+			}
+			pathSwitchRequestAcknowledgeTransfer.AdditionalNGUUPTNLInformation.List = append(pathSwitchRequestAcknowledgeTransfer.AdditionalNGUUPTNLInformation.List, upTransportLayerInformationPairItem)
+		}
+	}
+
 	if buf, err := aper.MarshalWithParams(pathSwitchRequestAcknowledgeTransfer, "valueExt"); err != nil {
 		return nil, err
 	} else {

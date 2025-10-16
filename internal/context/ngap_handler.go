@@ -240,6 +240,13 @@ func HandlePathSwitchRequestTransfer(b []byte, ctx *SMContext) error {
 		}
 	}
 
+	if ctx.NrdcIndicator {
+		DCGTPTunnel := pathSwitchRequestTransfer.AdditionalDLQosFlowPerTNLInformation.List[0].QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
+		ctx.DCTunnel.UpdateANInformation(
+			DCGTPTunnel.TransportLayerAddress.Value.Bytes,
+			binary.BigEndian.Uint32(DCGTPTunnel.GTPTEID.Value))
+	}
+
 	return nil
 }
 
