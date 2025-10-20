@@ -240,11 +240,20 @@ func HandlePathSwitchRequestTransfer(b []byte, ctx *SMContext) error {
 		}
 	}
 
+	// If NRDC is activated
+	// update the DC tunnel AN information from Additional DL QoS Flow per TNL Information at IE Extensions
 	if ctx.NrdcIndicator {
-		DCGTPTunnel := pathSwitchRequestTransfer.AdditionalDLQosFlowPerTNLInformation.List[0].QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
-		ctx.DCTunnel.UpdateANInformation(
-			DCGTPTunnel.TransportLayerAddress.Value.Bytes,
-			binary.BigEndian.Uint32(DCGTPTunnel.GTPTEID.Value))
+		ieExtensions := pathSwitchRequestTransfer.IEExtensions
+		for _, ie := range ieExtensions.List {
+			if ie.Id.Value == ngapType.ProtocolIEIDAdditionalDLQosFlowPerTNLInformation {
+				qosFlowInfo := ie.ExtensionValue.AdditionalDLQosFlowPerTNLInformation.List[0]
+				DCGTPTunnel := qosFlowInfo.QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
+				ctx.DCTunnel.UpdateANInformation(
+					DCGTPTunnel.TransportLayerAddress.Value.Bytes,
+					binary.BigEndian.Uint32(DCGTPTunnel.GTPTEID.Value))
+				break
+			}
+		}
 	}
 
 	return nil
