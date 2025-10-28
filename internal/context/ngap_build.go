@@ -2,6 +2,7 @@ package context
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/free5gc/aper"
@@ -326,6 +327,9 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 	ULNGUUPTNLInformation.Present = ngapType.UPTransportLayerInformationPresentGTPTunnel
 	ULNGUUPTNLInformation.GTPTunnel = new(ngapType.GTPTunnel)
 
+	if len(UpNode.N3Interfaces) == 0 {
+		return nil, errors.New("no N3 interface found for UPF")
+	}
 	if n3IP, err := UpNode.N3Interfaces[0].IP(ctx.SelectedPDUSessionType); err != nil {
 		return nil, err
 	} else {
@@ -398,6 +402,9 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 		ieExtensions := new(ngapType.ProtocolExtensionContainerPathSwitchRequestAcknowledgeTransferExtIEs)
 		pathSwitchRequestAcknowledgeTransfer.IEExtensions = ieExtensions
 
+		if len(dcUpNode.N3Interfaces) == 0 {
+			return nil, errors.New("no N3 interface found for DC UPF")
+		}
 		if n3IP, err := dcUpNode.N3Interfaces[0].IP(ctx.SelectedPDUSessionType); err != nil {
 			return nil, err
 		} else {
