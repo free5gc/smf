@@ -609,9 +609,14 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			smContext.Log.Errorf("Handle PDUSessionResourceSetupResponseTransfer failed: %+v", err)
 		} else if smContext.NrdcIndicator {
 			for _, pdr := range pdrList {
-				// Remove all PDRs except the default PDR
+				// Remove all PDRs and FARs except the default PDR
 				if pdr.Precedence != 255 {
 					pdr.State = smf_context.RULE_REMOVE
+					for _, far := range farList {
+						if far == pdr.FAR {
+							far.State = smf_context.RULE_REMOVE
+						}
+					}
 				}
 			}
 			if err = smContext.ApplyDcPccRulesOnDcTunnel(); err != nil {
@@ -622,6 +627,10 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					ANUPF := dataPath.FirstDPNode
 					ULPDR := ANUPF.UpLinkTunnel.PDR
 					DLPDR := ANUPF.DownLinkTunnel.PDR
+
+					if DLPDR.Precedence == 255 {
+						continue
+					}
 
 					ULPDR.FAR.ApplyAction = pfcpType.ApplyAction{
 						Buff: false,
@@ -876,6 +885,26 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			if dataPath.Activated {
 				ANUPF := dataPath.FirstDPNode
 				DLPDR := ANUPF.DownLinkTunnel.PDR
+
+				// skip the specified QoS traffic rules on Tunnel if DC is activated
+				if smContext.NrdcIndicator && DLPDR.Precedence != 255 {
+					continue
+				}
+
+				pdrList = append(pdrList, DLPDR)
+				farList = append(farList, DLPDR.FAR)
+			}
+		}
+
+		if smContext.NrdcIndicator {
+			for _, dataPath := range dcTunnel.DataPathPool {
+				ANUPF := dataPath.FirstDPNode
+				DLPDR := ANUPF.DownLinkTunnel.PDR
+
+				// skip the default traffic rules
+				if DLPDR.Precedence == 255 {
+					continue
+				}
 
 				pdrList = append(pdrList, DLPDR)
 				farList = append(farList, DLPDR.FAR)
