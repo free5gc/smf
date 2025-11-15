@@ -10,6 +10,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/util"
 	"github.com/free5gc/util/metrics/sbi"
 )
 
@@ -105,6 +106,16 @@ func (s *Server) HTTPPostSmContexts(c *gin.Context) {
 	if err != nil {
 		problemDetail := "[Request Body] " + err.Error()
 		logger.PduSessLog.Errorln(problemDetail)
+		problemDetails := openapi.ProblemDetailsMalformedReqSyntax(problemDetail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(problemDetails.Status)))
+		c.JSON(int(problemDetails.Status), problemDetails)
+		return
+	}
+
+	if request.JsonData.Supi != "" && !util.IsValidSupi(request.JsonData.Supi) {
+		problemDetail := "Invalid SUPI format: " + request.JsonData.Supi
+		logger.PduSessLog.Warnln(problemDetail)
+
 		problemDetails := openapi.ProblemDetailsMalformedReqSyntax(problemDetail)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(problemDetails.Status)))
 		c.JSON(int(problemDetails.Status), problemDetails)
