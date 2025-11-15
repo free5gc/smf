@@ -73,6 +73,20 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	upi.Mu.RLock()
 	defer upi.Mu.RUnlock()
 
+	// Check sNssai
+	if smContext.SNssai == nil {
+		logger.PduSessLog.Warnln("S-NSSAI is not provided in the SMContextCreate request")
+
+		postSmContextsError := models.PostSmContextsError{
+			JsonData: &models.SmContextCreateError{
+				Error: &smf_errors.MandatoryIeMissing,
+			},
+		}
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, postSmContextsError.JsonData.Error.Cause)
+		c.JSON(http.StatusBadRequest, postSmContextsError)
+		return
+	}
+
 	// DNN Information from config
 	smContext.DNNInfo = smf_context.RetrieveDnnInformation(smContext.SNssai, smContext.Dnn)
 	if smContext.DNNInfo == nil {

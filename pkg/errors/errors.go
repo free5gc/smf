@@ -13,6 +13,12 @@ var (
 		Detail: "N1 Message Error",
 		Cause:  "N1_SM_ERROR",
 	}
+	MandatoryIeMissing = models.SmfPduSessionExtProblemDetails{
+		Title:  "Mandatory IE missing in N1 Message",
+		Status: http.StatusForbidden,
+		Detail: "Mandatory IE missing",
+		Cause:  "MANDATORY_IE_MISSING",
+	}
 	N2SmError = models.SmfPduSessionExtProblemDetails{
 		Title:  "Invalid N2 Message",
 		Status: http.StatusForbidden,
