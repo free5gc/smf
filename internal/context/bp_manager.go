@@ -2,7 +2,7 @@ package context
 
 import (
 	"reflect"
-	
+
 	"github.com/free5gc/openapi/models"
 )
 
