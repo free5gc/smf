@@ -58,7 +58,7 @@ func NewApp(
 	ctx context.Context, cfg *factory.Config, tlsKeyLogPath string,
 	pfcpStart func(*SmfApp), pfcpTerminate func(),
 ) (*SmfApp, error) {
-	smf_context.Init()
+	smf_context.Init(cfg)
 	smf := &SmfApp{
 		cfg:           cfg,
 		wg:            sync.WaitGroup{},
