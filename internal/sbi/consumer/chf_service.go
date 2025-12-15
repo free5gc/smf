@@ -60,15 +60,11 @@ func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMCon
 		}
 	}
 
+	chr := GetNfConsumerIdentification(smfContext)
 	req := &models.ChfConvergedChargingChargingDataRequest{
 		ChargingId:           smContext.ChargingID,
 		SubscriberIdentifier: smContext.Supi,
-		NfConsumerIdentification: &models.ChfConvergedChargingNfIdentification{
-			NodeFunctionality: models.ChfConvergedChargingNodeFunctionality_SMF,
-			NFName:            smfContext.Name,
-			// not sure if NFIPv4Address is RegisterIPv4 or BindingIPv4
-			NFIPv4Address: smfContext.RegisterIPv4,
-		},
+		NfConsumerIdentification: &chr,
 		InvocationTimeStamp: &date,
 		Triggers:            triggers,
 		PDUSessionChargingInformation: &models.ChfConvergedChargingPduSessionChargingInformation{
@@ -92,16 +88,31 @@ func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMCon
 				DnnId: smContext.Dnn,
 			},
 		},
-		NotifyUri: fmt.Sprintf("%s://%s:%d/nsmf-callback/notify_%s",
-			smfContext.URIScheme,
-			smfContext.RegisterIPv4,
-			smfContext.SBIPort,
+		NotifyUri: fmt.Sprintf("%s/nsmf-callback/notify_%s",
+			smfContext.GetIPUri(),
 			smContext.Ref,
 		),
 		MultipleUnitUsage: multipleUnitUsage,
 	}
 
 	return req
+}
+
+func GetNfConsumerIdentification(smfContext *smf_context.SMFContext)  models.ChfConvergedChargingNfIdentification {
+	chf := models.ChfConvergedChargingNfIdentification{
+		NodeFunctionality: models.ChfConvergedChargingNodeFunctionality_SMF,
+		NFName:            smfContext.Name,
+	}
+
+	IPUri := smfContext.GetIPUri()
+
+	// not sure if NFIPv4Address is RegisterIPv4 or BindingIPv4
+	if smfContext.RegisterIP.Is6() {
+		chf.NFIPv6Address = IPUri
+	} else if smfContext.RegisterIP.Is4() {
+		chf.NFIPv4Address = IPUri
+	}
+	return chf
 }
 
 func (s *nchfService) SendConvergedChargingRequest(
