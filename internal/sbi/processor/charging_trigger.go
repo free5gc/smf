@@ -115,9 +115,10 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 		}
 
 		for upfId, urrList := range upfUrrMap {
-			logger.ChargingLog.Infof("@@@ Sending PFCP Session Modification to UpfId=%s with %d URRs", upfId, len(urrList))
+			logger.ChargingLog.Debugf("Sending PFCP Session Modification to UpfId=%s with %d URRs", upfId, len(urrList))
 			for _, urr := range urrList {
-				logger.ChargingLog.Infof("@@@ URR[%d]: VolumeQuota=%d, Trigger.Volqu=%v", urr.URRID, urr.VolumeQuota, urr.ReportingTrigger.Volqu)
+				logger.ChargingLog.Debugf("URR[%d]: VolumeQuota=%d, Trigger.Volqu=%v",
+					urr.URRID, urr.VolumeQuota, urr.ReportingTrigger.Volqu)
 			}
 
 			upf := smf_context.GetUpfById(upfId)
@@ -191,7 +192,7 @@ func buildMultiUnitUsageFromUsageReport(
 			}
 
 			rg := chgInfo.RatingGroup
-			logger.ChargingLog.Infof("@@@ Receive Usage Report from URR[%d], corresponding Rating Group[%d], UpfId=%s, ChargingMethod=%v",
+			logger.ChargingLog.Debugf("Receive Usage Report from URR[%d], Rating Group[%d], UpfId=%s, ChargingMethod=%v",
 				ur.UrrId, rg, chgInfo.UpfId, chgInfo.ChargingMethod)
 			triggerTime := time.Now()
 
@@ -248,15 +249,15 @@ func getUrrsByRg(smContext *smf_context.SMContext, upfId string, rg int32) []*sm
 			smContext.ChargingInfo[urr.URRID].RatingGroup == rg &&
 			smContext.ChargingInfo[urr.URRID].UpfId == upfId {
 			foundUrrs = append(foundUrrs, urr)
-			logger.ChargingLog.Infof("@@@ Found URR[%d] for RatingGroup[%d], UpfId=%s", urr.URRID, rg, upfId)
+			logger.ChargingLog.Debugf("Found URR[%d] for RatingGroup[%d], UpfId=%s", urr.URRID, rg, upfId)
 		}
 	}
 
 	if len(foundUrrs) > 1 {
-		logger.ChargingLog.Warnf("@@@ Multiple URRs (%d) found for RatingGroup[%d], UpfId=%s - Will update ALL of them",
+		logger.ChargingLog.Debugf("Multiple URRs (%d) found for RatingGroup[%d], UpfId=%s - Will update ALL of them",
 			len(foundUrrs), rg, upfId)
 	} else if len(foundUrrs) == 0 {
-		logger.ChargingLog.Errorf("@@@ !!! No URR found for RatingGroup[%d], UpfId=%s !!!", rg, upfId)
+		logger.ChargingLog.Errorf("No URR found for RatingGroup[%d], UpfId=%s", rg, upfId)
 	}
 
 	return foundUrrs
@@ -266,22 +267,23 @@ func getUrrsByRg(smContext *smf_context.SMContext, upfId string, rg int32) []*sm
 func (p *Processor) updateGrantedQuota(
 	smContext *smf_context.SMContext, multipleUnitInformation []models.MultipleUnitInformation,
 ) {
-	logger.ChargingLog.Infof("@@@ updateGrantedQuota: Received %d MultipleUnitInformation from CHF", len(multipleUnitInformation))
+	logger.ChargingLog.Debugf("updateGrantedQuota: Received %d MultipleUnitInformation from CHF",
+		len(multipleUnitInformation))
 
 	for _, ui := range multipleUnitInformation {
 		rg := ui.RatingGroup
 		upfId := ui.UPFID
-		logger.ChargingLog.Infof("@@@ Processing CHF response: RatingGroup=%d, UpfId=%s", rg, upfId)
+		logger.ChargingLog.Debugf("Processing CHF response: RatingGroup=%d, UpfId=%s", rg, upfId)
 
 		urrs := getUrrsByRg(smContext, upfId, rg)
 		if len(urrs) == 0 {
-			logger.ChargingLog.Errorf("@@@ !!! CRITICAL: Cannot find URR for RatingGroup[%d], UpfId=%s - Quota will NOT be updated !!!", rg, upfId)
+			logger.ChargingLog.Errorf("Cannot find URR for RatingGroup[%d], UpfId=%s - Quota will NOT be updated", rg, upfId)
 			continue
 		}
 
 		// Update ALL URRs with the same Rating Group
 		for _, urr := range urrs {
-			logger.ChargingLog.Infof("@@@ Will update URR[%d] with quota from RatingGroup[%d]", urr.URRID, rg)
+			logger.ChargingLog.Debugf("Will update URR[%d] with quota from RatingGroup[%d]", urr.URRID, rg)
 			trigger := pfcpType.ReportingTriggers{}
 			urr.State = smf_context.RULE_UPDATE
 			chgInfo := smContext.ChargingInfo[urr.URRID]
@@ -391,10 +393,10 @@ func (p *Processor) updateGrantedQuota(
 						if ui.GrantedUnit != nil {
 							trigger.Volqu = true
 							urr.VolumeQuota = uint64(ui.GrantedUnit.TotalVolume)
-							logger.ChargingLog.Infof("@@@ URR[%d] QUOTA_EXHAUSTED: Setting VolumeQuota=%d", urr.URRID, urr.VolumeQuota)
+							logger.ChargingLog.Debugf("QUOTA_EXHAUSTED: Setting VolumeQuota=%d", urr.VolumeQuota)
 						} else {
-							//  No granted quota, so set the urr.VolumeQuota to 0, upf should stop send traffic
-							logger.ChargingLog.Warnf("@@@ URR[%d] No granted quota, setting VolumeQuota=0", urr.URRID)
+							// No granted quota, so set the urr.VolumeQuota to 0, upf should stop send traffic
+							logger.ChargingLog.Warnf("No granted quota, setting VolumeQuota=0")
 							trigger.Volqu = true
 							urr.VolumeQuota = 0
 						}
