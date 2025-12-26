@@ -115,6 +115,11 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 		}
 
 		for upfId, urrList := range upfUrrMap {
+			logger.ChargingLog.Infof("@@@ Sending PFCP Session Modification to UpfId=%s with %d URRs", upfId, len(urrList))
+			for _, urr := range urrList {
+				logger.ChargingLog.Infof("@@@ URR[%d]: VolumeQuota=%d, Trigger.Volqu=%v", urr.URRID, urr.VolumeQuota, urr.ReportingTrigger.Volqu)
+			}
+
 			upf := smf_context.GetUpfById(upfId)
 			if upf == nil {
 				logger.PduSessLog.Warnf("Cound not find upf %s", upfId)
@@ -158,12 +163,13 @@ func buildMultiUnitUsageFromUsageReport(
 
 	ratingGroupUnitUsagesMap = make(map[int32]models.ChfConvergedChargingMultipleUnitUsage)
 	for _, ur := range smContext.UrrReports {
+		logger.ChargingLog.Infof("@@@ Processing Usage Report: URR ID=%d, ReportType=%s", ur.UrrId, ur.ReportTpye)
 		if ur.ReportTpye != "" {
 			var triggers []models.ChfConvergedChargingTrigger
 
 			chgInfo := smContext.ChargingInfo[ur.UrrId]
 			if chgInfo == nil {
-				logger.PduSessLog.Tracef("URR %d is not for charging", ur.UrrId)
+				logger.PduSessLog.Warnf("@@@ URR %d is not in ChargingInfo map!", ur.UrrId)
 				continue
 			}
 
@@ -185,8 +191,8 @@ func buildMultiUnitUsageFromUsageReport(
 			}
 
 			rg := chgInfo.RatingGroup
-			logger.PduSessLog.Tracef("Receive Usage Report from URR[%d], correspopnding Rating Group[%d], ChargingMethod %v",
-				ur.UrrId, rg, chgInfo.ChargingMethod)
+			logger.ChargingLog.Infof("@@@ Receive Usage Report from URR[%d], corresponding Rating Group[%d], UpfId=%s, ChargingMethod=%v",
+				ur.UrrId, rg, chgInfo.UpfId, chgInfo.ChargingMethod)
 			triggerTime := time.Now()
 
 			uu := models.ChfConvergedChargingUsedUnitContainer{
@@ -234,29 +240,49 @@ func buildMultiUnitUsageFromUsageReport(
 	return multipleUnitUsage
 }
 
-func getUrrByRg(smContext *smf_context.SMContext, upfId string, rg int32) *smf_context.URR {
+func getUrrsByRg(smContext *smf_context.SMContext, upfId string, rg int32) []*smf_context.URR {
+	var foundUrrs []*smf_context.URR
+
 	for _, urr := range smContext.UrrUpfMap {
 		if smContext.ChargingInfo[urr.URRID] != nil &&
 			smContext.ChargingInfo[urr.URRID].RatingGroup == rg &&
 			smContext.ChargingInfo[urr.URRID].UpfId == upfId {
-			return urr
+			foundUrrs = append(foundUrrs, urr)
+			logger.ChargingLog.Infof("@@@ Found URR[%d] for RatingGroup[%d], UpfId=%s", urr.URRID, rg, upfId)
 		}
 	}
 
-	return nil
+	if len(foundUrrs) > 1 {
+		logger.ChargingLog.Warnf("@@@ Multiple URRs (%d) found for RatingGroup[%d], UpfId=%s - Will update ALL of them",
+			len(foundUrrs), rg, upfId)
+	} else if len(foundUrrs) == 0 {
+		logger.ChargingLog.Errorf("@@@ !!! No URR found for RatingGroup[%d], UpfId=%s !!!", rg, upfId)
+	}
+
+	return foundUrrs
 }
 
 // Update the urr by the charging information renewed by chf
 func (p *Processor) updateGrantedQuota(
 	smContext *smf_context.SMContext, multipleUnitInformation []models.MultipleUnitInformation,
 ) {
-	for _, ui := range multipleUnitInformation {
-		trigger := pfcpType.ReportingTriggers{}
+	logger.ChargingLog.Infof("@@@ updateGrantedQuota: Received %d MultipleUnitInformation from CHF", len(multipleUnitInformation))
 
+	for _, ui := range multipleUnitInformation {
 		rg := ui.RatingGroup
 		upfId := ui.UPFID
+		logger.ChargingLog.Infof("@@@ Processing CHF response: RatingGroup=%d, UpfId=%s", rg, upfId)
 
-		if urr := getUrrByRg(smContext, upfId, rg); urr != nil {
+		urrs := getUrrsByRg(smContext, upfId, rg)
+		if len(urrs) == 0 {
+			logger.ChargingLog.Errorf("@@@ !!! CRITICAL: Cannot find URR for RatingGroup[%d], UpfId=%s - Quota will NOT be updated !!!", rg, upfId)
+			continue
+		}
+
+		// Update ALL URRs with the same Rating Group
+		for _, urr := range urrs {
+			logger.ChargingLog.Infof("@@@ Will update URR[%d] with quota from RatingGroup[%d]", urr.URRID, rg)
+			trigger := pfcpType.ReportingTriggers{}
 			urr.State = smf_context.RULE_UPDATE
 			chgInfo := smContext.ChargingInfo[urr.URRID]
 
@@ -365,9 +391,10 @@ func (p *Processor) updateGrantedQuota(
 						if ui.GrantedUnit != nil {
 							trigger.Volqu = true
 							urr.VolumeQuota = uint64(ui.GrantedUnit.TotalVolume)
+							logger.ChargingLog.Infof("@@@ URR[%d] QUOTA_EXHAUSTED: Setting VolumeQuota=%d", urr.URRID, urr.VolumeQuota)
 						} else {
 							//  No granted quota, so set the urr.VolumeQuota to 0, upf should stop send traffic
-							logger.ChargingLog.Warnf("No granted quota")
+							logger.ChargingLog.Warnf("@@@ URR[%d] No granted quota, setting VolumeQuota=0", urr.URRID)
 							trigger.Volqu = true
 							urr.VolumeQuota = 0
 						}
@@ -376,8 +403,6 @@ func (p *Processor) updateGrantedQuota(
 			}
 
 			urr.ReportingTrigger = trigger
-		} else {
-			logger.PduSessLog.Warnf("Do not find charging Information for rating group[%d]\n", rg)
-		}
+		} // end for each urr
 	}
 }
