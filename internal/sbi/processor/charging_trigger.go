@@ -164,13 +164,13 @@ func buildMultiUnitUsageFromUsageReport(
 
 	ratingGroupUnitUsagesMap = make(map[int32]models.ChfConvergedChargingMultipleUnitUsage)
 	for _, ur := range smContext.UrrReports {
-		logger.ChargingLog.Infof("@@@ Processing Usage Report: URR ID=%d, ReportType=%s", ur.UrrId, ur.ReportTpye)
+		logger.ChargingLog.Debugf("Processing Usage Report: URR ID=%d, ReportType=%s", ur.UrrId, ur.ReportTpye)
 		if ur.ReportTpye != "" {
 			var triggers []models.ChfConvergedChargingTrigger
 
 			chgInfo := smContext.ChargingInfo[ur.UrrId]
 			if chgInfo == nil {
-				logger.PduSessLog.Warnf("@@@ URR %d is not in ChargingInfo map!", ur.UrrId)
+				logger.PduSessLog.Warnf("URR %d is not in ChargingInfo map!", ur.UrrId)
 				continue
 			}
 
