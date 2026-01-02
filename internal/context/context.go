@@ -9,8 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/oauth"
 	"github.com/free5gc/pfcp/pfcpType"
@@ -19,8 +17,8 @@ import (
 	"github.com/free5gc/util/idgenerator"
 )
 
-func Init() {
-	smfContext.NfInstanceID = uuid.New().String()
+func Init(config *factory.Config) {
+	smfContext.NfInstanceID = config.GetNfInstanceId()
 }
 
 type NFContext interface {
