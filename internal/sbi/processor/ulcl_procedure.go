@@ -21,9 +21,11 @@ func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) err
 	switch bpMGR.AddingPSAState {
 	case context.ActivatingDataPath:
 		for {
+			bpMGR.ActivatingPath = nil
 			// select PSA2
 			bpMGR.SelectPSA2(smContext)
-			if len(bpMGR.ActivatedPaths) == len(smContext.Tunnel.DataPathPool) {
+			if bpMGR.ActivatingPath == nil {
+				smContext.Log.Infoln("No more valid PSA2 path found, finish selection.")
 				break
 			}
 			smContext.AllocateLocalSEIDForDataPath(bpMGR.ActivatingPath)
