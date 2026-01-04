@@ -1,6 +1,7 @@
 package util_oauth_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,7 +38,7 @@ func TestRouterAuthorizationCheck_Check(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 
 	var err error
-	c.Request, err = http.NewRequest("GET", "/", nil)
+	c.Request, err = http.NewRequestWithContext(context.Background(), "GET", "/", nil)
 	if err != nil {
 		t.Errorf("error on http request: %+v", err)
 	}
@@ -78,7 +79,7 @@ func TestRouterAuthorizationCheck_Check(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w = httptest.NewRecorder()
 			c, _ = gin.CreateTestContext(w)
-			c.Request, err = http.NewRequest("GET", "/", nil)
+			c.Request, err = http.NewRequestWithContext(context.Background(), "GET", "/", nil)
 			if err != nil {
 				t.Errorf("error on http request: %+v", err)
 			}
