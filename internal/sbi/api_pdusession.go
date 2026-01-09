@@ -10,8 +10,8 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/free5gc/smf/internal/util"
 	"github.com/free5gc/util/metrics/sbi"
+	"github.com/free5gc/util/validator"
 )
 
 func (s *Server) getPDUSessionRoutes() []Route {
@@ -112,7 +112,7 @@ func (s *Server) HTTPPostSmContexts(c *gin.Context) {
 		return
 	}
 
-	if request.JsonData.Supi != "" && !util.IsValidSupi(request.JsonData.Supi) {
+	if !validator.IsValidSupi(request.JsonData.Supi) {
 		problemDetail := "Invalid SUPI format: " + request.JsonData.Supi
 		logger.PduSessLog.Warnln(problemDetail)
 
