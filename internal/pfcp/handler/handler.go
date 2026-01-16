@@ -136,6 +136,7 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 		logger.PfcpLog.Warnf("PFCP Session Report Request rejected: %+v", err)
 		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
 		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
+		return
 	}
 
 	if smContext.UpCnxState == models.UpCnxState_DEACTIVATED {
