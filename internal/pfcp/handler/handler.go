@@ -28,6 +28,8 @@ func HandlePfcpAssociationSetupRequest(msg *pfcpUdp.Message) {
 	nodeID := req.NodeID
 	if nodeID == nil {
 		logger.PfcpLog.Errorln("pfcp association needs NodeID")
+		cause := pfcpType.Cause{CauseValue: pfcpType.CauseMandatoryIeMissing}
+		pfcp_message.SendPfcpAssociationSetupResponse(msg.RemoteAddr, cause)
 		return
 	}
 	logger.PfcpLog.Infof("Handle PFCP Association Setup Request with NodeID[%s]",
@@ -36,6 +38,8 @@ func HandlePfcpAssociationSetupRequest(msg *pfcpUdp.Message) {
 	upf := smf_context.RetrieveUPFNodeByNodeID(*nodeID)
 	if upf == nil {
 		logger.PfcpLog.Errorf("can't find UPF[%s]", nodeID.ResolveNodeIdToIp().String())
+		cause := pfcpType.Cause{CauseValue: pfcpType.CauseRequestRejected}
+		pfcp_message.SendPfcpAssociationSetupResponse(msg.RemoteAddr, cause)
 		return
 	}
 
