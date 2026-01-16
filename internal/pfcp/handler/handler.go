@@ -58,6 +58,12 @@ func HandlePfcpAssociationReleaseRequest(msg *pfcpUdp.Message) {
 	pfcpMsg := msg.PfcpMessage.Body.(pfcp.PFCPAssociationReleaseRequest)
 
 	var cause pfcpType.Cause
+	if pfcpMsg.NodeID == nil {
+		logger.PfcpLog.Errorln("pfcp association release needs NodeID")
+		cause.CauseValue = pfcpType.CauseMandatoryIeMissing
+		pfcp_message.SendPfcpAssociationReleaseResponse(msg.RemoteAddr, cause)
+		return
+	}
 	upf := smf_context.RetrieveUPFNodeByNodeID(*pfcpMsg.NodeID)
 
 	if upf != nil {
