@@ -124,6 +124,12 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 		return
 	}
 	remoteSEID := pfcpCtx.RemoteSEID
+	if req.ReportType == nil {
+		logger.PfcpLog.Errorf("PFCP Session Report Request missing ReportType")
+		cause.CauseValue = pfcpType.CauseMandatoryIeMissing
+		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, remoteSEID)
+		return
+	}
 
 	upf := smf_context.RetrieveUPFNodeByNodeID(upfNodeID)
 	if upf == nil {
