@@ -147,6 +147,12 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 
 	if smContext.UpCnxState == models.UpCnxState_DEACTIVATED {
 		if req.ReportType.Dldr {
+			if req.DownlinkDataReport == nil {
+				logger.PfcpLog.Errorf("PFCP Session Report Request missing DownlinkDataReport with DLDR flag")
+				cause.CauseValue = pfcpType.CauseMandatoryIeMissing
+				pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, remoteSEID)
+				return
+			}
 			downlinkDataReport := req.DownlinkDataReport
 
 			if downlinkDataReport.DownlinkDataServiceInformation != nil {
