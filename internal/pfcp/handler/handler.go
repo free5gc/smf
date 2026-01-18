@@ -28,6 +28,8 @@ func HandlePfcpAssociationSetupRequest(msg *pfcpUdp.Message) {
 	nodeID := req.NodeID
 	if nodeID == nil {
 		logger.PfcpLog.Errorln("pfcp association needs NodeID")
+		cause := pfcpType.Cause{CauseValue: pfcpType.CauseMandatoryIeMissing}
+		pfcp_message.SendPfcpAssociationSetupResponse(msg.RemoteAddr, cause)
 		return
 	}
 	logger.PfcpLog.Infof("Handle PFCP Association Setup Request with NodeID[%s]",
@@ -36,6 +38,8 @@ func HandlePfcpAssociationSetupRequest(msg *pfcpUdp.Message) {
 	upf := smf_context.RetrieveUPFNodeByNodeID(*nodeID)
 	if upf == nil {
 		logger.PfcpLog.Errorf("can't find UPF[%s]", nodeID.ResolveNodeIdToIp().String())
+		cause := pfcpType.Cause{CauseValue: pfcpType.CauseRequestRejected}
+		pfcp_message.SendPfcpAssociationSetupResponse(msg.RemoteAddr, cause)
 		return
 	}
 
@@ -54,6 +58,12 @@ func HandlePfcpAssociationReleaseRequest(msg *pfcpUdp.Message) {
 	pfcpMsg := msg.PfcpMessage.Body.(pfcp.PFCPAssociationReleaseRequest)
 
 	var cause pfcpType.Cause
+	if pfcpMsg.NodeID == nil {
+		logger.PfcpLog.Errorln("pfcp association release needs NodeID")
+		cause.CauseValue = pfcpType.CauseMandatoryIeMissing
+		pfcp_message.SendPfcpAssociationReleaseResponse(msg.RemoteAddr, cause)
+		return
+	}
 	upf := smf_context.RetrieveUPFNodeByNodeID(*pfcpMsg.NodeID)
 
 	if upf != nil {
@@ -114,6 +124,12 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 		return
 	}
 	remoteSEID := pfcpCtx.RemoteSEID
+	if req.ReportType == nil {
+		logger.PfcpLog.Errorf("PFCP Session Report Request missing ReportType")
+		cause.CauseValue = pfcpType.CauseMandatoryIeMissing
+		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, remoteSEID)
+		return
+	}
 
 	upf := smf_context.RetrieveUPFNodeByNodeID(upfNodeID)
 	if upf == nil {
@@ -126,10 +142,17 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 		logger.PfcpLog.Warnf("PFCP Session Report Request rejected: %+v", err)
 		cause.CauseValue = pfcpType.CauseNoEstablishedPfcpAssociation
 		pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, 0)
+		return
 	}
 
 	if smContext.UpCnxState == models.UpCnxState_DEACTIVATED {
 		if req.ReportType.Dldr {
+			if req.DownlinkDataReport == nil {
+				logger.PfcpLog.Errorf("PFCP Session Report Request missing DownlinkDataReport with DLDR flag")
+				cause.CauseValue = pfcpType.CauseMandatoryIeMissing
+				pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, remoteSEID)
+				return
+			}
 			downlinkDataReport := req.DownlinkDataReport
 
 			if downlinkDataReport.DownlinkDataServiceInformation != nil {
@@ -192,6 +215,14 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 	}
 
 	if req.ReportType.Usar && req.UsageReport != nil {
+		for _, report := range req.UsageReport {
+			if report.URRID == nil {
+				logger.PfcpLog.Errorf("PFCP Session Report Request missing URRID in UsageReport")
+				cause.CauseValue = pfcpType.CauseMandatoryIeMissing
+				pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, remoteSEID)
+				return
+			}
+		}
 		smContext.HandleReports(req.UsageReport, nil, nil, upfNodeID, "")
 		// After receiving the Usage Report, it should send charging request to the CHF
 		// and update the URR with the quota or other charging information according to
