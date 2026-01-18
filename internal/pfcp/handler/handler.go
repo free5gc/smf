@@ -215,6 +215,14 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 	}
 
 	if req.ReportType.Usar && req.UsageReport != nil {
+		for _, report := range req.UsageReport {
+			if report.URRID == nil {
+				logger.PfcpLog.Errorf("PFCP Session Report Request missing URRID in UsageReport")
+				cause.CauseValue = pfcpType.CauseMandatoryIeMissing
+				pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, remoteSEID)
+				return
+			}
+		}
 		smContext.HandleReports(req.UsageReport, nil, nil, upfNodeID, "")
 		// After receiving the Usage Report, it should send charging request to the CHF
 		// and update the URR with the quota or other charging information according to
