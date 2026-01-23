@@ -477,7 +477,15 @@ func deletePfcpSession(upf *smf_context.UPF, ctx *smf_context.SMContext, resCh c
 	}
 
 	rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionDeletionResponse)
-	if rsp.Cause != nil && rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
+	if rsp.Cause == nil {
+		logger.PduSessLog.Errorf("PFCP Session Deletion Response missing Cause")
+		resCh <- SendPfcpResult{
+			Status: smf_context.SessionReleaseFailed,
+			Err:    fmt.Errorf("missing Cause in PFCP Session Deletion Response"),
+		}
+		return
+	}
+	if rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
 		logger.PduSessLog.Info("Received PFCP Session Deletion Accepted Response")
 		resCh <- SendPfcpResult{
 			Status: smf_context.SessionReleaseSuccess,
