@@ -149,6 +149,14 @@ func establishPfcpSession(smContext *smf_context.SMContext,
 		}
 		return
 	}
+	if rsp.NodeID == nil {
+		logger.PduSessLog.Errorf("PFCP Session Establishment Response missing NodeID")
+		resCh <- SendPfcpResult{
+			Status: smf_context.SessionEstablishFailed,
+			Err:    fmt.Errorf("missing NodeID in PFCP Session Establishment Response"),
+		}
+		return
+	}
 	if rsp.UPFSEID != nil {
 		NodeIDtoIP := rsp.NodeID.ResolveNodeIdToIp().String()
 		pfcpSessionCtx := smContext.PFCPContext[NodeIDtoIP]
