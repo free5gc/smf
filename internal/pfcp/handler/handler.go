@@ -222,6 +222,12 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 				pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, remoteSEID)
 				return
 			}
+			if report.UsageReportTrigger == nil {
+				logger.PfcpLog.Errorf("PFCP Session Report Request missing UsageReportTrigger in UsageReport")
+				cause.CauseValue = pfcpType.CauseMandatoryIeMissing
+				pfcp_message.SendPfcpSessionReportResponse(msg.RemoteAddr, cause, seqFromUPF, remoteSEID)
+				return
+			}
 		}
 		smContext.HandleReports(req.UsageReport, nil, nil, upfNodeID, "")
 		// After receiving the Usage Report, it should send charging request to the CHF

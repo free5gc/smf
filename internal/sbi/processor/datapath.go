@@ -141,13 +141,29 @@ func establishPfcpSession(smContext *smf_context.SMContext,
 	}
 
 	rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionEstablishmentResponse)
+	if rsp.Cause == nil {
+		logger.PduSessLog.Errorf("PFCP Session Establishment Response missing Cause")
+		resCh <- SendPfcpResult{
+			Status: smf_context.SessionEstablishFailed,
+			Err:    fmt.Errorf("missing Cause in PFCP Session Establishment Response"),
+		}
+		return
+	}
+	if rsp.NodeID == nil {
+		logger.PduSessLog.Errorf("PFCP Session Establishment Response missing NodeID")
+		resCh <- SendPfcpResult{
+			Status: smf_context.SessionEstablishFailed,
+			Err:    fmt.Errorf("missing NodeID in PFCP Session Establishment Response"),
+		}
+		return
+	}
 	if rsp.UPFSEID != nil {
 		NodeIDtoIP := rsp.NodeID.ResolveNodeIdToIp().String()
 		pfcpSessionCtx := smContext.PFCPContext[NodeIDtoIP]
 		pfcpSessionCtx.RemoteSEID = rsp.UPFSEID.Seid
 	}
 
-	if rsp.Cause != nil && rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
+	if rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
 		logger.PduSessLog.Infoln("Received PFCP Session Establishment Accepted Response")
 		resCh <- SendPfcpResult{
 			Status: smf_context.SessionEstablishSuccess,
@@ -461,7 +477,15 @@ func deletePfcpSession(upf *smf_context.UPF, ctx *smf_context.SMContext, resCh c
 	}
 
 	rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionDeletionResponse)
-	if rsp.Cause != nil && rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
+	if rsp.Cause == nil {
+		logger.PduSessLog.Errorf("PFCP Session Deletion Response missing Cause")
+		resCh <- SendPfcpResult{
+			Status: smf_context.SessionReleaseFailed,
+			Err:    fmt.Errorf("missing Cause in PFCP Session Deletion Response"),
+		}
+		return
+	}
+	if rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
 		logger.PduSessLog.Info("Received PFCP Session Deletion Accepted Response")
 		resCh <- SendPfcpResult{
 			Status: smf_context.SessionReleaseSuccess,
