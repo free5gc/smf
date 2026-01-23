@@ -141,13 +141,21 @@ func establishPfcpSession(smContext *smf_context.SMContext,
 	}
 
 	rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionEstablishmentResponse)
+	if rsp.Cause == nil {
+		logger.PduSessLog.Errorf("PFCP Session Establishment Response missing Cause")
+		resCh <- SendPfcpResult{
+			Status: smf_context.SessionEstablishFailed,
+			Err:    fmt.Errorf("missing Cause in PFCP Session Establishment Response"),
+		}
+		return
+	}
 	if rsp.UPFSEID != nil {
 		NodeIDtoIP := rsp.NodeID.ResolveNodeIdToIp().String()
 		pfcpSessionCtx := smContext.PFCPContext[NodeIDtoIP]
 		pfcpSessionCtx.RemoteSEID = rsp.UPFSEID.Seid
 	}
 
-	if rsp.Cause != nil && rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
+	if rsp.Cause.CauseValue == pfcpType.CauseRequestAccepted {
 		logger.PduSessLog.Infoln("Received PFCP Session Establishment Accepted Response")
 		resCh <- SendPfcpResult{
 			Status: smf_context.SessionEstablishSuccess,
