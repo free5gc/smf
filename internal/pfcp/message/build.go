@@ -181,6 +181,20 @@ func qerToCreateQER(qer *context.QER) *pfcp.CreateQER {
 	return createQER
 }
 
+func qerToUpdateQER(qer *context.QER) *pfcp.UpdateQER {
+	updateQER := new(pfcp.UpdateQER)
+
+	updateQER.QERID = new(pfcpType.QERID)
+	updateQER.QERID.QERID = qer.QERID
+	updateQER.GateStatus = qer.GateStatus
+
+	updateQER.QoSFlowIdentifier = &qer.QFI
+	updateQER.MaximumBitrate = qer.MBR
+	updateQER.GuaranteedBitrate = qer.GBR
+
+	return updateQER
+}
+
 func urrToCreateURR(urr *context.URR) *pfcp.CreateURR {
 	createURR := new(pfcp.CreateURR)
 
@@ -561,8 +575,11 @@ func BuildPfcpSessionModificationRequest(
 	}
 
 	for _, qer := range qerList {
-		if qer.State == context.RULE_INITIAL {
+		switch qer.State {
+		case context.RULE_INITIAL:
 			msg.CreateQER = append(msg.CreateQER, qerToCreateQER(qer))
+		case context.RULE_UPDATE:
+			msg.UpdateQER = append(msg.UpdateQER, qerToUpdateQER(qer))
 		}
 		qer.State = context.RULE_CREATE
 	}
