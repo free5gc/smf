@@ -20,12 +20,16 @@ func (smContext *SMContext) HandleReports(
 	for _, report := range usageReportRequest {
 		usageReport.UrrId = report.URRID.UrrIdValue
 		usageReport.UpfId = upfId
-		usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
-		usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
-		usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
-		usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
-		usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
-		usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
+		if report.VolumeMeasurement == nil {
+			logger.PduSessLog.Warnf("UsageReportRequest missing VolumeMeasurement for URRID[%d]", report.URRID.UrrIdValue)
+		} else {
+			usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
+			usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
+			usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
+			usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
+			usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
+			usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
+		}
 		usageReport.ReportTpye = identityTriggerType(report.UsageReportTrigger)
 
 		if reportTpye != "" {
@@ -37,12 +41,16 @@ func (smContext *SMContext) HandleReports(
 	for _, report := range usageReportModification {
 		usageReport.UrrId = report.URRID.UrrIdValue
 		usageReport.UpfId = upfId
-		usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
-		usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
-		usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
-		usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
-		usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
-		usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
+		if report.VolumeMeasurement == nil {
+			logger.PduSessLog.Warnf("UsageReportModification missing VolumeMeasurement for URRID[%d]", report.URRID.UrrIdValue)
+		} else {
+			usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
+			usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
+			usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
+			usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
+			usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
+			usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
+		}
 		usageReport.ReportTpye = identityTriggerType(report.UsageReportTrigger)
 
 		if reportTpye != "" {
@@ -54,12 +62,16 @@ func (smContext *SMContext) HandleReports(
 	for _, report := range usageReportDeletion {
 		usageReport.UrrId = report.URRID.UrrIdValue
 		usageReport.UpfId = upfId
-		usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
-		usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
-		usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
-		usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
-		usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
-		usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
+		if report.VolumeMeasurement == nil {
+			logger.PduSessLog.Warnf("UsageReportDeletion missing VolumeMeasurement for URRID[%d]", report.URRID.UrrIdValue)
+		} else {
+			usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
+			usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
+			usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
+			usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
+			usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
+			usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
+		}
 		usageReport.ReportTpye = identityTriggerType(report.UsageReportTrigger)
 
 		if reportTpye != "" {

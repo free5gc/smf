@@ -3,6 +3,8 @@ package context
 import (
 	"github.com/free5gc/openapi/models"
 	"reflect"
+
+	"github.com/free5gc/openapi/models"
 )
 
 type BPManager struct {

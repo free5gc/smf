@@ -14,6 +14,7 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/google/uuid"
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
@@ -25,6 +26,7 @@ const (
 	SmfDefaultPrivateKeyPath     = "./cert/smf.key"
 	SmfDefaultConfigPath         = "./config/smfcfg.yaml"
 	SmfDefaultUERoutingPath      = "./config/uerouting.yaml"
+	SmfDefaultNfInstanceIdEnvVar = "SMF_NF_INSTANCE_ID"
 	SmfSbiDefaultIPv4            = "127.0.0.2"
 	SmfSbiDefaultPort            = 8000
 	SmfSbiDefaultScheme          = "https"
@@ -85,6 +87,7 @@ func (i *Info) validate() (bool, error) {
 
 type Configuration struct {
 	SmfName              string               `yaml:"smfName" valid:"type(string),required"`
+	NfInstanceId         string               `yaml:"nfInstanceId,omitempty" valid:"optional,uuidv4"`
 	Sbi                  *Sbi                 `yaml:"sbi" valid:"required"`
 	Metrics              *Metrics             `yaml:"metrics,omitempty" valid:"optional"`
 	PFCP                 *PFCP                `yaml:"pfcp" valid:"required"`
@@ -111,6 +114,10 @@ type Logger struct {
 }
 
 func (c *Configuration) validate() (bool, error) {
+	if c.NfInstanceId == "" {
+		c.NfInstanceId = uuid.New().String()
+	}
+
 	if sbi := c.Sbi; sbi != nil {
 		if result, err := sbi.validate(); err != nil {
 			return result, err
@@ -264,6 +271,31 @@ func (m *Metrics) validate() (bool, error) {
 		return false, error(errs)
 	}
 	return true, nil
+}
+
+func (c *Config) GetNfInstanceId() string {
+	c.RLock()
+	defer c.RUnlock()
+
+	var nfInstanceId string
+
+	logger.CfgLog.Debugf("Fetching nfInstanceId from env var \"%s\"", SmfDefaultNfInstanceIdEnvVar)
+
+	if nfInstanceId = os.Getenv(SmfDefaultNfInstanceIdEnvVar); nfInstanceId == "" {
+		logger.CfgLog.Debugf("No value found for \"%s\" env, fallback on config nfInstanceId : %s",
+			SmfDefaultNfInstanceIdEnvVar, c.Configuration.NfInstanceId)
+		return c.Configuration.NfInstanceId
+	}
+
+	if err := uuid.Validate(nfInstanceId); err != nil {
+		logger.CfgLog.Errorf("Env var \"%s\" is not a valid uuid, "+
+			"fallback on configuration nfInstanceId : %s", SmfDefaultNfInstanceIdEnvVar, c.Configuration.NfInstanceId)
+		return c.Configuration.NfInstanceId
+	}
+
+	logger.CfgLog.Debugf("nfInstanceId from %s : %s", SmfDefaultNfInstanceIdEnvVar, nfInstanceId)
+
+	return nfInstanceId
 }
 
 type Sbi struct {
