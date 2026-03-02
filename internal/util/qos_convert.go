@@ -6,36 +6,45 @@ import (
 	"strings"
 
 	"github.com/free5gc/ngap/ngapType"
+	"github.com/free5gc/smf/internal/logger"
 )
 
 func BitRateTokbps(bitrate string) (uint64, error) {
 	s := strings.Split(bitrate, " ")
 	var kbps uint64
 
-	var digit int
+	var digit uint64
 
-	if n, err := strconv.Atoi(s[0]); err != nil {
+	if bitrate == "" {
+		logger.UtilLog.Debugf("BitRateTokbps: bitrate is empty string, returning 0")
 		return 0, nil
-	} else {
-		digit = n
 	}
 
-	if len(s) == 1 {
-		return 0, errors.New("cannot get the unit of ULMBR/DLMBR/ULGBR/DLGBR, please check the settings in web console")
+	if len(s) < 2 {
+		return 0, errors.New("invalid bitrate format")
+	}
+
+	if f, err := strconv.ParseFloat(s[0], 64); err != nil {
+		return 0, errors.New("invalid bitrate value")
+	} else {
+		digit = uint64(f)
 	}
 
 	switch s[1] {
 	case "bps":
-		kbps = uint64(digit / 1000)
+		kbps = digit / 1000
 	case "Kbps":
-		kbps = uint64(digit * 1)
+		kbps = digit * 1
 	case "Mbps":
-		kbps = uint64(digit * 1000)
+		kbps = digit * 1000
 	case "Gbps":
-		kbps = uint64(digit * 1000000)
+		kbps = digit * 1000000
 	case "Tbps":
-		kbps = uint64(digit * 1000000000)
+		kbps = digit * 1000000000
+	default:
+		logger.UtilLog.Errorf("BitRateTokbps: unknown unit: '%s' in bitrate: '%s'", s[1], bitrate)
 	}
+	logger.UtilLog.Debugf("BitRateTokbps: input='%s' -> digit=%d, unit='%s', result kbps=%d", bitrate, digit, s[1], kbps)
 	return kbps, nil
 }
 

@@ -420,6 +420,9 @@ func (c *SMContext) getSrcTgtQosData(
 	if tgtQosData == nil {
 		// no TcData in decision, use source TcData as target TcData
 		tgtQosData = srcQosData
+		logger.CtxLog.Debugf("getSrcTgtQosData[%s]: No target QosData in decision, use source", qosID)
+	} else {
+		logger.CtxLog.Debugf("getSrcTgtQosData[%s]: Found target QosData in decision. Target: %+v", qosID, tgtQosData)
 	}
 	return srcQosData, tgtQosData
 }

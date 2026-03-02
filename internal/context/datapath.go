@@ -1275,6 +1275,7 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 	if qos == nil && qfi != 1 {
 		return
 	}
+	logger.PduSessLog.Debugf("AddQoS called: QFI=%d, QosData=%+v", qfi, qos)
 	for node := p.FirstDPNode; node != nil; node = node.Next() {
 		var qer *QER
 
@@ -1282,6 +1283,7 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 		id := getQosIdKey(currentUUID, qfi)
 
 		if qerId, ok := smContext.QerUpfMap[id]; !ok {
+			logger.PduSessLog.Debugf("AddQoS: QER not exist for ID=%s, creating new QER", id)
 			if newQER, err := node.UPF.AddQER(); err != nil {
 				logger.PduSessLog.Errorln("new QER failed")
 				return
@@ -1294,6 +1296,9 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 					DLGate: pfcpType.GateOpen,
 				}
 				if isGBRFlow(qos) {
+					logger.PduSessLog.Debugf("AddQoS: GBR flow detected for QFI=%d", qfi)
+					logger.PduSessLog.Debugf("AddQoS GBR fields: GbrUl='%s', GbrDl='%s', MaxbrUl='%s', MaxbrDl='%s'",
+						qos.GbrUl, qos.GbrDl, qos.MaxbrUl, qos.MaxbrDl)
 					var bitRateKbpsQoSGBRUL uint64
 					var bitRateKbpsQoSGBRDL uint64
 					var bitRateKbpsQoSMBRUL uint64
@@ -1323,6 +1328,8 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 						return
 					}
 
+					logger.PduSessLog.Debugf("AddQoS: Setting GBR/MBR on QER: ULGBR=%d, DLGBR=%d, ULMBR=%d, DLMBR=%d",
+						bitRateKbpsQoSGBRUL, bitRateKbpsQoSGBRDL, bitRateKbpsQoSMBRUL, bitRateKbpsQoSMBRDL)
 					newQER.GBR = &pfcpType.GBR{
 						ULGBR: bitRateKbpsQoSGBRUL,
 						DLGBR: bitRateKbpsQoSGBRDL,
@@ -1332,6 +1339,7 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 						DLMBR: bitRateKbpsQoSMBRDL,
 					}
 				} else {
+					logger.PduSessLog.Debugf("AddQoS: Non-GBR flow for QFI=%d", qfi)
 					var bitRateKbpsSessionAmbrMBRUL uint64
 					var bitRateKbpsSessionAmbrMBRDL uint64
 					var bitRateConvertErr error
@@ -1354,9 +1362,13 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 				}
 				qer = newQER
 			}
+			logger.PduSessLog.Debugf("AddQoS: New QER created with ID=%s, QERID=%d", id, qer.QERID)
 			smContext.QerUpfMap[id] = qer.QERID
-		} else if oldQER := node.UPF.GetQERById(qerId); ok {
+		} else {
+			logger.PduSessLog.Debugf("AddQoS: QER already exists for ID=%s, qerId=%d, retrieving existing QER", id, qerId)
+			oldQER := node.UPF.GetQERById(qerId)
 			if oldQER != nil {
+				logger.PduSessLog.Debugf("AddQoS: Using existing QER with QERID=%d", qerId)
 				qer = oldQER
 			}
 		}
