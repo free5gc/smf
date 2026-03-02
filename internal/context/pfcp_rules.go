@@ -116,6 +116,7 @@ func isUrrExist(urrs []*URR, urr *URR) bool { // check if urr is in URRs list
 	}
 	return false
 }
+
 func (c *SMContext) RegisterUrr(upfId string, urr *URR) *URR {
 	c.UrrTableMutex.Lock()
 	defer c.UrrTableMutex.Unlock()
@@ -132,6 +133,7 @@ func (c *SMContext) RegisterUrr(upfId string, urr *URR) *URR {
 	}
 	return cloned
 }
+
 func (c *SMContext) SetUrrState(upfId string, urrID uint32, state RuleState) {
 	c.UrrTableMutex.Lock()
 	defer c.UrrTableMutex.Unlock()
@@ -146,6 +148,7 @@ func (c *SMContext) SetUrrState(upfId string, urrID uint32, state RuleState) {
 		logger.PduSessLog.Warnf("SetUrrState: URR[%d] not found for UPF[%s]", urrID, upfId)
 	}
 }
+
 func (c *SMContext) GetUrrRule(upfId string, urrID uint32) *URR {
 	c.UrrTableMutex.RLock()
 	defer c.UrrTableMutex.RUnlock()
@@ -156,6 +159,7 @@ func (c *SMContext) GetUrrRule(upfId string, urrID uint32) *URR {
 	}
 	return nil
 }
+
 func (c *SMContext) GetUrrState(upfId string, urrID uint32) RuleState {
 	c.UrrTableMutex.RLock()
 	defer c.UrrTableMutex.RUnlock()
@@ -166,6 +170,7 @@ func (c *SMContext) GetUrrState(upfId string, urrID uint32) RuleState {
 	}
 	return RULE_INITIAL // default state if not found
 }
+
 func (urr *URR) Clone() *URR {
 	copied := *urr
 	return &copied
