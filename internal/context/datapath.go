@@ -1366,11 +1366,10 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) 
 			smContext.QerUpfMap[id] = qer.QERID
 		} else {
 			logger.PduSessLog.Debugf("AddQoS: QER already exists for ID=%s, qerId=%d, retrieving existing QER", id, qerId)
-			if oldQER := node.UPF.GetQERById(qerId); ok {
-				if oldQER != nil {
-					logger.PduSessLog.Debugf("AddQoS: Using existing QER with QERID=%d", qerId)
-					qer = oldQER
-				}
+			oldQER := node.UPF.GetQERById(qerId)
+			if oldQER != nil {
+				logger.PduSessLog.Debugf("AddQoS: Using existing QER with QERID=%d", qerId)
+				qer = oldQER
 			}
 		}
 		if qer != nil {
