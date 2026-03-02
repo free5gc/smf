@@ -652,6 +652,27 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					ULPDR.State = smf_context.RULE_INITIAL
 					ULPDR.FAR.State = smf_context.RULE_INITIAL
 
+					existUrr := make(map[uint32]bool)
+					for _, urr := range urrList {
+						existUrr[urr.URRID] = true
+					}
+					if DLPDR.URR != nil {
+						for _, urr := range DLPDR.URR {
+							urr.State = smf_context.RULE_INITIAL
+							if !existUrr[urr.URRID] {
+								urrList, existUrr[urr.URRID] = append(urrList, urr), true
+							}
+						}
+					}
+					if ULPDR.URR != nil {
+						for _, urr := range ULPDR.URR {
+							urr.State = smf_context.RULE_INITIAL
+							if !existUrr[urr.URRID] {
+								urrList, existUrr[urr.URRID] = append(urrList, urr), true
+							}
+						}
+					}
+
 					pdrList = append(pdrList, DLPDR)
 					farList = append(farList, DLPDR.FAR)
 
@@ -718,6 +739,27 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					DLPDR.State = smf_context.RULE_REMOVE
 					DLPDR.FAR.State = smf_context.RULE_REMOVE
 
+					existUrr := make(map[uint32]bool)
+					for _, urr := range urrList {
+						existUrr[urr.URRID] = true
+					}
+					if DLPDR.URR != nil {
+						for _, urr := range DLPDR.URR {
+							urr.State = smf_context.RULE_INITIAL
+							if !existUrr[urr.URRID] {
+								urrList, existUrr[urr.URRID] = append(urrList, urr), true
+							}
+						}
+					}
+					if ULPDR.URR != nil {
+						for _, urr := range ULPDR.URR {
+							urr.State = smf_context.RULE_INITIAL
+							if !existUrr[urr.URRID] {
+								urrList, existUrr[urr.URRID] = append(urrList, urr), true
+							}
+						}
+					}
+
 					pdrList = append(pdrList, ULPDR)
 					farList = append(farList, ULPDR.FAR)
 
@@ -775,6 +817,27 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 							ULPDR.State = smf_context.RULE_INITIAL
 							ULPDR.FAR.State = smf_context.RULE_INITIAL
 
+							existUrr := make(map[uint32]bool)
+							for _, urr := range urrList {
+								existUrr[urr.URRID] = true
+							}
+							if DLPDR.URR != nil {
+								for _, urr := range DLPDR.URR {
+									urr.State = smf_context.RULE_INITIAL
+									if !existUrr[urr.URRID] {
+										urrList, existUrr[urr.URRID] = append(urrList, urr), true
+									}
+								}
+							}
+							if ULPDR.URR != nil {
+								for _, urr := range ULPDR.URR {
+									urr.State = smf_context.RULE_INITIAL
+									if !existUrr[urr.URRID] {
+										urrList, existUrr[urr.URRID] = append(urrList, urr), true
+									}
+								}
+							}
+
 							pdrList = append(pdrList, DLPDR)
 							farList = append(farList, DLPDR.FAR)
 
@@ -794,6 +857,19 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 							DLPDR.State = smf_context.RULE_REMOVE
 							DLPDR.FAR.State = smf_context.RULE_REMOVE
+
+							existUrr := make(map[uint32]bool)
+							for _, urr := range urrList {
+								existUrr[urr.URRID] = true
+							}
+							if DLPDR.URR != nil {
+								for _, urr := range DLPDR.URR {
+									urr.State = smf_context.RULE_INITIAL
+									if !existUrr[urr.URRID] {
+										urrList, existUrr[urr.URRID] = append(urrList, urr), true
+									}
+								}
+							}
 
 							pdrList = append(pdrList, DLPDR)
 							farList = append(farList, DLPDR.FAR)
