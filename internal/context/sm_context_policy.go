@@ -84,40 +84,60 @@ func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) 
 		}
 	}
 
-	for _, flowPcc := range pccRules {
-		if chgLevel, err := flowPcc.IdentifyChargingLevel(); err != nil {
-			continue
-		} else if chgLevel == FlowCharging {
-			for node := flowPcc.Datapath.FirstDPNode; node != nil; node = node.Next() {
-				if node.IsAnchorUPF() {
-					// only the traffic on the PSA UPF will be charged
-					if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-						node.UpLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
-					}
-					if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-						node.DownLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
-					}
+	for _, dataPath := range c.Tunnel.DataPathPool {
+		for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
+			// only the traffic on the PSA UPF will be charged
+			if node.IsAnchorUPF() {
+				upfID := node.UPF.UUID()
+				var clonedUrrs []*URR
+				for _, urr := range pduLevelChargingUrrs {
+					cloned := c.RegisterUrr(upfID, urr)
+					clonedUrrs = append(clonedUrrs, cloned)
+				}
+				if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
+					node.UpLinkTunnel.PDR.AppendURRs(clonedUrrs)
+				}
+				if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
+					node.DownLinkTunnel.PDR.AppendURRs(clonedUrrs)
 				}
 			}
 		}
 	}
 
-	defaultPath := c.Tunnel.DataPathPool.GetDefaultPath()
-	if defaultPath == nil {
-		logger.CtxLog.Errorln("No default data path")
-		return
-	}
+	// for _, flowPcc := range pccRules {
+	// 	if chgLevel, err := flowPcc.IdentifyChargingLevel(); err != nil {
+	// 		continue
+	// 	} else if chgLevel == FlowCharging {
+	// 		for node := flowPcc.Datapath.FirstDPNode; node != nil; node = node.Next() {
+	// 			if node.IsAnchorUPF() {
+	// 				// only the traffic on the PSA UPF will be charged
+	// 				if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
+	// 					node.UpLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
+	// 				}
+	// 				if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
+	// 					node.DownLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }
 
-	for node := defaultPath.FirstDPNode; node != nil; node = node.Next() {
-		if node.IsAnchorUPF() {
-			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-				node.UpLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
-			}
-			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-				node.DownLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
-			}
-		}
-	}
+	// defaultPath := c.Tunnel.DataPathPool.GetDefaultPath()
+	// if defaultPath == nil {
+	// 	logger.CtxLog.Errorln("No default data path")
+	// 	return
+	// }
+
+	// for node := defaultPath.FirstDPNode; node != nil; node = node.Next() {
+	// 	if node.IsAnchorUPF() {
+	// 		if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
+	// 			node.UpLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
+	// 		}
+	// 		if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
+	// 			node.DownLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
+	// 		}
+	// 	}
+	// }
 }
 
 func (c *SMContext) ApplyPccRules(

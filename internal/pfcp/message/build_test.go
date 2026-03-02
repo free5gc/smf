@@ -79,8 +79,6 @@ func initRuleList() ([]*context.PDR, []*context.FAR, []*context.BAR,
 
 	testURR := &context.URR{
 		URRID: uint32(123),
-		// State Can be RULE_INITIAL or RULE_UPDATE or RULE_REMOVE
-		State: context.RULE_INITIAL,
 	}
 	pdrList := make([]*context.PDR, 0)
 	farList := make([]*context.FAR, 0)
@@ -158,9 +156,10 @@ func TestBuildPfcpSessionEstablishmentRequest(t *testing.T) {
 	smctx := context.NewSMContext("imsi-208930000000001", 10)
 	pdrList, farList, barList, qerList, urrList := initRuleList()
 	smctx.PFCPContext["10.4.0.1"] = &context.PFCPSessionContext{}
+	smctx.RegisterUrr("test-uuid", urrList[0])
 
 	req, err := message.BuildPfcpSessionEstablishmentRequest(
-		*testNodeID, "10.4.0.1", smctx, pdrList, farList, barList, qerList, urrList)
+		*testNodeID, "10.4.0.1", "test-uuid", smctx, pdrList, farList, barList, qerList, urrList)
 	if err != nil {
 		t.Errorf("TestBuildPfcpSessionEstablishmentRequest failed: %v", err)
 	}
@@ -176,10 +175,10 @@ func TestBuildPfcpSessionEstablishmentRequest(t *testing.T) {
 	assert.Equal(t, farList[0].State, context.RULE_CREATE)
 	assert.Equal(t, barList[0].State, context.RULE_CREATE)
 	assert.Equal(t, qerList[0].State, context.RULE_CREATE)
-	assert.Equal(t, urrList[0].State, context.RULE_CREATE)
+	assert.Equal(t, smctx.GetUrrState("test-uuid", uint32(123)), context.RULE_CREATE)
 
 	req2, err2 := message.BuildPfcpSessionEstablishmentRequest(
-		*testNodeID, "10.4.0.1", smctx, nil, nil, nil, nil, nil)
+		*testNodeID, "10.4.0.1", "test-uuid", smctx, nil, nil, nil, nil, nil)
 	if err2 != nil {
 		t.Errorf("TestBuildPfcpSessionEstablishmentRequest failed: %v", err2)
 	}
@@ -210,9 +209,10 @@ func TestBuildPfcpSessionModificationRequest(t *testing.T) {
 	smctx := context.NewSMContext("imsi-208930000000001", 10)
 	pdrList, farList, barList, qerList, urrList := initRuleList()
 	smctx.PFCPContext["10.4.0.1"] = &context.PFCPSessionContext{}
+	smctx.RegisterUrr("test-uuid", urrList[0])
 
 	req, err := message.BuildPfcpSessionModificationRequest(
-		*testNodeID, "10.4.0.1", smctx, pdrList, farList, barList, qerList, urrList)
+		*testNodeID, "10.4.0.1", "test-uuid", smctx, pdrList, farList, barList, qerList, urrList)
 	if err != nil {
 		t.Errorf("TestBuildPfcpSessionModificationRequest failed: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestBuildPfcpSessionModificationRequest(t *testing.T) {
 	assert.Equal(t, context.RULE_CREATE, farList[0].State)
 	assert.Equal(t, context.RULE_INITIAL, barList[0].State)
 	assert.Equal(t, context.RULE_CREATE, qerList[0].State)
-	assert.Equal(t, context.RULE_CREATE, urrList[0].State)
+	assert.Equal(t, context.RULE_CREATE, smctx.GetUrrState("test-uuid", uint32(123)))
 
 	assert.Equal(t, len(req.CreatePDR), 1)
 	assert.Equal(t, len(req.CreateFAR), 1)
