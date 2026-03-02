@@ -803,6 +803,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 							pdrList = append(pdrList, DLPDR)
 							farList = append(farList, DLPDR.FAR)
+							urrList = append(urrList, DLPDR.URR...)
 						}
 					}
 					smContext.NrdcIndicator, sendPFCPModification = true, true
