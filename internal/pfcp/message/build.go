@@ -439,17 +439,23 @@ func BuildPfcpSessionEstablishmentRequest(
 	for _, urr := range urrList {
 		urrMap[urr.URRID] = urr
 	}
+	smContext.Log.Infof("[BuildEstReq] UPF=%s urrList=%d unique_urrs=%d", upfUUID, len(urrList), len(urrMap))
 	for _, filteredURR := range urrMap {
 		// Only create URR if it's in RULE_INITIAL state
 		// URRs with State=RULE_CREATE are already in UPF, skip them
 		currentState := smContext.GetUrrState(upfUUID, filteredURR.URRID)
+		inRegistry := smContext.GetUrrRule(upfUUID, filteredURR.URRID) != nil
+
+		smContext.Log.Infof("[BuildEstReq] URR[%d] inRegistry=%v stateInTable=%v",
+			filteredURR.URRID, inRegistry, currentState)
 
 		if currentState == context.RULE_INITIAL {
 			msg.CreateURR = append(msg.CreateURR, urrToCreateURR(filteredURR))
 			smContext.SetUrrState(upfUUID, filteredURR.URRID, context.RULE_CREATE)
+			smContext.Log.Infof("[BuildEstReq] URR[%d] → CreateURR (sent to UPF)", filteredURR.URRID)
 		} else {
 			// URR already exists in UPF, no action needed
-			smContext.Log.Tracef("URR %d already created, skipping", filteredURR.URRID)
+			smContext.Log.Infof("[BuildEstReq] URR[%d] → SKIPPED (state=%v)", filteredURR.URRID, currentState)
 		}
 	}
 
@@ -579,24 +585,31 @@ func BuildPfcpSessionModificationRequest(
 	for _, urr := range urrList {
 		urrMap[urr.URRID] = urr
 	}
+	smContext.Log.Infof("[BuildModReq] UPF=%s urrList=%d unique_urrs=%d", upfUUID, len(urrList), len(urrMap))
 	for _, urr := range urrMap {
 		currentState := smContext.GetUrrState(upfUUID, urr.URRID)
+		inRegistry := smContext.GetUrrRule(upfUUID, urr.URRID) != nil
+		smContext.Log.Infof("[BuildModReq] UPF=%s URR[%d] inRegistry=%v stateInTable=%v",
+			upfUUID, urr.URRID, inRegistry, currentState)
 		switch currentState {
 		case context.RULE_INITIAL:
 			msg.CreateURR = append(msg.CreateURR, urrToCreateURR(urr))
 			smContext.SetUrrState(upfUUID, urr.URRID, context.RULE_CREATE)
+			smContext.Log.Infof("[BuildModReq] UPF=%s URR[%d] → CreateURR", upfUUID, urr.URRID)
 		case context.RULE_CREATE:
 			// URR already exists in UPF, no action needed for Session Modification
-			smContext.Log.Tracef("URR %d already created, skipping in Session Modification", urr.URRID)
+			smContext.Log.Infof("[BuildModReq] UPF=%s URR[%d] → SKIPPED (already created)", upfUUID, urr.URRID)
 		case context.RULE_UPDATE:
 			msg.UpdateURR = append(msg.UpdateURR, urrToUpdateURR(urr))
 			smContext.SetUrrState(upfUUID, urr.URRID, context.RULE_CREATE)
+			smContext.Log.Infof("[BuildModReq] UPF=%s URR[%d] → UpdateURR", upfUUID, urr.URRID)
 		case context.RULE_REMOVE:
 			msg.RemoveURR = append(msg.RemoveURR, &pfcp.RemoveURR{
 				URRID: &pfcpType.URRID{
 					UrrIdValue: urr.URRID,
 				},
 			})
+			smContext.Log.Infof("[BuildModReq] UPF=%s URR[%d] → RemoveURR", upfUUID, urr.URRID)
 		case context.RULE_QUERY:
 			msg.QueryURR = append(msg.QueryURR, &pfcp.QueryURR{
 				URRID: &pfcpType.URRID{
@@ -604,6 +617,7 @@ func BuildPfcpSessionModificationRequest(
 				},
 			})
 			smContext.SetUrrState(upfUUID, urr.URRID, context.RULE_CREATE)
+			smContext.Log.Infof("[BuildModReq] UPF=%s URR[%d] → QueryURR", upfUUID, urr.URRID)
 		}
 	}
 

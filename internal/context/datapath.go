@@ -1211,6 +1211,8 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 						return
 					} else {
 						urr = smContext.RegisterUrr(currentUUID, newURR)
+						logger.ChargingLog.Infof("[AddChargingRules] Online URR[%d] registered for UPF=%s RG=%d",
+							urr.URRID, currentUUID, chgData.RatingGroup)
 					}
 
 					chgInfo.ChargingMethod = models.QuotaManagementIndicator_ONLINE_CHARGING
@@ -1223,16 +1225,20 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 						return
 					} else {
 						urr = smContext.RegisterUrr(currentUUID, newURR)
+						logger.ChargingLog.Infof("[AddChargingRules] Offline URR[%d] registered for UPF=%s RG=%d",
+							urr.URRID, currentUUID, chgData.RatingGroup)
 					}
 
 					chgInfo.ChargingMethod = models.QuotaManagementIndicator_OFFLINE_CHARGING
 				}
 			} else {
 				urr = oldURR
+				logger.ChargingLog.Infof("[AddChargingRules] URR[%d] already in registry for UPF=%s RG=%d",
+					urr.URRID, currentUUID, chgData.RatingGroup)
 			}
 
 			if urr != nil {
-				logger.PduSessLog.Tracef("Successfully add URR %d for Rating group %d", urr.URRID, chgData.RatingGroup)
+				logger.PduSessLog.Infof("[AddChargingRules] URR[%d] appended to PDR for UPF=%s RG=%d", urr.URRID, currentUUID, chgData.RatingGroup)
 
 				smContext.ChargingInfo[urr.URRID] = chgInfo
 				if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
