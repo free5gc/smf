@@ -201,7 +201,8 @@ type SMContext struct {
 	// URR
 	UrrIDGenerator     *idgenerator.IDGenerator
 	UrrIdMap           map[UrrType]uint32
-	UrrUpfMap          map[string]*URR
+	UrrTable           map[string]map[uint32]*UrrEntry
+	UrrTableMutex      sync.RWMutex
 	UrrReportTime      time.Duration
 	UrrReportThreshold uint64
 	// Cache the usage reports, sent from UPF
@@ -327,7 +328,7 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 	smContext.UrrIDGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
 	smContext.UrrIdMap = make(map[UrrType]uint32)
 	smContext.GenerateUrrId()
-	smContext.UrrUpfMap = make(map[string]*URR)
+	smContext.UrrTable = make(map[string]map[uint32]*UrrEntry)
 
 	smContext.ChargingInfo = make(map[uint32]*ChargingInfo)
 	smContext.ChargingID = GenerateChargingID()

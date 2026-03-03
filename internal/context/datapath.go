@@ -3,7 +3,6 @@ package context
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/google/uuid"
 
@@ -458,22 +457,12 @@ func (dataPath *DataPath) String() string {
 	return str
 }
 
-func getUrrIdKey(uuid string, urrId uint32) string {
-	return uuid + ":" + strconv.Itoa(int(urrId))
-}
-
-func GetUpfIdFromUrrIdKey(urrIdKey string) string {
-	return strings.Split(urrIdKey, ":")[0]
-}
-
 func (node DataPathNode) addUrrToNode(smContext *SMContext, urrId uint32, isMeasurePkt, isMeasureBeforeQos bool) {
-	var urr *URR
-	var ok bool
-	var err error
 	currentUUID := node.UPF.UUID()
-	id := getUrrIdKey(currentUUID, urrId)
+	urr := smContext.GetUrrRule(currentUUID, urrId)
 
-	if urr, ok = smContext.UrrUpfMap[id]; !ok {
+	if urr == nil {
+		var err error
 		if urr, err = node.UPF.AddURR(urrId,
 			NewMeasureInformation(isMeasurePkt, isMeasureBeforeQos),
 			NewMeasurementPeriod(smContext.UrrReportTime),
@@ -481,6 +470,7 @@ func (node DataPathNode) addUrrToNode(smContext *SMContext, urrId uint32, isMeas
 			logger.PduSessLog.Errorln("new URR failed")
 			return
 		}
+		urr = smContext.RegisterUrr(currentUUID, urr)
 	}
 
 	if urr != nil {
@@ -1209,9 +1199,8 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 			}
 
 			currentUUID := node.UPF.UUID()
-			id := getUrrIdKey(currentUUID, uint32(urrId))
 
-			if oldURR, ok := smContext.UrrUpfMap[id]; !ok {
+			if oldURR := smContext.GetUrrRule(currentUUID, uint32(urrId)); oldURR == nil {
 				// For online charging, the charging trigger "Start of the Service data flow" are needed.
 				// Therefore, the START reporting trigger in the urr are needed to detect the Start of the SDF
 				if chgData.Online {
@@ -1221,7 +1210,9 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 						logger.PduSessLog.Errorln("new URR failed")
 						return
 					} else {
-						urr = newURR
+						urr = smContext.RegisterUrr(currentUUID, newURR)
+						logger.ChargingLog.Infof("[AddChargingRules] Online URR[%d] registered for UPF=%s RG=%d",
+							urr.URRID, currentUUID, chgData.RatingGroup)
 					}
 
 					chgInfo.ChargingMethod = models.QuotaManagementIndicator_ONLINE_CHARGING
@@ -1233,18 +1224,21 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 						logger.PduSessLog.Errorln("new URR failed")
 						return
 					} else {
-						urr = newURR
+						urr = smContext.RegisterUrr(currentUUID, newURR)
+						logger.ChargingLog.Infof("[AddChargingRules] Offline URR[%d] registered for UPF=%s RG=%d",
+							urr.URRID, currentUUID, chgData.RatingGroup)
 					}
 
 					chgInfo.ChargingMethod = models.QuotaManagementIndicator_OFFLINE_CHARGING
 				}
-				smContext.UrrUpfMap[id] = urr
 			} else {
 				urr = oldURR
+				logger.ChargingLog.Infof("[AddChargingRules] URR[%d] already in registry for UPF=%s RG=%d",
+					urr.URRID, currentUUID, chgData.RatingGroup)
 			}
 
 			if urr != nil {
-				logger.PduSessLog.Tracef("Successfully add URR %d for Rating group %d", urr.URRID, chgData.RatingGroup)
+				logger.PduSessLog.Infof("[AddChargingRules] URR[%d] appended to PDR for UPF=%s RG=%d", urr.URRID, currentUUID, chgData.RatingGroup)
 
 				smContext.ChargingInfo[urr.URRID] = chgInfo
 				if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {

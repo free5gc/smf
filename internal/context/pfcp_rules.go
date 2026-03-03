@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/free5gc/pfcp/pfcpType"
+	"github.com/free5gc/smf/internal/logger"
 )
 
 const (
@@ -49,7 +50,11 @@ type URR struct {
 	MeasurementInformation pfcpType.MeasurementInformation
 	VolumeThreshold        uint64
 	VolumeQuota            uint64
-	State                  RuleState
+}
+
+type UrrEntry struct {
+	Rule  *URR      // 規則內容 (RG, Threshold...)
+	State RuleState // 部署狀態 (INITIAL, CREATE...)
 }
 
 type UrrOpt func(urr *URR)
@@ -110,6 +115,65 @@ func isUrrExist(urrs []*URR, urr *URR) bool { // check if urr is in URRs list
 		}
 	}
 	return false
+}
+
+func (c *SMContext) RegisterUrr(upfId string, urr *URR) *URR {
+	c.UrrTableMutex.Lock()
+	defer c.UrrTableMutex.Unlock()
+	if c.UrrTable[upfId] == nil {
+		c.UrrTable[upfId] = make(map[uint32]*UrrEntry)
+	}
+	if entry, exists := c.UrrTable[upfId][urr.URRID]; exists {
+		return entry.Rule // already registered, return existing rule
+	}
+	cloned := urr.Clone()
+	c.UrrTable[upfId][urr.URRID] = &UrrEntry{
+		Rule:  cloned,
+		State: RULE_INITIAL,
+	}
+	return cloned
+}
+
+func (c *SMContext) SetUrrState(upfId string, urrID uint32, state RuleState) {
+	c.UrrTableMutex.Lock()
+	defer c.UrrTableMutex.Unlock()
+
+	if c.UrrTable[upfId] == nil {
+		logger.PduSessLog.Warnf("SetUrrState: UPF[%s] not in UrrTable", upfId)
+		return
+	}
+	if entry, ok := c.UrrTable[upfId][urrID]; ok {
+		entry.State = state
+	} else {
+		logger.PduSessLog.Warnf("SetUrrState: URR[%d] not found for UPF[%s]", urrID, upfId)
+	}
+}
+
+func (c *SMContext) GetUrrRule(upfId string, urrID uint32) *URR {
+	c.UrrTableMutex.RLock()
+	defer c.UrrTableMutex.RUnlock()
+	if entries, ok := c.UrrTable[upfId]; ok {
+		if entry, ok2 := entries[urrID]; ok2 {
+			return entry.Rule
+		}
+	}
+	return nil
+}
+
+func (c *SMContext) GetUrrState(upfId string, urrID uint32) RuleState {
+	c.UrrTableMutex.RLock()
+	defer c.UrrTableMutex.RUnlock()
+	if entries, ok := c.UrrTable[upfId]; ok {
+		if entry, ok2 := entries[urrID]; ok2 {
+			return entry.State
+		}
+	}
+	return RULE_INITIAL // default state if not found
+}
+
+func (urr *URR) Clone() *URR {
+	copied := *urr
+	return &copied
 }
 
 // Packet Detection. 7.5.2.2-2

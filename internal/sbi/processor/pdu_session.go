@@ -657,6 +657,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 					pdrList = append(pdrList, ULPDR)
 					farList = append(farList, ULPDR.FAR)
+
+					urrList = append(urrList, ULPDR.URR...)
+					urrList = append(urrList, DLPDR.URR...)
 				}
 			}
 		}
@@ -780,6 +783,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 							pdrList = append(pdrList, ULPDR)
 							farList = append(farList, ULPDR.FAR)
+
+							urrList = append(urrList, ULPDR.URR...)
+							urrList = append(urrList, DLPDR.URR...)
 						}
 					}
 
@@ -797,6 +803,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 							pdrList = append(pdrList, DLPDR)
 							farList = append(farList, DLPDR.FAR)
+							urrList = append(urrList, DLPDR.URR...)
 						}
 					}
 					smContext.NrdcIndicator, sendPFCPModification = true, true

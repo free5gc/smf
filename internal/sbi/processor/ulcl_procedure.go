@@ -163,14 +163,16 @@ func EstablishULCL(smContext *context.SMContext) error {
 				}
 			}
 
-			// For online charging, create new URR
+			// For online/offline charging, create new URR for PSA2 anchor
 			urrId := pduLevelChargingUrrs[0].URRID
-			if smContext.ChargingInfo[urrId].ChargingMethod == models.QuotaManagementIndicator_ONLINE_CHARGING {
+			if smContext.ChargingInfo[urrId].ChargingMethod == models.QuotaManagementIndicator_ONLINE_CHARGING ||
+				smContext.ChargingInfo[urrId].ChargingMethod == models.QuotaManagementIndicator_OFFLINE_CHARGING {
 				var urr *context.URR
+				currentUUID := curDPNode.UPF.UUID()
 				newChgInfo := &context.ChargingInfo{
 					RatingGroup:   smContext.ChargingInfo[urrId].RatingGroup,
 					ChargingLevel: smContext.ChargingInfo[urrId].ChargingLevel,
-					UpfId:         curDPNode.UPF.UUID(),
+					UpfId:         currentUUID,
 				}
 
 				newUrrId, err := smContext.UrrIDGenerator.Allocate()
@@ -179,10 +181,7 @@ func EstablishULCL(smContext *context.SMContext) error {
 					return err
 				}
 
-				currentUUID := curDPNode.UPF.UUID()
-				id := fmt.Sprintf("%s:%d", currentUUID, newUrrId)
-
-				if oldURR, ok := smContext.UrrUpfMap[id]; !ok {
+				if smContext.ChargingInfo[urrId].ChargingMethod == models.QuotaManagementIndicator_ONLINE_CHARGING {
 					if newURR, err2 := curDPNode.UPF.AddURR(uint32(newUrrId),
 						context.NewMeasureInformation(false, false),
 						context.SetStartOfSDFTrigger()); err2 != nil {
@@ -191,11 +190,20 @@ func EstablishULCL(smContext *context.SMContext) error {
 					} else {
 						urr = newURR
 						newChgInfo.ChargingMethod = models.QuotaManagementIndicator_ONLINE_CHARGING
-						smContext.UrrUpfMap[id] = urr
 					}
 				} else {
-					urr = oldURR
+					if newURR, err2 := curDPNode.UPF.AddURR(uint32(newUrrId),
+						context.NewMeasureInformation(false, false),
+						context.NewVolumeThreshold(smContext.UrrReportThreshold)); err2 != nil {
+						logger.PduSessLog.Errorln("new URR failed")
+						return fmt.Errorf("new URR failed for up node [%s]", currentUUID)
+					} else {
+						urr = newURR
+						newChgInfo.ChargingMethod = models.QuotaManagementIndicator_OFFLINE_CHARGING
+					}
 				}
+
+				smContext.RegisterUrr(currentUUID, urr)
 				smContext.Log.Tracef("Successfully add URR %d for Rating group %d",
 					urr.URRID, smContext.ChargingInfo[urrId].RatingGroup)
 				smContext.ChargingInfo[urr.URRID] = newChgInfo
@@ -284,17 +292,13 @@ func UpdatePSA2DownLink(smContext *context.SMContext) {
 				downLinkPDR.State = context.RULE_INITIAL
 				downLinkPDR.FAR.State = context.RULE_INITIAL
 
-				qerList := []*context.QER{}
-				qerList = append(qerList, downLinkPDR.QER...)
-				urrList := []*context.URR{}
-				urrList = append(urrList, downLinkPDR.URR...)
 				pfcpState := &PFCPState{
 					upf:     node.UPF,
 					pdrList: []*context.PDR{downLinkPDR},
 					farList: []*context.FAR{downLinkPDR.FAR},
 					barList: []*context.BAR{},
-					qerList: qerList,
-					urrList: urrList,
+					qerList: downLinkPDR.QER,
+					urrList: downLinkPDR.URR,
 				}
 
 				curDPNodeIP := node.UPF.NodeID.ResolveNodeIdToIp().String()
