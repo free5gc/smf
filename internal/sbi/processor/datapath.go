@@ -49,6 +49,9 @@ func ActivateUPFSession(
 			qerList := make([]*smf_context.QER, 0, 2)
 			urrList := make([]*smf_context.URR, 0, 2)
 
+			upfName := smf_context.GetUserPlaneInformation().GetUPFNameByIp(node.GetNodeIP())
+			isAnchor := node.IsAnchorUPF()
+
 			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
 				pdrList = append(pdrList, node.UpLinkTunnel.PDR)
 				farList = append(farList, node.UpLinkTunnel.PDR.FAR)
@@ -58,6 +61,12 @@ func ActivateUPFSession(
 				if node.UpLinkTunnel.PDR.URR != nil {
 					urrList = append(urrList, node.UpLinkTunnel.PDR.URR...)
 				}
+				ulUrrIds := make([]uint32, 0, len(node.UpLinkTunnel.PDR.URR))
+				for _, u := range node.UpLinkTunnel.PDR.URR {
+					ulUrrIds = append(ulUrrIds, u.URRID)
+				}
+				logger.PduSessLog.Infof("[ActivateUPFSession] UPF[%s] isAnchor=%v UL-PDR[%d] URR IDs: %v",
+					upfName, isAnchor, node.UpLinkTunnel.PDR.PDRID, ulUrrIds)
 			}
 			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
 				pdrList = append(pdrList, node.DownLinkTunnel.PDR)
@@ -65,6 +74,12 @@ func ActivateUPFSession(
 				if node.DownLinkTunnel.PDR.URR != nil {
 					urrList = append(urrList, node.DownLinkTunnel.PDR.URR...)
 				}
+				dlUrrIds := make([]uint32, 0, len(node.DownLinkTunnel.PDR.URR))
+				for _, u := range node.DownLinkTunnel.PDR.URR {
+					dlUrrIds = append(dlUrrIds, u.URRID)
+				}
+				logger.PduSessLog.Infof("[ActivateUPFSession] UPF[%s] isAnchor=%v DL-PDR[%d] URR IDs: %v",
+					upfName, isAnchor, node.DownLinkTunnel.PDR.PDRID, dlUrrIds)
 				// skip send QER because uplink and downlink shared one QER
 			}
 
@@ -93,7 +108,7 @@ func ActivateUPFSession(
 		for _, urr := range pfcp.urrList {
 			urrIds = append(urrIds, urr.URRID)
 		}
-		logger.PduSessLog.Tracef("[ActivateUPFSession] About to send to UPF[%s]: %d PDRs, %d FARs, %d URRs %v",
+		logger.PduSessLog.Tracef("[ActivateUPFSession] About to send to UPF[%s]: %d PDRs, %d FARs, %d URRs (aggregated IDs: %v)",
 			ip, len(pfcp.pdrList), len(pfcp.farList), len(pfcp.urrList), urrIds)
 		sessionContext, exist := smContext.PFCPContext[ip]
 		if !exist || sessionContext.RemoteSEID == 0 {
