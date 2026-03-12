@@ -73,117 +73,70 @@ func (c *SMContext) RemoveQosFlow(qfi uint8) {
 func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) {
 	var pduLevelChargingUrrs []*URR
 
-	logger.CtxLog.Infof("[PDU Charging] Starting addPduLevelChargingRuleToFlow, total PCC rules: %d", len(pccRules))
-
 	// First, select charging URRs from pcc rule, which charging level is PDU Session level
 	for id, pcc := range pccRules {
 		if chargingLevel, err := pcc.IdentifyChargingLevel(); err != nil {
-			logger.CtxLog.Debugf("[PDU Charging] PCC[%s]: failed to identify charging level: %v", id, err)
 			continue
 		} else if chargingLevel == PduSessionCharging {
-			pduPcc := pccRules[id]
-			pduLevelChargingUrrs = pduPcc.Datapath.GetChargingUrr(c)
-			var pduUrrIds []uint32
-			for _, u := range pduLevelChargingUrrs {
-				pduUrrIds = append(pduUrrIds, u.URRID)
-			}
-			logger.CtxLog.Infof("[PDU Charging] Found PDU session charging in PCC[%s], URR count: %d, URR IDs: %v", id, len(pduLevelChargingUrrs), pduUrrIds)
+			pduLevelChargingUrrs = pccRules[id].Datapath.GetChargingUrr(c)
 			break
-		} else {
-			logger.CtxLog.Debugf("[PDU Charging] PCC[%s]: charging level=%d (not PDU session level)", id, chargingLevel)
 		}
 	}
 
-	logger.CtxLog.Infof("[PDU Charging] PDU-level charging URRs count: %d", len(pduLevelChargingUrrs))
-
-	// Apply PDU-level charging URRs to each PCC rule's data path anchor UPF.
-	// AppendURRs de-duplicates by URRID, so applying to the PDU session charging
-	// rule's own path is harmless.
-	for pccID, pcc := range pccRules {
-		logger.CtxLog.Infof("[PDU Charging] Processing PCC[%s]: Precedence=%d, IsDefaultPath=%v, Datapath=%v",
-			pccID, pcc.Precedence, pcc.Datapath != nil && pcc.Datapath.IsDefaultPath, pcc.Datapath != nil)
-
-		if pcc.Datapath == nil {
-			logger.CtxLog.Warnf("[PDU Charging] PCC[%s]: Datapath is nil, skipping", pccID)
-			continue
-		}
-
-		pathNodes := 0
-		for node := pcc.Datapath.FirstDPNode; node != nil; node = node.Next() {
-			pathNodes++
-			upfID := node.UPF.UUID()
-			upfName := GetUserPlaneInformation().GetUPFNameByIp(node.UPF.NodeID.ResolveNodeIdToIp().String())
-			isAnchor := node.IsAnchorUPF()
-
-			logger.CtxLog.Infof("[PDU Charging] PCC[%s] Node[%d]: UPF=%s, ID=%s, IsAnchor=%v",
-				pccID, pathNodes, upfName, upfID, isAnchor)
-
-			// only the traffic on the PSA UPF will be charged
-			if isAnchor {
-				var clonedUrrs []*URR
-				for _, urr := range pduLevelChargingUrrs {
-					cloned := c.RegisterUrr(upfID, urr)
-					clonedUrrs = append(clonedUrrs, cloned)
-					logger.CtxLog.Debugf("[PDU Charging] PCC[%s] Anchor UPF[%s]: Cloned URR ID=%d", pccID, upfName, cloned.URRID)
-				}
-
-				var appendedIds []uint32
-				for _, u := range pduLevelChargingUrrs {
-					appendedIds = append(appendedIds, u.URRID)
-				}
-				if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-					node.UpLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
-					logger.CtxLog.Infof("[PDU Charging] PCC[%s] Anchor UPF[%s]: Added %d URRs to UpLink PDR, URR IDs: %v", pccID, upfName, len(clonedUrrs), appendedIds)
-				}
-				if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-					node.DownLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
-					logger.CtxLog.Infof("[PDU Charging] PCC[%s] Anchor UPF[%s]: Added %d URRs to DownLink PDR, URR IDs: %v", pccID, upfName, len(clonedUrrs), appendedIds)
-				}
-			}
-		}
-		logger.CtxLog.Infof("[PDU Charging] PCC[%s]: Total nodes in path=%d", pccID, pathNodes)
-	}
-
-	defaultPath := c.Tunnel.DataPathPool.GetDefaultPath()
-	if defaultPath == nil {
-		logger.CtxLog.Warnln("[PDU Charging] No default data path found")
+	if len(pduLevelChargingUrrs) == 0 {
 		return
 	}
 
-	logger.CtxLog.Infof("[PDU Charging] Processing default path, IsDefaultPath=%v", defaultPath.IsDefaultPath)
-	defaultPathNodes := 0
-	for node := defaultPath.FirstDPNode; node != nil; node = node.Next() {
-		defaultPathNodes++
-		upfID := node.UPF.UUID()
-		upfName := GetUserPlaneInformation().GetUPFNameByIp(node.UPF.NodeID.ResolveNodeIdToIp().String())
-		isAnchor := node.IsAnchorUPF()
-
-		logger.CtxLog.Infof("[PDU Charging] Default Path Node[%d]: UPF=%s, ID=%s, IsAnchor=%v",
-			defaultPathNodes, upfName, upfID, isAnchor)
-
-		if isAnchor {
-			var clonedUrrs []*URR
-			for _, urr := range pduLevelChargingUrrs {
-				cloned := c.RegisterUrr(upfID, urr)
-				clonedUrrs = append(clonedUrrs, cloned)
-				logger.CtxLog.Debugf("[PDU Charging] Default Path Anchor UPF[%s]: Cloned URR ID=%d", upfName, cloned.URRID)
-			}
-			var clonedIds []uint32
-			for _, u := range clonedUrrs {
-				clonedIds = append(clonedIds, u.URRID)
-			}
-			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-				node.UpLinkTunnel.PDR.AppendURRs(clonedUrrs)
-				logger.CtxLog.Infof("[PDU Charging] Default Path Anchor UPF[%s]: Added %d URRs to UpLink PDR, URR IDs: %v", upfName, len(clonedUrrs), clonedIds)
-			}
-			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-				node.DownLinkTunnel.PDR.AppendURRs(clonedUrrs)
-				logger.CtxLog.Infof("[PDU Charging] Default Path Anchor UPF[%s]: Added %d URRs to DownLink PDR, URR IDs: %v", upfName, len(clonedUrrs), clonedIds)
+	// Apply PDU-level URRs to FlowCharging paths in pccRules.
+	// Only paths created by CreatePccRuleDataPath are covered here.
+	// Pre-config ULCL branch paths are handled separately by EstablishULCL.
+	for _, flowPcc := range pccRules {
+		if chgLevel, err := flowPcc.IdentifyChargingLevel(); err != nil {
+			continue
+		} else if chgLevel == FlowCharging {
+			for node := flowPcc.Datapath.FirstDPNode; node != nil; node = node.Next() {
+				if !node.IsAnchorUPF() {
+					continue
+				}
+				upfID := node.UPF.UUID()
+				var clonedUrrs []*URR
+				for _, urr := range pduLevelChargingUrrs {
+					clonedUrrs = append(clonedUrrs, c.RegisterUrr(upfID, urr))
+				}
+				if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
+					c.PDRAppendURRs(upfID, node.UpLinkTunnel.PDR, clonedUrrs)
+				}
+				if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
+					c.PDRAppendURRs(upfID, node.DownLinkTunnel.PDR, clonedUrrs)
+				}
 			}
 		}
 	}
-	logger.CtxLog.Infof("[PDU Charging] Default path: Total nodes=%d", defaultPathNodes)
-	logger.CtxLog.Infof("[PDU Charging] Finished addPduLevelChargingRuleToFlow")
+
+	// Also apply to the default path anchor.
+	// PDRAppendURRs deduplicates by URRID, so this is a no-op if already present
+	// (AddChargingRules already added these URRs when the PduSessionCharging path was created).
+	defaultPath := c.Tunnel.DataPathPool.GetDefaultPath()
+	if defaultPath == nil {
+		logger.CtxLog.Warnln("[addPduLevelChargingRuleToFlow] No default data path found")
+		return
+	}
+	for node := defaultPath.FirstDPNode; node != nil; node = node.Next() {
+		if !node.IsAnchorUPF() {
+			continue
+		}
+		upfID := node.UPF.UUID()
+		var clonedUrrs []*URR
+		for _, urr := range pduLevelChargingUrrs {
+			clonedUrrs = append(clonedUrrs, c.RegisterUrr(upfID, urr))
+		}
+		if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
+			c.PDRAppendURRs(upfID, node.UpLinkTunnel.PDR, clonedUrrs)
+		}
+		if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
+			c.PDRAppendURRs(upfID, node.DownLinkTunnel.PDR, clonedUrrs)
+		}
+	}
 }
 
 func (c *SMContext) ApplyPccRules(

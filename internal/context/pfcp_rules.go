@@ -102,14 +102,6 @@ func MeasureInformation(isMeasurePkt, isMeasureBeforeQos bool) pfcpType.Measurem
 	return measureInformation
 }
 
-func (pdr *PDR) AppendURRs(urrs []*URR) {
-	for _, urr := range urrs {
-		if !isUrrExist(pdr.URR, urr) {
-			pdr.URR = append(pdr.URR, urr)
-		}
-	}
-}
-
 func isUrrExist(urrs []*URR, urr *URR) bool { // check if urr is in URRs list
 	for _, URR := range urrs {
 		if urr.URRID == URR.URRID {
