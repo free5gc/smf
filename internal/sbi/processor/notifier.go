@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -132,9 +131,17 @@ func SendUpPathChgEventExposureNotification(
 	request := &EventExposure.CreateIndividualSubcriptionMyNotificationPostRequest{
 		NsmfEventExposureNotification: notification,
 	}
-	_, err := client.
+
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(
+		models.ServiceName("nnef-callback"), models.NrfNfManagementNfType_NEF)
+	if err != nil {
+		logger.PduSessLog.Warnf("SMF Event Exposure Notification get token failed: %+v", pd)
+		return
+	}
+
+	_, err = client.
 		SubscriptionsCollectionApi.
-		CreateIndividualSubcriptionMyNotificationPost(context.Background(), uri, request)
+		CreateIndividualSubcriptionMyNotificationPost(ctx, uri, request)
 
 	switch err := err.(type) {
 	case openapi.GenericOpenAPIError:

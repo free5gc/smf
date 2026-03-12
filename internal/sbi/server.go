@@ -71,6 +71,10 @@ func newRouter(s *Server) *gin.Engine {
 	router.Use(metrics.InboundMetrics())
 	smfCallbackGroup := router.Group(factory.SmfCallbackUriPrefix)
 	smfCallbackRoutes := s.getCallbackRoutes()
+	smfCallbackAuthCheck := util_oauth.NewRouterAuthorizationCheck(models.ServiceName("nsmf-callback"))
+	smfCallbackGroup.Use(func(c *gin.Context) {
+		smfCallbackAuthCheck.Check(c, smf_context.GetSelf())
+	})
 	applyRoutes(smfCallbackGroup, smfCallbackRoutes)
 
 	upiGroup := router.Group(factory.UpiUriPrefix)
