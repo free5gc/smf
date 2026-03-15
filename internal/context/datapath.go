@@ -1289,11 +1289,17 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 				continue
 			}
 			smContext.ChargingInfo[urr.URRID] = chgInfo
+			logger.ChargingLog.Infof("[AddChargingRules] ChargingInfo bind URR[%d] -> RG=%d UPF=%s level=%v method=%v",
+				urr.URRID, chgInfo.RatingGroup, chgInfo.UpfId, chgInfo.ChargingLevel, chgInfo.ChargingMethod)
 			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
 				smContext.PDRAppendURRs(currentUUID, node.UpLinkTunnel.PDR, []*URR{urr})
+				logger.ChargingLog.Debugf("[AddChargingRules] UL PDR[%d] on UPF=%s now references charging URR[%d] RG=%d",
+					node.UpLinkTunnel.PDR.PDRID, currentUUID, urr.URRID, chgInfo.RatingGroup)
 			}
 			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
 				smContext.PDRAppendURRs(currentUUID, node.DownLinkTunnel.PDR, []*URR{urr})
+				logger.ChargingLog.Debugf("[AddChargingRules] DL PDR[%d] on UPF=%s now references charging URR[%d] RG=%d",
+					node.DownLinkTunnel.PDR.PDRID, currentUUID, urr.URRID, chgInfo.RatingGroup)
 			}
 		}
 	}
