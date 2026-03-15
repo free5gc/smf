@@ -515,6 +515,8 @@ func (node DataPathNode) addUrrToNode(smContext *SMContext, urrId uint32, isMeas
 			return
 		}
 		urr = smContext.RegisterUrr(currentUUID, urr)
+		logger.PduSessLog.Tracef("New add URR %d for UPF %s ", urrId, node.UPF.NodeID.ResolveNodeIdToIp().String())
+
 	}
 
 	if urr != nil {
@@ -1295,6 +1297,12 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 			}
 		}
 	}
+	var urrIds []uint32
+
+	for urrId := range smContext.ChargingInfo {
+		urrIds = append(urrIds, urrId)
+	}
+	logger.PduSessLog.Tracef("Final URR IDs: %+v", urrIds)
 }
 
 func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) {

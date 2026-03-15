@@ -174,6 +174,11 @@ func buildMultiUnitUsageFromUsageReport(
 				continue
 			}
 
+			if ur.UpfId != "" && chgInfo.UpfId != "" && ur.UpfId != chgInfo.UpfId {
+				logger.ChargingLog.Warnf("Usage report UPF mismatch for URR[%d] RG[%d]: report.UpfId=%s chargingInfo.UpfId=%s reportType=%s",
+					ur.UrrId, chgInfo.RatingGroup, ur.UpfId, chgInfo.UpfId, ur.ReportTpye)
+			}
+
 			if chgInfo.ChargingLevel == smf_context.FlowCharging &&
 				ur.ReportTpye == models.ChfConvergedChargingTriggerType_VOLUME_LIMIT {
 				triggers = []models.ChfConvergedChargingTrigger{
@@ -192,8 +197,8 @@ func buildMultiUnitUsageFromUsageReport(
 			}
 
 			rg := chgInfo.RatingGroup
-			logger.ChargingLog.Debugf("Receive Usage Report from URR[%d], Rating Group[%d], UpfId=%s, ChargingMethod=%v",
-				ur.UrrId, rg, chgInfo.UpfId, chgInfo.ChargingMethod)
+			logger.ChargingLog.Debugf("Receive Usage Report from URR[%d], Rating Group[%d], ReportUpfId=%s, ChargingInfoUpfId=%s, ChargingMethod=%v",
+				ur.UrrId, rg, ur.UpfId, chgInfo.UpfId, chgInfo.ChargingMethod)
 			triggerTime := time.Now()
 
 			uu := models.ChfConvergedChargingUsedUnitContainer{
@@ -245,13 +250,17 @@ func getUrrsByRg(smContext *smf_context.SMContext, upfId string, rg int32) []*sm
 	var foundUrrs []*smf_context.URR
 
 	if entries, ok := smContext.UrrTable[upfId]; ok {
+		trackedUrrs := make([]uint32, 0, len(entries))
 		for urrID, entry := range entries {
+			trackedUrrs = append(trackedUrrs, urrID)
 			if smContext.ChargingInfo[urrID] != nil &&
 				smContext.ChargingInfo[urrID].RatingGroup == rg {
 				foundUrrs = append(foundUrrs, entry.Rule)
 				logger.ChargingLog.Debugf("Found URR[%d] for RatingGroup[%d], UpfId=%s", urrID, rg, upfId)
 			}
 		}
+		logger.ChargingLog.Debugf("Inspect UrrTable for RatingGroup[%d], UpfId=%s: trackedURRs=%v matched=%d",
+			rg, upfId, trackedUrrs, len(foundUrrs))
 	}
 
 	if len(foundUrrs) > 1 {
@@ -281,6 +290,13 @@ func (p *Processor) updateGrantedQuota(
 			logger.ChargingLog.Errorf("Cannot find URR for RatingGroup[%d], UpfId=%s - Quota will NOT be updated", rg, upfId)
 			continue
 		}
+
+		urrIDs := make([]uint32, 0, len(urrs))
+		for _, resolvedURR := range urrs {
+			urrIDs = append(urrIDs, resolvedURR.URRID)
+		}
+		logger.ChargingLog.Debugf("Quota update target resolved: RatingGroup=%d, UpfId=%s, URRs=%v",
+			rg, upfId, urrIDs)
 
 		// Update ALL URRs with the same Rating Group
 		for _, urr := range urrs {
