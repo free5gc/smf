@@ -3,7 +3,6 @@ package context
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/google/uuid"
 
@@ -224,6 +223,7 @@ func (node *DataPathNode) ActivateDownLinkDcTunnel(smContext *SMContext) error {
 
 func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 	if pdr := node.UpLinkTunnel.PDR; pdr != nil {
+		upfId := node.UPF.UUID()
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
 		err := node.UPF.RemovePDR(pdr)
 		if err != nil {
@@ -254,11 +254,22 @@ func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 				}
 			}
 		}
+		// Free URRs whose ref count reached 0 (RULE_REMOVE) from UPF pool
+		for _, urr := range pdr.URR {
+			if smContext.GetUrrState(upfId, urr.URRID) == RULE_REMOVE {
+				if err2 := node.UPF.RemoveURR(urr); err2 != nil {
+					logger.CtxLog.Warnln("Deactivated UpLinkTunnel RemoveURR", err2)
+				}
+				smContext.DeleteFromUrrTable(upfId, urr.URRID)
+				logger.PduSessLog.Infof("[DeactivateUpLinkTunnel] UPF=%s URR[%d] freed from pool", upfId, urr.URRID)
+			}
+		}
 	}
 }
 
 func (node *DataPathNode) DeactivateUpLinkDcTunnel(smContext *SMContext) {
 	if pdr := node.UpLinkTunnel.PDR; pdr != nil {
+		upfId := node.UPF.UUID()
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
 		err := node.UPF.RemovePDR(pdr)
 		if err != nil {
@@ -289,11 +300,22 @@ func (node *DataPathNode) DeactivateUpLinkDcTunnel(smContext *SMContext) {
 				}
 			}
 		}
+		// Free URRs whose ref count reached 0 (RULE_REMOVE) from UPF pool
+		for _, urr := range pdr.URR {
+			if smContext.GetUrrState(upfId, urr.URRID) == RULE_REMOVE {
+				if err2 := node.UPF.RemoveURR(urr); err2 != nil {
+					logger.CtxLog.Warnln("Deactivated UpLinkDcTunnel RemoveURR", err2)
+				}
+				smContext.DeleteFromUrrTable(upfId, urr.URRID)
+				logger.PduSessLog.Infof("[DeactivateUpLinkDcTunnel] UPF=%s URR[%d] freed from pool", upfId, urr.URRID)
+			}
+		}
 	}
 }
 
 func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 	if pdr := node.DownLinkTunnel.PDR; pdr != nil {
+		upfId := node.UPF.UUID()
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
 		err := node.UPF.RemovePDR(pdr)
 		if err != nil {
@@ -319,9 +341,19 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 				if qer != nil {
 					err = node.UPF.RemoveQER(qer)
 					if err != nil {
-						logger.CtxLog.Warnln("Deactivated UpLinkTunnel", err)
+						logger.CtxLog.Warnln("Deactivated DownLinkTunnel", err)
 					}
 				}
+			}
+		}
+		// Free URRs whose ref count reached 0 (RULE_REMOVE) from UPF pool
+		for _, urr := range pdr.URR {
+			if smContext.GetUrrState(upfId, urr.URRID) == RULE_REMOVE {
+				if err2 := node.UPF.RemoveURR(urr); err2 != nil {
+					logger.CtxLog.Warnln("Deactivated DownLinkTunnel RemoveURR", err2)
+				}
+				smContext.DeleteFromUrrTable(upfId, urr.URRID)
+				logger.PduSessLog.Tracef("[DeactivateDownLinkTunnel] UPF=%s URR[%d] freed from pool", upfId, urr.URRID)
 			}
 		}
 	}
@@ -329,6 +361,7 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 
 func (node *DataPathNode) DeactivateDownLinkDcTunnel(smContext *SMContext) {
 	if pdr := node.DownLinkTunnel.PDR; pdr != nil {
+		upfId := node.UPF.UUID()
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
 		err := node.UPF.RemovePDR(pdr)
 		if err != nil {
@@ -357,6 +390,16 @@ func (node *DataPathNode) DeactivateDownLinkDcTunnel(smContext *SMContext) {
 						logger.CtxLog.Warnln("Deactivated DownLinkDctunnel", err)
 					}
 				}
+			}
+		}
+		// Free URRs whose ref count reached 0 (RULE_REMOVE) from UPF pool
+		for _, urr := range pdr.URR {
+			if smContext.GetUrrState(upfId, urr.URRID) == RULE_REMOVE {
+				if err2 := node.UPF.RemoveURR(urr); err2 != nil {
+					logger.CtxLog.Warnln("Deactivated DownLinkDcTunnel RemoveURR", err2)
+				}
+				smContext.DeleteFromUrrTable(upfId, urr.URRID)
+				logger.PduSessLog.Infof("[DeactivateDownLinkDcTunnel] UPF=%s URR[%d] freed from pool", upfId, urr.URRID)
 			}
 		}
 	}
@@ -458,22 +501,12 @@ func (dataPath *DataPath) String() string {
 	return str
 }
 
-func getUrrIdKey(uuid string, urrId uint32) string {
-	return uuid + ":" + strconv.Itoa(int(urrId))
-}
-
-func GetUpfIdFromUrrIdKey(urrIdKey string) string {
-	return strings.Split(urrIdKey, ":")[0]
-}
-
 func (node DataPathNode) addUrrToNode(smContext *SMContext, urrId uint32, isMeasurePkt, isMeasureBeforeQos bool) {
-	var urr *URR
-	var ok bool
-	var err error
 	currentUUID := node.UPF.UUID()
-	id := getUrrIdKey(currentUUID, urrId)
+	urr := smContext.GetUrrRule(currentUUID, urrId)
 
-	if urr, ok = smContext.UrrUpfMap[id]; !ok {
+	if urr == nil {
+		var err error
 		if urr, err = node.UPF.AddURR(urrId,
 			NewMeasureInformation(isMeasurePkt, isMeasureBeforeQos),
 			NewMeasurementPeriod(smContext.UrrReportTime),
@@ -481,14 +514,17 @@ func (node DataPathNode) addUrrToNode(smContext *SMContext, urrId uint32, isMeas
 			logger.PduSessLog.Errorln("new URR failed")
 			return
 		}
+		urr = smContext.RegisterUrr(currentUUID, urr)
+		logger.PduSessLog.Tracef("New add URR %d for UPF %s ", urrId, node.UPF.NodeID.ResolveNodeIdToIp().String())
+
 	}
 
 	if urr != nil {
 		if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-			node.UpLinkTunnel.PDR.AppendURRs([]*URR{urr})
+			smContext.PDRAppendURRs(currentUUID, node.UpLinkTunnel.PDR, []*URR{urr})
 		}
 		if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-			node.DownLinkTunnel.PDR.AppendURRs([]*URR{urr})
+			smContext.PDRAppendURRs(currentUUID, node.DownLinkTunnel.PDR, []*URR{urr})
 		}
 	}
 }
@@ -1209,9 +1245,8 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 			}
 
 			currentUUID := node.UPF.UUID()
-			id := getUrrIdKey(currentUUID, uint32(urrId))
 
-			if oldURR, ok := smContext.UrrUpfMap[id]; !ok {
+			if oldURR := smContext.GetUrrRule(currentUUID, uint32(urrId)); oldURR == nil {
 				// For online charging, the charging trigger "Start of the Service data flow" are needed.
 				// Therefore, the START reporting trigger in the urr are needed to detect the Start of the SDF
 				if chgData.Online {
@@ -1221,7 +1256,9 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 						logger.PduSessLog.Errorln("new URR failed")
 						return
 					} else {
-						urr = newURR
+						urr = smContext.RegisterUrr(currentUUID, newURR)
+						logger.ChargingLog.Infof("[AddChargingRules] Online URR[%d] registered for UPF=%s RG=%d",
+							urr.URRID, currentUUID, chgData.RatingGroup)
 					}
 
 					chgInfo.ChargingMethod = models.QuotaManagementIndicator_ONLINE_CHARGING
@@ -1233,41 +1270,45 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 						logger.PduSessLog.Errorln("new URR failed")
 						return
 					} else {
-						urr = newURR
+						urr = smContext.RegisterUrr(currentUUID, newURR)
+						logger.ChargingLog.Infof("[AddChargingRules] Offline URR[%d] registered for UPF=%s RG=%d",
+							urr.URRID, currentUUID, chgData.RatingGroup)
 					}
 
 					chgInfo.ChargingMethod = models.QuotaManagementIndicator_OFFLINE_CHARGING
 				}
-				smContext.UrrUpfMap[id] = urr
 			} else {
 				urr = oldURR
+				logger.ChargingLog.Infof("[AddChargingRules] URR[%d] already in registry for UPF=%s RG=%d",
+					urr.URRID, currentUUID, chgData.RatingGroup)
 			}
 
-			if urr != nil {
-				logger.PduSessLog.Tracef("Successfully add URR %d for Rating group %d", urr.URRID, chgData.RatingGroup)
-
-				smContext.ChargingInfo[urr.URRID] = chgInfo
-				if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-					if !isUrrExist(node.UpLinkTunnel.PDR.URR, urr) {
-						node.UpLinkTunnel.PDR.AppendURRs([]*URR{urr})
-						// nolint
-						nodeId, _ := node.GetUPFID()
-						logger.PduSessLog.Tracef("UpLinkTunnel add URR for node %s %+v",
-							nodeId, node.UpLinkTunnel.PDR)
-					}
-				}
-				if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-					if !isUrrExist(node.DownLinkTunnel.PDR.URR, urr) {
-						node.DownLinkTunnel.PDR.AppendURRs([]*URR{urr})
-						// nolint
-						nodeId, _ := node.GetUPFID()
-						logger.PduSessLog.Tracef("DownLinkTunnel add URR for node %s %+v",
-							nodeId, node.DownLinkTunnel.PDR)
-					}
-				}
+			if urr == nil {
+				logger.ChargingLog.Warnf("[AddChargingRules] BUG: URR not created for UPF=%s RG=%d (chgData.Online=%v Offline=%v)",
+					currentUUID, chgData.RatingGroup, chgData.Online, chgData.Offline)
+				continue
+			}
+			smContext.ChargingInfo[urr.URRID] = chgInfo
+			logger.ChargingLog.Infof("[AddChargingRules] ChargingInfo bind URR[%d] -> RG=%d UPF=%s level=%v method=%v",
+				urr.URRID, chgInfo.RatingGroup, chgInfo.UpfId, chgInfo.ChargingLevel, chgInfo.ChargingMethod)
+			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
+				smContext.PDRAppendURRs(currentUUID, node.UpLinkTunnel.PDR, []*URR{urr})
+				logger.ChargingLog.Debugf("[AddChargingRules] UL PDR[%d] on UPF=%s now references charging URR[%d] RG=%d",
+					node.UpLinkTunnel.PDR.PDRID, currentUUID, urr.URRID, chgInfo.RatingGroup)
+			}
+			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
+				smContext.PDRAppendURRs(currentUUID, node.DownLinkTunnel.PDR, []*URR{urr})
+				logger.ChargingLog.Debugf("[AddChargingRules] DL PDR[%d] on UPF=%s now references charging URR[%d] RG=%d",
+					node.DownLinkTunnel.PDR.PDRID, currentUUID, urr.URRID, chgInfo.RatingGroup)
 			}
 		}
 	}
+	var urrIds []uint32
+
+	for urrId := range smContext.ChargingInfo {
+		urrIds = append(urrIds, urrId)
+	}
+	logger.PduSessLog.Tracef("Final URR IDs: %+v", urrIds)
 }
 
 func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) {

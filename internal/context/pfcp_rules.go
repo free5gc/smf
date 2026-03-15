@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/free5gc/pfcp/pfcpType"
+	"github.com/free5gc/smf/internal/logger"
 )
 
 const (
@@ -49,7 +50,13 @@ type URR struct {
 	MeasurementInformation pfcpType.MeasurementInformation
 	VolumeThreshold        uint64
 	VolumeQuota            uint64
-	State                  RuleState
+}
+
+type UrrEntry struct {
+	Rule     *URR      // 規則內容 (RG, Threshold...)
+	State    RuleState // 部署狀態 (INITIAL, CREATE...)
+	RefCount int       // number of PDRs referencing this URR
+	PDRIDs   []uint16  // IDs of PDRs currently referencing this URR
 }
 
 type UrrOpt func(urr *URR)
@@ -95,14 +102,6 @@ func MeasureInformation(isMeasurePkt, isMeasureBeforeQos bool) pfcpType.Measurem
 	return measureInformation
 }
 
-func (pdr *PDR) AppendURRs(urrs []*URR) {
-	for _, urr := range urrs {
-		if !isUrrExist(pdr.URR, urr) {
-			pdr.URR = append(pdr.URR, urr)
-		}
-	}
-}
-
 func isUrrExist(urrs []*URR, urr *URR) bool { // check if urr is in URRs list
 	for _, URR := range urrs {
 		if urr.URRID == URR.URRID {
@@ -110,6 +109,127 @@ func isUrrExist(urrs []*URR, urr *URR) bool { // check if urr is in URRs list
 		}
 	}
 	return false
+}
+
+func (c *SMContext) RegisterUrr(upfId string, urr *URR) *URR {
+	c.UrrTableMutex.Lock()
+	defer c.UrrTableMutex.Unlock()
+	if c.UrrTable[upfId] == nil {
+		c.UrrTable[upfId] = make(map[uint32]*UrrEntry)
+	}
+	if entry, exists := c.UrrTable[upfId][urr.URRID]; exists {
+		return entry.Rule // already registered, return existing rule
+	}
+	cloned := urr.Clone()
+	c.UrrTable[upfId][urr.URRID] = &UrrEntry{
+		Rule:  cloned,
+		State: RULE_INITIAL,
+	}
+	return cloned
+}
+
+func (c *SMContext) SetUrrState(upfId string, urrID uint32, state RuleState) {
+	c.UrrTableMutex.Lock()
+	defer c.UrrTableMutex.Unlock()
+
+	if c.UrrTable[upfId] == nil {
+		logger.PduSessLog.Warnf("SetUrrState: UPF[%s] not in UrrTable", upfId)
+		return
+	}
+	if entry, ok := c.UrrTable[upfId][urrID]; ok {
+		entry.State = state
+	} else {
+		logger.PduSessLog.Warnf("SetUrrState: URR[%d] not found for UPF[%s]", urrID, upfId)
+	}
+}
+
+func (c *SMContext) GetUrrRule(upfId string, urrID uint32) *URR {
+	c.UrrTableMutex.RLock()
+	defer c.UrrTableMutex.RUnlock()
+	if entries, ok := c.UrrTable[upfId]; ok {
+		if entry, ok2 := entries[urrID]; ok2 {
+			return entry.Rule
+		}
+	}
+	return nil
+}
+
+func (c *SMContext) GetUrrState(upfId string, urrID uint32) RuleState {
+	c.UrrTableMutex.RLock()
+	defer c.UrrTableMutex.RUnlock()
+	if entries, ok := c.UrrTable[upfId]; ok {
+		if entry, ok2 := entries[urrID]; ok2 {
+			return entry.State
+		}
+	}
+	return RULE_INITIAL // default state if not found
+}
+
+func (urr *URR) Clone() *URR {
+	copied := *urr
+	return &copied
+}
+
+// PDRAppendURRs appends URRs to a PDR and increments the ref count in UrrTable.
+// Must be used instead of pdr.AppendURRs() whenever smContext is available.
+func (c *SMContext) PDRAppendURRs(upfId string, pdr *PDR, urrs []*URR) {
+	c.UrrTableMutex.Lock()
+	defer c.UrrTableMutex.Unlock()
+	for _, urr := range urrs {
+		pdr.URR = append(pdr.URR, urr)
+		entry := c.UrrTable[upfId][urr.URRID]
+		if entry == nil {
+			logger.PduSessLog.Warnf("[PDRAppendURRs] BUG: UPF=%s URR[%d] not in UrrTable (RegisterUrr missing?)", upfId, urr.URRID)
+			continue
+		}
+		entry.RefCount++
+		entry.PDRIDs = append(entry.PDRIDs, pdr.PDRID)
+		logger.PduSessLog.Tracef("[PDRAppendURRs] UPF=%s URR[%d] refCount=%d PDRs=%v",
+			upfId, urr.URRID, entry.RefCount, entry.PDRIDs)
+	}
+}
+
+// PDRReleaseURRs decrements the ref count for all URRs on a PDR.
+// URRs whose ref count reaches 0 are marked RULE_REMOVE so that
+// ActivateUPFSession will include them in the PFCP RemoveURR list.
+func (c *SMContext) PDRReleaseURRs(upfId string, pdr *PDR) {
+	if pdr == nil {
+		return
+	}
+	c.UrrTableMutex.Lock()
+	defer c.UrrTableMutex.Unlock()
+	for _, urr := range pdr.URR {
+		entry := c.UrrTable[upfId][urr.URRID]
+		if entry == nil {
+			logger.PduSessLog.Warnf("[PDRReleaseURRs] BUG: UPF=%s URR[%d] not in UrrTable", upfId, urr.URRID)
+			continue
+		}
+		entry.RefCount--
+		// remove this PDR from the tracking list
+		for i, id := range entry.PDRIDs {
+			if id == pdr.PDRID {
+				entry.PDRIDs = append(entry.PDRIDs[:i], entry.PDRIDs[i+1:]...)
+				break
+			}
+		}
+		if entry.RefCount <= 0 {
+			entry.State = RULE_REMOVE
+			logger.PduSessLog.Tracef("[PDRReleaseURRs] UPF=%s URR[%d] refCount=0 → RULE_REMOVE", upfId, urr.URRID)
+		} else {
+			logger.PduSessLog.Tracef("[PDRReleaseURRs] UPF=%s URR[%d] refCount=%d PDRs=%v",
+				upfId, urr.URRID, entry.RefCount, entry.PDRIDs)
+		}
+	}
+}
+
+// DeleteFromUrrTable removes a URR entry from UrrTable after the PFCP RemoveURR
+// has been acknowledged and the UPF pool entry freed.
+func (c *SMContext) DeleteFromUrrTable(upfId string, urrID uint32) {
+	c.UrrTableMutex.Lock()
+	defer c.UrrTableMutex.Unlock()
+	if entries, ok := c.UrrTable[upfId]; ok {
+		delete(entries, urrID)
+	}
 }
 
 // Packet Detection. 7.5.2.2-2

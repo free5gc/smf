@@ -36,6 +36,8 @@ func (smContext *SMContext) HandleReports(
 			usageReport.ReportTpye = reportTpye
 		}
 
+		logger.PduSessLog.Tracef("[HandleReports] Request: URRID=%d, UpfId=%s, ReportType=%s, TotalVol=%d, UlVol=%d, DlVol=%d",
+			usageReport.UrrId, usageReport.UpfId, usageReport.ReportTpye, usageReport.TotalVolume, usageReport.UplinkVolume, usageReport.DownlinkVolume)
 		smContext.UrrReports = append(smContext.UrrReports, usageReport)
 	}
 	for _, report := range usageReportModification {
@@ -57,6 +59,8 @@ func (smContext *SMContext) HandleReports(
 			usageReport.ReportTpye = reportTpye
 		}
 
+		logger.PduSessLog.Tracef("[HandleReports] Modification: URRID=%d, UpfId=%s, ReportType=%s, TotalVol=%d, UlVol=%d, DlVol=%d",
+			usageReport.UrrId, usageReport.UpfId, usageReport.ReportTpye, usageReport.TotalVolume, usageReport.UplinkVolume, usageReport.DownlinkVolume)
 		smContext.UrrReports = append(smContext.UrrReports, usageReport)
 	}
 	for _, report := range usageReportDeletion {
@@ -78,6 +82,8 @@ func (smContext *SMContext) HandleReports(
 			usageReport.ReportTpye = reportTpye
 		}
 
+		logger.PduSessLog.Tracef("[HandleReports] Deletion: URRID=%d, UpfId=%s, ReportType=%s, TotalVol=%d, UlVol=%d, DlVol=%d",
+			usageReport.UrrId, usageReport.UpfId, usageReport.ReportTpye, usageReport.TotalVolume, usageReport.UplinkVolume, usageReport.DownlinkVolume)
 		smContext.UrrReports = append(smContext.UrrReports, usageReport)
 	}
 }
