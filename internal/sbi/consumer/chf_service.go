@@ -92,7 +92,7 @@ func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMCon
 				DnnId: smContext.Dnn,
 			},
 		},
-		NotifyUri: fmt.Sprintf("%s://%s:%d/nsmf-callback/notify_%s",
+		NotifyUri: fmt.Sprintf("%s://%s:%d/nsmf-callback/v1/notify_%s",
 			smfContext.URIScheme,
 			smfContext.RegisterIPv4,
 			smfContext.SBIPort,
