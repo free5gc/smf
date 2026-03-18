@@ -1222,86 +1222,51 @@ func (p *DataPath) GetChargingUrr(smContext *SMContext) []*URR {
 	return chargingUrrs
 }
 
-func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel, chgData *models.ChargingData) {
+func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel, chgData *models.ChargingData, pduChgDatas []*models.ChargingData) {
 	logger.ChargingLog.Tracef("AddChargingRules: type[%v], data:[%+v]", chgLevel, chgData)
-	if chgData == nil {
+	if chgData == nil && len(pduChgDatas) == 0 {
 		return
 	}
 
 	for node := p.FirstDPNode; node != nil; node = node.Next() {
 		// Charging rules only apply to anchor UPF
-		if node.IsAnchorUPF() {
-			var urr *URR
-			chgInfo := &ChargingInfo{
-				RatingGroup:   chgData.RatingGroup,
-				ChargingLevel: chgLevel,
-				UpfId:         node.UPF.UUID(),
-			}
+		if !node.IsAnchorUPF() {
+			continue
+		}
 
-			urrId, err := smContext.UrrIDGenerator.Allocate()
-			if err != nil {
-				logger.PduSessLog.Errorln("Generate URR Id failed")
-				return
-			}
+		currentUPF := node.UPF
+		currentUUID := node.UPF.UUID()
 
-			currentUUID := node.UPF.UUID()
+		var urrsToAttach []*URR
 
-			if oldURR := smContext.GetUrrRule(currentUUID, uint32(urrId)); oldURR == nil {
-				// For online charging, the charging trigger "Start of the Service data flow" are needed.
-				// Therefore, the START reporting trigger in the urr are needed to detect the Start of the SDF
-				if chgData.Online {
-					if newURR, err2 := node.UPF.AddURR(uint32(urrId),
-						NewMeasureInformation(false, false),
-						SetStartOfSDFTrigger()); err2 != nil {
-						logger.PduSessLog.Errorln("new URR failed")
-						return
-					} else {
-						urr = smContext.RegisterUrr(currentUUID, newURR)
-						logger.ChargingLog.Infof("[AddChargingRules] Online URR[%d] registered for UPF=%s RG=%d",
-							urr.URRID, currentUUID, chgData.RatingGroup)
-					}
-
-					chgInfo.ChargingMethod = models.QuotaManagementIndicator_ONLINE_CHARGING
-				} else if chgData.Offline {
-					// For offline charging, URR only need to report based on the volume threshold
-					if newURR, err2 := node.UPF.AddURR(uint32(urrId),
-						NewMeasureInformation(false, false),
-						NewVolumeThreshold(smContext.UrrReportThreshold)); err2 != nil {
-						logger.PduSessLog.Errorln("new URR failed")
-						return
-					} else {
-						urr = smContext.RegisterUrr(currentUUID, newURR)
-						logger.ChargingLog.Infof("[AddChargingRules] Offline URR[%d] registered for UPF=%s RG=%d",
-							urr.URRID, currentUUID, chgData.RatingGroup)
-					}
-
-					chgInfo.ChargingMethod = models.QuotaManagementIndicator_OFFLINE_CHARGING
-				}
-			} else {
-				urr = oldURR
-				logger.ChargingLog.Infof("[AddChargingRules] URR[%d] already in registry for UPF=%s RG=%d",
-					urr.URRID, currentUUID, chgData.RatingGroup)
-			}
-
-			if urr == nil {
-				logger.ChargingLog.Warnf("[AddChargingRules] BUG: URR not created for UPF=%s RG=%d (chgData.Online=%v Offline=%v)",
-					currentUUID, chgData.RatingGroup, chgData.Online, chgData.Offline)
-				continue
-			}
+		urr, chgInfo := p.CreateUrrAndChgInfo(smContext, chgData, chgLevel, currentUPF)
+		if urr != nil && chgInfo != nil {
 			smContext.ChargingInfo[urr.URRID] = chgInfo
-			logger.ChargingLog.Infof("[AddChargingRules] ChargingInfo bind URR[%d] -> RG=%d UPF=%s level=%v method=%v",
+			urrsToAttach = append(urrsToAttach, urr)
+			logger.ChargingLog.Infof("[AddChargingRules] Bind URR[%d] -> RG=%d UPF=%s level=%v method=%v",
 				urr.URRID, chgInfo.RatingGroup, chgInfo.UpfId, chgInfo.ChargingLevel, chgInfo.ChargingMethod)
-			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-				smContext.PDRAppendURRs(currentUUID, node.UpLinkTunnel.PDR, []*URR{urr})
-				logger.ChargingLog.Debugf("[AddChargingRules] UL PDR[%d] on UPF=%s now references charging URR[%d] RG=%d",
-					node.UpLinkTunnel.PDR.PDRID, currentUUID, urr.URRID, chgInfo.RatingGroup)
-			}
-			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-				smContext.PDRAppendURRs(currentUUID, node.DownLinkTunnel.PDR, []*URR{urr})
-				logger.ChargingLog.Debugf("[AddChargingRules] DL PDR[%d] on UPF=%s now references charging URR[%d] RG=%d",
-					node.DownLinkTunnel.PDR.PDRID, currentUUID, urr.URRID, chgInfo.RatingGroup)
+		} else {
+			logger.ChargingLog.Warnf("[AddChargingRules] BUG: URR not created for UPF=%s RG=%d", currentUUID, chgData.RatingGroup)
+		}
+
+		if chgLevel != PduSessionCharging && len(pduChgDatas) > 0 {
+			for _, pduData := range pduChgDatas {
+				if pduUrr := p.GetOrCreateUrr(smContext, currentUPF, pduData, PduSessionCharging); pduUrr != nil {
+					urrsToAttach = append(urrsToAttach, pduUrr)
+				}
 			}
 		}
+
+		logger.ChargingLog.Infof("[AddChargingRules] ChargingInfo bind URR[%d] -> RG=%d UPF=%s level=%v method=%v",
+			urr.URRID, chgInfo.RatingGroup, chgInfo.UpfId, chgInfo.ChargingLevel, chgInfo.ChargingMethod)
+
+		if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
+			smContext.PDRAppendURRs(currentUUID, node.UpLinkTunnel.PDR, urrsToAttach)
+		}
+		if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
+			smContext.PDRAppendURRs(currentUUID, node.DownLinkTunnel.PDR, urrsToAttach)
+		}
+
 	}
 	var urrIds []uint32
 
@@ -1309,6 +1274,64 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 		urrIds = append(urrIds, urrId)
 	}
 	logger.PduSessLog.Tracef("Final URR IDs: %+v", urrIds)
+}
+func (p *DataPath) CreateUrrAndChgInfo(smContext *SMContext, chgData *models.ChargingData, chgLevel ChargingLevel, upf *UPF) (*URR, *ChargingInfo) {
+	urrIdInt, err := smContext.UrrIDGenerator.Allocate()
+	if err != nil {
+		logger.PduSessLog.Errorln("Generate URR Id failed")
+		return nil, nil
+	}
+	urrId := uint32(urrIdInt)
+
+	chgInfo := &ChargingInfo{
+		RatingGroup:   chgData.RatingGroup,
+		ChargingLevel: chgLevel,
+		UpfId:         upf.UUID(),
+	}
+
+	var newURR *URR
+	var err2 error
+
+	if chgData.Online {
+		//For online charging, URR need to report based on the volume threshold and time threshold
+		newURR, err2 = upf.AddURR(urrId, NewMeasureInformation(false, false), SetStartOfSDFTrigger())
+		chgInfo.ChargingMethod = models.QuotaManagementIndicator_ONLINE_CHARGING
+	} else if chgData.Offline {
+		// For offline charging, URR only need to report based on the volume threshold
+		newURR, err2 = upf.AddURR(urrId, NewMeasureInformation(false, false), NewVolumeThreshold(smContext.UrrReportThreshold))
+		chgInfo.ChargingMethod = models.QuotaManagementIndicator_OFFLINE_CHARGING
+	} else {
+		return nil, nil
+	}
+
+	if err2 != nil || newURR == nil {
+		logger.PduSessLog.Errorln("new URR failed")
+		return nil, nil
+	}
+
+	urr := smContext.RegisterUrr(upf.UUID(), newURR)
+	return urr, chgInfo
+}
+
+func (p *DataPath) GetOrCreateUrr(smContext *SMContext, upf *UPF, chgData *models.ChargingData, chgLevel ChargingLevel) *URR {
+	currentUUID := upf.UUID()
+
+	for _, info := range smContext.ChargingInfo {
+		if info.UpfId == upf.UUID() && info.ChargingLevel == PduSessionCharging && info.RatingGroup == chgData.RatingGroup {
+			return nil
+		}
+	}
+
+	urr, chgInfo := p.CreateUrrAndChgInfo(smContext, chgData, chgLevel, upf)
+	if urr != nil && chgInfo != nil {
+		smContext.ChargingInfo[urr.URRID] = chgInfo
+		logger.ChargingLog.Infof("[GetOrCreateUrr] Created new URR[%d] for UPF=%s RG=%d Level=%v",
+			urr.URRID, currentUUID, chgInfo.RatingGroup, chgLevel)
+		return urr
+	}
+
+	logger.ChargingLog.Warnf("[GetOrCreateUrr] BUG: URR not created for UPF=%s RG=%d", currentUUID, chgData.RatingGroup)
+	return nil
 }
 
 func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.QosData) {

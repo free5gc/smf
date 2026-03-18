@@ -120,12 +120,12 @@ func (c *SMContext) RegisterUrr(upfId string, urr *URR) *URR {
 	if entry, exists := c.UrrTable[upfId][urr.URRID]; exists {
 		return entry.Rule // already registered, return existing rule
 	}
-	cloned := urr.Clone()
+
 	c.UrrTable[upfId][urr.URRID] = &UrrEntry{
-		Rule:  cloned,
+		Rule:  urr,
 		State: RULE_INITIAL,
 	}
-	return cloned
+	return urr
 }
 
 func (c *SMContext) SetUrrState(upfId string, urrID uint32, state RuleState) {
@@ -163,11 +163,6 @@ func (c *SMContext) GetUrrState(upfId string, urrID uint32) RuleState {
 		}
 	}
 	return RULE_INITIAL // default state if not found
-}
-
-func (urr *URR) Clone() *URR {
-	copied := *urr
-	return &copied
 }
 
 // PDRAppendURRs appends URRs to a PDR and increments the ref count in UrrTable.

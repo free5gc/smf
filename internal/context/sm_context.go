@@ -666,7 +666,7 @@ func (c *SMContext) SelectDefaultDataPath() error {
 
 func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	tcData *TrafficControlData, qosData *models.QosData,
-	chgData *models.ChargingData,
+	chgData *models.ChargingData, pduChgDatas []*models.ChargingData,
 ) error {
 	var targetRoute models.RouteToLocation
 	if tcData != nil && len(tcData.RouteToLocs) > 0 {
@@ -702,7 +702,7 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	if chgLevel, err := pccRule.IdentifyChargingLevel(); err != nil {
 		c.Log.Warnf("fail to identify charging level[%+v] for pcc rule[%s]", err, pccRule.PccRuleId)
 	} else {
-		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData)
+		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData, pduChgDatas)
 	}
 
 	if pccRule.RefQosDataID() != "" {
@@ -714,7 +714,7 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 
 func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
 	tcData *TrafficControlData, qosData *models.QosData,
-	chgData *models.ChargingData,
+	chgData *models.ChargingData, pduChgDatas []*models.ChargingData,
 ) error {
 	var targetRoute models.RouteToLocation
 	if tcData != nil && len(tcData.RouteToLocs) > 0 {
@@ -750,7 +750,7 @@ func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
 	if chgLevel, err := pccRule.IdentifyChargingLevel(); err != nil {
 		c.Log.Warnf("fail to identify charging level[%+v] for pcc rule[%s]", err, pccRule.PccRuleId)
 	} else {
-		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData)
+		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData, pduChgDatas)
 	}
 
 	if pccRule.RefQosDataID() != "" {
