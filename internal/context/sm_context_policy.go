@@ -389,41 +389,80 @@ func (c *SMContext) ApplyDcPccRulesOnDcTunnel() error {
 
 		c.DCPCCRules[id] = newPcc
 	}
+	var pduChgDatas []*models.ChargingData
 
+	// ==========================================================
+	// Pass 1: Pdu Session level charging rules of DC tunnel (pduLevelUrrs = nil)
+	// ==========================================================
 	for id, pcc := range c.DCPCCRules {
 		if pcc == nil {
-			c.Log.Warnf("PCCRule[%s] is nil", id)
 			continue
 		}
 
-		tcID := pcc.RefTcDataID()
-		tcData := c.TrafficControlDatas[tcID]
+		chgLevel, _ := pcc.IdentifyChargingLevel()
+		if chgLevel == PduSessionCharging {
+			tcID := pcc.RefTcDataID()
+			tcData := c.TrafficControlDatas[tcID]
+			chgID := pcc.RefChgDataID()
+			chgData := c.ChargingData[chgID]
+			qosID := pcc.RefQosDataID()
+			qosData := c.QosDatas[qosID]
 
-		chgID := pcc.RefChgDataID()
-		chgData := c.ChargingData[chgID]
+			if pcc.Datapath != nil {
+				c.PreRemoveDataPath(pcc.Datapath)
+			}
 
-		qosID := pcc.RefQosDataID()
-		qosData := c.QosDatas[qosID]
+			if err := c.CreateDcPccRuleDataPathOnDcTunnel(pcc, tcData, qosData, chgData, nil); err != nil {
+				c.Log.Errorf("CreateDcPccRuleDataPathOnDcTunnel (PDU Level) for PCCRule[%s] failed: %v", id, err)
+				continue
+			}
+			if err := applyFlowInfoOrPFD(pcc); err != nil {
+				c.Log.Errorf("applyFlowInfoOrPFD for PCCRule[%s] failed: %v", id, err)
+				continue
+			}
 
-		if pcc.Datapath != nil {
-			c.PreRemoveDataPath(pcc.Datapath)
+			c.Log.Infof("Applied PDU Level PCCRule[%s] to DCTunnel", id)
+
+			if chgData != nil {
+				pduChgDatas = append(pduChgDatas, chgData)
+			}
 		}
-
-		//not sure
-		if err := c.CreateDcPccRuleDataPathOnDcTunnel(pcc, tcData, qosData, chgData, nil); err != nil {
-			c.Log.Errorf("CreatePccRuleDataPathOnDcTunnel for PCCRule[%s] failed: %v", id, err)
-			continue
-		}
-
-		if err := applyFlowInfoOrPFD(pcc); err != nil {
-			c.Log.Errorf("applyFlowInfoOrPFD for PCCRule[%s] failed: %v", id, err)
-			continue
-		}
-
-		c.Log.Infof("Applied PCCRule[%s] to DCTunnel", id)
 	}
 
-	c.addPduLevelChargingRuleToFlow(c.DCPCCRules)
+	// ==========================================================
+	// Pass 2 - Flow level charging rules of DC tunnel
+	// ==========================================================
+	for id, pcc := range c.DCPCCRules {
+		if pcc == nil {
+			continue
+		}
+
+		chgLevel, _ := pcc.IdentifyChargingLevel()
+		if chgLevel != PduSessionCharging {
+			tcID := pcc.RefTcDataID()
+			tcData := c.TrafficControlDatas[tcID]
+			chgID := pcc.RefChgDataID()
+			chgData := c.ChargingData[chgID]
+			qosID := pcc.RefQosDataID()
+			qosData := c.QosDatas[qosID]
+
+			if pcc.Datapath != nil {
+				c.PreRemoveDataPath(pcc.Datapath)
+			}
+
+			// main difference between Pass 1 and Pass 2: whether pduChgDatas is passed in
+			if err := c.CreateDcPccRuleDataPathOnDcTunnel(pcc, tcData, qosData, chgData, pduChgDatas); err != nil {
+				c.Log.Errorf("CreateDcPccRuleDataPathOnDcTunnel (Flow Level) for PCCRule[%s] failed: %v", id, err)
+				continue
+			}
+			if err := applyFlowInfoOrPFD(pcc); err != nil {
+				c.Log.Errorf("applyFlowInfoOrPFD for PCCRule[%s] failed: %v", id, err)
+				continue
+			}
+
+			c.Log.Infof("Applied Flow Level PCCRule[%s] to DCTunnel", id)
+		}
+	}
 
 	return nil
 }
