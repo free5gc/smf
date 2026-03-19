@@ -23,8 +23,8 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 	c.NfProfile.NFServiceVersion = &[]models.NfServiceVersion{
 		{
 			ApiVersionInUri: "v1",
-			ApiFullVersion: nfProfileconfig.GetVersion(),
-			Expiry: &nfSetupTime,
+			ApiFullVersion:  nfProfileconfig.GetVersion(),
+			Expiry:          &nfSetupTime,
 		},
 	}
 
