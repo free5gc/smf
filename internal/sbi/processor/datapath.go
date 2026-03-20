@@ -93,8 +93,8 @@ func ActivateUPFSession(
 		for _, urr := range pfcp.urrList {
 			urrIds = append(urrIds, urr.URRID)
 		}
-		logger.PduSessLog.Tracef("[ActivateUPFSession] About to send to UPF[%s]: %d PDRs, %d FARs, %d URRs (aggregated IDs: %v)",
-			ip, len(pfcp.pdrList), len(pfcp.farList), len(pfcp.urrList), urrIds)
+		logger.PduSessLog.Tracef("[ActivateUPFSession] About to send to UPF[%s]: %d PDRs, %d FARs, "+
+			"%d URRs (aggregated IDs: %v)", ip, len(pfcp.pdrList), len(pfcp.farList), len(pfcp.urrList), urrIds)
 		sessionContext, exist := smContext.PFCPContext[ip]
 		if !exist || sessionContext.RemoteSEID == 0 {
 			go establishPfcpSession(smContext, pfcp, resChan)

@@ -516,7 +516,6 @@ func (node DataPathNode) addUrrToNode(smContext *SMContext, urrId uint32, isMeas
 		}
 		urr = smContext.RegisterUrr(currentUUID, urr)
 		logger.PduSessLog.Tracef("New add URR %d for UPF %s ", urrId, node.UPF.NodeID.ResolveNodeIdToIp().String())
-
 	}
 
 	if urr != nil {
@@ -1222,7 +1221,9 @@ func (p *DataPath) GetChargingUrr(smContext *SMContext) []*URR {
 	return chargingUrrs
 }
 
-func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel, chgData *models.ChargingData, pduChgDatas []*models.ChargingData) {
+func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel,
+	chgData *models.ChargingData, pduChgDatas []*models.ChargingData,
+) {
 	logger.ChargingLog.Tracef("AddChargingRules: type[%v], data:[%+v]", chgLevel, chgData)
 	if chgData == nil && len(pduChgDatas) == 0 {
 		return
@@ -1244,7 +1245,7 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 			smContext.ChargingInfo[urr.URRID] = chgInfo
 			urrsToAttach = append(urrsToAttach, urr)
 		} else {
-			logger.ChargingLog.Warnf("[AddChargingRules] BUG: URR not created for UPF=%s RG=%d", currentUUID, chgData.RatingGroup)
+			logger.ChargingLog.Warnf("[AddChargingRules]URR not created for UPF=%s RG=%d", currentUUID, chgData.RatingGroup)
 		}
 
 		if chgLevel != PduSessionCharging && len(pduChgDatas) > 0 {
@@ -1264,11 +1265,12 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 		if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
 			smContext.PDRAppendURRs(currentUUID, node.DownLinkTunnel.PDR, urrsToAttach)
 		}
-
 	}
 }
+
 func (p *DataPath) CreateUrrAndChgInfo(smContext *SMContext, chgData *models.ChargingData,
-	chgLevel ChargingLevel, upf *UPF) (*URR, *ChargingInfo) {
+	chgLevel ChargingLevel, upf *UPF,
+) (*URR, *ChargingInfo) {
 	urrIdInt, err := smContext.UrrIDGenerator.Allocate()
 	if err != nil {
 		logger.PduSessLog.Errorln("Generate URR Id failed")
@@ -1307,7 +1309,9 @@ func (p *DataPath) CreateUrrAndChgInfo(smContext *SMContext, chgData *models.Cha
 	return urr, chgInfo
 }
 
-func (p *DataPath) GetOrCreateUrr(smContext *SMContext, upf *UPF, chgData *models.ChargingData, chgLevel ChargingLevel) *URR {
+func (p *DataPath) GetOrCreateUrr(smContext *SMContext, upf *UPF,
+	chgData *models.ChargingData, chgLevel ChargingLevel,
+) *URR {
 	currentUUID := upf.UUID()
 
 	for _, info := range smContext.ChargingInfo {

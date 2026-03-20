@@ -102,15 +102,6 @@ func MeasureInformation(isMeasurePkt, isMeasureBeforeQos bool) pfcpType.Measurem
 	return measureInformation
 }
 
-func isUrrExist(urrs []*URR, urr *URR) bool { // check if urr is in URRs list
-	for _, URR := range urrs {
-		if urr.URRID == URR.URRID {
-			return true
-		}
-	}
-	return false
-}
-
 func (c *SMContext) RegisterUrr(upfId string, urr *URR) *URR {
 	c.UrrTableMutex.Lock()
 	defer c.UrrTableMutex.Unlock()
@@ -174,7 +165,7 @@ func (c *SMContext) PDRAppendURRs(upfId string, pdr *PDR, urrs []*URR) {
 		pdr.URR = append(pdr.URR, urr)
 		entry := c.UrrTable[upfId][urr.URRID]
 		if entry == nil {
-			logger.PduSessLog.Warnf("[PDRAppendURRs] BUG: UPF=%s URR[%d] not in UrrTable (RegisterUrr missing?)", upfId, urr.URRID)
+			logger.PduSessLog.Warnf("[PDRAppendURRs]UPF=%s URR[%d] not in UrrTable", upfId, urr.URRID)
 			continue
 		}
 		entry.RefCount++

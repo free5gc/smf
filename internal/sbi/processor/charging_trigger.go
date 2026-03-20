@@ -175,7 +175,8 @@ func buildMultiUnitUsageFromUsageReport(
 			}
 
 			if ur.UpfId != "" && chgInfo.UpfId != "" && ur.UpfId != chgInfo.UpfId {
-				logger.ChargingLog.Warnf("Usage report UPF mismatch for URR[%d] RG[%d]: report.UpfId=%s chargingInfo.UpfId=%s reportType=%s",
+				logger.ChargingLog.Warnf("Usage report UPF mismatch for URR[%d] RG[%d]: "+
+					"report.UpfId=%s chargingInfo.UpfId=%s reportType=%s",
 					ur.UrrId, chgInfo.RatingGroup, ur.UpfId, chgInfo.UpfId, ur.ReportTpye)
 			}
 
@@ -197,7 +198,8 @@ func buildMultiUnitUsageFromUsageReport(
 			}
 
 			rg := chgInfo.RatingGroup
-			logger.ChargingLog.Debugf("Receive Usage Report from URR[%d], Rating Group[%d], ReportUpfId=%s, ChargingInfoUpfId=%s, ChargingMethod=%v",
+			logger.ChargingLog.Debugf("Receive Usage Report from URR[%d], Rating Group[%d], ReportUpfId=%s, "+
+				"ChargingInfoUpfId=%s, ChargingMethod=%v",
 				ur.UrrId, rg, ur.UpfId, chgInfo.UpfId, chgInfo.ChargingMethod)
 			triggerTime := time.Now()
 

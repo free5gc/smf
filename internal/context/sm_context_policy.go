@@ -90,12 +90,18 @@ func (c *SMContext) ApplyPccRules(decision *models.SmPolicyDecision) error {
 	flowRulesToProcess := make(map[string]*PCCRule)
 
 	// Helper function: queue rules to be processed in Pass 1 or Pass 2
-	queueRule := func(id string, pcc *PCCRule) {
-		if chgLevel, _ := pcc.IdentifyChargingLevel(); chgLevel == PduSessionCharging {
+	queueRule := func(id string, pcc *PCCRule) error {
+		chgLevel, err := pcc.IdentifyChargingLevel()
+		if err != nil {
+			return err
+		}
+
+		if chgLevel == PduSessionCharging {
 			pduRulesToProcess[id] = pcc
 		} else {
 			flowRulesToProcess[id] = pcc
 		}
+		return nil
 	}
 
 	// Shared logic for processing each rule in Pass 1 and Pass 2
@@ -155,14 +161,18 @@ func (c *SMContext) ApplyPccRules(decision *models.SmPolicyDecision) error {
 			if srcPcc := c.PCCRules[id]; srcPcc != nil {
 				c.PreRemoveDataPath(srcPcc.Datapath)
 				srcTcData := c.TrafficControlDatas[srcPcc.RefTcDataID()]
-				_ = checkUpPathChangeEvt(c, srcTcData, nil)
+				if err := checkUpPathChangeEvt(c, srcTcData, nil); err != nil {
+					c.Log.Warnf("Check UpPathChgEvent err: %v", err)
+				}
 			} else {
 				c.Log.Warnf("PCCRule[%s] not exist", id)
 			}
 			delete(c.PCCRules, id)
 			continue
 		}
-		queueRule(id, NewPCCRule(pccModel))
+		if err := queueRule(id, NewPCCRule(pccModel)); err != nil {
+			return err
+		}
 	}
 
 	// 1.2 Scan the old rules find out which rules are modified
@@ -181,8 +191,10 @@ func (c *SMContext) ApplyPccRules(decision *models.SmPolicyDecision) error {
 		if !reflect.DeepEqual(srcTcData, tgtTcData) ||
 			!reflect.DeepEqual(srcQosData, tgtQosData) ||
 			!reflect.DeepEqual(srcChgData, tgtChgData) {
-
-			queueRule(id, pcc) // rule is changed, so it needs to be re-created with new data
+			if err := queueRule(id, pcc); err != nil {
+				return err
+			}
+			// rule is changed, so it needs to be re-created with new data
 		} else {
 			// rule is not changed, keep using the old one
 			finalPccRules[id] = pcc
@@ -212,11 +224,13 @@ func (c *SMContext) ApplyPccRules(decision *models.SmPolicyDecision) error {
 	// Collect PDU-level charging data from rules created in Pass 1
 	var pduChgDatas []*models.ChargingData
 	for _, pcc := range finalPccRules {
-		if chgLevel, _ := pcc.IdentifyChargingLevel(); chgLevel == PduSessionCharging && pcc.Datapath != nil {
+		if chgLevel, err := pcc.IdentifyChargingLevel(); err == nil && chgLevel == PduSessionCharging && pcc.Datapath != nil {
 			chgID := pcc.RefChgDataID()
 			if data, ok := finalChgDatas[chgID]; ok {
 				pduChgDatas = append(pduChgDatas, data)
 			}
+		} else if err != nil {
+			return err
 		}
 	}
 
@@ -329,7 +343,10 @@ func (c *SMContext) ApplyDcPccRulesOnDcTunnel() error {
 			continue
 		}
 
-		chgLevel, _ := pcc.IdentifyChargingLevel()
+		chgLevel, err := pcc.IdentifyChargingLevel()
+		if err != nil {
+			return err
+		}
 		if chgLevel == PduSessionCharging {
 			tcID := pcc.RefTcDataID()
 			tcData := c.TrafficControlDatas[tcID]
@@ -342,12 +359,12 @@ func (c *SMContext) ApplyDcPccRulesOnDcTunnel() error {
 				c.PreRemoveDataPath(pcc.Datapath)
 			}
 
-			if err := c.CreateDcPccRuleDataPathOnDcTunnel(pcc, tcData, qosData, chgData, nil); err != nil {
-				c.Log.Errorf("CreateDcPccRuleDataPathOnDcTunnel (PDU Level) for PCCRule[%s] failed: %v", id, err)
+			if err2 := c.CreateDcPccRuleDataPathOnDcTunnel(pcc, tcData, qosData, chgData, nil); err2 != nil {
+				c.Log.Errorf("CreateDcPccRuleDataPathOnDcTunnel (PDU Level) for PCCRule[%s] failed: %v", id, err2)
 				continue
 			}
-			if err := applyFlowInfoOrPFD(pcc); err != nil {
-				c.Log.Errorf("applyFlowInfoOrPFD for PCCRule[%s] failed: %v", id, err)
+			if err3 := applyFlowInfoOrPFD(pcc); err3 != nil {
+				c.Log.Errorf("applyFlowInfoOrPFD for PCCRule[%s] failed: %v", id, err3)
 				continue
 			}
 
@@ -367,7 +384,10 @@ func (c *SMContext) ApplyDcPccRulesOnDcTunnel() error {
 			continue
 		}
 
-		chgLevel, _ := pcc.IdentifyChargingLevel()
+		chgLevel, err := pcc.IdentifyChargingLevel()
+		if err != nil {
+			return err
+		}
 		if chgLevel != PduSessionCharging {
 			tcID := pcc.RefTcDataID()
 			tcData := c.TrafficControlDatas[tcID]
@@ -381,12 +401,12 @@ func (c *SMContext) ApplyDcPccRulesOnDcTunnel() error {
 			}
 
 			// main difference between Pass 1 and Pass 2: whether pduChgDatas is passed in
-			if err := c.CreateDcPccRuleDataPathOnDcTunnel(pcc, tcData, qosData, chgData, pduChgDatas); err != nil {
-				c.Log.Errorf("CreateDcPccRuleDataPathOnDcTunnel (Flow Level) for PCCRule[%s] failed: %v", id, err)
+			if err2 := c.CreateDcPccRuleDataPathOnDcTunnel(pcc, tcData, qosData, chgData, pduChgDatas); err2 != nil {
+				c.Log.Errorf("CreateDcPccRuleDataPathOnDcTunnel (Flow Level) for PCCRule[%s] failed: %v", id, err2)
 				continue
 			}
-			if err := applyFlowInfoOrPFD(pcc); err != nil {
-				c.Log.Errorf("applyFlowInfoOrPFD for PCCRule[%s] failed: %v", id, err)
+			if err3 := applyFlowInfoOrPFD(pcc); err3 != nil {
+				c.Log.Errorf("applyFlowInfoOrPFD for PCCRule[%s] failed: %v", id, err3)
 				continue
 			}
 
