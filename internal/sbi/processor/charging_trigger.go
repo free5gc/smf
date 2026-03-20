@@ -250,17 +250,13 @@ func getUrrsByRg(smContext *smf_context.SMContext, upfId string, rg int32) []*sm
 	var foundUrrs []*smf_context.URR
 
 	if entries, ok := smContext.UrrTable[upfId]; ok {
-		trackedUrrs := make([]uint32, 0, len(entries))
 		for urrID, entry := range entries {
-			trackedUrrs = append(trackedUrrs, urrID)
 			if smContext.ChargingInfo[urrID] != nil &&
 				smContext.ChargingInfo[urrID].RatingGroup == rg {
 				foundUrrs = append(foundUrrs, entry.Rule)
 				logger.ChargingLog.Debugf("Found URR[%d] for RatingGroup[%d], UpfId=%s", urrID, rg, upfId)
 			}
 		}
-		logger.ChargingLog.Debugf("Inspect UrrTable for RatingGroup[%d], UpfId=%s: trackedURRs=%v matched=%d",
-			rg, upfId, trackedUrrs, len(foundUrrs))
 	}
 
 	if len(foundUrrs) > 1 {
@@ -290,13 +286,6 @@ func (p *Processor) updateGrantedQuota(
 			logger.ChargingLog.Errorf("Cannot find URR for RatingGroup[%d], UpfId=%s - Quota will NOT be updated", rg, upfId)
 			continue
 		}
-
-		urrIDs := make([]uint32, 0, len(urrs))
-		for _, resolvedURR := range urrs {
-			urrIDs = append(urrIDs, resolvedURR.URRID)
-		}
-		logger.ChargingLog.Debugf("Quota update target resolved: RatingGroup=%d, UpfId=%s, URRs=%v",
-			rg, upfId, urrIDs)
 
 		// Update ALL URRs with the same Rating Group
 		for _, urr := range urrs {

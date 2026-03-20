@@ -214,21 +214,9 @@ func EstablishULCL(smContext *context.SMContext) error {
 			// Append URRs to anchor UPF
 			if curDPNode.UpLinkTunnel != nil && curDPNode.UpLinkTunnel.PDR != nil {
 				smContext.PDRAppendURRs(curDPNode.UPF.UUID(), curDPNode.UpLinkTunnel.PDR, pduLevelChargingUrrs)
-				urrIds := make([]uint32, 0, len(pduLevelChargingUrrs))
-				for _, u := range pduLevelChargingUrrs {
-					urrIds = append(urrIds, u.URRID)
-				}
-				logger.PduSessLog.Infof("[EstablishULCL] UPF=%s URR IDs %v appended to UL-PDR[%d]",
-					curDPNode.UPF.UUID(), urrIds, curDPNode.UpLinkTunnel.PDR.PDRID)
 			}
 			if curDPNode.DownLinkTunnel != nil && curDPNode.DownLinkTunnel.PDR != nil {
 				smContext.PDRAppendURRs(curDPNode.UPF.UUID(), curDPNode.DownLinkTunnel.PDR, pduLevelChargingUrrs)
-				urrIds := make([]uint32, 0, len(pduLevelChargingUrrs))
-				for _, u := range pduLevelChargingUrrs {
-					urrIds = append(urrIds, u.URRID)
-				}
-				logger.PduSessLog.Infof("[EstablishULCL] UPF=%s URR IDs %v appended to DL-PDR[%d]",
-					curDPNode.UPF.UUID(), urrIds, curDPNode.DownLinkTunnel.PDR.PDRID)
 			}
 		}
 

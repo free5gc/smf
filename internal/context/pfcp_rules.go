@@ -53,8 +53,8 @@ type URR struct {
 }
 
 type UrrEntry struct {
-	Rule     *URR      // 規則內容 (RG, Threshold...)
-	State    RuleState // 部署狀態 (INITIAL, CREATE...)
+	Rule     *URR      // rule content (RG, Threshold...)
+	State    RuleState // deployment state (INITIAL, CREATE...)
 	RefCount int       // number of PDRs referencing this URR
 	PDRIDs   []uint16  // IDs of PDRs currently referencing this URR
 }

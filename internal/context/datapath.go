@@ -1243,8 +1243,6 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 		if urr != nil && chgInfo != nil {
 			smContext.ChargingInfo[urr.URRID] = chgInfo
 			urrsToAttach = append(urrsToAttach, urr)
-			logger.ChargingLog.Infof("[AddChargingRules] Bind URR[%d] -> RG=%d UPF=%s level=%v method=%v",
-				urr.URRID, chgInfo.RatingGroup, chgInfo.UpfId, chgInfo.ChargingLevel, chgInfo.ChargingMethod)
 		} else {
 			logger.ChargingLog.Warnf("[AddChargingRules] BUG: URR not created for UPF=%s RG=%d", currentUUID, chgData.RatingGroup)
 		}
@@ -1268,14 +1266,9 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 		}
 
 	}
-	var urrIds []uint32
-
-	for urrId := range smContext.ChargingInfo {
-		urrIds = append(urrIds, urrId)
-	}
-	logger.PduSessLog.Tracef("Final URR IDs: %+v", urrIds)
 }
-func (p *DataPath) CreateUrrAndChgInfo(smContext *SMContext, chgData *models.ChargingData, chgLevel ChargingLevel, upf *UPF) (*URR, *ChargingInfo) {
+func (p *DataPath) CreateUrrAndChgInfo(smContext *SMContext, chgData *models.ChargingData,
+	chgLevel ChargingLevel, upf *UPF) (*URR, *ChargingInfo) {
 	urrIdInt, err := smContext.UrrIDGenerator.Allocate()
 	if err != nil {
 		logger.PduSessLog.Errorln("Generate URR Id failed")
@@ -1293,12 +1286,13 @@ func (p *DataPath) CreateUrrAndChgInfo(smContext *SMContext, chgData *models.Cha
 	var err2 error
 
 	if chgData.Online {
-		//For online charging, URR need to report based on the volume threshold and time threshold
+		// For online charging, URR need to report based on the volume threshold and time threshold
 		newURR, err2 = upf.AddURR(urrId, NewMeasureInformation(false, false), SetStartOfSDFTrigger())
 		chgInfo.ChargingMethod = models.QuotaManagementIndicator_ONLINE_CHARGING
 	} else if chgData.Offline {
 		// For offline charging, URR only need to report based on the volume threshold
-		newURR, err2 = upf.AddURR(urrId, NewMeasureInformation(false, false), NewVolumeThreshold(smContext.UrrReportThreshold))
+		newURR, err2 = upf.AddURR(urrId, NewMeasureInformation(false, false),
+			NewVolumeThreshold(smContext.UrrReportThreshold))
 		chgInfo.ChargingMethod = models.QuotaManagementIndicator_OFFLINE_CHARGING
 	} else {
 		return nil, nil
