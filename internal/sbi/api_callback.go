@@ -69,7 +69,15 @@ func (s *Server) HTTPChargingNotification(c *gin.Context) {
 		logger.PduSessLog.Errorln("Deserialize request failed")
 	}
 
-	smContextRef := strings.Split(c.Params.ByName("notifyUri"), "_")[1]
+	notifyURI := c.Params.ByName("notifyUri")
+	uriparts := strings.SplitN(notifyURI, "_", 2)
+	if len(uriparts) != 2 || uriparts[1] == "" {
+		logger.PduSessLog.Warnf("Invalid notifyUri format: %s", notifyURI)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid notifyUri format"})
+		return
+	}
+
+	smContextRef := uriparts[1]
 
 	s.Processor().HandleChargingNotification(c, req, smContextRef)
 }
