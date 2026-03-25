@@ -70,6 +70,16 @@ func newRouter(s *Server) *gin.Engine {
 
 	router.Use(metrics.InboundMetrics())
 	smfCallbackGroup := router.Group(factory.SmfCallbackUriPrefix)
+	smPolicyCallbackAuthCheck := util_oauth.NewRouterAuthorizationCheck(models.ServiceName_NPCF_SMPOLICYCONTROL)
+	smfCallbackGroup.Use(func(c *gin.Context) {
+		// Apply OAuth check only for SM policy callbacks from PCF.
+		if c.Param("smContextRef") != "" {
+			smPolicyCallbackAuthCheck.Check(c, smf_context.GetSelf())
+			if c.IsAborted() {
+				return
+			}
+		}
+	})
 	smfCallbackRoutes := s.getCallbackRoutes()
 	applyRoutes(smfCallbackGroup, smfCallbackRoutes)
 
