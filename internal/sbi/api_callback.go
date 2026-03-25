@@ -71,7 +71,7 @@ func (s *Server) HTTPChargingNotification(c *gin.Context) {
 
 	notifyURI := c.Params.ByName("notifyUri")
 	uriparts := strings.SplitN(notifyURI, "_", 2)
-	if len(uriparts) != 2 || uriparts[1] == "" {
+	if len(uriparts) != 2 || uriparts[0] != "notify" || uriparts[1] == "" {
 		logger.PduSessLog.Warnf("Invalid notifyUri format: %s", notifyURI)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid notifyUri format"})
 		return
