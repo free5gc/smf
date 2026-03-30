@@ -1025,6 +1025,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			farList = append(farList, indirectForwardingPDR.FAR)
 		}
 
+		if smContextUpdateData.UeLocation != nil {
+			smContext.UeLocation = smContextUpdateData.UeLocation
+		}
 		sendPFCPModification = true
 		smContext.SetState(smf_context.PFCPModification)
 		smContext.HoState = models.HoState_COMPLETED
@@ -1076,6 +1079,24 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		case smf_context.SessionUpdateSuccess:
 			smContext.Log.Traceln("In case SessionUpdateSuccess")
 			smContext.SetState(smf_context.Active)
+			if smContext.HoState == models.HoState_COMPLETED && smContext.UeLocation != nil {
+				go func() {
+					if smPolicyDecision, err := p.Consumer().SendSMPolicyAssociationUpdateByLocationChange(smContext); err != nil {
+						smContext.Log.Warnf("SendSMPolicyAssociationUpdateByLocationChange failed: %s", err)
+					} else if smPolicyDecision != nil {
+						smContext.SMLock.Lock()
+						defer smContext.SMLock.Unlock()
+						if err := smContext.ApplySessionRules(smPolicyDecision); err != nil {
+							smContext.Log.Errorf("apply session rules after handover failed: %v", err)
+						}
+						if err := smContext.ApplyPccRules(smPolicyDecision); err != nil {
+							smContext.Log.Errorf("apply pcc rules after handover failed: %v", err)
+						}
+						ActivateUPFSession(smContext, nil)
+						smContext.PostRemoveDataPath()
+					}
+				}()
+			}
 			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 		case smf_context.SessionUpdateFailed:
 			smContext.Log.Traceln("In case SessionUpdateFailed")
