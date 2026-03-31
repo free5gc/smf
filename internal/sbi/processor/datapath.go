@@ -89,6 +89,12 @@ func ActivateUPFSession(
 	resChan := make(chan SendPfcpResult)
 
 	for ip, pfcp := range pfcpPool {
+		urrIds := []uint32{}
+		for _, urr := range pfcp.urrList {
+			urrIds = append(urrIds, urr.URRID)
+		}
+		logger.PduSessLog.Tracef("[ActivateUPFSession] About to send to UPF[%s]: %d PDRs, %d FARs, "+
+			"%d URRs (aggregated IDs: %v)", ip, len(pfcp.pdrList), len(pfcp.farList), len(pfcp.urrList), urrIds)
 		sessionContext, exist := smContext.PFCPContext[ip]
 		if !exist || sessionContext.RemoteSEID == 0 {
 			go establishPfcpSession(smContext, pfcp, resChan)
@@ -105,7 +111,7 @@ func QueryReport(smContext *smf_context.SMContext, upf *smf_context.UPF,
 	urrs []*smf_context.URR, reportResaon models.ChfConvergedChargingTriggerType,
 ) {
 	for _, urr := range urrs {
-		urr.State = smf_context.RULE_QUERY
+		smContext.SetUrrState(upf.UUID(), urr.URRID, smf_context.RULE_QUERY)
 	}
 
 	pfcpState := &PFCPState{

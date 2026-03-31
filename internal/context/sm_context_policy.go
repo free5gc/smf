@@ -69,60 +69,7 @@ func (c *SMContext) RemoveQosFlow(qfi uint8) {
 	delete(c.AdditonalQosFlows, qfi)
 }
 
-// For urr that created for Pdu session level charging, it shall be applied to all data path
-func (c *SMContext) addPduLevelChargingRuleToFlow(pccRules map[string]*PCCRule) {
-	var pduLevelChargingUrrs []*URR
-
-	// First, select charging URRs from pcc rule, which charging level is PDU Session level
-	for id, pcc := range pccRules {
-		if chargingLevel, err := pcc.IdentifyChargingLevel(); err != nil {
-			continue
-		} else if chargingLevel == PduSessionCharging {
-			pduPcc := pccRules[id]
-			pduLevelChargingUrrs = pduPcc.Datapath.GetChargingUrr(c)
-			break
-		}
-	}
-
-	for _, flowPcc := range pccRules {
-		if chgLevel, err := flowPcc.IdentifyChargingLevel(); err != nil {
-			continue
-		} else if chgLevel == FlowCharging {
-			for node := flowPcc.Datapath.FirstDPNode; node != nil; node = node.Next() {
-				if node.IsAnchorUPF() {
-					// only the traffic on the PSA UPF will be charged
-					if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-						node.UpLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
-					}
-					if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-						node.DownLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
-					}
-				}
-			}
-		}
-	}
-
-	defaultPath := c.Tunnel.DataPathPool.GetDefaultPath()
-	if defaultPath == nil {
-		logger.CtxLog.Errorln("No default data path")
-		return
-	}
-
-	for node := defaultPath.FirstDPNode; node != nil; node = node.Next() {
-		if node.IsAnchorUPF() {
-			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-				node.UpLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
-			}
-			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-				node.DownLinkTunnel.PDR.AppendURRs(pduLevelChargingUrrs)
-			}
-		}
-	}
-}
-
-func (c *SMContext) ApplyPccRules(
-	decision *models.SmPolicyDecision,
-) error {
+func (c *SMContext) ApplyPccRules(decision *models.SmPolicyDecision) error {
 	if decision == nil {
 		return fmt.Errorf("SmPolicyDecision is nil")
 	}
@@ -131,117 +78,168 @@ func (c *SMContext) ApplyPccRules(
 	finalTcDatas := make(map[string]*TrafficControlData)
 	finalQosDatas := make(map[string]*models.QosData)
 	finalChgDatas := make(map[string]*models.ChargingData)
-	// Handle QoSData
+
+	// Handle QoSData Deletion
 	for id, qos := range decision.QosDecs {
 		if qos == nil {
-			// If QoS Data is nil should remove QFI
 			c.RemoveQFI(id)
 		}
 	}
 
-	// Handle PccRules in decision first
-	for id, pccModel := range decision.PccRules {
-		var srcTcData, tgtTcData *TrafficControlData
-		srcPcc := c.PCCRules[id]
-		if pccModel == nil {
-			c.Log.Infof("Remove PCCRule[%s]", id)
-			if srcPcc == nil {
-				c.Log.Warnf("PCCRule[%s] not exist", id)
-				continue
-			}
+	pduRulesToProcess := make(map[string]*PCCRule)
+	flowRulesToProcess := make(map[string]*PCCRule)
 
+	// Helper function: queue rules to be processed in Pass 1 or Pass 2
+	queueRule := func(id string, pcc *PCCRule) error {
+		chgLevel, err := pcc.IdentifyChargingLevel()
+		if err != nil {
+			return err
+		}
+
+		if chgLevel == PduSessionCharging {
+			pduRulesToProcess[id] = pcc
+		} else {
+			flowRulesToProcess[id] = pcc
+		}
+		return nil
+	}
+
+	// Shared logic for processing each rule in Pass 1 and Pass 2
+	processRule := func(id string, tgtPcc *PCCRule, pduChgDatas []*models.ChargingData) error {
+		tgtTcID := tgtPcc.RefTcDataID()
+		_, tgtTcData := c.getSrcTgtTcData(decision.TraffContDecs, tgtTcID)
+		tgtChgID := tgtPcc.RefChgDataID()
+		_, tgtChgData := c.getSrcTgtChgData(decision.ChgDecs, tgtChgID)
+		tgtQosID := tgtPcc.RefQosDataID()
+		_, tgtQosData := c.getSrcTgtQosData(decision.QosDecs, tgtQosID)
+
+		if tgtQosID != "" {
+			tgtPcc.SetQFI(c.AssignQFI(tgtQosID))
+		}
+
+		var srcTcData *TrafficControlData
+		if srcPcc := c.PCCRules[id]; srcPcc != nil {
+			c.Log.Infof("Modify PCCRule[%s]", id)
 			srcTcData = c.TrafficControlDatas[srcPcc.RefTcDataID()]
 			c.PreRemoveDataPath(srcPcc.Datapath)
 		} else {
-			tgtPcc := NewPCCRule(pccModel)
+			c.Log.Infof("Install PCCRule[%s]", id)
+		}
 
-			tgtTcID := tgtPcc.RefTcDataID()
-			_, tgtTcData = c.getSrcTgtTcData(decision.TraffContDecs, tgtTcID)
-
-			tgtChgID := tgtPcc.RefChgDataID()
-			_, tgtChgData := c.getSrcTgtChgData(decision.ChgDecs, tgtChgID)
-
-			tgtQosID := tgtPcc.RefQosDataID()
-			_, tgtQosData := c.getSrcTgtQosData(decision.QosDecs, tgtQosID)
-
-			// only assign the QFI when there is tgtQoSID (i.e. there is QoSData)
-			if tgtQosID != "" {
-				tgtPcc.SetQFI(c.AssignQFI(tgtQosID))
-			}
-
-			// Create Data path for targetPccRule
-			if err := c.CreatePccRuleDataPath(tgtPcc, tgtTcData, tgtQosData, tgtChgData); err != nil {
-				return err
-			}
-			if srcPcc != nil {
-				c.Log.Infof("Modify PCCRule[%s]", id)
-				srcTcData = c.TrafficControlDatas[srcPcc.RefTcDataID()]
-				c.PreRemoveDataPath(srcPcc.Datapath)
-			} else {
-				c.Log.Infof("Install PCCRule[%s]", id)
-			}
-
-			if err := applyFlowInfoOrPFD(tgtPcc); err != nil {
-				return err
-			}
-
-			finalPccRules[id] = tgtPcc
-			if tgtTcID != "" {
-				finalTcDatas[tgtTcID] = tgtTcData
-			}
-			if tgtQosID != "" {
-				finalQosDatas[tgtQosID] = tgtQosData
-			}
-			if tgtChgID != "" {
-				finalChgDatas[tgtChgID] = tgtChgData
-			}
+		// the main difference between Pass 1 and Pass 2: whether pduUrrs is passed in
+		if err := c.CreatePccRuleDataPath(tgtPcc, tgtTcData, tgtQosData, tgtChgData, pduChgDatas); err != nil {
+			return err
+		}
+		if err := applyFlowInfoOrPFD(tgtPcc); err != nil {
+			return err
 		}
 		if err := checkUpPathChangeEvt(c, srcTcData, tgtTcData); err != nil {
 			c.Log.Warnf("Check UpPathChgEvent err: %v", err)
 		}
-		// Remove handled pcc rule
-		delete(c.PCCRules, id)
+
+		finalPccRules[id] = tgtPcc
+		if tgtTcID != "" {
+			finalTcDatas[tgtTcID] = tgtTcData
+		}
+		if tgtQosID != "" {
+			finalQosDatas[tgtQosID] = tgtQosData
+		}
+		if tgtChgID != "" {
+			finalChgDatas[tgtChgID] = tgtChgData
+		}
+		return nil
 	}
 
-	// Handle PccRules not in decision
+	// ==========================================================
+	// Level 1：classifier - Find out which rules are new/modified/deleted
+	// ==========================================================
+
+	// 1.1 Handle Removed PccRule (PccMode == nil)
+	for id, pccModel := range decision.PccRules {
+		if pccModel == nil {
+			c.Log.Infof("Remove PCCRule[%s]", id)
+			if srcPcc := c.PCCRules[id]; srcPcc != nil {
+				c.PreRemoveDataPath(srcPcc.Datapath)
+				srcTcData := c.TrafficControlDatas[srcPcc.RefTcDataID()]
+				if err := checkUpPathChangeEvt(c, srcTcData, nil); err != nil {
+					c.Log.Warnf("Check UpPathChgEvent err: %v", err)
+				}
+			} else {
+				c.Log.Warnf("PCCRule[%s] not exist", id)
+			}
+			delete(c.PCCRules, id)
+			continue
+		}
+		if err := queueRule(id, NewPCCRule(pccModel)); err != nil {
+			return err
+		}
+	}
+
+	// 1.2 Scan the old rules find out which rules are modified
 	for id, pcc := range c.PCCRules {
+		if _, ok := decision.PccRules[id]; ok {
+			continue // already handled in 1.1
+		}
+
 		tcID := pcc.RefTcDataID()
 		srcTcData, tgtTcData := c.getSrcTgtTcData(decision.TraffContDecs, tcID)
-
 		chgID := pcc.RefChgDataID()
 		srcChgData, tgtChgData := c.getSrcTgtChgData(decision.ChgDecs, chgID)
-
 		qosID := pcc.RefQosDataID()
 		srcQosData, tgtQosData := c.getSrcTgtQosData(decision.QosDecs, qosID)
 
 		if !reflect.DeepEqual(srcTcData, tgtTcData) ||
 			!reflect.DeepEqual(srcQosData, tgtQosData) ||
 			!reflect.DeepEqual(srcChgData, tgtChgData) {
-			// Remove old Data path
-			c.PreRemoveDataPath(pcc.Datapath)
-			// Create new Data path
-			if err := c.CreatePccRuleDataPath(pcc, tgtTcData, tgtQosData, tgtChgData); err != nil {
+			if err := queueRule(id, pcc); err != nil {
 				return err
 			}
-			if err := checkUpPathChangeEvt(c, srcTcData, tgtTcData); err != nil {
-				c.Log.Warnf("Check UpPathChgEvent err: %v", err)
+			// rule is changed, so it needs to be re-created with new data
+		} else {
+			// rule is not changed, keep using the old one
+			finalPccRules[id] = pcc
+			if tcID != "" {
+				finalTcDatas[tcID] = tgtTcData
+			}
+			if qosID != "" {
+				finalQosDatas[qosID] = tgtQosData
+			}
+			if chgID != "" {
+				finalChgDatas[chgID] = tgtChgData
 			}
 		}
-		finalPccRules[id] = pcc
-		if tcID != "" {
-			finalTcDatas[tcID] = tgtTcData
-		}
-		if qosID != "" {
-			finalQosDatas[qosID] = tgtQosData
-		}
-		if chgID != "" {
-			finalChgDatas[chgID] = tgtChgData
+	}
+
+	// ==========================================================
+	// Level 2：sequential execution of Two-Pass injection
+	// ==========================================================
+
+	// Pass 1: Pdu Session level charging rules (pduLevelUrrs = nil)
+	for id, pcc := range pduRulesToProcess {
+		if err := processRule(id, pcc, nil); err != nil {
+			return err
 		}
 	}
-	// For PCC rule that is for Pdu session level charging, add the created session rules to all other flow
-	// so that all volume in the Pdu session could be recorded and charged for the Pdu session
-	// FIX ME: This function may add URR which is unrelated to certain UpNode, e.g. TI online charging
-	c.addPduLevelChargingRuleToFlow(finalPccRules)
+
+	// Collect PDU-level charging data from rules created in Pass 1
+	var pduChgDatas []*models.ChargingData
+	for _, pcc := range finalPccRules {
+		if chgLevel, err := pcc.IdentifyChargingLevel(); err == nil && chgLevel == PduSessionCharging && pcc.Datapath != nil {
+			chgID := pcc.RefChgDataID()
+			if data, ok := finalChgDatas[chgID]; ok {
+				pduChgDatas = append(pduChgDatas, data)
+			}
+		} else if err != nil {
+			return err
+		}
+	}
+
+	// Pass 2: Flow level charging rules, which need to apply PDU-level charging data to the data path
+	for id, pcc := range flowRulesToProcess {
+		if err := processRule(id, pcc, pduChgDatas); err != nil {
+			return err
+		}
+	}
 
 	c.PCCRules = finalPccRules
 	c.TrafficControlDatas = finalTcDatas
@@ -335,40 +333,86 @@ func (c *SMContext) ApplyDcPccRulesOnDcTunnel() error {
 
 		c.DCPCCRules[id] = newPcc
 	}
+	var pduChgDatas []*models.ChargingData
 
+	// ==========================================================
+	// Pass 1: Pdu Session level charging rules of DC tunnel (pduLevelUrrs = nil)
+	// ==========================================================
 	for id, pcc := range c.DCPCCRules {
 		if pcc == nil {
-			c.Log.Warnf("PCCRule[%s] is nil", id)
 			continue
 		}
 
-		tcID := pcc.RefTcDataID()
-		tcData := c.TrafficControlDatas[tcID]
-
-		chgID := pcc.RefChgDataID()
-		chgData := c.ChargingData[chgID]
-
-		qosID := pcc.RefQosDataID()
-		qosData := c.QosDatas[qosID]
-
-		if pcc.Datapath != nil {
-			c.PreRemoveDataPath(pcc.Datapath)
+		chgLevel, err := pcc.IdentifyChargingLevel()
+		if err != nil {
+			return err
 		}
+		if chgLevel == PduSessionCharging {
+			tcID := pcc.RefTcDataID()
+			tcData := c.TrafficControlDatas[tcID]
+			chgID := pcc.RefChgDataID()
+			chgData := c.ChargingData[chgID]
+			qosID := pcc.RefQosDataID()
+			qosData := c.QosDatas[qosID]
 
-		if err := c.CreateDcPccRuleDataPathOnDcTunnel(pcc, tcData, qosData, chgData); err != nil {
-			c.Log.Errorf("CreatePccRuleDataPathOnDcTunnel for PCCRule[%s] failed: %v", id, err)
-			continue
+			if pcc.Datapath != nil {
+				c.PreRemoveDataPath(pcc.Datapath)
+			}
+
+			if err2 := c.CreateDcPccRuleDataPathOnDcTunnel(pcc, tcData, qosData, chgData, nil); err2 != nil {
+				c.Log.Errorf("CreateDcPccRuleDataPathOnDcTunnel (PDU Level) for PCCRule[%s] failed: %v", id, err2)
+				continue
+			}
+			if err3 := applyFlowInfoOrPFD(pcc); err3 != nil {
+				c.Log.Errorf("applyFlowInfoOrPFD for PCCRule[%s] failed: %v", id, err3)
+				continue
+			}
+
+			c.Log.Infof("Applied PDU Level PCCRule[%s] to DCTunnel", id)
+
+			if chgData != nil {
+				pduChgDatas = append(pduChgDatas, chgData)
+			}
 		}
-
-		if err := applyFlowInfoOrPFD(pcc); err != nil {
-			c.Log.Errorf("applyFlowInfoOrPFD for PCCRule[%s] failed: %v", id, err)
-			continue
-		}
-
-		c.Log.Infof("Applied PCCRule[%s] to DCTunnel", id)
 	}
 
-	c.addPduLevelChargingRuleToFlow(c.DCPCCRules)
+	// ==========================================================
+	// Pass 2 - Flow level charging rules of DC tunnel
+	// ==========================================================
+	for id, pcc := range c.DCPCCRules {
+		if pcc == nil {
+			continue
+		}
+
+		chgLevel, err := pcc.IdentifyChargingLevel()
+		if err != nil {
+			return err
+		}
+		if chgLevel != PduSessionCharging {
+			tcID := pcc.RefTcDataID()
+			tcData := c.TrafficControlDatas[tcID]
+			chgID := pcc.RefChgDataID()
+			chgData := c.ChargingData[chgID]
+			qosID := pcc.RefQosDataID()
+			qosData := c.QosDatas[qosID]
+
+			if pcc.Datapath != nil {
+				c.PreRemoveDataPath(pcc.Datapath)
+			}
+
+			// main difference between Pass 1 and Pass 2: whether pduChgDatas is passed in
+			if err2 := c.CreateDcPccRuleDataPathOnDcTunnel(pcc, tcData, qosData, chgData, pduChgDatas); err2 != nil {
+				c.Log.Errorf("CreateDcPccRuleDataPathOnDcTunnel (Flow Level) for PCCRule[%s] failed: %v", id, err2)
+				continue
+			}
+			if err3 := applyFlowInfoOrPFD(pcc); err3 != nil {
+				c.Log.Errorf("applyFlowInfoOrPFD for PCCRule[%s] failed: %v", id, err3)
+				continue
+			}
+
+			c.Log.Infof("Applied Flow Level PCCRule[%s] to DCTunnel", id)
+		}
+	}
 
 	return nil
 }

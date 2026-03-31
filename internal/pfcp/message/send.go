@@ -145,7 +145,7 @@ func SendPfcpSessionEstablishmentRequest(
 	}
 
 	pfcpMsg, err := BuildPfcpSessionEstablishmentRequest(upf.NodeID, nodeIDtoIP.String(),
-		ctx, pdrList, farList, barList, qerList, urrList)
+		upf.UUID(), ctx, pdrList, farList, barList, qerList, urrList)
 	if err != nil {
 		logger.PfcpLog.Errorf("build PFCP Session Establishment Request failed: %v", err)
 		return nil, err
@@ -228,7 +228,7 @@ func SendPfcpSessionModificationRequest(
 	}
 
 	pfcpMsg, err := BuildPfcpSessionModificationRequest(upf.NodeID, nodeIDtoIP.String(),
-		ctx, pdrList, farList, barList, qerList, urrList)
+		upf.UUID(), ctx, pdrList, farList, barList, qerList, urrList)
 	if err != nil {
 		logger.PfcpLog.Errorf("build PFCP Session Modification Request failed: %v", err)
 		return nil, err
