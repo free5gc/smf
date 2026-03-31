@@ -51,6 +51,24 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	}
 
 	createData := request.JsonData
+	// ServingNetwork is mandatory for SM Context Create Request, if it is missing, reject the request with 400 Bad Request
+	if createData.ServingNetwork == nil {
+		logger.PduSessLog.Errorf("Reject SM Context Create: ServingNetwork is missing for SUPI[%s]", createData.Supi)
+		postSmContextsError := models.PostSmContextsError{
+			JsonData: &models.SmContextCreateError{
+				Error: &models.SmfPduSessionExtProblemDetails{
+					Title:  "Bad Request",
+					Status: http.StatusBadRequest,
+					Detail: "Mandatory IE ServingNetwork is missing",
+					Cause:  "MANDATORY_IE_MISSING",
+				},
+			},
+		}
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, postSmContextsError.JsonData.Error.Cause)
+		c.JSON(http.StatusBadRequest, postSmContextsError)
+		return
+	}
+
 	// Check duplicate SM Context
 	if dup_smCtx := smf_context.GetSMContextById(createData.Supi, createData.PduSessionId); dup_smCtx != nil {
 		p.HandlePDUSessionSMContextLocalRelease(dup_smCtx, createData)
