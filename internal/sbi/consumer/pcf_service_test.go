@@ -31,7 +31,7 @@ var testConfig = factory.Config{
 }
 
 func TestSendSMPolicyAssociationUpdateByUERequestModification(t *testing.T) {
-	smf_context.InitSmfContext(&testConfig)
+	require.NoError(t, smf_context.InitSmfContext(&testConfig))
 
 	testCases := []struct {
 		name         string

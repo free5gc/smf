@@ -37,7 +37,9 @@ var testNodeID = &pfcpType.NodeID{
 }
 
 func initSmfContext() {
-	context.InitSmfContext(&testConfig)
+	if err := context.InitSmfContext(&testConfig); err != nil {
+		panic(err)
+	}
 }
 
 func initRuleList() ([]*context.PDR, []*context.FAR, []*context.BAR,
