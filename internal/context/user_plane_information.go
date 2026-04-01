@@ -2,6 +2,7 @@ package context
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"net"
 	"reflect"
@@ -80,7 +81,7 @@ func AllocateUPFID() {
 }
 
 // NewUserPlaneInformation process the configuration then returns a new instance of UserPlaneInformation
-func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlaneInformation {
+func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) (*UserPlaneInformation, error) {
 	nodePool := make(map[string]*UPNode)
 	upfPool := make(map[string]*UPNode)
 	anPool := make(map[string]*UPNode)
@@ -142,7 +143,7 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 					for _, pool := range dnnInfoConfig.Pools {
 						ueIPPool := NewUEIPPool(pool)
 						if ueIPPool == nil {
-							logger.InitLog.Fatalf("invalid pools value: %+v", pool)
+							return nil, fmt.Errorf("invalid pools value: %+v", pool)
 						} else {
 							ueIPPools = append(ueIPPools, ueIPPool)
 							allUEIPPools = append(allUEIPPools, ueIPPool)
@@ -151,13 +152,13 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 					for _, staticPool := range dnnInfoConfig.StaticPools {
 						staticUeIPPool := NewUEIPPool(staticPool)
 						if staticUeIPPool == nil {
-							logger.InitLog.Fatalf("invalid pools value: %+v", staticPool)
+							return nil, fmt.Errorf("invalid pools value: %+v", staticPool)
 						} else {
 							staticUeIPPools = append(staticUeIPPools, staticUeIPPool)
 							for _, dynamicUePool := range ueIPPools {
 								if dynamicUePool.ueSubNet.Contains(staticUeIPPool.ueSubNet.IP) {
 									if err := dynamicUePool.Exclude(staticUeIPPool); err != nil {
-										logger.InitLog.Fatalf("exclude static Pool[%s] failed: %v",
+										return nil, fmt.Errorf("exclude static Pool[%s] failed: %v",
 											staticUeIPPool.ueSubNet, err)
 									}
 								}
@@ -200,7 +201,7 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 	}
 
 	if isOverlap(allUEIPPools) {
-		logger.InitLog.Fatalf("overlap cidr value between UPFs")
+		return nil, fmt.Errorf("overlap cidr value between UPFs")
 	}
 
 	for _, link := range upTopology.Links {
@@ -229,7 +230,7 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) *UserPlan
 		DefaultUserPlanePathToUPF: make(map[string]map[string][]*UPNode),
 	}
 
-	return userplaneInformation
+	return userplaneInformation, nil
 }
 
 func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]*factory.UPNode {
@@ -358,7 +359,7 @@ func (upi *UserPlaneInformation) LinksToConfiguration() []*factory.UPLink {
 	return links
 }
 
-func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.UserPlaneInformation) {
+func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.UserPlaneInformation) error {
 	for name, node := range upTopology.UPNodes {
 		if _, ok := upi.UPNodes[name]; ok {
 			logger.InitLog.Warningf("Node [%s] already exists in SMF.\n", name)
@@ -413,7 +414,7 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 					for _, pool := range dnnInfoConfig.Pools {
 						ueIPPool := NewUEIPPool(pool)
 						if ueIPPool == nil {
-							logger.InitLog.Fatalf("invalid pools value: %+v", pool)
+							return fmt.Errorf("invalid pools value: %+v", pool)
 						} else {
 							ueIPPools = append(ueIPPools, ueIPPool)
 						}
@@ -421,13 +422,13 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 					for _, pool := range dnnInfoConfig.StaticPools {
 						ueIPPool := NewUEIPPool(pool)
 						if ueIPPool == nil {
-							logger.InitLog.Fatalf("invalid pools value: %+v", pool)
+							return fmt.Errorf("invalid pools value: %+v", pool)
 						} else {
 							staticUeIPPools = append(staticUeIPPools, ueIPPool)
 							for _, dynamicUePool := range ueIPPools {
 								if dynamicUePool.ueSubNet.Contains(ueIPPool.ueSubNet.IP) {
 									if err := dynamicUePool.Exclude(ueIPPool); err != nil {
-										logger.InitLog.Fatalf("exclude static Pool[%s] failed: %v",
+										return fmt.Errorf("exclude static Pool[%s] failed: %v",
 											ueIPPool.ueSubNet, err)
 									}
 								}
@@ -476,8 +477,10 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 		}
 	}
 	if isOverlap(allUEIPPools) {
-		logger.InitLog.Fatalf("overlap cidr value between UPFs")
+		return fmt.Errorf("overlap cidr value between UPFs")
 	}
+
+	return nil
 }
 
 func (upi *UserPlaneInformation) LinksFromConfiguration(upTopology *factory.UserPlaneInformation) {
