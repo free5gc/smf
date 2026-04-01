@@ -119,7 +119,9 @@ var testConfig = factory.Config{
 }
 
 func initConfig() {
-	smf_context.InitSmfContext(&testConfig)
+	if err := smf_context.InitSmfContext(&testConfig); err != nil {
+		panic(err)
+	}
 	factory.SmfConfig = &testConfig
 }
 
