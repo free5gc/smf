@@ -657,7 +657,9 @@ func TestApplyPccRules(t *testing.T) {
 	}
 
 	smfContext := smf_context.GetSelf()
-	smfContext.UserPlaneInformation = smf_context.NewUserPlaneInformation(&userPlaneConfig)
+	userPlaneInformation, err := smf_context.NewUserPlaneInformation(&userPlaneConfig)
+	require.NoError(t, err)
+	smfContext.UserPlaneInformation = userPlaneInformation
 	for _, n := range smfContext.UserPlaneInformation.UPFs {
 		n.UPF.AssociationContext = context.Background()
 	}
@@ -715,7 +717,7 @@ func TestApplyPccRules(t *testing.T) {
 			Downlink: "1 Gbps",
 		},
 	}
-	err := smctx.AllocUeIP()
+	err = smctx.AllocUeIP()
 	require.NoError(t, err)
 	err = smctx.SelectDefaultDataPath()
 	require.NoError(t, err)
