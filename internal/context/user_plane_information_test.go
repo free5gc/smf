@@ -150,7 +150,8 @@ var configuration = &factory.UserPlaneInformation{
 }
 
 func TestNewUserPlaneInformation(t *testing.T) {
-	userplaneInformation := smf_context.NewUserPlaneInformation(configuration)
+	userplaneInformation, err := smf_context.NewUserPlaneInformation(configuration)
+	require.NoError(t, err)
 
 	require.NotNil(t, userplaneInformation.AccessNetwork["GNodeB"])
 
@@ -249,7 +250,8 @@ func TestGenerateDefaultPath(t *testing.T) {
 		},
 	}
 
-	userplaneInformation := smf_context.NewUserPlaneInformation(&config1)
+	userplaneInformation, err := smf_context.NewUserPlaneInformation(&config1)
+	require.NoError(t, err)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			pathExist := userplaneInformation.GenerateDefaultPath(tc.param)
@@ -268,7 +270,8 @@ func TestSelectUPFAndAllocUEIP(t *testing.T) {
 		expectedIPPool = append(expectedIPPool, net.ParseIP(fmt.Sprintf("10.60.0.%d", i)).To4())
 	}
 
-	userplaneInformation := smf_context.NewUserPlaneInformation(configuration)
+	userplaneInformation, err := smf_context.NewUserPlaneInformation(configuration)
+	require.NoError(t, err)
 	for _, upf := range userplaneInformation.UPFs {
 		upf.UPF.AssociationContext = context.Background()
 	}
@@ -485,7 +488,8 @@ var testCasesOfGetUEIPPool = []struct {
 }
 
 func TestGetUEIPPool(t *testing.T) {
-	userplaneInformation := smf_context.NewUserPlaneInformation(configForIPPoolAllocate)
+	userplaneInformation, err := smf_context.NewUserPlaneInformation(configForIPPoolAllocate)
+	require.NoError(t, err)
 	for _, upf := range userplaneInformation.UPFs {
 		upf.UPF.AssociationContext = context.Background()
 	}
