@@ -360,12 +360,50 @@ func (upi *UserPlaneInformation) LinksToConfiguration() []*factory.UPLink {
 }
 
 func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.UserPlaneInformation) error {
+	candidateUPNodes := make(map[string]*UPNode, len(upi.UPNodes))
+	for name, node := range upi.UPNodes {
+		candidateUPNodes[name] = node
+	}
+
+	candidateUPFs := make(map[string]*UPNode, len(upi.UPFs))
+	for name, node := range upi.UPFs {
+		candidateUPFs[name] = node
+	}
+
+	candidateAccessNetwork := make(map[string]*UPNode, len(upi.AccessNetwork))
+	for name, node := range upi.AccessNetwork {
+		candidateAccessNetwork[name] = node
+	}
+
+	candidateUPFsID := make(map[string]string, len(upi.UPFsID))
+	for name, id := range upi.UPFsID {
+		candidateUPFsID[name] = id
+	}
+
+	candidateUPFsIPtoID := make(map[string]string, len(upi.UPFsIPtoID))
+	for ip, id := range upi.UPFsIPtoID {
+		candidateUPFsIPtoID[ip] = id
+	}
+
+	candidateUPFIPToName := make(map[string]string, len(upi.UPFIPToName))
+	for ip, name := range upi.UPFIPToName {
+		candidateUPFIPToName[ip] = name
+	}
+
+	createdUPFs := make([]*UPF, 0)
+	cleanupCreatedUPFs := func() {
+		for _, upf := range createdUPFs {
+			upfPool.Delete(upf.UUID())
+		}
+	}
+
 	for name, node := range upTopology.UPNodes {
-		if _, ok := upi.UPNodes[name]; ok {
+		if _, ok := candidateUPNodes[name]; ok {
 			logger.InitLog.Warningf("Node [%s] already exists in SMF.\n", name)
 			continue
 		}
 		upNode := new(UPNode)
+		upNode.Name = name
 		upNode.Type = UPNodeType(node.Type)
 		switch upNode.Type {
 		case UPNODE_UPF:
@@ -398,6 +436,7 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 			}
 
 			upNode.UPF = NewUPF(&upNode.NodeID, node.InterfaceUpfInfoList)
+			createdUPFs = append(createdUPFs, upNode.UPF)
 			snssaiInfos := make([]*SnssaiUPFInfo, 0)
 			for _, snssaiInfoConfig := range node.SNssaiInfos {
 				snssaiInfo := &SnssaiUPFInfo{
@@ -414,6 +453,7 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 					for _, pool := range dnnInfoConfig.Pools {
 						ueIPPool := NewUEIPPool(pool)
 						if ueIPPool == nil {
+							cleanupCreatedUPFs()
 							return fmt.Errorf("invalid pools value: %+v", pool)
 						} else {
 							ueIPPools = append(ueIPPools, ueIPPool)
@@ -422,12 +462,14 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 					for _, pool := range dnnInfoConfig.StaticPools {
 						ueIPPool := NewUEIPPool(pool)
 						if ueIPPool == nil {
+							cleanupCreatedUPFs()
 							return fmt.Errorf("invalid pools value: %+v", pool)
 						} else {
 							staticUeIPPools = append(staticUeIPPools, ueIPPool)
 							for _, dynamicUePool := range ueIPPools {
 								if dynamicUePool.ueSubNet.Contains(ueIPPool.ueSubNet.IP) {
 									if err := dynamicUePool.Exclude(ueIPPool); err != nil {
+										cleanupCreatedUPFs()
 										return fmt.Errorf("exclude static Pool[%s] failed: %v",
 											ueIPPool.ueSubNet, err)
 									}
@@ -446,30 +488,30 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 				snssaiInfos = append(snssaiInfos, snssaiInfo)
 			}
 			upNode.UPF.SNssaiInfos = snssaiInfos
-			upi.UPFs[name] = upNode
+			candidateUPFs[name] = upNode
 
 			// AllocateUPFID
 			upfid := upNode.UPF.UUID()
 			upfip := upNode.NodeID.ResolveNodeIdToIp().String()
-			upi.UPFsID[name] = upfid
-			upi.UPFsIPtoID[upfip] = upfid
+			candidateUPFsID[name] = upfid
+			candidateUPFsIPtoID[upfip] = upfid
 
 		case UPNODE_AN:
 			upNode.ANIP = net.ParseIP(node.ANIP)
-			upi.AccessNetwork[name] = upNode
+			candidateAccessNetwork[name] = upNode
 		default:
 			logger.InitLog.Warningf("invalid UPNodeType: %s\n", upNode.Type)
 		}
 
-		upi.UPNodes[name] = upNode
+		candidateUPNodes[name] = upNode
 
 		ipStr := upNode.NodeID.ResolveNodeIdToIp().String()
-		upi.UPFIPToName[ipStr] = name
+		candidateUPFIPToName[ipStr] = name
 	}
 
 	// overlap UE IP pool validation
 	allUEIPPools := []*UeIPPool{}
-	for _, upf := range upi.UPFs {
+	for _, upf := range candidateUPFs {
 		for _, snssaiInfo := range upf.UPF.SNssaiInfos {
 			for _, dnn := range snssaiInfo.DnnList {
 				allUEIPPools = append(allUEIPPools, dnn.UeIPPools...)
@@ -477,8 +519,16 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 		}
 	}
 	if isOverlap(allUEIPPools) {
+		cleanupCreatedUPFs()
 		return fmt.Errorf("overlap cidr value between UPFs")
 	}
+
+	upi.UPNodes = candidateUPNodes
+	upi.UPFs = candidateUPFs
+	upi.AccessNetwork = candidateAccessNetwork
+	upi.UPFsID = candidateUPFsID
+	upi.UPFsIPtoID = candidateUPFsIPtoID
+	upi.UPFIPToName = candidateUPFIPToName
 
 	return nil
 }
