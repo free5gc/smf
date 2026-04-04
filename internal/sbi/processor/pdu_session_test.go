@@ -651,3 +651,129 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 	err = udp.ClosePfcp()
 	require.NoError(t, err)
 }
+
+func TestHandlePDUSessionSMContextCreate_InvalidDnnSnssaiInputs(t *testing.T) {
+	openapi.InterceptH2CClient()
+	defer openapi.RestoreH2CClient()
+	initConfig()
+	initStubPFCP()
+
+	allUPFs := smf_context.GetSelf().UserPlaneInformation.UPFs
+	for _, upfNode := range allUPFs {
+		upfNode.UPF.AssociationContext = context.Background()
+	}
+
+	type input struct {
+		dnn    string
+		snssai *models.Snssai
+		pti    uint8
+	}
+
+	testCases := []struct {
+		name  string
+		input input
+	}{
+		{
+			name: "DNN empty equals nil-case",
+			input: input{
+				dnn: "",
+				snssai: &models.Snssai{
+					Sst: 1,
+					Sd:  "112232",
+				},
+				pti: 7,
+			},
+		},
+		{
+			name: "SNssai nil",
+			input: input{
+				dnn:    "internet",
+				snssai: nil,
+				pti:    8,
+			},
+		},
+		{
+			name: "SD empty equals nil-case",
+			input: input{
+				dnn: "internet",
+				snssai: &models.Snssai{
+					Sst: 1,
+					Sd:  "",
+				},
+				pti: 9,
+			},
+		},
+	}
+
+	mockSmf := service.NewMockSmfAppInterface(gomock.NewController(t))
+	consumer, err := consumer.NewConsumer(mockSmf)
+	require.NoError(t, err)
+
+	processor, err := processor.NewProcessor(mockSmf)
+	require.NoError(t, err)
+
+	service.SMF = mockSmf
+	mockSmf.EXPECT().Context().Return(smf_context.GetSelf()).AnyTimes()
+	mockSmf.EXPECT().Consumer().Return(consumer).AnyTimes()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			httpRecorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(httpRecorder)
+
+			request := models.PostSmContextsRequest{
+				JsonData: &models.SmfPduSessionSmContextCreateData{
+					Supi:         "imsi-208930000007487",
+					Pei:          "imeisv-1110000000000000",
+					Gpsi:         "msisdn-0900000000",
+					PduSessionId: 10,
+					Dnn:          tc.input.dnn,
+					SNssai:       tc.input.snssai,
+					ServingNfId:  "c8d0ee65-f466-48aa-a42f-235ec771cb52",
+					Guami: &models.Guami{
+						PlmnId: &models.PlmnIdNid{
+							Mcc: "208",
+							Mnc: "93",
+						},
+						AmfId: "cafe00",
+					},
+					AnType: "3GPP_ACCESS",
+					ServingNetwork: &models.PlmnIdNid{
+						Mcc: "208",
+						Mnc: "93",
+					},
+				},
+				BinaryDataN1SmMessage: buildPDUSessionEstablishmentRequest(10, tc.input.pti, nasMessage.PDUSessionTypeIPv4),
+			}
+
+			processor.HandlePDUSessionSMContextCreate(c, request, nil)
+
+			httpResp := httpRecorder.Result()
+			defer func() {
+				errClose := httpResp.Body.Close()
+				require.NoError(t, errClose)
+			}()
+
+			rawBytes, errReadAll := io.ReadAll(httpResp.Body)
+			require.NoError(t, errReadAll)
+
+			actual := models.PostSmContextsError{}
+			err = openapi.Deserialize(&actual, rawBytes, httpResp.Header.Get("Content-Type"))
+			require.NoError(t, err)
+
+			require.Equal(t, http.StatusForbidden, httpResp.StatusCode)
+			require.NotNil(t, actual.JsonData)
+			require.NotNil(t, actual.JsonData.Error)
+			require.Equal(t, PDUSession_errors.DnnNotSupported.Cause, actual.JsonData.Error.Cause)
+			require.Equal(t, PDUSession_errors.DnnNotSupported.Status, actual.JsonData.Error.Status)
+			require.NotNil(t, actual.BinaryDataN1SmMessage)
+			require.Equal(t,
+				buildPDUSessionEstablishmentReject(10, 0, nasMessage.Cause5GSMRequestRejectedUnspecified),
+				actual.BinaryDataN1SmMessage,
+			)
+		})
+	}
+
+	err = udp.ClosePfcp()
+	require.NoError(t, err)
+}

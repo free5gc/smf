@@ -122,6 +122,16 @@ func (s *Server) HTTPPostSmContexts(c *gin.Context) {
 		return
 	}
 
+	if request.JsonData.SNssai == nil || request.JsonData.SNssai.Sst == 0 {
+		problemDetail := "Missing or invalid S-NSSAI: SST is required"
+		logger.PduSessLog.Warnln(problemDetail)
+
+		problemDetails := openapi.ProblemDetailsMalformedReqSyntax(problemDetail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(problemDetails.Status)))
+		c.JSON(int(problemDetails.Status), problemDetails)
+		return
+	}
+
 	isDone := c.Done()
 	s.Processor().HandlePDUSessionSMContextCreate(c, request, isDone)
 }

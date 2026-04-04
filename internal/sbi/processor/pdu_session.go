@@ -76,8 +76,18 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	// DNN Information from config
 	smContext.DNNInfo = smf_context.RetrieveDnnInformation(smContext.SNssai, smContext.Dnn)
 	if smContext.DNNInfo == nil {
-		logger.PduSessLog.Errorf("S-NSSAI[sst: %d, sd: %s] DNN[%s] not matched DNN Config",
-			smContext.SNssai.Sst, smContext.SNssai.Sd, smContext.Dnn)
+		var sst int32
+		var sd string
+		if smContext.SNssai != nil {
+			sst = smContext.SNssai.Sst
+			sd = smContext.SNssai.Sd
+		}
+		logger.PduSessLog.Warnf("S-NSSAI[sst: %d, sd: %s] DNN[%s] not matched DNN Config",
+			sst, sd, smContext.Dnn)
+		p.makeEstRejectResAndReleaseSMContext(c, smContext,
+			nasMessage.Cause5GSMRequestRejectedUnspecified,
+			&smf_errors.DnnNotSupported)
+		return
 	}
 	smContext.Log.Debugf("S-NSSAI[sst: %d, sd: %s] DNN[%s]",
 		smContext.SNssai.Sst, smContext.SNssai.Sd, smContext.Dnn)
