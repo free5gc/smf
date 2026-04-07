@@ -108,6 +108,9 @@ func (s *SMFContext) ListenIP() net.IP {
 
 // RetrieveDnnInformation gets the corresponding dnn info from S-NSSAI and DNN
 func RetrieveDnnInformation(snssai *models.Snssai, dnn string) *SnssaiSmfDnnInfo {
+	if snssai == nil || dnn == "" {
+		return nil
+	}
 	for _, snssaiInfo := range GetSelf().SnssaiInfos {
 		if snssaiInfo.Snssai.EqualModelsSnssai(snssai) {
 			return snssaiInfo.DnnInfos[dnn]
