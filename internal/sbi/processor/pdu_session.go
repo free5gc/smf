@@ -191,7 +191,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	smPolicyID, smPolicyDecision, err := p.Consumer().SendSMPolicyAssociationCreate(smContext)
 	if err != nil {
 		if openapiError, ok := err.(openapi.GenericOpenAPIError); ok {
-			if problemDetails, ok := openapiError.Model().(models.ProblemDetails); ok {
+			if problemDetails, okPd := openapiError.Model().(models.ProblemDetails); okPd {
 				smContext.Log.Errorln("setup sm policy association failed:", err, problemDetails)
 				smContext.SetState(smf_context.InActive)
 				if problemDetails.Cause == "USER_UNKNOWN" {
