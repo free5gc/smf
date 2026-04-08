@@ -164,51 +164,53 @@ func EstablishULCL(smContext *context.SMContext) error {
 			}
 
 			// For online/offline charging, create new URR for PSA2 anchor
-			urrId := pduLevelChargingUrrs[0].URRID
-			if smContext.ChargingInfo[urrId].ChargingMethod == models.QuotaManagementIndicator_ONLINE_CHARGING ||
-				smContext.ChargingInfo[urrId].ChargingMethod == models.QuotaManagementIndicator_OFFLINE_CHARGING {
-				var urr *context.URR
-				currentUUID := curDPNode.UPF.UUID()
-				newChgInfo := &context.ChargingInfo{
-					RatingGroup:   smContext.ChargingInfo[urrId].RatingGroup,
-					ChargingLevel: smContext.ChargingInfo[urrId].ChargingLevel,
-					UpfId:         currentUUID,
-				}
-
-				newUrrId, err := smContext.UrrIDGenerator.Allocate()
-				if err != nil {
-					logger.PduSessLog.Errorln("Generate URR Id failed")
-					return err
-				}
-
-				if smContext.ChargingInfo[urrId].ChargingMethod == models.QuotaManagementIndicator_ONLINE_CHARGING {
-					if newURR, err2 := curDPNode.UPF.AddURR(uint32(newUrrId),
-						context.NewMeasureInformation(false, false),
-						context.SetStartOfSDFTrigger()); err2 != nil {
-						logger.PduSessLog.Errorln("new URR failed")
-						return fmt.Errorf("new URR failed for up node [%s]", currentUUID)
-					} else {
-						urr = newURR
-						newChgInfo.ChargingMethod = models.QuotaManagementIndicator_ONLINE_CHARGING
+			if len(pduLevelChargingUrrs) > 0 {
+				urrId := pduLevelChargingUrrs[0].URRID
+				if smContext.ChargingInfo[urrId].ChargingMethod == models.QuotaManagementIndicator_ONLINE_CHARGING ||
+					smContext.ChargingInfo[urrId].ChargingMethod == models.QuotaManagementIndicator_OFFLINE_CHARGING {
+					var urr *context.URR
+					currentUUID := curDPNode.UPF.UUID()
+					newChgInfo := &context.ChargingInfo{
+						RatingGroup:   smContext.ChargingInfo[urrId].RatingGroup,
+						ChargingLevel: smContext.ChargingInfo[urrId].ChargingLevel,
+						UpfId:         currentUUID,
 					}
-				} else {
-					if newURR, err2 := curDPNode.UPF.AddURR(uint32(newUrrId),
-						context.NewMeasureInformation(false, false),
-						context.NewVolumeThreshold(smContext.UrrReportThreshold)); err2 != nil {
-						logger.PduSessLog.Errorln("new URR failed")
-						return fmt.Errorf("new URR failed for up node [%s]", currentUUID)
-					} else {
-						urr = newURR
-						newChgInfo.ChargingMethod = models.QuotaManagementIndicator_OFFLINE_CHARGING
-					}
-				}
 
-				smContext.RegisterUrr(currentUUID, urr)
-				smContext.Log.Tracef("Successfully add URR %d for Rating group %d",
-					urr.URRID, smContext.ChargingInfo[urrId].RatingGroup)
-				smContext.ChargingInfo[urr.URRID] = newChgInfo
-				pduLevelChargingUrrs = pduLevelChargingUrrs[:0]
-				pduLevelChargingUrrs = append(pduLevelChargingUrrs, urr)
+					newUrrId, err := smContext.UrrIDGenerator.Allocate()
+					if err != nil {
+						logger.PduSessLog.Errorln("Generate URR Id failed")
+						return err
+					}
+
+					if smContext.ChargingInfo[urrId].ChargingMethod == models.QuotaManagementIndicator_ONLINE_CHARGING {
+						if newURR, err2 := curDPNode.UPF.AddURR(uint32(newUrrId),
+							context.NewMeasureInformation(false, false),
+							context.SetStartOfSDFTrigger()); err2 != nil {
+							logger.PduSessLog.Errorln("new URR failed")
+							return fmt.Errorf("new URR failed for up node [%s]", currentUUID)
+						} else {
+							urr = newURR
+							newChgInfo.ChargingMethod = models.QuotaManagementIndicator_ONLINE_CHARGING
+						}
+					} else {
+						if newURR, err2 := curDPNode.UPF.AddURR(uint32(newUrrId),
+							context.NewMeasureInformation(false, false),
+							context.NewVolumeThreshold(smContext.UrrReportThreshold)); err2 != nil {
+							logger.PduSessLog.Errorln("new URR failed")
+							return fmt.Errorf("new URR failed for up node [%s]", currentUUID)
+						} else {
+							urr = newURR
+							newChgInfo.ChargingMethod = models.QuotaManagementIndicator_OFFLINE_CHARGING
+						}
+					}
+
+					smContext.RegisterUrr(currentUUID, urr)
+					smContext.Log.Tracef("Successfully add URR %d for Rating group %d",
+						urr.URRID, smContext.ChargingInfo[urrId].RatingGroup)
+					smContext.ChargingInfo[urr.URRID] = newChgInfo
+					pduLevelChargingUrrs = pduLevelChargingUrrs[:0]
+					pduLevelChargingUrrs = append(pduLevelChargingUrrs, urr)
+				}
 			}
 
 			// Append URRs to anchor UPF
