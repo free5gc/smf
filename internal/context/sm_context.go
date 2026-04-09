@@ -670,6 +670,9 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 ) error {
 	var targetRoute models.RouteToLocation
 	if tcData != nil && len(tcData.RouteToLocs) > 0 {
+		if tcData.RouteToLocs[0] == nil {
+			return fmt.Errorf("RouteToLocs contains nil element for pcc rule[%s]", pccRule.PccRuleId)
+		}
 		targetRoute = *tcData.RouteToLocs[0]
 	}
 	param := &UPFSelectionParams{
@@ -718,6 +721,9 @@ func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
 ) error {
 	var targetRoute models.RouteToLocation
 	if tcData != nil && len(tcData.RouteToLocs) > 0 {
+		if tcData.RouteToLocs[0] == nil {
+			return fmt.Errorf("RouteToLocs contains nil element for pcc rule[%s]", pccRule.PccRuleId)
+		}
 		targetRoute = *tcData.RouteToLocs[0]
 	}
 	param := &UPFSelectionParams{
