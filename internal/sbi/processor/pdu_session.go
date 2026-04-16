@@ -15,6 +15,7 @@ import (
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/openapi/pcf/SMPolicyControl"
 	"github.com/free5gc/openapi/udm/SubscriberDataManagement"
 	"github.com/free5gc/pfcp/pfcpType"
 	smf_context "github.com/free5gc/smf/internal/context"
@@ -219,14 +220,20 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	smPolicyID, smPolicyDecision, err := p.Consumer().SendSMPolicyAssociationCreate(smContext)
 	if err != nil {
 		if openapiError, ok := err.(openapi.GenericOpenAPIError); ok {
-			problemDetails := openapiError.Model().(models.ProblemDetails)
-			smContext.Log.Errorln("setup sm policy association failed:", err, problemDetails)
-			smContext.SetState(smf_context.InActive)
-			if problemDetails.Cause == "USER_UNKNOWN" {
-				p.makeEstRejectResAndReleaseSMContext(c, smContext,
-					nasMessage.Cause5GSMRequestRejectedUnspecified,
-					&smf_errors.SubscriptionDenied)
-				return
+			switch errModel := openapiError.Model().(type) {
+			case SMPolicyControl.CreateSMPolicyError:
+				problemDetails := errModel.ProblemDetails
+				smContext.Log.Errorln("set sm policy association failed:", err, problemDetails)
+				smContext.SetState(smf_context.InActive)
+
+				if problemDetails.Cause == "USER_UNKNOWN" {
+					p.makeEstRejectResAndReleaseSMContext(c, smContext,
+						nasMessage.Cause5GSMRequestRejectedUnspecified,
+						&smf_errors.SubscriptionDenied)
+					return
+				}
+			default:
+				smContext.Log.Errorln("set sm policy association failed with unknown error model:", err)
 			}
 		}
 		p.makeEstRejectResAndReleaseSMContext(c, smContext,
