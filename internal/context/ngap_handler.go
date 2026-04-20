@@ -244,6 +244,13 @@ func HandlePathSwitchRequestTransfer(b []byte, ctx *SMContext) error {
 	// update the DC tunnel AN information from Additional DL QoS Flow per TNL Information at IE Extensions
 	if ctx.NrdcIndicator {
 		ieExtensions := pathSwitchRequestTransfer.IEExtensions
+		// IEExtensions is aper:"optional" on PathSwitchRequestTransfer so
+		// a well-formed but stripped-down PathSwitchRequest can omit it
+		// entirely. Skip the DC-tunnel update in that case rather than
+		// panicking on the nil pointer (free5gc/free5gc#1019).
+		if ieExtensions == nil {
+			return nil
+		}
 		for _, ie := range ieExtensions.List {
 			if ie.Id.Value == ngapType.ProtocolIEIDAdditionalDLQosFlowPerTNLInformation {
 				qosFlowInfo := ie.ExtensionValue.AdditionalDLQosFlowPerTNLInformation.List[0]
