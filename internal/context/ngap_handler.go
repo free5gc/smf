@@ -108,7 +108,11 @@ func HandlePDUSessionResourceModifyResponseTransfer(b []byte, ctx *SMContext) er
 	if qosInfoList := resourceModifyResponseTransfer.QosFlowAddOrModifyResponseList; qosInfoList != nil {
 		for _, item := range qosInfoList.List {
 			qfi := uint8(item.QosFlowIdentifier.Value)
-			ctx.AdditonalQosFlows[qfi].State = QoSFlowSet
+			if qosFlow, ok := ctx.AdditonalQosFlows[qfi]; ok {
+				qosFlow.State = QoSFlowSet
+			} else {
+				logger.PduSessLog.Warnf("PDU Session Resource Modify QFI[%d] not found in AdditonalQosFlows", qfi)
+			}
 		}
 	}
 
@@ -118,7 +122,11 @@ func HandlePDUSessionResourceModifyResponseTransfer(b []byte, ctx *SMContext) er
 			logger.PduSessLog.Warnf("PDU Session Resource Modify QFI[%d] %s",
 				qfi, strNgapCause(&item.Cause))
 
-			ctx.AdditonalQosFlows[qfi].State = QoSFlowUnset
+			if qosFlow, ok := ctx.AdditonalQosFlows[qfi]; ok {
+				qosFlow.State = QoSFlowUnset
+			} else {
+				logger.PduSessLog.Warnf("PDU Session Resource Modify QFI[%d] not found in AdditonalQosFlows", qfi)
+			}
 		}
 	}
 
