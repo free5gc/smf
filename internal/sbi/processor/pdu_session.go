@@ -1246,10 +1246,16 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 		}
 	}
 
-	if !smContext.CheckState(smf_context.InActive) {
-		smContext.SetState(smf_context.PFCPModification)
+	var pfcpResponseStatus smf_context.PFCPSessionResponseStatus
+	if smContext.State() == smf_context.InActivePending || smContext.State() == smf_context.InActive {
+		smContext.Log.Infof("PFCP session already released (State: %s), skip PFCP releaseSession", smContext.State().String())
+		pfcpResponseStatus = smf_context.SessionReleaseSuccess
+	} else {
+		if !smContext.CheckState(smf_context.InActive) {
+			smContext.SetState(smf_context.PFCPModification)
+		}
+		pfcpResponseStatus = releaseSession(smContext)
 	}
-	pfcpResponseStatus := releaseSession(smContext)
 
 	switch pfcpResponseStatus {
 	case smf_context.SessionReleaseSuccess:
@@ -1347,9 +1353,14 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 		}
 	}
 
-	smContext.SetState(smf_context.PFCPModification)
-
-	pfcpResponseStatus := releaseSession(smContext)
+	var pfcpResponseStatus smf_context.PFCPSessionResponseStatus
+	if smContext.State() == smf_context.InActivePending || smContext.State() == smf_context.InActive {
+		smContext.Log.Infof("PFCP session already released (State: %s), skip PFCP releaseSession", smContext.State().String())
+		pfcpResponseStatus = smf_context.SessionReleaseSuccess
+	} else {
+		smContext.SetState(smf_context.PFCPModification)
+		pfcpResponseStatus = releaseSession(smContext)
+	}
 
 	switch pfcpResponseStatus {
 	case smf_context.SessionReleaseSuccess:
