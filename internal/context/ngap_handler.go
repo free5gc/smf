@@ -108,7 +108,17 @@ func HandlePDUSessionResourceModifyResponseTransfer(b []byte, ctx *SMContext) er
 	if qosInfoList := resourceModifyResponseTransfer.QosFlowAddOrModifyResponseList; qosInfoList != nil {
 		for _, item := range qosInfoList.List {
 			qfi := uint8(item.QosFlowIdentifier.Value)
-			ctx.AdditonalQosFlows[qfi].State = QoSFlowSet
+			// A gNB can send a QFI that SMF never added to AdditonalQosFlows
+			// (unsolicited NGAP PDUSessionResourceModifyResponse). The map
+			// lookup returns a nil *QoSFlow and `.State = ...` then panics,
+			// killing the goroutine and surfacing HTTP 500 on N11 back to AMF.
+			// Skip unknown QFIs with a warning instead.
+			qos, ok := ctx.AdditonalQosFlows[qfi]
+			if !ok || qos == nil {
+				logger.PduSessLog.Warnf("PDU Session Resource Modify response referenced unknown QFI[%d]; ignoring", qfi)
+				continue
+			}
+			qos.State = QoSFlowSet
 		}
 	}
 
@@ -118,7 +128,12 @@ func HandlePDUSessionResourceModifyResponseTransfer(b []byte, ctx *SMContext) er
 			logger.PduSessLog.Warnf("PDU Session Resource Modify QFI[%d] %s",
 				qfi, strNgapCause(&item.Cause))
 
-			ctx.AdditonalQosFlows[qfi].State = QoSFlowUnset
+			qos, ok := ctx.AdditonalQosFlows[qfi]
+			if !ok || qos == nil {
+				logger.PduSessLog.Warnf("PDU Session Resource Modify failed-list referenced unknown QFI[%d]; ignoring", qfi)
+				continue
+			}
+			qos.State = QoSFlowUnset
 		}
 	}
 
