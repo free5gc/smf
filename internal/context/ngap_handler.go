@@ -111,7 +111,7 @@ func HandlePDUSessionResourceModifyResponseTransfer(b []byte, ctx *SMContext) er
 			if qosFlow, ok := ctx.AdditonalQosFlows[qfi]; ok {
 				qosFlow.State = QoSFlowSet
 			} else {
-				logger.PduSessLog.Warnf("PDU Session Resource Modify QFI[%d] not found in AdditonalQosFlows", qfi)
+				logger.PduSessLog.Warnf("PDU Session Resource Modify QFI[%d] not found in AdditionalQosFlows", qfi)
 			}
 		}
 	}
@@ -125,7 +125,7 @@ func HandlePDUSessionResourceModifyResponseTransfer(b []byte, ctx *SMContext) er
 			if qosFlow, ok := ctx.AdditonalQosFlows[qfi]; ok {
 				qosFlow.State = QoSFlowUnset
 			} else {
-				logger.PduSessLog.Warnf("PDU Session Resource Modify QFI[%d] not found in AdditonalQosFlows", qfi)
+				logger.PduSessLog.Warnf("PDU Session Resource Modify QFI[%d] not found in AdditionalQosFlows", qfi)
 			}
 		}
 	}
@@ -252,14 +252,18 @@ func HandlePathSwitchRequestTransfer(b []byte, ctx *SMContext) error {
 	// update the DC tunnel AN information from Additional DL QoS Flow per TNL Information at IE Extensions
 	if ctx.NrdcIndicator {
 		ieExtensions := pathSwitchRequestTransfer.IEExtensions
-		for _, ie := range ieExtensions.List {
-			if ie.Id.Value == ngapType.ProtocolIEIDAdditionalDLQosFlowPerTNLInformation {
-				qosFlowInfo := ie.ExtensionValue.AdditionalDLQosFlowPerTNLInformation.List[0]
-				DCGTPTunnel := qosFlowInfo.QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
-				ctx.DCTunnel.UpdateANInformation(
-					DCGTPTunnel.TransportLayerAddress.Value.Bytes,
-					binary.BigEndian.Uint32(DCGTPTunnel.GTPTEID.Value))
-				break
+		if ieExtensions == nil {
+			logger.PduSessLog.Warnf("PathSwitchRequestTransfer IEExtensions is nil when NRDC is activated")
+		} else {
+			for _, ie := range ieExtensions.List {
+				if ie.Id.Value == ngapType.ProtocolIEIDAdditionalDLQosFlowPerTNLInformation {
+					qosFlowInfo := ie.ExtensionValue.AdditionalDLQosFlowPerTNLInformation.List[0]
+					DCGTPTunnel := qosFlowInfo.QosFlowPerTNLInformation.UPTransportLayerInformation.GTPTunnel
+					ctx.DCTunnel.UpdateANInformation(
+						DCGTPTunnel.TransportLayerAddress.Value.Bytes,
+						binary.BigEndian.Uint32(DCGTPTunnel.GTPTEID.Value))
+					break
+				}
 			}
 		}
 	}
