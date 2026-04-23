@@ -16,7 +16,9 @@ var config = configuration
 
 func TestNewUEPreConfigPaths(t *testing.T) {
 	smfContext := context.GetSelf()
-	smfContext.UserPlaneInformation = context.NewUserPlaneInformation(config)
+	userPlaneInformation, err := context.NewUserPlaneInformation(config)
+	require.NoError(t, err)
+	smfContext.UserPlaneInformation = userPlaneInformation
 	fmt.Println("Start")
 	testcases := []struct {
 		name                  string
@@ -150,8 +152,8 @@ func TestNewUEPreConfigPaths(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			retUePreConfigPaths, err := context.NewUEPreConfigPaths(tc.inPaths)
-			require.Nil(t, err)
+			retUePreConfigPaths, preConfigErr := context.NewUEPreConfigPaths(tc.inPaths)
+			require.Nil(t, preConfigErr)
 			require.NotNil(t, retUePreConfigPaths.PathIDGenerator)
 			for pathIndex, path := range tc.inPaths {
 				retDataPath := retUePreConfigPaths.DataPathPool[int64(pathIndex+1)]

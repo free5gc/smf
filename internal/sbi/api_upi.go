@@ -69,7 +69,11 @@ func (s *Server) PostUpNodesLinks(c *gin.Context) {
 		return
 	}
 
-	upi.UpNodesFromConfiguration(&json)
+	if err := upi.UpNodesFromConfiguration(&json); err != nil {
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(http.StatusBadRequest)))
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	upi.LinksFromConfiguration(&json)
 
 	for _, upf := range upi.UPFs {

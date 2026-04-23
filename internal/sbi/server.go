@@ -48,7 +48,9 @@ func NewServer(smf ServerSmf, tlsKeyLogPath string) (*Server, error) {
 		ServerSmf: smf,
 	}
 
-	smf_context.InitSmfContext(factory.SmfConfig)
+	if err := smf_context.InitSmfContext(factory.SmfConfig); err != nil {
+		return nil, err
+	}
 	// allocate id for each upf
 	smf_context.AllocateUPFID()
 	smf_context.InitSMFUERouting(factory.UERoutingConfig)
