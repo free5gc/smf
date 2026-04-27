@@ -1,11 +1,12 @@
 package context_test
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestAllowedNfTypesForService(t *testing.T) {
@@ -32,9 +33,7 @@ func TestAllowedNfTypesForService(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := smf_context.AllowedNfTypesForService(tt.serviceName)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("AllowedNfTypesForService(%q) = %v, want %v", tt.serviceName, got, tt.want)
-			}
+			require.Equal(t, tt.want, got)
 		})
 	}
 }
