@@ -296,6 +296,10 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 	case error:
 		return openapi.ProblemDetailsSystemFailure(err.Error()), nil
 	case nil:
+		if len(result.NfInstances) == 0 {
+			logger.ConsumerLog.Warnln("UDM discovery returned empty NfInstances")
+			return nil, openapi.ReportError("UDM discovery returned empty NfInstances")
+		}
 		smfContext.UDMProfile = result.NfInstances[0]
 
 		var client *SubscriberDataManagement.APIClient
@@ -370,6 +374,10 @@ func (s *nnrfService) SendNFDiscoveryServingAMF(smContext *smf_context.SMContext
 		if result.NfInstances == nil {
 			logger.ConsumerLog.Warnln("NfInstances is nil")
 			return nil, openapi.ReportError("NfInstances is nil")
+		}
+		if len(result.NfInstances) == 0 {
+			logger.ConsumerLog.Warnln("AMF NfInstances is empty")
+			return nil, openapi.ReportError("AMF NfInstances is empty")
 		}
 		logger.ConsumerLog.Info("SendNFDiscoveryServingAMF ok")
 		smContext.AMFProfile = result.NfInstances[0]
