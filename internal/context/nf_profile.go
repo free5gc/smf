@@ -32,7 +32,7 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 	// set NFServices
 	c.NfProfile.NFServices = new([]models.NrfNfManagementNfService)
 	for _, serviceName := range nfProfileconfig.Configuration.ServiceNameList {
-		*c.NfProfile.NFServices = append(*c.NfProfile.NFServices, models.NrfNfManagementNfService{
+		nfService := models.NrfNfManagementNfService{
 			ServiceInstanceId: GetSelf().NfInstanceID + serviceName,
 			ServiceName:       models.ServiceName(serviceName),
 			Versions:          *c.NfProfile.NFServiceVersion,
@@ -45,7 +45,13 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 					Port:        int32(GetSelf().SBIPort),
 				},
 			},
-		})
+		}
+
+		if allowedNfTypes := allowedNfTypesForService(models.ServiceName(serviceName)); len(allowedNfTypes) > 0 {
+			nfService.AllowedNfTypes = allowedNfTypes
+		}
+
+		*c.NfProfile.NFServices = append(*c.NfProfile.NFServices, nfService)
 	}
 
 	// set smfInfo
@@ -62,6 +68,19 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 				Mnc: plmn.Mnc,
 			})
 		}
+	}
+}
+
+func allowedNfTypesForService(serviceName models.ServiceName) []models.NrfNfManagementNfType {
+	switch serviceName {
+	case models.ServiceName_NSMF_PDUSESSION:
+		// N11 `/sm-contexts` is consumed by AMF and inter-SMF procedures.
+		return []models.NrfNfManagementNfType{
+			models.NrfNfManagementNfType_AMF,
+			models.NrfNfManagementNfType_SMF,
+		}
+	default:
+		return nil
 	}
 }
 
