@@ -47,7 +47,7 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 			},
 		}
 
-		if allowedNfTypes := allowedNfTypesForService(models.ServiceName(serviceName)); len(allowedNfTypes) > 0 {
+		if allowedNfTypes := AllowedNfTypesForService(models.ServiceName(serviceName)); len(allowedNfTypes) > 0 {
 			nfService.AllowedNfTypes = allowedNfTypes
 		}
 
@@ -71,7 +71,7 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 	}
 }
 
-func allowedNfTypesForService(serviceName models.ServiceName) []models.NrfNfManagementNfType {
+func AllowedNfTypesForService(serviceName models.ServiceName) []models.NrfNfManagementNfType {
 	switch serviceName {
 	case models.ServiceName_NSMF_PDUSESSION:
 		// N11 `/sm-contexts` is consumed by AMF and inter-SMF procedures.
