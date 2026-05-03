@@ -5,7 +5,9 @@ import (
 	"reflect"
 
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/util"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
@@ -54,8 +56,55 @@ func (c *SMContext) ApplySessionRules(
 		}
 	}
 
-	// TODO: need update default data path if SessionRule changed
+	// Update AMBR QER if the selected session rule's AMBR has changed
+	selectedRule := c.SelectedSessionRule()
+	if selectedRule != nil && selectedRule.AuthSessAmbr != nil {
+		ulMbr, errUL := util.BitRateTokbps(selectedRule.AuthSessAmbr.Uplink)
+		dlMbr, errDL := util.BitRateTokbps(selectedRule.AuthSessAmbr.Downlink)
+		if errUL != nil || errDL != nil {
+			logger.CtxLog.Warnf("ApplySessionRules: failed to parse AMBR: UL=%v DL=%v", errUL, errDL)
+		} else {
+			c.updateAMBRQer(ulMbr, dlMbr)
+		}
+	}
 	return nil
+}
+
+// updateAMBRQer walks all activated datapath nodes and updates the AMBR QER
+// MBR values, marking each as RULE_UPDATE so the next PFCP modification
+// request will carry an UpdateQER IE.
+func (c *SMContext) updateAMBRQer(ulMbrkbps, dlMbrkbps uint64) {
+	if c.Tunnel == nil {
+		return
+	}
+	visited := make(map[uint32]bool) // avoid updating the same QER twice
+	for _, dataPath := range c.Tunnel.DataPathPool {
+		if !dataPath.Activated {
+			continue
+		}
+		for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
+			qerID, ok := c.AMBRQerMap[node.UPF.uuid]
+			if !ok {
+				continue
+			}
+			if visited[qerID] {
+				continue
+			}
+			visited[qerID] = true
+
+			qer := node.UPF.GetQERById(qerID)
+			if qer == nil {
+				continue
+			}
+			qer.MBR = &pfcpType.MBR{
+				ULMBR: ulMbrkbps,
+				DLMBR: dlMbrkbps,
+			}
+			qer.State = RULE_UPDATE
+			c.Log.Infof("updateAMBRQer: QER[%d] updated to UL=%d DL=%d kbps, state=RULE_UPDATE",
+				qerID, ulMbrkbps, dlMbrkbps)
+		}
+	}
 }
 
 func (c *SMContext) AddQosFlow(qfi uint8, qos *models.QosData) {
