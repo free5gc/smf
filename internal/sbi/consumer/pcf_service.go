@@ -133,66 +133,72 @@ func (s *npcfService) SendSMPolicyAssociationUpdateByUERequestModification(
 ) (*models.SmPolicyDecision, error) {
 	updateSMPolicy := models.SmPolicyUpdateContextData{}
 
-	updateSMPolicy.RepPolicyCtrlReqTriggers = []models.PolicyControlRequestTrigger{
-		models.PolicyControlRequestTrigger_RES_MO_RE,
-	}
+	hasQoSRules := len(qosRules) > 0
+	hasQoSFlowDescs := len(qosFlowDescs) > 0
 
-	// UE SHOULD only create ONE QoS Flow in a request (TS 24.501 6.4.2.2)
-	if len(qosRules) == 0 {
-		return nil, errors.New("QoS Rule not found")
-	}
-	if len(qosFlowDescs) == 0 {
-		return nil, errors.New("QoS Flow Description not found")
-	}
-
-	rule := qosRules[0]
-	flowDesc := qosFlowDescs[0]
-
-	var ruleOp models.RuleOperation
-	switch rule.Operation {
-	case nasType.OperationCodeCreateNewQoSRule:
-		ruleOp = models.RuleOperation_CREATE_PCC_RULE
-	case nasType.OperationCodeDeleteExistingQoSRule:
-		ruleOp = models.RuleOperation_DELETE_PCC_RULE
-	case nasType.OperationCodeModifyExistingQoSRuleAndAddPacketFilters:
-		ruleOp = models.RuleOperation_MODIFY_PCC_RULE_AND_ADD_PACKET_FILTERS
-	case nasType.OperationCodeModifyExistingQoSRuleAndDeletePacketFilters:
-		ruleOp = models.RuleOperation_MODIFY_PCC_RULE_AND_DELETE_PACKET_FILTERS
-	case nasType.OperationCodeModifyExistingQoSRuleAndReplaceAllPacketFilters:
-		ruleOp = models.RuleOperation_MODIFY_PCC_RULE_AND_REPLACE_PACKET_FILTERS
-	case nasType.OperationCodeModifyExistingQoSRuleWithoutModifyingPacketFilters:
-		ruleOp = models.RuleOperation_MODIFY_PCC_RULE_WITHOUT_MODIFY_PACKET_FILTERS
-	default:
-		return nil, errors.New("QoS Rule Operation Unknown")
-	}
-
-	ueInitResReq := &models.UeInitiatedResourceRequest{}
-	ueInitResReq.RuleOp = ruleOp
-	ueInitResReq.Precedence = int32(rule.Precedence)
-	ueInitResReq.ReqQos = new(models.RequestedQos)
-
-	for _, parameter := range flowDesc.Parameters {
-		switch parameter.Identifier() {
-		case nasType.ParameterIdentifier5QI:
-			para5Qi := parameter.(*nasType.QoSFlow5QI)
-			ueInitResReq.ReqQos.Var5qi = int32(para5Qi.FiveQI)
-		case nasType.ParameterIdentifierGFBRUplink:
-			paraGFBRUplink := parameter.(*nasType.QoSFlowGFBRUplink)
-			ueInitResReq.ReqQos.GbrUl = s.nasBitRateToString(paraGFBRUplink.Value, paraGFBRUplink.Unit)
-		case nasType.ParameterIdentifierGFBRDownlink:
-			paraGFBRDownlink := parameter.(*nasType.QoSFlowGFBRDownlink)
-			ueInitResReq.ReqQos.GbrDl = s.nasBitRateToString(paraGFBRDownlink.Value, paraGFBRDownlink.Unit)
+	if !hasQoSRules && !hasQoSFlowDescs {
+		// No UE-initiated resource request; update without RES_MO_RE.
+	} else if !hasQoSRules {
+		return nil, errors.New("QoS rules missing for UE-initiated request")
+	} else {
+		updateSMPolicy.RepPolicyCtrlReqTriggers = []models.PolicyControlRequestTrigger{
+			models.PolicyControlRequestTrigger_RES_MO_RE,
 		}
-	}
 
-	updateSMPolicy.UeInitResReq = ueInitResReq
+		// UE SHOULD only create ONE QoS Flow in a request (TS 24.501 6.4.2.2)
+		rule := qosRules[0]
+		var flowDesc *nasType.QoSFlowDesc
+		if hasQoSFlowDescs {
+			flowDesc = &qosFlowDescs[0]
+		}
 
-	for _, pf := range rule.PacketFilterList {
-		if PackFiltInfo, err := s.buildPktFilterInfo(pf); err != nil {
-			smContext.Log.Warning("Build PackFiltInfo failed", err)
-			continue
-		} else {
-			updateSMPolicy.UeInitResReq.PackFiltInfo = append(updateSMPolicy.UeInitResReq.PackFiltInfo, *PackFiltInfo)
+		var ruleOp models.RuleOperation
+		switch rule.Operation {
+		case nasType.OperationCodeCreateNewQoSRule:
+			ruleOp = models.RuleOperation_CREATE_PCC_RULE
+		case nasType.OperationCodeDeleteExistingQoSRule:
+			ruleOp = models.RuleOperation_DELETE_PCC_RULE
+		case nasType.OperationCodeModifyExistingQoSRuleAndAddPacketFilters:
+			ruleOp = models.RuleOperation_MODIFY_PCC_RULE_AND_ADD_PACKET_FILTERS
+		case nasType.OperationCodeModifyExistingQoSRuleAndDeletePacketFilters:
+			ruleOp = models.RuleOperation_MODIFY_PCC_RULE_AND_DELETE_PACKET_FILTERS
+		case nasType.OperationCodeModifyExistingQoSRuleAndReplaceAllPacketFilters:
+			ruleOp = models.RuleOperation_MODIFY_PCC_RULE_AND_REPLACE_PACKET_FILTERS
+		case nasType.OperationCodeModifyExistingQoSRuleWithoutModifyingPacketFilters:
+			ruleOp = models.RuleOperation_MODIFY_PCC_RULE_WITHOUT_MODIFY_PACKET_FILTERS
+		default:
+			return nil, errors.New("QoS Rule Operation Unknown")
+		}
+
+		ueInitResReq := &models.UeInitiatedResourceRequest{}
+		ueInitResReq.RuleOp = ruleOp
+		ueInitResReq.Precedence = int32(rule.Precedence)
+		if flowDesc != nil {
+			ueInitResReq.ReqQos = new(models.RequestedQos)
+			for _, parameter := range flowDesc.Parameters {
+				switch parameter.Identifier() {
+				case nasType.ParameterIdentifier5QI:
+					para5Qi := parameter.(*nasType.QoSFlow5QI)
+					ueInitResReq.ReqQos.Var5qi = int32(para5Qi.FiveQI)
+				case nasType.ParameterIdentifierGFBRUplink:
+					paraGFBRUplink := parameter.(*nasType.QoSFlowGFBRUplink)
+					ueInitResReq.ReqQos.GbrUl = s.nasBitRateToString(paraGFBRUplink.Value, paraGFBRUplink.Unit)
+				case nasType.ParameterIdentifierGFBRDownlink:
+					paraGFBRDownlink := parameter.(*nasType.QoSFlowGFBRDownlink)
+					ueInitResReq.ReqQos.GbrDl = s.nasBitRateToString(paraGFBRDownlink.Value, paraGFBRDownlink.Unit)
+				}
+			}
+		}
+
+		updateSMPolicy.UeInitResReq = ueInitResReq
+
+		for _, pf := range rule.PacketFilterList {
+			if PackFiltInfo, err := s.buildPktFilterInfo(pf); err != nil {
+				smContext.Log.Warning("Build PackFiltInfo failed", err)
+				continue
+			} else {
+				updateSMPolicy.UeInitResReq.PackFiltInfo = append(updateSMPolicy.UeInitResReq.PackFiltInfo, *PackFiltInfo)
+			}
 		}
 	}
 
