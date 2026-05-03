@@ -1,12 +1,12 @@
 package consumer
 
 import (
-	"context"
 	"sync"
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/smf/PDUSession"
+	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 )
@@ -54,9 +54,16 @@ func (s *nsmfService) SendSMContextStatusNotification(uri string) (*models.Probl
 
 		client := s.getPDUSessionClient(uri)
 
+		ctx, pd, err := smf_context.GetSelf().GetTokenCtx(
+			models.ServiceName("namf-callback"), models.NrfNfManagementNfType_AMF)
+		if err != nil {
+			logger.CtxLog.Warnf("[SMF] Get token for AMF callback failed: %+v", pd)
+			return pd, err
+		}
+
 		logger.CtxLog.Infoln("[SMF] Send SMContext Status Notification")
 		_, localErr := client.SMContextsCollectionApi.
-			PostSmContextsSmContextStatusNotificationPost(context.Background(), uri, request)
+			PostSmContextsSmContextStatusNotificationPost(ctx, uri, request)
 
 		switch err := localErr.(type) {
 		case openapi.GenericOpenAPIError:
