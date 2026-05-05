@@ -47,7 +47,7 @@ func (p *Processor) chargingNotificationProcedure(
 				for urrID, entry := range entries {
 					chgInfo := smContext.ChargingInfo[urrID]
 					if chgInfo == nil {
-						logger.ChargingLog.Warnf("Charging Info for URR ID %d not found", urrID)
+						logger.ChargingLog.Warnf("ChargingInfo for URR ID %d not found", urrID)
 						continue
 					}
 					if chgInfo.RatingGroup == rg ||
