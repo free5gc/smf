@@ -46,6 +46,10 @@ func (p *Processor) chargingNotificationProcedure(
 			for upfId, entries := range smContext.UrrTable {
 				for urrID, entry := range entries {
 					chgInfo := smContext.ChargingInfo[urrID]
+					if chgInfo == nil {
+						logger.ChargingLog.Warnf("Charging Info for URR ID %d not found", urrID)
+						continue
+					}
 					if chgInfo.RatingGroup == rg ||
 						chgInfo.ChargingLevel == smf_context.PduSessionCharging {
 						logger.ChargingLog.Tracef("Query URR (%d) for Rating Group (%d)", urrID, rg)
