@@ -47,7 +47,13 @@ func (p *Processor) chargingNotificationProcedure(
 				for urrID, entry := range entries {
 					chgInfo := smContext.ChargingInfo[urrID]
 					if chgInfo == nil {
-						logger.ChargingLog.Warnf("ChargingInfo for URR ID %d not found", urrID)
+						if smf_context.IsChargingRelatedUrr(entry.Rule) {
+							logger.ChargingLog.Errorf(
+								"Charging-related URR[%d] (UPF=%s, state=%v, requestedRG=%d) missing ChargingInfo", urrID, upfId, entry.State, rg)
+						} else {
+							logger.ChargingLog.Tracef(
+								"Skip non-charging URR[%d] (UPF=%s, state=%v) with no ChargingInfo", urrID, upfId, entry.State)
+						}
 						continue
 					}
 					if chgInfo.RatingGroup == rg ||
