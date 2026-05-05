@@ -188,15 +188,9 @@ func buildMultiUnitUsageFromUsageReport(
 				}
 
 				if smf_context.IsChargingRelatedUrr(urrRule) {
-					logger.PduSessLog.Errorf(
-						"Charging-related URR[%d] (report.UpfId=%s, reportType=%s) missing ChargingInfo",
-						ur.UrrId, ur.UpfId, ur.ReportTpye,
-					)
+					logger.PduSessLog.Errorf("Charging-related URR[%d] missing ChargingInfo", ur.UrrId)
 				} else {
-					logger.PduSessLog.Tracef(
-						"Skip non-charging URR[%d] (report.UpfId=%s, reportType=%s) with no ChargingInfo",
-						ur.UrrId, ur.UpfId, ur.ReportTpye,
-					)
+					logger.PduSessLog.Tracef("Skip non-charging URR[%d] with no ChargingInfo", ur.UrrId)
 				}
 				continue
 			}
