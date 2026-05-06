@@ -45,6 +45,10 @@ func (p *Processor) chargingNotificationProcedure(
 			logger.ChargingLog.Infof("Force update charging information for rating group %d", rg)
 			for upfId, entries := range smContext.UrrTable {
 				for urrID, entry := range entries {
+					if entry == nil || entry.Rule == nil {
+						logger.ChargingLog.Errorf("URR[%d] rule not found for rating group %d", urrID, rg)
+						continue
+					}
 					chgInfo := smContext.ChargingInfo[urrID]
 					if chgInfo == nil {
 						if smf_context.IsChargingRelatedUrr(entry.Rule) {

@@ -187,7 +187,9 @@ func buildMultiUnitUsageFromUsageReport(
 					}
 				}
 
-				if smf_context.IsChargingRelatedUrr(urrRule) {
+				if urrRule == nil {
+					logger.PduSessLog.Errorf("URR[%d] rule not found", ur.UrrId)
+				} else if smf_context.IsChargingRelatedUrr(urrRule) {
 					logger.PduSessLog.Errorf("Charging-related URR[%d] missing ChargingInfo", ur.UrrId)
 				} else {
 					logger.PduSessLog.Tracef("Skip non-charging URR[%d] with no ChargingInfo", ur.UrrId)
