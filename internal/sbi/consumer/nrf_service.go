@@ -446,7 +446,9 @@ func (s *nnrfService) PCFSelection(smContext *smf_context.SMContext) error {
 	}
 
 	// Select PCF from available PCF
-
+	if res == nil || len(res.SearchResult.NfInstances) == 0 {
+		return fmt.Errorf("no PCF found in PCFSelection")
+	}
 	smContext.SelectedPCFProfile = res.SearchResult.NfInstances[0]
 
 	return nil
