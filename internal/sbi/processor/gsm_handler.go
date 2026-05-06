@@ -232,8 +232,13 @@ func (p *Processor) HandlePDUSessionModificationRequest(
 	authQoSFlowDesc := reqQoSFlowDescs
 
 	for id := range smPolicyDecision.PccRules {
-		// get op code from request
-		opCode := reqQoSRules[0].Operation
+		// get op code from request, default if UE omitted RequestedQosRules
+		var opCode nasType.QoSRuleOperationCode
+		if len(reqQoSRules) > 0 {
+			opCode = reqQoSRules[0].Operation
+		} else {
+			opCode = nasType.OperationCodeModifyExistingQoSRuleAndAddPacketFilters
+		}
 		// build nas Qos Rule
 		pccRule := smCtx.PCCRules[id]
 		rule, err := pccRule.BuildNasQoSRule(smCtx, opCode)
