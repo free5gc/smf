@@ -170,7 +170,30 @@ func buildMultiUnitUsageFromUsageReport(
 
 			chgInfo := smContext.ChargingInfo[ur.UrrId]
 			if chgInfo == nil {
-				logger.PduSessLog.Warnf("URR %d is not in ChargingInfo map!", ur.UrrId)
+				var urrRule *smf_context.URR
+				if ur.UpfId != "" {
+					if entries, ok := smContext.UrrTable[ur.UpfId]; ok {
+						if entry := entries[ur.UrrId]; entry != nil {
+							urrRule = entry.Rule
+						}
+					}
+				}
+				if urrRule == nil {
+					for _, entries := range smContext.UrrTable {
+						if entry := entries[ur.UrrId]; entry != nil {
+							urrRule = entry.Rule
+							break
+						}
+					}
+				}
+
+				if urrRule == nil {
+					logger.PduSessLog.Errorf("URR[%d] rule not found", ur.UrrId)
+				} else if smf_context.IsChargingRelatedUrr(urrRule) {
+					logger.PduSessLog.Errorf("Charging-related URR[%d] missing ChargingInfo", ur.UrrId)
+				} else {
+					logger.PduSessLog.Tracef("Skip non-charging URR[%d] with no ChargingInfo", ur.UrrId)
+				}
 				continue
 			}
 

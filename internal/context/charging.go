@@ -31,3 +31,11 @@ type ChargingInfo struct {
 	RatingGroup            int32
 	UpfId                  string
 }
+
+// IsChargingRelatedUrr determines whether a URR is expected to have ChargingInfo.
+func IsChargingRelatedUrr(urr *URR) bool {
+	if urr == nil {
+		return false
+	}
+	return !urr.MeasurementInformation.Mnop && !urr.MeasurementInformation.Mbqe
+}

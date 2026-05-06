@@ -45,7 +45,19 @@ func (p *Processor) chargingNotificationProcedure(
 			logger.ChargingLog.Infof("Force update charging information for rating group %d", rg)
 			for upfId, entries := range smContext.UrrTable {
 				for urrID, entry := range entries {
+					if entry == nil || entry.Rule == nil {
+						logger.ChargingLog.Errorf("URR[%d] rule not found for rating group %d", urrID, rg)
+						continue
+					}
 					chgInfo := smContext.ChargingInfo[urrID]
+					if chgInfo == nil {
+						if smf_context.IsChargingRelatedUrr(entry.Rule) {
+							logger.ChargingLog.Errorf("Charging-related URR[%d] missing ChargingInfo", urrID)
+						} else {
+							logger.ChargingLog.Tracef("Skip non-charging URR[%d] with no ChargingInfo", urrID)
+						}
+						continue
+					}
 					if chgInfo.RatingGroup == rg ||
 						chgInfo.ChargingLevel == smf_context.PduSessionCharging {
 						logger.ChargingLog.Tracef("Query URR (%d) for Rating Group (%d)", urrID, rg)
