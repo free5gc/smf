@@ -45,7 +45,11 @@ func (p *Processor) chargingNotificationProcedure(
 			logger.ChargingLog.Infof("Force update charging information for rating group %d", rg)
 			for upfId, entries := range smContext.UrrTable {
 				for urrID, entry := range entries {
+					// skip URRs not registered in ChargingInfo
 					chgInfo := smContext.ChargingInfo[urrID]
+					if chgInfo == nil {
+						continue
+					}
 					if chgInfo.RatingGroup == rg ||
 						chgInfo.ChargingLevel == smf_context.PduSessionCharging {
 						logger.ChargingLog.Tracef("Query URR (%d) for Rating Group (%d)", urrID, rg)
