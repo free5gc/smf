@@ -48,7 +48,9 @@ func NewServer(smf ServerSmf, tlsKeyLogPath string) (*Server, error) {
 		ServerSmf: smf,
 	}
 
-	smf_context.InitSmfContext(factory.SmfConfig)
+	if err := smf_context.InitSmfContext(factory.SmfConfig); err != nil {
+		return nil, err
+	}
 	// allocate id for each upf
 	smf_context.AllocateUPFID()
 	smf_context.InitSMFUERouting(factory.UERoutingConfig)
@@ -70,10 +72,24 @@ func newRouter(s *Server) *gin.Engine {
 
 	router.Use(metrics.InboundMetrics())
 	smfCallbackGroup := router.Group(factory.SmfCallbackUriPrefix)
+	smPolicyCallbackAuthCheck := util_oauth.NewRouterAuthorizationCheck(models.ServiceName_NPCF_SMPOLICYCONTROL)
+	smfCallbackGroup.Use(func(c *gin.Context) {
+		// Apply OAuth check only for SM policy callbacks from PCF.
+		if c.Param("smContextRef") != "" {
+			smPolicyCallbackAuthCheck.Check(c, smf_context.GetSelf())
+			if c.IsAborted() {
+				return
+			}
+		}
+	})
 	smfCallbackRoutes := s.getCallbackRoutes()
 	applyRoutes(smfCallbackGroup, smfCallbackRoutes)
 
 	upiGroup := router.Group(factory.UpiUriPrefix)
+	upiAuthCheck := util_oauth.NewRouterAuthorizationCheck(models.ServiceName_NSMF_OAM)
+	upiGroup.Use(func(c *gin.Context) {
+		upiAuthCheck.Check(c, smf_context.GetSelf())
+	})
 	upiRoutes := s.getUPIRoutes()
 	applyRoutes(upiGroup, upiRoutes)
 

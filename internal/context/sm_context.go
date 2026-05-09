@@ -168,6 +168,7 @@ type SMContext struct {
 	BPManager   *BPManager
 	// NodeID(string form) to PFCP Session Context
 	PFCPContext                         map[string]*PFCPSessionContext
+	PFCPReleaseDone                     bool
 	PDUSessionRelease_DUE_TO_DUP_PDU_ID bool
 
 	DNNInfo *SnssaiSmfDnnInfo
@@ -201,7 +202,8 @@ type SMContext struct {
 	// URR
 	UrrIDGenerator     *idgenerator.IDGenerator
 	UrrIdMap           map[UrrType]uint32
-	UrrUpfMap          map[string]*URR
+	UrrTable           map[string]map[uint32]*UrrEntry
+	UrrTableMutex      sync.RWMutex
 	UrrReportTime      time.Duration
 	UrrReportThreshold uint64
 	// Cache the usage reports, sent from UPF
@@ -327,7 +329,7 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 	smContext.UrrIDGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
 	smContext.UrrIdMap = make(map[UrrType]uint32)
 	smContext.GenerateUrrId()
-	smContext.UrrUpfMap = make(map[string]*URR)
+	smContext.UrrTable = make(map[string]map[uint32]*UrrEntry)
 
 	smContext.ChargingInfo = make(map[uint32]*ChargingInfo)
 	smContext.ChargingID = GenerateChargingID()
@@ -665,10 +667,13 @@ func (c *SMContext) SelectDefaultDataPath() error {
 
 func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	tcData *TrafficControlData, qosData *models.QosData,
-	chgData *models.ChargingData,
+	chgData *models.ChargingData, pduChgDatas []*models.ChargingData,
 ) error {
 	var targetRoute models.RouteToLocation
 	if tcData != nil && len(tcData.RouteToLocs) > 0 {
+		if tcData.RouteToLocs[0] == nil {
+			return fmt.Errorf("RouteToLocs contains nil element for pcc rule[%s]", pccRule.PccRuleId)
+		}
 		targetRoute = *tcData.RouteToLocs[0]
 	}
 	param := &UPFSelectionParams{
@@ -701,7 +706,7 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	if chgLevel, err := pccRule.IdentifyChargingLevel(); err != nil {
 		c.Log.Warnf("fail to identify charging level[%+v] for pcc rule[%s]", err, pccRule.PccRuleId)
 	} else {
-		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData)
+		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData, pduChgDatas)
 	}
 
 	if pccRule.RefQosDataID() != "" {
@@ -713,10 +718,13 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 
 func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
 	tcData *TrafficControlData, qosData *models.QosData,
-	chgData *models.ChargingData,
+	chgData *models.ChargingData, pduChgDatas []*models.ChargingData,
 ) error {
 	var targetRoute models.RouteToLocation
 	if tcData != nil && len(tcData.RouteToLocs) > 0 {
+		if tcData.RouteToLocs[0] == nil {
+			return fmt.Errorf("RouteToLocs contains nil element for pcc rule[%s]", pccRule.PccRuleId)
+		}
 		targetRoute = *tcData.RouteToLocs[0]
 	}
 	param := &UPFSelectionParams{
@@ -749,7 +757,7 @@ func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
 	if chgLevel, err := pccRule.IdentifyChargingLevel(); err != nil {
 		c.Log.Warnf("fail to identify charging level[%+v] for pcc rule[%s]", err, pccRule.PccRuleId)
 	} else {
-		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData)
+		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData, pduChgDatas)
 	}
 
 	if pccRule.RefQosDataID() != "" {

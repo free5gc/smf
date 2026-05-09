@@ -108,6 +108,9 @@ func (s *SMFContext) ListenIP() net.IP {
 
 // RetrieveDnnInformation gets the corresponding dnn info from S-NSSAI and DNN
 func RetrieveDnnInformation(snssai *models.Snssai, dnn string) *SnssaiSmfDnnInfo {
+	if snssai == nil || dnn == "" {
+		return nil
+	}
 	for _, snssaiInfo := range GetSelf().SnssaiInfos {
 		if snssaiInfo.Snssai.EqualModelsSnssai(snssai) {
 			return snssaiInfo.DnnInfos[dnn]
@@ -120,10 +123,9 @@ func AllocateLocalSEID() uint64 {
 	return atomic.AddUint64(&smfContext.LocalSEIDCount, 1)
 }
 
-func InitSmfContext(config *factory.Config) {
+func InitSmfContext(config *factory.Config) error {
 	if config == nil {
-		logger.CtxLog.Error("Config is nil")
-		return
+		return fmt.Errorf("config is nil")
 	}
 
 	logger.CtxLog.Infof("smfconfig Info: Version[%s] Description[%s]", config.Info.Version, config.Info.Description)
@@ -134,8 +136,7 @@ func InitSmfContext(config *factory.Config) {
 
 	sbi := configuration.Sbi
 	if sbi == nil {
-		logger.CtxLog.Errorln("Configuration needs \"sbi\" value")
-		return
+		return fmt.Errorf("configuration needs \"sbi\" value")
 	} else {
 		smfContext.URIScheme = models.UriScheme(sbi.Scheme)
 		smfContext.RegisterIPv4 = factory.SmfSbiDefaultIPv4 // default localhost
@@ -239,7 +240,11 @@ func InitSmfContext(config *factory.Config) {
 
 	smfContext.SupportedPDUSessionType = "IPv4"
 
-	smfContext.UserPlaneInformation = NewUserPlaneInformation(&configuration.UserPlaneInformation)
+	userPlaneInformation, err := NewUserPlaneInformation(&configuration.UserPlaneInformation)
+	if err != nil {
+		return fmt.Errorf("initialize user plane information failed: %w", err)
+	}
+	smfContext.UserPlaneInformation = userPlaneInformation
 
 	smfContext.ChargingIDGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
 
@@ -250,6 +255,8 @@ func InitSmfContext(config *factory.Config) {
 	TeidGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
 
 	smfContext.Ues = InitSmfUeData()
+
+	return nil
 }
 
 func InitSMFUERouting(routingConfig *factory.RoutingConfig) {

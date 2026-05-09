@@ -101,11 +101,11 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 
 		p.updateGrantedQuota(smContext, rsp.MultipleUnitInformation)
 		// Usually only the anchor UPF need	to be updated
-		for _, urr := range smContext.UrrUpfMap {
-			upfId := smContext.ChargingInfo[urr.URRID].UpfId
-
-			if urr.State == smf_context.RULE_UPDATE {
-				upfUrrMap[upfId] = append(upfUrrMap[upfId], urr)
+		for upfId, entries := range smContext.UrrTable {
+			for _, entry := range entries {
+				if entry.State == smf_context.RULE_UPDATE {
+					upfUrrMap[upfId] = append(upfUrrMap[upfId], entry.Rule)
+				}
 			}
 		}
 
@@ -174,6 +174,12 @@ func buildMultiUnitUsageFromUsageReport(
 				continue
 			}
 
+			if ur.UpfId != "" && chgInfo.UpfId != "" && ur.UpfId != chgInfo.UpfId {
+				logger.ChargingLog.Warnf("Usage report UPF mismatch for URR[%d] RG[%d]: "+
+					"report.UpfId=%s chargingInfo.UpfId=%s reportType=%s",
+					ur.UrrId, chgInfo.RatingGroup, ur.UpfId, chgInfo.UpfId, ur.ReportTpye)
+			}
+
 			if chgInfo.ChargingLevel == smf_context.FlowCharging &&
 				ur.ReportTpye == models.ChfConvergedChargingTriggerType_VOLUME_LIMIT {
 				triggers = []models.ChfConvergedChargingTrigger{
@@ -192,8 +198,9 @@ func buildMultiUnitUsageFromUsageReport(
 			}
 
 			rg := chgInfo.RatingGroup
-			logger.ChargingLog.Debugf("Receive Usage Report from URR[%d], Rating Group[%d], UpfId=%s, ChargingMethod=%v",
-				ur.UrrId, rg, chgInfo.UpfId, chgInfo.ChargingMethod)
+			logger.ChargingLog.Debugf("Receive Usage Report from URR[%d], Rating Group[%d], ReportUpfId=%s, "+
+				"ChargingInfoUpfId=%s, ChargingMethod=%v",
+				ur.UrrId, rg, ur.UpfId, chgInfo.UpfId, chgInfo.ChargingMethod)
 			triggerTime := time.Now()
 
 			uu := models.ChfConvergedChargingUsedUnitContainer{
@@ -244,12 +251,13 @@ func buildMultiUnitUsageFromUsageReport(
 func getUrrsByRg(smContext *smf_context.SMContext, upfId string, rg int32) []*smf_context.URR {
 	var foundUrrs []*smf_context.URR
 
-	for _, urr := range smContext.UrrUpfMap {
-		if smContext.ChargingInfo[urr.URRID] != nil &&
-			smContext.ChargingInfo[urr.URRID].RatingGroup == rg &&
-			smContext.ChargingInfo[urr.URRID].UpfId == upfId {
-			foundUrrs = append(foundUrrs, urr)
-			logger.ChargingLog.Debugf("Found URR[%d] for RatingGroup[%d], UpfId=%s", urr.URRID, rg, upfId)
+	if entries, ok := smContext.UrrTable[upfId]; ok {
+		for urrID, entry := range entries {
+			if smContext.ChargingInfo[urrID] != nil &&
+				smContext.ChargingInfo[urrID].RatingGroup == rg {
+				foundUrrs = append(foundUrrs, entry.Rule)
+				logger.ChargingLog.Debugf("Found URR[%d] for RatingGroup[%d], UpfId=%s", urrID, rg, upfId)
+			}
 		}
 	}
 
@@ -285,7 +293,7 @@ func (p *Processor) updateGrantedQuota(
 		for _, urr := range urrs {
 			logger.ChargingLog.Debugf("Will update URR[%d] with quota from RatingGroup[%d]", urr.URRID, rg)
 			trigger := pfcpType.ReportingTriggers{}
-			urr.State = smf_context.RULE_UPDATE
+			smContext.SetUrrState(upfId, urr.URRID, smf_context.RULE_UPDATE)
 			chgInfo := smContext.ChargingInfo[urr.URRID]
 
 			for _, t := range ui.Triggers {

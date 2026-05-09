@@ -43,13 +43,18 @@ func (p *Processor) chargingNotificationProcedure(
 		for _, reauthorizeDetail := range req.ReauthorizationDetails {
 			rg := reauthorizeDetail.RatingGroup
 			logger.ChargingLog.Infof("Force update charging information for rating group %d", rg)
-			for _, urr := range smContext.UrrUpfMap {
-				chgInfo := smContext.ChargingInfo[urr.URRID]
-				if chgInfo.RatingGroup == rg ||
-					chgInfo.ChargingLevel == smf_context.PduSessionCharging {
-					logger.ChargingLog.Tracef("Query URR (%d) for Rating Group (%d)", urr.URRID, rg)
-					upfId := smContext.ChargingInfo[urr.URRID].UpfId
-					upfUrrMap[upfId] = append(upfUrrMap[upfId], urr)
+			for upfId, entries := range smContext.UrrTable {
+				for urrID, entry := range entries {
+					// skip URRs not registered in ChargingInfo
+					chgInfo := smContext.ChargingInfo[urrID]
+					if chgInfo == nil {
+						continue
+					}
+					if chgInfo.RatingGroup == rg ||
+						chgInfo.ChargingLevel == smf_context.PduSessionCharging {
+						logger.ChargingLog.Tracef("Query URR (%d) for Rating Group (%d)", urrID, rg)
+						upfUrrMap[upfId] = append(upfUrrMap[upfId], entry.Rule)
+					}
 				}
 			}
 		}

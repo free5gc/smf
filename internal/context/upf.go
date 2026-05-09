@@ -578,6 +578,17 @@ func (upf *UPF) RemoveQER(qer *QER) (err error) {
 	return
 }
 
+// *** add unit test ***//
+func (upf *UPF) RemoveURR(urr *URR) (err error) {
+	if err = upf.IsAssociated(); err != nil {
+		return
+	}
+
+	upf.urrIDGenerator.FreeID(int64(urr.URRID))
+	upf.urrPool.Delete(urr.URRID)
+	return
+}
+
 func (upf *UPF) isSupportSnssai(snssai *SNssai) bool {
 	for _, snssaiInfo := range upf.SNssaiInfos {
 		if snssaiInfo.SNssai.Equal(snssai) {

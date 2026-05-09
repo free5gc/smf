@@ -111,7 +111,9 @@ var testConfig = factory.Config{
 }
 
 func initConfig() {
-	smf_context.InitSmfContext(&testConfig)
+	if err := smf_context.InitSmfContext(&testConfig); err != nil {
+		panic(err)
+	}
 	factory.SmfConfig = &testConfig
 }
 
@@ -347,6 +349,7 @@ func TestApplyPccRules(t *testing.T) {
 		name             string
 		decision         *models.SmPolicyDecision
 		noErr            bool
+		expectedErr      string
 		expectedPCCRules map[string]*smf_context.PCCRule
 		expectedQosDatas map[string]*models.QosData
 		expectedTcDatas  map[string]*smf_context.TrafficControlData
@@ -494,6 +497,39 @@ func TestApplyPccRules(t *testing.T) {
 			noErr: true,
 		},
 		{
+			name: "Install pcc rule with nil RouteToLocs element",
+			decision: &models.SmPolicyDecision{
+				PccRules: map[string]*models.PccRule{
+					"PccRuleId-bad-route": {
+						FlowInfos: []models.FlowInformation{
+							{
+								FlowDescription: "permit out ip from 192.168.0.31 to 10.60.0.0/16",
+							},
+						},
+						PccRuleId:  "PccRuleId-bad-route",
+						Precedence: 25,
+						RefQosData: []string{"QosId-bad-route"},
+						RefTcData:  []string{"TcId-bad-route"},
+					},
+				},
+				QosDecs: map[string]*models.QosData{
+					"QosId-bad-route": {
+						QosId: "QosId-bad-route",
+					},
+				},
+				TraffContDecs: map[string]*models.TrafficControlData{
+					"TcId-bad-route": {
+						TcId: "TcId-bad-route",
+						RouteToLocs: []*models.RouteToLocation{
+							nil,
+						},
+					},
+				},
+			},
+			noErr:       false,
+			expectedErr: "RouteToLocs contains nil element for pcc rule[PccRuleId-bad-route]",
+		},
+		{
 			name: "modify first pcc rule",
 			decision: &models.SmPolicyDecision{
 				PccRules: map[string]*models.PccRule{
@@ -621,7 +657,9 @@ func TestApplyPccRules(t *testing.T) {
 	}
 
 	smfContext := smf_context.GetSelf()
-	smfContext.UserPlaneInformation = smf_context.NewUserPlaneInformation(&userPlaneConfig)
+	userPlaneInformation, err := smf_context.NewUserPlaneInformation(&userPlaneConfig)
+	require.NoError(t, err)
+	smfContext.UserPlaneInformation = userPlaneInformation
 	for _, n := range smfContext.UserPlaneInformation.UPFs {
 		n.UPF.AssociationContext = context.Background()
 	}
@@ -679,7 +717,7 @@ func TestApplyPccRules(t *testing.T) {
 			Downlink: "1 Gbps",
 		},
 	}
-	err := smctx.AllocUeIP()
+	err = smctx.AllocUeIP()
 	require.NoError(t, err)
 	err = smctx.SelectDefaultDataPath()
 	require.NoError(t, err)
@@ -691,6 +729,9 @@ func TestApplyPccRules(t *testing.T) {
 				require.NoError(t, err)
 			} else {
 				require.Error(t, err)
+				if tc.expectedErr != "" {
+					require.EqualError(t, err, tc.expectedErr)
+				}
 			}
 			for id, expPcc := range tc.expectedPCCRules {
 				require.Equal(t, expPcc.PccRule, smctx.PCCRules[id].PccRule)

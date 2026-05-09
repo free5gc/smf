@@ -374,6 +374,7 @@ func urrToUpdateURR(urr *context.URR) *pfcp.UpdateURR {
 func BuildPfcpSessionEstablishmentRequest(
 	upNodeID pfcpType.NodeID,
 	upN4Addr string,
+	upfUUID string,
 	smContext *context.SMContext,
 	pdrList []*context.PDR,
 	farList []*context.FAR,
@@ -438,12 +439,16 @@ func BuildPfcpSessionEstablishmentRequest(
 	for _, urr := range urrList {
 		urrMap[urr.URRID] = urr
 	}
+	smContext.Log.Infof("[BuildEstReq] UPF=%s urrList=%d unique_urrs=%d", upfUUID, len(urrList), len(urrMap))
 	for _, filteredURR := range urrMap {
-		msg.CreateURR = append(msg.CreateURR, urrToCreateURR(filteredURR))
-		if filteredURR.State == context.RULE_CREATE {
-			smContext.Log.Warn("Duplicate URR creation")
+		// Only create URR if it's in RULE_INITIAL state
+		// URRs with State=RULE_CREATE are already in UPF, skip them
+		currentState := smContext.GetUrrState(upfUUID, filteredURR.URRID)
+
+		if currentState == context.RULE_INITIAL {
+			msg.CreateURR = append(msg.CreateURR, urrToCreateURR(filteredURR))
+			smContext.SetUrrState(upfUUID, filteredURR.URRID, context.RULE_CREATE)
 		}
-		filteredURR.State = context.RULE_CREATE
 	}
 
 	msg.PDNType = &pfcpType.PDNType{
@@ -498,6 +503,7 @@ func BuildPfcpSessionEstablishmentResponse() (pfcp.PFCPSessionEstablishmentRespo
 func BuildPfcpSessionModificationRequest(
 	upNodeID pfcpType.NodeID,
 	upN4Addr string,
+	upfUUID string,
 	smContext *context.SMContext,
 	pdrList []*context.PDR,
 	farList []*context.FAR,
@@ -567,15 +573,22 @@ func BuildPfcpSessionModificationRequest(
 		qer.State = context.RULE_CREATE
 	}
 
+	urrMap := make(map[uint32]*context.URR)
 	for _, urr := range urrList {
-		switch urr.State {
-		case context.RULE_CREATE:
-			smContext.Log.Warn("Duplicate URR creation")
-			fallthrough
+		urrMap[urr.URRID] = urr
+	}
+	smContext.Log.Infof("[BuildModReq] UPF=%s urrList=%d unique_urrs=%d", upfUUID, len(urrList), len(urrMap))
+	for _, urr := range urrMap {
+		currentState := smContext.GetUrrState(upfUUID, urr.URRID)
+		switch currentState {
 		case context.RULE_INITIAL:
 			msg.CreateURR = append(msg.CreateURR, urrToCreateURR(urr))
+			smContext.SetUrrState(upfUUID, urr.URRID, context.RULE_CREATE)
+		case context.RULE_CREATE:
+			// URR already exists in UPF, no action needed for Session Modification
 		case context.RULE_UPDATE:
 			msg.UpdateURR = append(msg.UpdateURR, urrToUpdateURR(urr))
+			smContext.SetUrrState(upfUUID, urr.URRID, context.RULE_CREATE)
 		case context.RULE_REMOVE:
 			msg.RemoveURR = append(msg.RemoveURR, &pfcp.RemoveURR{
 				URRID: &pfcpType.URRID{
@@ -588,8 +601,8 @@ func BuildPfcpSessionModificationRequest(
 					UrrIdValue: urr.URRID,
 				},
 			})
+			smContext.SetUrrState(upfUUID, urr.URRID, context.RULE_CREATE)
 		}
-		urr.State = context.RULE_CREATE
 	}
 
 	return msg, nil

@@ -15,6 +15,7 @@ import (
 	"github.com/free5gc/nas/nasMessage"
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/openapi/pcf/SMPolicyControl"
 	"github.com/free5gc/openapi/udm/SubscriberDataManagement"
 	"github.com/free5gc/pfcp/pfcpType"
 	smf_context "github.com/free5gc/smf/internal/context"
@@ -51,6 +52,24 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	}
 
 	createData := request.JsonData
+	// ServingNetwork is mandatory for SM Context Create Request, if it is missing, reject the request with 400 Bad Request
+	if createData.ServingNetwork == nil {
+		logger.PduSessLog.Errorf("Reject SM Context Create: ServingNetwork is missing for SUPI[%s]", createData.Supi)
+		postSmContextsError := models.PostSmContextsError{
+			JsonData: &models.SmContextCreateError{
+				Error: &models.SmfPduSessionExtProblemDetails{
+					Title:  "Bad Request",
+					Status: http.StatusBadRequest,
+					Detail: "Mandatory IE ServingNetwork is missing",
+					Cause:  "MANDATORY_IE_MISSING",
+				},
+			},
+		}
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, postSmContextsError.JsonData.Error.Cause)
+		c.JSON(http.StatusBadRequest, postSmContextsError)
+		return
+	}
+
 	// Check duplicate SM Context
 	if dup_smCtx := smf_context.GetSMContextById(createData.Supi, createData.PduSessionId); dup_smCtx != nil {
 		p.HandlePDUSessionSMContextLocalRelease(dup_smCtx, createData)
@@ -76,8 +95,18 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	// DNN Information from config
 	smContext.DNNInfo = smf_context.RetrieveDnnInformation(smContext.SNssai, smContext.Dnn)
 	if smContext.DNNInfo == nil {
-		logger.PduSessLog.Errorf("S-NSSAI[sst: %d, sd: %s] DNN[%s] not matched DNN Config",
-			smContext.SNssai.Sst, smContext.SNssai.Sd, smContext.Dnn)
+		var sst int32
+		var sd string
+		if smContext.SNssai != nil {
+			sst = smContext.SNssai.Sst
+			sd = smContext.SNssai.Sd
+		}
+		logger.PduSessLog.Warnf("S-NSSAI[sst: %d, sd: %s] DNN[%s] not matched DNN Config",
+			sst, sd, smContext.Dnn)
+		p.makeEstRejectResAndReleaseSMContext(c, smContext,
+			nasMessage.Cause5GSMRequestRejectedUnspecified,
+			&smf_errors.DnnNotSupported)
+		return
 	}
 	smContext.Log.Debugf("S-NSSAI[sst: %d, sd: %s] DNN[%s]",
 		smContext.SNssai.Sst, smContext.SNssai.Sd, smContext.Dnn)
@@ -191,14 +220,20 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	smPolicyID, smPolicyDecision, err := p.Consumer().SendSMPolicyAssociationCreate(smContext)
 	if err != nil {
 		if openapiError, ok := err.(openapi.GenericOpenAPIError); ok {
-			problemDetails := openapiError.Model().(models.ProblemDetails)
-			smContext.Log.Errorln("setup sm policy association failed:", err, problemDetails)
-			smContext.SetState(smf_context.InActive)
-			if problemDetails.Cause == "USER_UNKNOWN" {
-				p.makeEstRejectResAndReleaseSMContext(c, smContext,
-					nasMessage.Cause5GSMRequestRejectedUnspecified,
-					&smf_errors.SubscriptionDenied)
-				return
+			switch errModel := openapiError.Model().(type) {
+			case SMPolicyControl.CreateSMPolicyError:
+				problemDetails := errModel.ProblemDetails
+				smContext.Log.Errorln("set sm policy association failed:", err, problemDetails)
+				smContext.SetState(smf_context.InActive)
+
+				if problemDetails.Cause == "USER_UNKNOWN" {
+					p.makeEstRejectResAndReleaseSMContext(c, smContext,
+						nasMessage.Cause5GSMRequestRejectedUnspecified,
+						&smf_errors.SubscriptionDenied)
+					return
+				}
+			default:
+				smContext.Log.Errorln("set sm policy association failed with unknown error model:", err)
 			}
 		}
 		p.makeEstRejectResAndReleaseSMContext(c, smContext,
@@ -657,6 +692,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 					pdrList = append(pdrList, ULPDR)
 					farList = append(farList, ULPDR.FAR)
+
+					urrList = append(urrList, ULPDR.URR...)
+					urrList = append(urrList, DLPDR.URR...)
 				}
 			}
 		}
@@ -780,6 +818,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 							pdrList = append(pdrList, ULPDR)
 							farList = append(farList, ULPDR.FAR)
+
+							urrList = append(urrList, ULPDR.URR...)
+							urrList = append(urrList, DLPDR.URR...)
 						}
 					}
 
@@ -797,6 +838,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 							pdrList = append(pdrList, DLPDR)
 							farList = append(farList, DLPDR.FAR)
+							urrList = append(urrList, DLPDR.URR...)
 						}
 					}
 					smContext.NrdcIndicator, sendPFCPModification = true, true
@@ -1204,10 +1246,13 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 		}
 	}
 
-	if !smContext.CheckState(smf_context.InActive) {
-		smContext.SetState(smf_context.PFCPModification)
+	var pfcpResponseStatus smf_context.PFCPSessionResponseStatus
+	if smContext.PFCPReleaseDone {
+		smContext.Log.Infof("PFCP session already released (State: %s), skip PFCP releaseSession", smContext.State().String())
+		pfcpResponseStatus = smf_context.SessionReleaseSuccess
+	} else {
+		pfcpResponseStatus = releaseSession(smContext)
 	}
-	pfcpResponseStatus := releaseSession(smContext)
 
 	switch pfcpResponseStatus {
 	case smf_context.SessionReleaseSuccess:
@@ -1305,9 +1350,13 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 		}
 	}
 
-	smContext.SetState(smf_context.PFCPModification)
-
-	pfcpResponseStatus := releaseSession(smContext)
+	var pfcpResponseStatus smf_context.PFCPSessionResponseStatus
+	if smContext.PFCPReleaseDone {
+		smContext.Log.Infof("PFCP session already released (State: %s), skip PFCP releaseSession", smContext.State().String())
+		pfcpResponseStatus = smf_context.SessionReleaseSuccess
+	} else {
+		pfcpResponseStatus = releaseSession(smContext)
+	}
 
 	switch pfcpResponseStatus {
 	case smf_context.SessionReleaseSuccess:
@@ -1343,6 +1392,7 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 }
 
 func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionResponseStatus {
+	smContext.PFCPReleaseDone = false
 	smContext.SetState(smf_context.PFCPModification)
 
 	for _, res := range ReleaseTunnel(smContext) {
@@ -1351,6 +1401,7 @@ func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionRes
 		}
 	}
 	if !smContext.NrdcIndicator {
+		smContext.PFCPReleaseDone = true
 		return smf_context.SessionReleaseSuccess
 	}
 
@@ -1359,6 +1410,7 @@ func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionRes
 			return res.Status
 		}
 	}
+	smContext.PFCPReleaseDone = true
 	return smf_context.SessionReleaseSuccess
 }
 

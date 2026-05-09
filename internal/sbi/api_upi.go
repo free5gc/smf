@@ -69,7 +69,11 @@ func (s *Server) PostUpNodesLinks(c *gin.Context) {
 		return
 	}
 
-	upi.UpNodesFromConfiguration(&json)
+	if err := upi.UpNodesFromConfiguration(&json); err != nil {
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(http.StatusBadRequest)))
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	upi.LinksFromConfiguration(&json)
 
 	for _, upf := range upi.UPFs {
@@ -92,11 +96,11 @@ func (s *Server) DeleteUpNodeLink(c *gin.Context) {
 		upi.Mu.Lock()
 		defer upi.Mu.Unlock()
 		if upNode, ok := upi.UPNodes[upNodeRef]; ok {
-			if upNode.Type == smf_context.UPNODE_UPF {
+			if upNode.Type == smf_context.UPNODE_UPF && upNode.UPF != nil {
 				go s.Processor().ReleaseAllResourcesOfUPF(upNode.UPF)
+				upNode.UPF.CancelAssociation()
 			}
 			upi.UpNodeDelete(upNodeRef)
-			upNode.UPF.CancelAssociation()
 			c.JSON(http.StatusOK, gin.H{"status": "OK"})
 		} else {
 			statusCode := http.StatusNotFound
