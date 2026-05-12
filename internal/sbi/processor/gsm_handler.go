@@ -236,7 +236,7 @@ func (p *Processor) HandlePDUSessionModificationRequest(
 	smPolicyDecision, err_ := p.Consumer().SendSMPolicyAssociationUpdateByUERequestModification(
 		smCtx, reqQoSRules, reqQoSFlowDescs)
 	if err_ != nil {
-		return nil, fmt.Errorf("sm policy update failed: %s", err_)
+		return nil, fmt.Errorf("sm policy update failed: %w", err_)
 	}
 	if smPolicyDecision == nil {
 		smPolicyDecision = &models.SmPolicyDecision{PccRules: map[string]*models.PccRule{}}
