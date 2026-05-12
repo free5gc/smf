@@ -141,10 +141,6 @@ func (s *npcfService) SendSMPolicyAssociationUpdateByUERequestModification(
 	} else if !hasQoSRules {
 		return nil, errors.New("QoS rules missing for UE-initiated request")
 	} else {
-		updateSMPolicy.RepPolicyCtrlReqTriggers = []models.PolicyControlRequestTrigger{
-			models.PolicyControlRequestTrigger_RES_MO_RE,
-		}
-
 		// UE SHOULD only create ONE QoS Flow in a request (TS 24.501 6.4.2.2)
 		rule := qosRules[0]
 		var flowDesc *nasType.QoSFlowDesc
@@ -168,6 +164,16 @@ func (s *npcfService) SendSMPolicyAssociationUpdateByUERequestModification(
 			ruleOp = models.RuleOperation_MODIFY_PCC_RULE_WITHOUT_MODIFY_PACKET_FILTERS
 		default:
 			return nil, errors.New("QoS Rule Operation Unknown")
+		}
+
+		requiresFlowDesc := rule.Operation == nasType.OperationCodeCreateNewQoSRule ||
+			rule.Operation == nasType.OperationCodeModifyExistingQoSRuleWithoutModifyingPacketFilters
+		if requiresFlowDesc && flowDesc == nil {
+			return nil, errors.New("QoS flow description required for QoS rule operation")
+		}
+
+		updateSMPolicy.RepPolicyCtrlReqTriggers = []models.PolicyControlRequestTrigger{
+			models.PolicyControlRequestTrigger_RES_MO_RE,
 		}
 
 		ueInitResReq := &models.UeInitiatedResourceRequest{}
