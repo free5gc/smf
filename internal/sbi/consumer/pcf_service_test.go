@@ -48,7 +48,7 @@ func TestSendSMPolicyAssociationUpdateByUERequestModification(t *testing.T) {
 			qosRules:         nasType.QoSRules{},
 			qosFlowDescs:     nasType.QoSFlowDescs{nasType.QoSFlowDesc{}},
 			smPolicyDecision: nil,
-			responseErr:      fmt.Errorf("QoS Rule not found"),
+			responseErr:      fmt.Errorf("QoS rules missing for UE-initiated request"),
 		},
 		{
 			name:             "QoSFlowDescs is nil",
@@ -56,7 +56,7 @@ func TestSendSMPolicyAssociationUpdateByUERequestModification(t *testing.T) {
 			qosRules:         nasType.QoSRules{nasType.QoSRule{}},
 			qosFlowDescs:     nasType.QoSFlowDescs{},
 			smPolicyDecision: nil,
-			responseErr:      fmt.Errorf("QoS Flow Description not found"),
+			responseErr:      fmt.Errorf("QoS Rule Operation Unknown"),
 		},
 	}
 
