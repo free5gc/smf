@@ -164,8 +164,13 @@ func (r *PCCRule) BuildNasQoSRule(smCtx *SMContext,
 	opCode nasType.QoSRuleOperationCode,
 ) (*nasType.QoSRule, error) {
 	rule := nasType.QoSRule{}
-	rule.Operation = nasType.OperationCodeCreateNewQoSRule
+	rule.Operation = opCode
 	rule.Precedence = uint8(r.Precedence)
+	rule.QFI = r.QFI
+	if opCode == nasType.OperationCodeDeleteExistingQoSRule ||
+		opCode == nasType.OperationCodeModifyExistingQoSRuleWithoutModifyingPacketFilters {
+		return &rule, nil
+	}
 	pfList := make(nasType.PacketFilterList, 0)
 	for _, flowInfo := range r.FlowInfos {
 		if pfs, err := BuildNASPacketFiltersFromFlowInformation(&flowInfo, smCtx); err != nil {
@@ -176,7 +181,6 @@ func (r *PCCRule) BuildNasQoSRule(smCtx *SMContext,
 		}
 	}
 	rule.PacketFilterList = pfList
-	rule.QFI = r.QFI
 
 	return &rule, nil
 }

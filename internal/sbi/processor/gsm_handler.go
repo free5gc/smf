@@ -198,11 +198,14 @@ func (p *Processor) HandlePDUSessionModificationRequest(
 
 	reqQoSRules := nasType.QoSRules{}
 	reqQoSFlowDescs := nasType.QoSFlowDescs{}
+	var qosRuleParseErr error
+	var qosFlowDescParseErr error
 
 	if req.RequestedQosRules != nil {
 		qosRuleBytes := req.GetQoSRules()
 		if err := reqQoSRules.UnmarshalBinary(qosRuleBytes); err != nil {
 			smCtx.Log.Warning("QoS rule parse failed:", err)
+			qosRuleParseErr = err
 		}
 	}
 
@@ -210,13 +213,36 @@ func (p *Processor) HandlePDUSessionModificationRequest(
 		qosFlowDescsBytes := req.GetQoSFlowDescriptions()
 		if err := reqQoSFlowDescs.UnmarshalBinary(qosFlowDescsBytes); err != nil {
 			smCtx.Log.Warning("QoS flow descriptions parse failed:", err)
+			qosFlowDescParseErr = err
 		}
+	}
+
+	if qosRuleParseErr != nil {
+		return nil, fmt.Errorf("invalid requested QoS rules: %w", qosRuleParseErr)
+	}
+	if qosFlowDescParseErr != nil {
+		return nil, fmt.Errorf("invalid requested QoS flow descriptions: %w", qosFlowDescParseErr)
+	}
+
+	prevPccRules := make(map[string]*smf_context.PCCRule, len(smCtx.PCCRules))
+	for id, rule := range smCtx.PCCRules {
+		prevPccRules[id] = rule
+	}
+	prevQoSRuleIDs := make(map[string]uint8, len(smCtx.PCCRuleIDToQoSRuleID))
+	for id, ruleID := range smCtx.PCCRuleIDToQoSRuleID {
+		prevQoSRuleIDs[id] = ruleID
 	}
 
 	smPolicyDecision, err_ := p.Consumer().SendSMPolicyAssociationUpdateByUERequestModification(
 		smCtx, reqQoSRules, reqQoSFlowDescs)
 	if err_ != nil {
-		return nil, fmt.Errorf("sm policy update failed: %s", err_)
+		return nil, fmt.Errorf("sm policy update failed: %w", err_)
+	}
+	if smPolicyDecision == nil {
+		smPolicyDecision = &models.SmPolicyDecision{PccRules: map[string]*models.PccRule{}}
+	}
+	if smPolicyDecision.PccRules == nil {
+		smPolicyDecision.PccRules = map[string]*models.PccRule{}
 	}
 
 	// Update SessionRule from decision
@@ -231,15 +257,72 @@ func (p *Processor) HandlePDUSessionModificationRequest(
 	authQoSRules := nasType.QoSRules{}
 	authQoSFlowDesc := reqQoSFlowDescs
 
-	for id := range smPolicyDecision.PccRules {
-		// get op code from request
-		opCode := reqQoSRules[0].Operation
-		// build nas Qos Rule
+	for id, pccModel := range smPolicyDecision.PccRules {
 		pccRule := smCtx.PCCRules[id]
+		if pccRule == nil {
+			pccRule = prevPccRules[id]
+		}
+		if pccRule == nil {
+			smCtx.Log.Warnf("skip QoS rule build for unknown PCCRule[%s]", id)
+			continue
+		}
+
+		opCode, opCodeFromReq := nasType.QoSRuleOperationCode(0), false
+		if qosRuleID, ok := prevQoSRuleIDs[id]; ok {
+			for _, reqRule := range reqQoSRules {
+				if reqRule.Identifier == qosRuleID {
+					opCode = reqRule.Operation
+					opCodeFromReq = true
+					break
+				}
+			}
+		}
+		if pccModel == nil {
+			opCode = nasType.OperationCodeDeleteExistingQoSRule
+			opCodeFromReq = true
+		}
+		if !opCodeFromReq {
+			if _, existed := prevPccRules[id]; existed {
+				opCode = nasType.OperationCodeModifyExistingQoSRuleAndReplaceAllPacketFilters
+			} else {
+				opCode = nasType.OperationCodeCreateNewQoSRule
+			}
+		} else {
+			switch opCode {
+			case nasType.OperationCodeCreateNewQoSRule,
+				nasType.OperationCodeDeleteExistingQoSRule,
+				nasType.OperationCodeModifyExistingQoSRuleAndReplaceAllPacketFilters,
+				nasType.OperationCodeModifyExistingQoSRuleWithoutModifyingPacketFilters:
+			default:
+				opCode = nasType.OperationCodeModifyExistingQoSRuleAndReplaceAllPacketFilters
+			}
+		}
+
+		ruleID, hasRuleID := prevQoSRuleIDs[id]
+		if !hasRuleID {
+			if opCode != nasType.OperationCodeCreateNewQoSRule {
+				return nil, fmt.Errorf("missing QoS rule id for PCCRule[%s]", id)
+			}
+			if smCtx.QoSRuleIDGenerator == nil {
+				return nil, fmt.Errorf("QoS rule id generator not initialized")
+			}
+			newRuleID, err := smCtx.QoSRuleIDGenerator.Allocate()
+			if err != nil {
+				return nil, err
+			}
+			ruleID = uint8(newRuleID)
+			if smCtx.PCCRuleIDToQoSRuleID == nil {
+				smCtx.PCCRuleIDToQoSRuleID = make(map[string]uint8)
+			}
+			smCtx.PCCRuleIDToQoSRuleID[id] = ruleID
+		}
+
+		// build nas QoS Rule
 		rule, err := pccRule.BuildNasQoSRule(smCtx, opCode)
 		if err != nil {
 			return nil, err
 		}
+		rule.Identifier = ruleID
 
 		authQoSRules = append(authQoSRules, *rule)
 	}
