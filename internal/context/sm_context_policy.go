@@ -61,12 +61,12 @@ func (c *SMContext) ApplySessionRules(
 func (c *SMContext) AddQosFlow(qfi uint8, qos *models.QosData) {
 	qosFlow := NewQoSFlow(qfi, qos)
 	if qosFlow != nil {
-		c.AdditonalQosFlows[qfi] = qosFlow
+		c.AdditionalQosFlows[qfi] = qosFlow
 	}
 }
 
 func (c *SMContext) RemoveQosFlow(qfi uint8) {
-	delete(c.AdditonalQosFlows, qfi)
+	delete(c.AdditionalQosFlows, qfi)
 }
 
 func (c *SMContext) ApplyPccRules(decision *models.SmPolicyDecision) error {

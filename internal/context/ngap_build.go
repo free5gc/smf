@@ -156,7 +156,7 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 		},
 	}
 
-	for _, qosFlow := range ctx.AdditonalQosFlows {
+	for _, qosFlow := range ctx.AdditionalQosFlows {
 		if qosDesc, err := qosFlow.BuildNgapQosFlowSetupRequestItem(); err != nil {
 			return nil, fmt.Errorf("encode BuildNgapQosFlowSetupRequestItem failed: %s", err)
 		} else {
@@ -240,7 +240,7 @@ func BuildPDUSessionResourceModifyRequestTransfer(ctx *SMContext) ([]byte, error
 	ie.Value.QosFlowAddOrModifyRequestList = new(ngapType.QosFlowAddOrModifyRequestList)
 	qosFlowAddOrModifyRequestList := ie.Value.QosFlowAddOrModifyRequestList
 
-	for _, qos := range ctx.AdditonalQosFlows {
+	for _, qos := range ctx.AdditionalQosFlows {
 		if qos.State == QoSFlowUnset || qos.State == QoSFlowToBeModify {
 			if qosDesc, err := qos.BuildNgapQosFlowAddOrModifyRequestItem(); err != nil {
 				return nil, fmt.Errorf("BuildNgapQosFlowSetupRequestItem failed: %s", err)
