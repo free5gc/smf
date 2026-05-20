@@ -83,7 +83,7 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) err
 	}
 
 	ctx.UpCnxState = models.UpCnxState_ACTIVATED
-	for _, qos := range ctx.AdditonalQosFlows {
+	for _, qos := range ctx.AdditionalQosFlows {
 		qos.State = QoSFlowSet
 	}
 	return nil
@@ -108,7 +108,7 @@ func HandlePDUSessionResourceModifyResponseTransfer(b []byte, ctx *SMContext) er
 	if qosInfoList := resourceModifyResponseTransfer.QosFlowAddOrModifyResponseList; qosInfoList != nil {
 		for _, item := range qosInfoList.List {
 			qfi := uint8(item.QosFlowIdentifier.Value)
-			if qosFlow, ok := ctx.AdditonalQosFlows[qfi]; ok {
+			if qosFlow, ok := ctx.AdditionalQosFlows[qfi]; ok {
 				qosFlow.State = QoSFlowSet
 			} else {
 				logger.PduSessLog.Warnf("PDU Session Resource Modify QFI[%d] not found in AdditionalQosFlows", qfi)
@@ -122,7 +122,7 @@ func HandlePDUSessionResourceModifyResponseTransfer(b []byte, ctx *SMContext) er
 			logger.PduSessLog.Warnf("PDU Session Resource Modify QFI[%d] %s",
 				qfi, strNgapCause(&item.Cause))
 
-			if qosFlow, ok := ctx.AdditonalQosFlows[qfi]; ok {
+			if qosFlow, ok := ctx.AdditionalQosFlows[qfi]; ok {
 				qosFlow.State = QoSFlowUnset
 			} else {
 				logger.PduSessLog.Warnf("PDU Session Resource Modify QFI[%d] not found in AdditionalQosFlows", qfi)

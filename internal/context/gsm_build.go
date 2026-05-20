@@ -100,7 +100,7 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 	parameter.FiveQI = uint8(authDefQos.Var5qi)
 	dafaultAuthDesc.Parameters = append(dafaultAuthDesc.Parameters, parameter)
 	authDescs = append(authDescs, dafaultAuthDesc)
-	for _, qosFlow := range smContext.AdditonalQosFlows {
+	for _, qosFlow := range smContext.AdditionalQosFlows {
 		if qosDesc, e := qosFlow.BuildNasQoSDesc(nasType.OperationCodeCreateNewQoSFlowDescription); e != nil {
 			logger.GsmLog.Warnf("Create QoS Desc from qos flow error: %s\n", e)
 		} else {

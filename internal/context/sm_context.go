@@ -197,7 +197,7 @@ type SMContext struct {
 	PacketFilterIDToNASPFID map[string]uint8
 	AMBRQerMap              map[uuid.UUID]uint32
 	QerUpfMap               map[string]uint32
-	AdditonalQosFlows       map[uint8]*QoSFlow // Key: qfi
+	AdditionalQosFlows      map[uint8]*QoSFlow // Key: qfi
 
 	// URR
 	UrrIDGenerator     *idgenerator.IDGenerator
@@ -325,7 +325,7 @@ func NewSMContext(id string, pduSessID int32) *SMContext {
 	smContext.qosDataToQFI = make(map[string]uint8)
 	smContext.AMBRQerMap = make(map[uuid.UUID]uint32)
 	smContext.QerUpfMap = make(map[string]uint32)
-	smContext.AdditonalQosFlows = make(map[uint8]*QoSFlow)
+	smContext.AdditionalQosFlows = make(map[uint8]*QoSFlow)
 	smContext.UrrIDGenerator = idgenerator.NewGenerator(1, math.MaxUint32)
 	smContext.UrrIdMap = make(map[UrrType]uint32)
 	smContext.GenerateUrrId()
