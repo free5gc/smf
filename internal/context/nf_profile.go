@@ -23,9 +23,8 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 	c.NfProfile.NFServiceVersion = &[]models.NfServiceVersion{
 		{
 			ApiVersionInUri: "v1",
-			ApiFullVersion: fmt.
-				Sprintf("https://%s:%d"+factory.SmfPdusessionResUriPrefix, GetSelf().RegisterIPv4, GetSelf().SBIPort),
-			Expiry: &nfSetupTime,
+			ApiFullVersion:  nfProfileconfig.GetVersion(),
+			Expiry:          &nfSetupTime,
 		},
 	}
 
@@ -36,7 +35,7 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 			ServiceInstanceId: GetSelf().NfInstanceID + serviceName,
 			ServiceName:       models.ServiceName(serviceName),
 			Versions:          *c.NfProfile.NFServiceVersion,
-			Scheme:            models.UriScheme_HTTPS,
+			Scheme:            GetSelf().URIScheme,
 			NfServiceStatus:   models.NfServiceStatus_REGISTERED,
 			ApiPrefix:         fmt.Sprintf("%s://%s:%d", GetSelf().URIScheme, GetSelf().RegisterIPv4, GetSelf().SBIPort),
 			IpEndPoints: []models.IpEndPoint{
