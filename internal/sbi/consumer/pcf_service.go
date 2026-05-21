@@ -90,6 +90,15 @@ func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMCon
 		Mnc: smContext.ServingNetwork.Mnc,
 	}
 	smPolicyData.SuppFeat = "F"
+	if smContext.UeLocation != nil {
+		ueLocation := *smContext.UeLocation
+		if ueLocation.NrLocation != nil && ueLocation.NrLocation.AgeOfLocationInformation < 0 {
+			nrLoc := *ueLocation.NrLocation
+			nrLoc.AgeOfLocationInformation = 0
+			ueLocation.NrLocation = &nrLoc
+		}
+		smPolicyData.UserLocationInfo = &ueLocation
+	}
 
 	ctx, _, err := smf_context.GetSelf().
 		GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NrfNfManagementNfType_PCF)
