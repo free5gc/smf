@@ -38,7 +38,7 @@ const (
 	SmfEventExposureResUriPrefix = "/nsmf_event-exposure/v1"
 	SmfPdusessionResUriPrefix    = "/nsmf-pdusession/v1"
 	SmfOamUriPrefix              = "/nsmf-oam/v1"
-	SmfCallbackUriPrefix         = "/nsmf-callback"
+	SmfCallbackUriPrefix         = "/nsmf-callback/v1"
 	NrfDiscUriPrefix             = "/nnrf-disc/v1"
 	UdmSdmUriPrefix              = "/nudm-sdm/v1"
 	PcfSmpolicycontrolUriPrefix  = "/npcf-smpolicycontrol/v1"
@@ -155,9 +155,10 @@ func (c *Configuration) validate() (bool, error) {
 		case "nsmf-pdusession":
 		case "nsmf-event-exposure":
 		case "nsmf-oam":
+		case "nsmf-callback":
 		default:
 			err := errors.New("invalid serviceNameList[" + strconv.Itoa(index) + "]: " +
-				serviceName + ", should be nsmf-pdusession, nsmf-event-exposure or nsmf-oam")
+				serviceName + ", should be nsmf-pdusession, nsmf-event-exposure, nsmf-oam or nsmf-callback")
 			return false, err
 		}
 	}

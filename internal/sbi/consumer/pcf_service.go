@@ -71,7 +71,7 @@ func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMCon
 
 	smPolicyData.Supi = smContext.Supi
 	smPolicyData.PduSessionId = smContext.PDUSessionID
-	smPolicyData.NotificationUri = fmt.Sprintf("%s://%s:%d/nsmf-callback/sm-policies/%s",
+	smPolicyData.NotificationUri = fmt.Sprintf("%s://%s:%d/nsmf-callback/v1/sm-policies/%s",
 		smf_context.GetSelf().URIScheme,
 		smf_context.GetSelf().RegisterIPv4,
 		smf_context.GetSelf().SBIPort,
