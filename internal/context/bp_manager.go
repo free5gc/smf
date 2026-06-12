@@ -61,9 +61,8 @@ func (bpMGR *BPManager) SelectPSA2(smContext *SMContext) {
 			for lastNode.Next() != nil {
 				lastNode = lastNode.Next()
 			}
-			ifaceN3 := lastNode.UPF.GetInterface(models.UpInterfaceType_N3, smContext.Dnn)
 			ifaceN9 := lastNode.UPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
-			if ifaceN3 == nil || ifaceN9 == nil {
+			if ifaceN9 == nil {
 				smContext.Log.Tracef("Skipping path via UPF [%v] (DNN mismatch)", lastNode.UPF.NodeID)
 				continue
 			}
@@ -80,6 +79,9 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) error {
 		depth := 0
 		psa1CurDPNode := psa1Path.FirstDPNode
 		for psa2CurDPNode := activatingPath.FirstDPNode; psa2CurDPNode != nil; psa2CurDPNode = psa2CurDPNode.Next() {
+			if psa1CurDPNode == nil {
+				break
+			}
 			if reflect.DeepEqual(psa2CurDPNode.UPF.NodeID, psa1CurDPNode.UPF.NodeID) {
 				psa1CurDPNode = psa1CurDPNode.Next()
 				depth++
