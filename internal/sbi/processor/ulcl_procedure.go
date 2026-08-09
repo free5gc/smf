@@ -34,6 +34,10 @@ func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) err
 			if err != nil {
 				return err
 			}
+			if bpMGR.ULCL == nil {
+				smContext.Log.Warnln("No ULCL branching point found for PSA2 path, skipping")
+				continue
+			}
 
 			// Allocate Path PDR and TEID
 			bpMGR.ActivatingPath.ActivateTunnelAndPDR(smContext, 255)
