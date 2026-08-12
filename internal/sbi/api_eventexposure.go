@@ -13,6 +13,11 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/free5gc/openapi"
+	"github.com/free5gc/openapi/models"
+	smf_context "github.com/free5gc/smf/internal/context"
+	"github.com/free5gc/smf/pkg/factory"
 )
 
 func (s *Server) getEventExposureRoutes() []Route {
@@ -54,20 +59,63 @@ func (s *Server) getEventExposureRoutes() []Route {
 
 // SubscriptionsPost -
 func (s *Server) HTTPCreateIndividualSubcription(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{})
+	request, problemDetails := decodeEventExposureCreateRequest(c.Request.Body)
+	if problemDetails != nil {
+		c.JSON(int(problemDetails.Status), problemDetails)
+		return
+	}
+
+	result, problem := s.Processor().CreateEventExposureSubscription(c.Request.Context(), request)
+	if problem != nil {
+		c.JSON(problem.Status, problem.ProblemDetails)
+		return
+	}
+
+	location := factory.SmfEventExposureResUriPrefix + "/subscriptions/" + result.Subscription.ID
+	c.Header("Location", location)
+	c.JSON(http.StatusCreated, eventExposureResponseBody(result.Subscription))
 }
 
 // SubscriptionsSubIdDelete -
 func (s *Server) HTTPDeleteIndividualSubcription(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{})
+	if problem := s.Processor().DeleteEventExposureSubscription(c.Request.Context(), c.Param("subId")); problem != nil {
+		c.JSON(problem.Status, problem.ProblemDetails)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 // SubscriptionsSubIdGet -
 func (s *Server) HTTPGetIndividualSubcription(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{})
+	problemDetails := openapi.ProblemDetailsOperationNotSupported()
+	c.JSON(int(problemDetails.Status), problemDetails)
 }
 
 // SubscriptionsSubIdPut -
 func (s *Server) HTTPReplaceIndividualSubcription(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{})
+	problemDetails := openapi.ProblemDetailsOperationNotSupported()
+	c.JSON(int(problemDetails.Status), problemDetails)
+}
+
+func eventExposureResponseBody(subscription smf_context.EventExposureSubscription) models.NsmfEventExposure {
+	eventSubscription := models.SmfEventExposureEventSubscription{
+		Event: models.SmfEvent_UPF_EVENT,
+		UpfEvents: []models.UpfEvent{
+			{
+				Type:                     models.UpfEventType_USER_DATA_USAGE_MEASURES,
+				MeasurementTypes:         append([]models.UpfMeasurementType(nil), subscription.MeasurementTypes...),
+				GranularityOfMeasurement: models.UpfGranularityOfMeasurement_PER_SESSION,
+			},
+		},
+		BundledEventNotifyUri: subscription.BundledEventNotifyURI,
+	}
+	return models.NsmfEventExposure{
+		Supi:        subscription.Supi,
+		SubId:       subscription.ID,
+		NotifId:     subscription.NotifID,
+		NotifUri:    subscription.NotifURI,
+		EventSubs:   []models.SmfEventExposureEventSubscription{eventSubscription},
+		NotifMethod: models.SmfEventExposureNotificationMethod_PERIODIC,
+		RepPeriod:   subscription.ReportingPeriod,
+	}
 }

@@ -7,8 +7,11 @@ package factory
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,7 +38,7 @@ const (
 	SmfMetricsDefaultScheme      = "https"
 	SmfMetricsDefaultNamespace   = "free5gc"
 	SmfDefaultNrfUri             = "https://127.0.0.10:8000"
-	SmfEventExposureResUriPrefix = "/nsmf_event-exposure/v1"
+	SmfEventExposureResUriPrefix = "/nsmf-event-exposure/v1"
 	SmfPdusessionResUriPrefix    = "/nsmf-pdusession/v1"
 	SmfOamUriPrefix              = "/nsmf-oam/v1"
 	SmfCallbackUriPrefix         = "/nsmf-callback/v1"
@@ -54,7 +57,7 @@ type Config struct {
 
 func (c *Config) Validate() (bool, error) {
 	govalidator.TagMap["scheme"] = func(str string) bool {
-		return str == "https" || str == "http"
+		return str == SmfSbiDefaultScheme || str == "http"
 	}
 
 	if configuration := c.Configuration; configuration != nil {
@@ -310,7 +313,7 @@ type Sbi struct {
 
 func (s *Sbi) validate() (bool, error) {
 	govalidator.TagMap["scheme"] = govalidator.Validator(func(str string) bool {
-		return str == "https" || str == "http"
+		return str == SmfSbiDefaultScheme || str == "http"
 	})
 
 	if tls := s.Tls; tls != nil {
@@ -566,6 +569,7 @@ type UPNode struct {
 	Addr                 string                  `json:"addr" yaml:"addr" valid:"host,optional"`
 	ANIP                 string                  `json:"anIP" yaml:"anIP" valid:"host,optional"`
 	Dnn                  string                  `json:"dnn" yaml:"dnn" valid:"type(string),minstringlength(1),optional"`
+	NupfEeApiRoot        *string                 `json:"nupfEeApiRoot" yaml:"nupfEeApiRoot" valid:"optional"`
 	SNssaiInfos          []*SnssaiUpfInfoItem    `json:"sNssaiUpfInfos" yaml:"sNssaiUpfInfos,omitempty" valid:"optional"`
 	InterfaceUpfInfoList []*InterfaceUpfInfoItem `json:"interfaces" yaml:"interfaces,omitempty" valid:"optional"`
 }
@@ -574,6 +578,17 @@ func (u *UPNode) validate() (bool, error) {
 	govalidator.TagMap["upNodeType"] = govalidator.Validator(func(str string) bool {
 		return str == "AN" || str == "UPF"
 	})
+
+	if u.NupfEeApiRoot != nil {
+		if u.Type != "UPF" {
+			return false, errors.New("nupfEeApiRoot is only valid on UPF nodes")
+		}
+		normalized, err := normalizeNupfEeApiRoot(*u.NupfEeApiRoot)
+		if err != nil {
+			return false, err
+		}
+		u.NupfEeApiRoot = &normalized
+	}
 
 	for _, snssaiInfo := range u.SNssaiInfos {
 		if result, err := snssaiInfo.Validate(); err != nil {
@@ -603,6 +618,41 @@ func (u *UPNode) validate() (bool, error) {
 	}
 	result, err := govalidator.ValidateStruct(u)
 	return result, appendInvalid(err)
+}
+
+func normalizeNupfEeApiRoot(raw string) (string, error) {
+	if raw == "" {
+		return "", errors.New("nupfEeApiRoot must not be empty")
+	}
+
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("invalid nupfEeApiRoot: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != SmfSbiDefaultScheme {
+		return "", errors.New("nupfEeApiRoot must use http or https scheme")
+	}
+	if u.Host == "" {
+		return "", errors.New("nupfEeApiRoot must include a host")
+	}
+	if u.User != nil {
+		return "", errors.New("nupfEeApiRoot must not include userinfo")
+	}
+	if u.RawQuery != "" {
+		return "", errors.New("nupfEeApiRoot must not include query")
+	}
+	if u.Fragment != "" {
+		return "", errors.New("nupfEeApiRoot must not include fragment")
+	}
+
+	cleanPath := path.Clean(u.Path)
+	if cleanPath == "." || cleanPath == "/" {
+		u.Path = ""
+	} else {
+		u.Path = "/" + strings.Trim(cleanPath, "/")
+	}
+	u.RawPath = ""
+	return strings.TrimRight(u.String(), "/"), nil
 }
 
 type InterfaceUpfInfoItem struct {

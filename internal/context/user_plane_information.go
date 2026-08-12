@@ -37,13 +37,14 @@ const (
 
 // UPNode represent the user plane node topology
 type UPNode struct {
-	Name   string
-	Type   UPNodeType
-	NodeID pfcpType.NodeID
-	ANIP   net.IP
-	Dnn    string
-	Links  []*UPNode
-	UPF    *UPF
+	Name          string
+	Type          UPNodeType
+	NodeID        pfcpType.NodeID
+	ANIP          net.IP
+	Dnn           string
+	NupfEeApiRoot string
+	Links         []*UPNode
+	UPF           *UPF
 }
 
 func (u *UPNode) MatchedSelection(selection *UPFSelectionParams) bool {
@@ -127,6 +128,9 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) (*UserPla
 
 			upNode.UPF = NewUPF(&upNode.NodeID, node.InterfaceUpfInfoList)
 			upNode.UPF.Addr = node.Addr
+			if node.NupfEeApiRoot != nil {
+				upNode.NupfEeApiRoot = *node.NupfEeApiRoot
+			}
 			snssaiInfos := make([]*SnssaiUPFInfo, 0)
 			for _, snssaiInfoConfig := range node.SNssaiInfos {
 				snssaiInfo := SnssaiUPFInfo{
@@ -251,6 +255,10 @@ func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]*factory.UP
 			u.NodeID = nodeIDtoIp.String()
 		}
 		if upNode.UPF != nil {
+			if upNode.NupfEeApiRoot != "" {
+				nupfEeApiRoot := upNode.NupfEeApiRoot
+				u.NupfEeApiRoot = &nupfEeApiRoot
+			}
 			if upNode.UPF.SNssaiInfos != nil {
 				FsNssaiInfoList := make([]*factory.SnssaiUpfInfoItem, 0)
 				for _, sNssaiInfo := range upNode.UPF.SNssaiInfos {
@@ -436,6 +444,10 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 			}
 
 			upNode.UPF = NewUPF(&upNode.NodeID, node.InterfaceUpfInfoList)
+			upNode.UPF.Addr = node.Addr
+			if node.NupfEeApiRoot != nil {
+				upNode.NupfEeApiRoot = *node.NupfEeApiRoot
+			}
 			createdUPFs = append(createdUPFs, upNode.UPF)
 			snssaiInfos := make([]*SnssaiUPFInfo, 0)
 			for _, snssaiInfoConfig := range node.SNssaiInfos {
