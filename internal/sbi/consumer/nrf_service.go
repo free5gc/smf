@@ -123,9 +123,8 @@ func (s *nnrfService) RegisterNFInstance(ctx context.Context) error {
 						logger.MainLog.Infoln("OAuth2 setting receive from NRF:", oauth2)
 					}
 				}
-				smfContext.OAuth2Required = oauth2
-				if oauth2 && smfContext.NrfCertPem == "" {
-					logger.CfgLog.Error("OAuth2 enable but no nrfCertPem provided in config.")
+				if oauthErr := smfContext.SetOAuth2Required(oauth2); oauthErr != nil {
+					return oauthErr
 				}
 				finish = true
 			}
@@ -170,7 +169,7 @@ func (s *nnrfService) SendDeregisterNFInstance() (err error) {
 	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
 	smfContext := s.consumer.Context()
-	ctx, pd, err := smfContext.GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_NFM, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, pd, err := smfContext.GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_NFM)
 	if err != nil {
 		logger.ConsumerLog.Errorf("Get token context failed, problem details: %+v", pd)
 		return err
@@ -199,7 +198,7 @@ func (s *nnrfService) SendSearchNFInstances(
 		return nil, openapi.ReportError("nrf not found")
 	}
 
-	ctx, _, err := smfContext.GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, _, err := smfContext.GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +277,7 @@ func (s *nnrfService) NFDiscoveryAMF(smContext *smf_context.SMContext, ctx conte
 
 func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 	smfContext := s.consumer.Context()
-	ctx, pd, err := smfContext.GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, pd, err := smfContext.GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return pd, err
 	}
@@ -323,7 +322,7 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 }
 
 func (s *nnrfService) SendNFDiscoveryPCF() (*models.ProblemDetails, error) {
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, pd, err := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return pd, err
 	}
@@ -353,7 +352,7 @@ func (s *nnrfService) SendNFDiscoveryPCF() (*models.ProblemDetails, error) {
 }
 
 func (s *nnrfService) SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.ProblemDetails, error) {
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, pd, err := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return pd, err
 	}
@@ -402,7 +401,7 @@ func (s *nnrfService) CHFSelection(smContext *smf_context.SMContext) error {
 		// Supi:            &smContext.Supi,
 	}
 
-	ctx, _, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, _, err := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return err
 	}
@@ -425,7 +424,7 @@ func (s *nnrfService) CHFSelection(smContext *smf_context.SMContext) error {
 
 // PCFSelection will select PCF for this SM Context
 func (s *nnrfService) PCFSelection(smContext *smf_context.SMContext) error {
-	ctx, _, errToken := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, "NRF")
+	ctx, _, errToken := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if errToken != nil {
 		return errToken
 	}
