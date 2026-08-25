@@ -139,6 +139,19 @@ func (s *nnrfService) buildNfProfile(smfContext *smf_context.SMFContext) (
 	profile models.Nrf_NFMgmt_NFProfile, err error,
 ) {
 	smfProfile := smfContext.NfProfile
+	if smfProfile.NFServices == nil {
+		return profile, fmt.Errorf("SMF NFServices is nil")
+	}
+
+	services := make([]models.Nrf_NFMgmt_NFService, 0, len(*smfProfile.NFServices))
+	for _, nfService := range *smfProfile.NFServices {
+		allowed, known := smf_context.AllowedNfTypesForService(nfService.ServiceName)
+		if !known {
+			return profile, fmt.Errorf("no AllowedNfTypes policy for service %q", nfService.ServiceName)
+		}
+		nfService.AllowedNfTypes = allowed
+		services = append(services, nfService)
+	}
 
 	sNssais := []models.ExtSnssai{}
 	for _, snssaiSmfInfo := range smfProfile.SMFInfo.SNssaiSmfInfoList {
@@ -151,7 +164,7 @@ func (s *nnrfService) buildNfProfile(smfContext *smf_context.SMFContext) (
 		NfType:        models.Nrf_NFMgmt_NFType_SMF,
 		NfStatus:      models.Nrf_NFMgmt_NFStatus_REGISTERED,
 		Ipv4Addresses: []string{smfContext.RegisterIPv4},
-		NfServices:    *smfProfile.NFServices,
+		NfServices:    services,
 		SmfInfo:       smfProfile.SMFInfo,
 		SNssais:       sNssais,
 	}

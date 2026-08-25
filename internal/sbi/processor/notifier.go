@@ -146,7 +146,7 @@ func SendUpPathChgEventExposureNotification(
 	}
 
 	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(
-		models.Nrf_NFMgmt_ServiceName("nnef-callback"), models.Nrf_NFMgmt_NFType_NEF)
+		smf_context.ServiceNameNnefCallback, models.Nrf_NFMgmt_NFType_NEF)
 	if err != nil {
 		logger.PduSessLog.Warnf("SMF Event Exposure Notification get token failed: %+v", pd)
 		return
