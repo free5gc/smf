@@ -20,6 +20,7 @@ require (
 	github.com/urfave/cli/v2 v2.27.7
 	github.com/wmnsk/go-pfcp v0.0.25-0.20251110163217-837df5430868
 	go.uber.org/mock v0.4.0
+	golang.org/x/net v0.55.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -75,7 +76,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.24.0 // indirect
 	golang.org/x/arch v0.8.0 // indirect
 	golang.org/x/crypto v0.52.0 // indirect
-	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
