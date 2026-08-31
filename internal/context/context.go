@@ -176,7 +176,6 @@ func InitSmfContext(config *factory.Config) error {
 		smfContext.NrfUri = fmt.Sprintf("%s://%s:%d", smfContext.URIScheme, "127.0.0.1", 29510)
 	}
 	smfContext.NrfCertPem = configuration.NrfCertPem
-	smfContext.NrfNfInstanceID = configuration.NrfNfInstanceId
 
 	if pfcp := configuration.PFCP; pfcp != nil {
 		smfContext.ListenAddr = pfcp.ListenAddr
@@ -363,6 +362,7 @@ func (c *SMFContext) tokenRequestForNFInstance(serviceName models.Nrf_NFMgmt_Ser
 func (c *SMFContext) SetOAuth2Required(required bool) error {
 	if !required {
 		c.OAuth2Required = false
+		c.NrfNfInstanceID = ""
 		return nil
 	}
 	if strings.TrimSpace(c.NrfCertPem) == "" {
@@ -371,9 +371,11 @@ func (c *SMFContext) SetOAuth2Required(required bool) error {
 	if strings.TrimSpace(c.NrfUri) == "" {
 		return fmt.Errorf("OAuth2 enabled but NRF URI is empty")
 	}
-	if err := uuid.Validate(c.NrfNfInstanceID); err != nil {
-		return fmt.Errorf("OAuth2 enabled but trusted NRF instance ID is invalid: %w", err)
+	nrfNfInstanceID, err := oauth.NFInstanceIDFromCertificate(c.NrfCertPem)
+	if err != nil {
+		return fmt.Errorf("derive trusted NRF instance ID from certificate: %w", err)
 	}
+	c.NrfNfInstanceID = nrfNfInstanceID
 	c.OAuth2Required = true
 	return nil
 }
