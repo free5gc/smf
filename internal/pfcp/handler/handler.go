@@ -195,8 +195,9 @@ func HandlePfcpSessionReportRequest(msg *pfcpUdp.Message) {
 				},
 			}
 
-			ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(
-				models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFType_AMF)
+			ctx, _, errToken := smf_context.GetSelf().GetTokenCtxForNFInstance(
+				models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFType_AMF,
+				smContext.AMFProfile.NfInstanceId)
 			if errToken != nil {
 				logger.PfcpLog.Warnf("Get NAMF_COMM context failed: %s", errToken)
 				return

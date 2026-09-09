@@ -198,6 +198,7 @@ func (a *SmfApp) Start() {
 	err := a.sbiServer.Run(context.Background(), &a.wg)
 	if err != nil {
 		logger.MainLog.Errorf("sbi server run error %+v", err)
+		return
 	}
 
 	a.wg.Add(1)

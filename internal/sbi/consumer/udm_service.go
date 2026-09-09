@@ -105,8 +105,8 @@ func (s *nudmService) UeCmRegistration(smCtx *smf_context.SMContext) (
 		" PduSessionId:", registrationData.PduSessionId, " SNssai:", registrationData.SingleNssai,
 		" Dnn:", registrationData.Dnn, " PlmnId:", registrationData.PlmnId)
 
-	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(
-		models.Nrf_NFMgmt_ServiceName_NUDM_UECM, models.Nrf_NFMgmt_NFType_UDM)
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtxForNFInstance(
+		models.Nrf_NFMgmt_ServiceName_NUDM_UECM, models.Nrf_NFMgmt_NFType_UDM, smfContext.UDMProfile.NfInstanceId)
 	if err != nil {
 		return pd, err
 	}
@@ -150,8 +150,8 @@ func (s *nudmService) UeCmDeregistration(smCtx *smf_context.SMContext) (*models.
 	}
 	client := s.getUEContextManagementClient(uecmUri)
 
-	ctx, pd, err := smf_context.GetSelf().GetTokenCtx(
-		models.Nrf_NFMgmt_ServiceName_NUDM_UECM, models.Nrf_NFMgmt_NFType_UDM)
+	ctx, pd, err := smf_context.GetSelf().GetTokenCtxForNFInstance(
+		models.Nrf_NFMgmt_ServiceName_NUDM_UECM, models.Nrf_NFMgmt_NFType_UDM, smfContext.UDMProfile.NfInstanceId)
 	if err != nil {
 		return pd, err
 	}
@@ -272,7 +272,9 @@ func (s *nudmService) Subscribe(ctx context.Context, smCtx *smf_context.SMContex
 func (s *nudmService) UnSubscribe(smCtx *smf_context.SMContext) (
 	*models.ProblemDetails, error,
 ) {
-	ctx, _, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_NFType_UDM)
+	ctx, _, err := s.consumer.Context().GetTokenCtxForNFInstance(
+		models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_NFType_UDM,
+		s.consumer.Context().UDMProfile.NfInstanceId)
 	if err != nil {
 		return nil, err
 	}
