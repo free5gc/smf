@@ -145,6 +145,7 @@ type SMContext struct {
 	DLForwardingType         DLForwardingType
 	DLDirectForwardingTunnel *ngapie.UPTransportLayerInformation
 	IndirectForwardingTunnel *DataPath
+	QosFlowsToBeForwarded    []int64
 
 	// UP Security support TS 29.502 R16 6.1.6.2.39
 	UpSecurity                                                     *models.UpSecurity
