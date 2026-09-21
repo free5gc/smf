@@ -10,7 +10,9 @@ import (
 	"github.com/free5gc/openapi/udm/SDM"
 	"github.com/free5gc/openapi/udm/UECM"
 	smf_context "github.com/free5gc/smf/internal/context"
+	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/app"
+	"github.com/free5gc/util/nfheartbeat"
 )
 
 type Consumer struct {
@@ -57,6 +59,15 @@ func NewConsumer(smf app.App) (*Consumer, error) {
 		NFManagementClients: make(map[string]*NFMgmt.APIClient),
 		NFDiscoveryClients:  make(map[string]*NFDisc.APIClient),
 	}
+	heartbeat, err := nfheartbeat.NewRunner(
+		nrfRegistrar{c.nnrfService},
+		func() int32 { return c.Config().GetNfHeartBeatTimer() },
+		logger.ConsumerLog,
+	)
+	if err != nil {
+		return nil, err
+	}
+	c.heartbeat = heartbeat
 
 	c.npcfService = &npcfService{
 		consumer:               c,
