@@ -9,7 +9,7 @@ require (
 	github.com/free5gc/ngap v1.2.0
 	github.com/free5gc/openapi v1.3.0
 	github.com/free5gc/pfcp v1.1.2
-	github.com/free5gc/util v1.4.0
+	github.com/free5gc/util v1.4.1-0.20260918051623-86c859a404ad
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/uuid v1.6.0
 	github.com/h2non/gock v1.2.0

@@ -120,10 +120,12 @@ func newRouter(s *Server) *gin.Engine {
 }
 
 func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {
-	err := s.Consumer().RegisterNFInstance(s.CancelContext())
-	if err != nil {
+	ctx := s.CancelContext()
+	if err := s.Consumer().RegisterNFInstance(ctx, true); err != nil {
 		return err
 	}
+	// Only a registered profile has something to keep alive.
+	s.Consumer().StartHeartbeat(ctx, wg)
 
 	wg.Add(1)
 	go s.startServer(wg)

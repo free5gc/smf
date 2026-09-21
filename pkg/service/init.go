@@ -235,6 +235,10 @@ func (a *SmfApp) Terminate() {
 func (a *SmfApp) terminateProcedure() {
 	logger.MainLog.Infof("Terminating SMF...")
 	a.pfcpTerminate()
+
+	// no heartbeat PATCH or re-registration PUT may land after the deregistration
+	a.Consumer().WaitHeartbeatStopped()
+
 	// deregister with NRF
 	err := a.Consumer().SendDeregisterNFInstance()
 	if err != nil {
