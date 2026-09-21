@@ -3,7 +3,6 @@ package consumer
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -17,7 +16,10 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	sbi_metrics "github.com/free5gc/util/metrics/sbi"
+	"github.com/free5gc/util/nfheartbeat"
 )
+
+const registerRetryInterval = 2 * time.Second
 
 type nnrfService struct {
 	consumer *Consumer
@@ -27,6 +29,12 @@ type nnrfService struct {
 
 	NFManagementClients map[string]*NFMgmt.APIClient
 	NFDiscoveryClients  map[string]*NFDisc.APIClient
+
+	heartbeat *nfheartbeat.Runner
+
+	// Interval in seconds from the last registration response. Written before the heartbeat starts, then only on
+	// the heartbeat goroutine.
+	heartbeatTimer int32
 }
 
 func (s *nnrfService) getNFManagementClient(uri string) *NFMgmt.APIClient {
@@ -83,65 +91,117 @@ func (s *nnrfService) getNFDiscoveryClient(uri string) *NFDisc.APIClient {
 	return client
 }
 
-func (s *nnrfService) RegisterNFInstance(ctx context.Context) error {
+// RegisterNFInstance PUTs the profile on the NF's own instance ID (3GPP TS 29.510 clause 5.2.2.2.2) until it
+// succeeds or ctx is done. Only the startup call may pass applyOAuth2: it writes OAuth2Required unsynchronized.
+func (s *nnrfService) RegisterNFInstance(ctx context.Context, applyOAuth2 bool) error {
 	smfContext := s.consumer.Context()
 	client := s.getNFManagementClient(smfContext.NrfUri)
-	nfProfile, err := s.buildNfProfile(smfContext)
-	if err != nil {
-		return errors.Wrap(err, "RegisterNFInstance buildNfProfile()")
+	if client == nil {
+		return fmt.Errorf("RegisterNFInstance: nrf not found")
 	}
 
-	var nf models.Nrf_NFMgmt_NFProfile
+	nfProfile, err := s.buildNfProfile(smfContext)
+	if err != nil {
+		return fmt.Errorf("RegisterNFInstance buildNfProfile(): %w", err)
+	}
+
 	var res *NFMgmt.RegisterNFInstanceResponse
 	registerNFInstanceRequest := &NFMgmt.RegisterNFInstanceRequest{
 		NfInstanceID: &smfContext.NfInstanceID,
 		RequestBody:  &nfProfile,
 	}
-
-	// Check data (Use RESTful PUT)
-	finish := false
-	for !finish {
+	for ctx.Err() == nil {
+		res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, registerNFInstanceRequest)
+		if err == nil && res != nil {
+			s.processRegisterResponse(smfContext, res.Nrf_NFMgmt_NFProfile, applyOAuth2)
+			logger.InitLog.Infof("SMF registered to NRF as %s", smfContext.NfInstanceID)
+			return nil
+		}
+		logger.ConsumerLog.Errorf("SMF register to NRF Error[%v]", err)
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("RegisterNFInstance context done")
-		default:
-			res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, registerNFInstanceRequest)
-			if err != nil || res == nil {
-				logger.ConsumerLog.Errorf("SMF register to NRF Error[%s]", err.Error())
-				time.Sleep(2 * time.Second)
-				continue
-			}
-			if res.Nrf_NFMgmt_NFProfile != nil {
-				nf = *res.Nrf_NFMgmt_NFProfile
-			}
-
-			// http.StatusOK
-			if res.Location == "" {
-				// NFUpdate
-				finish = true
-			} else { // http.StatusCreated
-				// NFRegister
-				resourceUri := res.Location
-				smfContext.NfInstanceID = resourceUri[strings.LastIndex(resourceUri, "/")+1:]
-
-				oauth2 := false
-				if customInfo, ok := nf.CustomInfo.(map[string]interface{}); ok {
-					if v, isBool := customInfo["oauth2"].(bool); isBool {
-						oauth2 = v
-						logger.MainLog.Infoln("OAuth2 setting receive from NRF:", oauth2)
-					}
-				}
-				smfContext.OAuth2Required = oauth2
-				if oauth2 && smfContext.NrfCertPem == "" {
-					logger.CfgLog.Error("OAuth2 enable but no nrfCertPem provided in config.")
-				}
-				finish = true
-			}
+		case <-time.After(registerRetryInterval):
 		}
 	}
+	return fmt.Errorf("NFRegister aborted: %w (last error: %v)", ctx.Err(), err)
+}
 
-	logger.InitLog.Infof("SMF Registration to NRF %v", nf)
-	return nil
+// processRegisterResponse adopts what the NRF answered to the NFRegister PUT: the
+// heartbeat interval and the oauth2 custom info. A nil profile is a legal answer.
+func (s *nnrfService) processRegisterResponse(
+	smfContext *smf_context.SMFContext,
+	nf *models.Nrf_NFMgmt_NFProfile,
+	applyOAuth2 bool,
+) {
+	if nf == nil {
+		nf = &models.Nrf_NFMgmt_NFProfile{}
+	}
+	s.heartbeatTimer = nf.HeartBeatTimer
+
+	oauth2 := false
+	if customInfo, ok := nf.CustomInfo.(map[string]interface{}); ok {
+		if v, isBool := customInfo["oauth2"].(bool); isBool {
+			oauth2 = v
+			logger.MainLog.Infoln("OAuth2 setting receive from NRF:", oauth2)
+		}
+	}
+	if applyOAuth2 {
+		smfContext.OAuth2Required = oauth2
+		if oauth2 && smfContext.NrfCertPem == "" {
+			logger.CfgLog.Error("OAuth2 enable but no nrfCertPem provided in config.")
+		}
+	} else if oauth2 != smfContext.OAuth2Required {
+		logger.ConsumerLog.Warnf("NRF OAuth2 setting changed to %v, restart SMF to apply it", oauth2)
+	}
+}
+
+// SendUpdateNFInstance sends an NFUpdate PATCH to the NRF, honoring ctx. The
+// raw err comes back alongside any ProblemDetails so callers can read its
+// GenericOpenAPIError status.
+func (s *nnrfService) SendUpdateNFInstance(ctx context.Context, patchItems []models.PatchItem) (
+	nf models.Nrf_NFMgmt_NFProfile, problemDetails *models.ProblemDetails, err error,
+) {
+	smfContext := s.consumer.Context()
+	tokCtx, pd, err := smfContext.GetTokenCtx(
+		models.Nrf_NFMgmt_ServiceName_NNRF_NFM,
+		models.Nrf_NFMgmt_NFType_NRF,
+	)
+	if err != nil {
+		return nf, pd, err
+	}
+	// GetTokenCtx takes no parent, so the token request stays uncancellable;
+	// transplanting the token lets at least the PATCH honor ctx.
+	if tok := tokCtx.Value(openapi.ContextOAuth2); tok != nil {
+		ctx = context.WithValue(ctx, openapi.ContextOAuth2, tok)
+	}
+
+	client := s.getNFManagementClient(smfContext.NrfUri)
+	if client == nil {
+		return nf, nil, errors.Errorf("SendUpdateNFInstance: nrf not found")
+	}
+
+	request := &NFMgmt.UpdateNFInstanceRequest{
+		NfInstanceID: &smfContext.NfInstanceID,
+		RequestBody:  patchItems,
+	}
+
+	res, err := client.NFInstanceIDDocumentApi.UpdateNFInstance(ctx, request)
+	if err != nil {
+		var apiErr openapi.GenericOpenAPIError
+		if errors.As(err, &apiErr) {
+			if updateErr, okModel := apiErr.Model().(NFMgmt.UpdateNFInstanceError); okModel {
+				return nf, updateErr.ProblemDetails, err
+			}
+		}
+		return nf, nil, err
+	}
+	if res == nil {
+		return nf, nil, errors.Errorf("empty NFUpdate response")
+	}
+	if res.Nrf_NFMgmt_NFProfile != nil {
+		nf = *res.Nrf_NFMgmt_NFProfile
+	}
+	return nf, nil, nil
 }
 
 func (s *nnrfService) buildNfProfile(smfContext *smf_context.SMFContext) (
