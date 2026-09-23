@@ -15,8 +15,8 @@ import (
 	nasie "github.com/free5gc/nas/ie"
 	ngapie "github.com/free5gc/ngap/ie"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/idgenerator"
 )
@@ -214,6 +214,9 @@ type SMContext struct {
 	// Each PDU session has a unique charging id
 	ChargingID    int32
 	RequestedUnit int32
+
+	chargingReleaseMu   sync.Mutex
+	chargingReleaseDone bool
 	// key = urrid
 	// All urr can map to a rating group
 	// However, a rating group may map to more than one urr
@@ -487,14 +490,27 @@ func (smContext *SMContext) State() SMContextState {
 	return SMContextState(atomic.LoadUint32((*uint32)(&smContext.state)))
 }
 
-func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) pfcpType.NodeID {
+// BeginChargingRelease elects exactly one caller to send the CHF termination
+// request. Association-triggered release can race a later AMF/UE completion,
+// but a charging session must be terminated only once.
+func (smContext *SMContext) BeginChargingRelease() bool {
+	smContext.chargingReleaseMu.Lock()
+	defer smContext.chargingReleaseMu.Unlock()
+	if smContext.chargingReleaseDone {
+		return false
+	}
+	smContext.chargingReleaseDone = true
+	return true
+}
+
+func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) pfcptype.NodeID {
 	for _, pfcpCtx := range smContext.PFCPContext {
 		if pfcpCtx.LocalSEID == seid {
 			return pfcpCtx.NodeID
 		}
 	}
 
-	return pfcpType.NodeID{}
+	return pfcptype.NodeID{}
 }
 
 func (smContext *SMContext) AllocateLocalSEIDForUPPath(path UPPath) {
@@ -532,7 +548,7 @@ func (smContext *SMContext) AllocateLocalSEIDForDataPath(dataPath *DataPath) {
 	}
 }
 
-func (smContext *SMContext) PutPDRtoPFCPSession(nodeID pfcpType.NodeID, pdr *PDR) error {
+func (smContext *SMContext) PutPDRtoPFCPSession(nodeID pfcptype.NodeID, pdr *PDR) error {
 	NodeIDtoIP := nodeID.ResolveNodeIdToIp().String()
 	if pfcpSessCtx, exist := smContext.PFCPContext[NodeIDtoIP]; exist {
 		smContext.Log.Tracef("PutPDRtoPFCPSession [%+v]", pdr)
@@ -829,7 +845,7 @@ func (c *SMContext) SendUpPathChgNotification(chgType string, notifCb NotifCallb
 	}
 }
 
-func (smContext *SMContext) RemovePDRfromPFCPSession(nodeID pfcpType.NodeID, pdr *PDR) {
+func (smContext *SMContext) RemovePDRfromPFCPSession(nodeID pfcptype.NodeID, pdr *PDR) {
 	NodeIDtoIP := nodeID.ResolveNodeIdToIp().String()
 	pfcpSessCtx := smContext.PFCPContext[NodeIDtoIP]
 	delete(pfcpSessCtx.PDRs, pdr.PDRID)

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/free5gc/pfcp/pfcpType"
+	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 )
 
 type PFCPSessionResponseStatus int
@@ -25,7 +25,7 @@ type FSEID struct {
 
 type PFCPSessionContext struct {
 	PDRs       map[uint16]*PDR
-	NodeID     pfcpType.NodeID
+	NodeID     pfcptype.NodeID
 	LocalSEID  uint64
 	RemoteSEID uint64
 }

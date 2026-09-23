@@ -628,7 +628,7 @@ func TestApplyPccRules(t *testing.T) {
 	require.NoError(t, err)
 	smfContext.UserPlaneInformation = userPlaneInformation
 	for _, n := range smfContext.UserPlaneInformation.UPFs {
-		n.UPF.AssociationContext = context.Background()
+		n.UPF.EstablishAssociation(context.Background())
 	}
 
 	smctx := smf_context.NewSMContext("imsi-208930000000002", 10)

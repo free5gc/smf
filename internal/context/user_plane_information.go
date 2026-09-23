@@ -10,8 +10,8 @@ import (
 	"sync"
 
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
@@ -39,7 +39,7 @@ const (
 type UPNode struct {
 	Name   string
 	Type   UPNodeType
-	NodeID pfcpType.NodeID
+	NodeID pfcptype.NodeID
 	ANIP   net.IP
 	Dnn    string
 	Links  []*UPNode
@@ -109,18 +109,18 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) (*UserPla
 
 			switch len(ip) {
 			case net.IPv4len:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+				upNode.NodeID = pfcptype.NodeID{
+					NodeIdType: pfcptype.NodeIdTypeIpv4Address,
 					IP:         ip,
 				}
 			case net.IPv6len:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeIpv6Address,
+				upNode.NodeID = pfcptype.NodeID{
+					NodeIdType: pfcptype.NodeIdTypeIpv6Address,
 					IP:         ip,
 				}
 			default:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeFqdn,
+				upNode.NodeID = pfcptype.NodeID{
+					NodeIdType: pfcptype.NodeIdTypeFqdn,
 					FQDN:       node.NodeID,
 				}
 			}
@@ -419,18 +419,18 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 
 			switch len(ip) {
 			case net.IPv4len:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+				upNode.NodeID = pfcptype.NodeID{
+					NodeIdType: pfcptype.NodeIdTypeIpv4Address,
 					IP:         ip,
 				}
 			case net.IPv6len:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeIpv6Address,
+				upNode.NodeID = pfcptype.NodeID{
+					NodeIdType: pfcptype.NodeIdTypeIpv6Address,
 					IP:         ip,
 				}
 			default:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeFqdn,
+				upNode.NodeID = pfcptype.NodeID{
+					NodeIdType: pfcptype.NodeIdTypeFqdn,
 					FQDN:       node.NodeID,
 				}
 			}
@@ -614,7 +614,7 @@ func (upi *UserPlaneInformation) GetUPFNameByIp(ip string) string {
 	return upi.UPFIPToName[ip]
 }
 
-func (upi *UserPlaneInformation) GetUPFNodeIDByName(name string) pfcpType.NodeID {
+func (upi *UserPlaneInformation) GetUPFNodeIDByName(name string) pfcptype.NodeID {
 	return upi.UPFs[name].NodeID
 }
 
@@ -943,7 +943,7 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionPa
 	for _, upf := range sortedUPFList {
 		logger.CtxLog.Debugf("check start UPF: %s",
 			upi.GetUPFNameByIp(upf.NodeID.ResolveNodeIdToIp().String()))
-		if err = upf.UPF.IsAssociated(); err != nil {
+		if err = upf.UPF.IsAvailable(); err != nil {
 			logger.CtxLog.Infoln(err)
 			continue
 		}

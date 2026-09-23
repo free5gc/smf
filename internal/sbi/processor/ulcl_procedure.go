@@ -6,10 +6,9 @@ import (
 	"reflect"
 
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/pfcp/pfcpType"
-	"github.com/free5gc/pfcp/pfcpUdp"
 	"github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/flowdesc"
 )
@@ -44,14 +43,14 @@ func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) err
 
 			EstablishRANTunnelInfo(smContext)
 			// Establish ULCL
-			err = EstablishULCL(smContext)
+			err = p.EstablishULCL(smContext)
 			if err != nil {
 				return err
 			}
 
-			UpdatePSA2DownLink(smContext)
+			p.UpdatePSA2DownLink(smContext)
 
-			UpdateRANAndIUPFUpLink(smContext)
+			p.UpdateRANAndIUPFUpLink(smContext)
 		}
 	default:
 		logger.CtxLog.Warnln("unexpected status")
@@ -72,7 +71,7 @@ func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 		if nodeAfterULCL {
 			addr := net.UDPAddr{
 				IP:   context.ResolveIP(node.UPF.Addr),
-				Port: pfcpUdp.PFCP_PORT,
+				Port: pfcpPeerPort,
 			}
 
 			logger.PduSessLog.Traceln("Send to upf addr: ", addr.String())
@@ -87,7 +86,7 @@ func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 
 			chgUrrList := []*context.URR{}
 			for _, urr := range urrList {
-				if urr.ReportingTrigger.Start {
+				if urr.ReportingTrigger.HasSTART() {
 					chgUrrList = append(chgUrrList, urr)
 				}
 			}
@@ -119,9 +118,9 @@ func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 
 			sessionContext, exist := smContext.PFCPContext[node.GetNodeIP()]
 			if !exist || sessionContext.RemoteSEID == 0 {
-				go establishPfcpSession(smContext, pfcpState, resChan)
+				go p.establishPfcpSession(smContext, pfcpState, resChan)
 			} else {
-				go modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
+				go p.modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
 			}
 		} else if reflect.DeepEqual(node.UPF.NodeID, ulcl.NodeID) {
 			nodeAfterULCL = true
@@ -136,7 +135,7 @@ func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 	logger.PduSessLog.Traceln("End of EstablishPSA2")
 }
 
-func EstablishULCL(smContext *context.SMContext) error {
+func (p *Processor) EstablishULCL(smContext *context.SMContext) error {
 	logger.PduSessLog.Infoln("In EstablishULCL")
 
 	bpMGR := smContext.BPManager
@@ -241,7 +240,7 @@ func EstablishULCL(smContext *context.SMContext) error {
 				logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
 			}
 
-			UPLinkPDR.PDI.SDFFilter = &pfcpType.SDFFilter{
+			UPLinkPDR.PDI.SDFFilter = &pfcptype.SDFFilter{
 				Bid:                     false,
 				Fl:                      false,
 				Spi:                     false,
@@ -264,7 +263,7 @@ func EstablishULCL(smContext *context.SMContext) error {
 
 			curDPNodeIP := ulcl.NodeID.ResolveNodeIdToIp().String()
 			pendingUPFs = append(pendingUPFs, curDPNodeIP)
-			go modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
+			go p.modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
 			break
 		}
 	}
@@ -277,7 +276,7 @@ func EstablishULCL(smContext *context.SMContext) error {
 	return nil
 }
 
-func UpdatePSA2DownLink(smContext *context.SMContext) {
+func (p *Processor) UpdatePSA2DownLink(smContext *context.SMContext) {
 	logger.PduSessLog.Traceln("In UpdatePSA2DownLink")
 
 	bpMGR := smContext.BPManager
@@ -306,7 +305,7 @@ func UpdatePSA2DownLink(smContext *context.SMContext) {
 
 				curDPNodeIP := node.UPF.NodeID.ResolveNodeIdToIp().String()
 				pendingUPFs = append(pendingUPFs, curDPNodeIP)
-				go modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
+				go p.modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
 				logger.PfcpLog.Info("[SMF] Update PSA2 downlink msg has been send")
 				break
 			}
@@ -338,7 +337,7 @@ func EstablishRANTunnelInfo(smContext *context.SMContext) {
 
 	defaultANUPFDLFAR := defaultANUPF.DownLinkTunnel.PDR.FAR
 	activatingANUPFDLFAR := activatingANUPF.DownLinkTunnel.PDR.FAR
-	activatingANUPFDLFAR.ApplyAction = pfcpType.ApplyAction{
+	activatingANUPFDLFAR.ApplyAction = pfcptype.ApplyAction{
 		Buff: false,
 		Drop: false,
 		Dupl: false,
@@ -346,24 +345,24 @@ func EstablishRANTunnelInfo(smContext *context.SMContext) {
 		Nocp: false,
 	}
 	activatingANUPFDLFAR.ForwardingParameters = &context.ForwardingParameters{
-		DestinationInterface: pfcpType.DestinationInterface{
-			InterfaceValue: pfcpType.DestinationInterfaceAccess,
+		DestinationInterface: pfcptype.DestinationInterface{
+			InterfaceValue: pfcptype.DestinationInterfaceAccess,
 		},
-		NetworkInstance: &pfcpType.NetworkInstance{
+		NetworkInstance: &pfcptype.NetworkInstance{
 			NetworkInstance: smContext.Dnn,
 			FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
 		},
 	}
 
 	activatingANUPFDLFAR.State = context.RULE_INITIAL
-	activatingANUPFDLFAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
+	activatingANUPFDLFAR.ForwardingParameters.OuterHeaderCreation = new(pfcptype.OuterHeaderCreation)
 	anOuterHeaderCreation := activatingANUPFDLFAR.ForwardingParameters.OuterHeaderCreation
-	anOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+	anOuterHeaderCreation.OuterHeaderCreationDescription = pfcptype.OuterHeaderCreationGtpUUdpIpv4
 	anOuterHeaderCreation.Teid = defaultANUPFDLFAR.ForwardingParameters.OuterHeaderCreation.Teid
 	anOuterHeaderCreation.Ipv4Address = defaultANUPFDLFAR.ForwardingParameters.OuterHeaderCreation.Ipv4Address
 }
 
-func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
+func (p *Processor) UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 	logger.PduSessLog.Traceln("In UpdateRANAndIUPFUpLink")
 	bpMGR := smContext.BPManager
 	activatingPath := bpMGR.ActivatingPath
@@ -396,7 +395,7 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 					logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
 				}
 
-				UPLinkPDR.PDI.SDFFilter = &pfcpType.SDFFilter{
+				UPLinkPDR.PDI.SDFFilter = &pfcptype.SDFFilter{
 					Bid:                     false,
 					Fl:                      false,
 					Spi:                     false,
@@ -419,7 +418,7 @@ func UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 
 			curDPNodeIP := curDPNode.UPF.NodeID.ResolveNodeIdToIp().String()
 			pendingUPFs = append(pendingUPFs, curDPNodeIP)
-			go modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
+			go p.modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
 		}
 	}
 

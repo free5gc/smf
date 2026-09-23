@@ -37,5 +37,5 @@ func IsChargingRelatedUrr(urr *URR) bool {
 	if urr == nil {
 		return false
 	}
-	return !urr.MeasurementInformation.Mnop && !urr.MeasurementInformation.Mbqe
+	return !urr.MeasurementInformation.HasMNOP() && !urr.MeasurementInformation.HasMBQE()
 }

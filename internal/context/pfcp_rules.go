@@ -3,8 +3,8 @@ package context
 import (
 	"time"
 
-	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 )
 
 const (
@@ -23,7 +23,7 @@ type PDR struct {
 
 	Precedence         uint32
 	PDI                PDI
-	OuterHeaderRemoval *pfcpType.OuterHeaderRemoval
+	OuterHeaderRemoval *pfcptype.OuterHeaderRemoval
 
 	FAR *FAR
 	URR []*URR
@@ -44,10 +44,10 @@ const (
 type URR struct {
 	URRID                  uint32
 	MeasureMethod          string // vol or time
-	ReportingTrigger       pfcpType.ReportingTriggers
+	ReportingTrigger       pfcptype.ReportingTrigger
 	MeasurementPeriod      time.Duration
 	QuotaValidityTime      time.Time
-	MeasurementInformation pfcpType.MeasurementInformation
+	MeasurementInformation pfcptype.MeasurementInformation
 	VolumeThreshold        uint64
 	VolumeQuota            uint64
 }
@@ -63,43 +63,46 @@ type UrrOpt func(urr *URR)
 
 func NewMeasureInformation(isMeasurePkt, isMeasureBeforeQos bool) UrrOpt {
 	return func(urr *URR) {
-		urr.MeasurementInformation.Mnop = isMeasurePkt
-		urr.MeasurementInformation.Mbqe = isMeasureBeforeQos
+		urr.MeasurementInformation = MeasureInformation(isMeasurePkt, isMeasureBeforeQos)
 	}
 }
 
-func NewMeasurementPeriod(time time.Duration) UrrOpt {
+func NewMeasurementPeriod(period time.Duration) UrrOpt {
 	return func(urr *URR) {
-		urr.ReportingTrigger.Perio = true
-		urr.MeasurementPeriod = time
+		urr.ReportingTrigger.SetPERIO()
+		urr.MeasurementPeriod = period
 	}
 }
 
 func NewVolumeThreshold(threshold uint64) UrrOpt {
 	return func(urr *URR) {
-		urr.ReportingTrigger.Volth = true
+		urr.ReportingTrigger.SetVOLTH()
 		urr.VolumeThreshold = threshold
 	}
 }
 
 func NewVolumeQuota(quota uint64) UrrOpt {
 	return func(urr *URR) {
-		urr.ReportingTrigger.Volqu = true
+		urr.ReportingTrigger.SetVOLQU()
 		urr.VolumeQuota = quota
 	}
 }
 
 func SetStartOfSDFTrigger() UrrOpt {
 	return func(urr *URR) {
-		urr.ReportingTrigger.Start = true
+		urr.ReportingTrigger.SetSTART()
 	}
 }
 
-func MeasureInformation(isMeasurePkt, isMeasureBeforeQos bool) pfcpType.MeasurementInformation {
-	var measureInformation pfcpType.MeasurementInformation
-	measureInformation.Mnop = isMeasurePkt
-	measureInformation.Mbqe = isMeasureBeforeQos
-	return measureInformation
+func MeasureInformation(isMeasurePkt, isMeasureBeforeQos bool) pfcptype.MeasurementInformation {
+	var flags uint8
+	if isMeasureBeforeQos {
+		flags |= pfcptype.MeasureInfoMBQE
+	}
+	if isMeasurePkt {
+		flags |= pfcptype.MeasureInfoMNOP
+	}
+	return pfcptype.MeasurementInformation{Flags: flags}
 }
 
 func (c *SMContext) RegisterUrr(upfId string, urr *URR) *URR {
@@ -220,11 +223,11 @@ func (c *SMContext) DeleteFromUrrTable(upfId string, urrID uint32) {
 
 // Packet Detection. 7.5.2.2-2
 type PDI struct {
-	SourceInterface pfcpType.SourceInterface
-	LocalFTeid      *pfcpType.FTEID
-	NetworkInstance *pfcpType.NetworkInstance
-	UEIPAddress     *pfcpType.UEIPAddress
-	SDFFilter       *pfcpType.SDFFilter
+	SourceInterface pfcptype.SourceInterface
+	LocalFTeid      *pfcptype.FTEID
+	NetworkInstance *pfcptype.NetworkInstance
+	UEIPAddress     *pfcptype.UEIPAddress
+	SDFFilter       *pfcptype.SDFFilter
 	ApplicationID   string
 }
 
@@ -232,7 +235,7 @@ type PDI struct {
 type FAR struct {
 	FARID uint32
 
-	ApplyAction          pfcpType.ApplyAction
+	ApplyAction          pfcptype.ApplyAction
 	ForwardingParameters *ForwardingParameters
 
 	BAR   *BAR
@@ -241,9 +244,9 @@ type FAR struct {
 
 // Forwarding Parameters. 7.5.2.3-2
 type ForwardingParameters struct {
-	DestinationInterface pfcpType.DestinationInterface
-	NetworkInstance      *pfcpType.NetworkInstance
-	OuterHeaderCreation  *pfcpType.OuterHeaderCreation
+	DestinationInterface pfcptype.DestinationInterface
+	NetworkInstance      *pfcptype.NetworkInstance
+	OuterHeaderCreation  *pfcptype.OuterHeaderCreation
 	ForwardingPolicyID   string
 	SendEndMarker        bool
 }
@@ -252,8 +255,8 @@ type ForwardingParameters struct {
 type BAR struct {
 	BARID uint8
 
-	DownlinkDataNotificationDelay  pfcpType.DownlinkDataNotificationDelay
-	SuggestedBufferingPacketsCount pfcpType.SuggestedBufferingPacketsCount
+	DownlinkDataNotificationDelay  pfcptype.DownlinkDataNotificationDelay
+	SuggestedBufferingPacketsCount pfcptype.SuggestedBufferingPacketsCount
 
 	State RuleState
 }
@@ -262,11 +265,11 @@ type BAR struct {
 type QER struct {
 	QERID uint32
 
-	QFI pfcpType.QFI
+	QFI pfcptype.QFI
 
-	GateStatus *pfcpType.GateStatus
-	MBR        *pfcpType.MBR
-	GBR        *pfcpType.GBR
+	GateStatus *pfcptype.GateStatus
+	MBR        *pfcptype.MBR
+	GBR        *pfcptype.GBR
 
 	State RuleState
 }

@@ -46,7 +46,7 @@ type SmfApp struct {
 	processor     *processor.Processor
 	wg            sync.WaitGroup
 
-	pfcpStart     func(*SmfApp)
+	pfcpStart     func(*SmfApp) error
 	pfcpTerminate func()
 }
 
@@ -56,7 +56,7 @@ func GetApp() SmfAppInterface {
 
 func NewApp(
 	ctx context.Context, cfg *factory.Config, tlsKeyLogPath string,
-	pfcpStart func(*SmfApp), pfcpTerminate func(),
+	pfcpStart func(*SmfApp) error, pfcpTerminate func(),
 ) (*SmfApp, error) {
 	smf_context.Init(cfg)
 	smf := &SmfApp{
@@ -101,10 +101,6 @@ func NewApp(
 	}
 
 	smf.ctx, smf.cancel = context.WithCancel(ctx)
-
-	// for PFCP
-	smfContext := smf_context.GetSelf()
-	smfContext.PfcpContext, smfContext.PfcpCancelFunc = context.WithCancel(smf.ctx)
 
 	SMF = smf
 
@@ -195,22 +191,31 @@ func (a *SmfApp) SetReportCaller(reportCaller bool) {
 func (a *SmfApp) Start() {
 	logger.InitLog.Infoln("Server started")
 
-	err := a.sbiServer.Run(context.Background(), &a.wg)
-	if err != nil {
-		logger.MainLog.Errorf("sbi server run error %+v", err)
-	}
-
 	a.wg.Add(1)
 	go a.listenShutDownEvent()
+
+	// PFCP must be ready and injected into Processor before SBI accepts any
+	// PDU Session request. Otherwise an early SBI request can observe a nil
+	// PFCP client while the application is only partially started.
+	if err := a.pfcpStart(a); err != nil {
+		logger.MainLog.Errorf("PFCP server startup failed: %+v", err)
+		a.cancel()
+		a.WaitRoutineStopped()
+		return
+	}
+
+	if err := a.sbiServer.Run(context.Background(), &a.wg); err != nil {
+		logger.MainLog.Errorf("SBI server startup failed: %+v", err)
+		a.cancel()
+		a.WaitRoutineStopped()
+		return
+	}
 
 	if a.cfg.AreMetricsEnabled() && a.metricsServer != nil {
 		go func() {
 			a.metricsServer.Run(&a.wg)
 		}()
 	}
-
-	// Initialize PFCP server
-	a.pfcpStart(a)
 
 	a.WaitRoutineStopped()
 }

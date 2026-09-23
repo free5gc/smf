@@ -11,8 +11,8 @@ import (
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/oauth"
-	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/idgenerator"
 )
@@ -39,7 +39,7 @@ type SMFContext struct {
 	SBIPort      int
 
 	// N4 interface-related
-	CPNodeID     pfcpType.NodeID
+	CPNodeID     pfcptype.NodeID
 	ExternalAddr string
 	ListenAddr   string
 
@@ -178,20 +178,20 @@ func InitSmfContext(config *factory.Config) error {
 		smfContext.ExternalAddr = pfcp.ExternalAddr
 
 		if ip := net.ParseIP(pfcp.NodeID); ip == nil {
-			smfContext.CPNodeID = pfcpType.NodeID{
-				NodeIdType: pfcpType.NodeIdTypeFqdn,
+			smfContext.CPNodeID = pfcptype.NodeID{
+				NodeIdType: pfcptype.NodeIdTypeFqdn,
 				FQDN:       pfcp.NodeID,
 			}
 		} else {
 			ipv4 := ip.To4()
 			if ipv4 != nil {
-				smfContext.CPNodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+				smfContext.CPNodeID = pfcptype.NodeID{
+					NodeIdType: pfcptype.NodeIdTypeIpv4Address,
 					IP:         ipv4,
 				}
 			} else {
-				smfContext.CPNodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeIpv6Address,
+				smfContext.CPNodeID = pfcptype.NodeID{
+					NodeIdType: pfcptype.NodeIdTypeIpv6Address,
 					IP:         ip,
 				}
 			}

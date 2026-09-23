@@ -14,9 +14,8 @@ import (
 
 	nasie "github.com/free5gc/nas/ie"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/pfcp/pfcpType"
-	"github.com/free5gc/pfcp/pfcpUdp"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/idgenerator"
 )
@@ -46,9 +45,9 @@ func (t *UPTunnel) UpdateANInformation(ip net.IP, teid uint32) {
 				DLPDR.FAR.ForwardingParameters.SendEndMarker = true
 			}
 
-			DLPDR.FAR.ForwardingParameters.OuterHeaderCreation = new(pfcpType.OuterHeaderCreation)
+			DLPDR.FAR.ForwardingParameters.OuterHeaderCreation = new(pfcptype.OuterHeaderCreation)
 			dlOuterHeaderCreation := DLPDR.FAR.ForwardingParameters.OuterHeaderCreation
-			dlOuterHeaderCreation.OuterHeaderCreationDescription = pfcpType.OuterHeaderCreationGtpUUdpIpv4
+			dlOuterHeaderCreation.OuterHeaderCreationDescription = pfcptype.OuterHeaderCreationGtpUUdpIpv4
 			dlOuterHeaderCreation.Teid = t.ANInformation.TEID
 			dlOuterHeaderCreation.Ipv4Address = t.ANInformation.IPAddress.To4()
 			DLPDR.FAR.State = RULE_UPDATE
@@ -56,22 +55,41 @@ func (t *UPTunnel) UpdateANInformation(ip net.IP, teid uint32) {
 	}
 }
 
-type UPFStatus int
+type UPFAssociationState uint8
 
 const (
-	NotAssociated          UPFStatus = 0
-	AssociatedSettingUp    UPFStatus = 1
-	AssociatedSetUpSuccess UPFStatus = 2
+	AssociationDown UPFAssociationState = iota
+	AssociationSettingUp
+	AssociationEstablished
+	AssociationReleasing
 )
 
-type UPF struct {
-	uuid              uuid.UUID
-	NodeID            pfcpType.NodeID
-	Addr              string
-	RecoveryTimeStamp time.Time
+var closedAssociationDone = func() <-chan struct{} {
+	done := make(chan struct{})
+	close(done)
+	return done
+}()
 
-	AssociationContext context.Context
-	CancelAssociation  context.CancelFunc
+type UPF struct {
+	uuid                uuid.UUID
+	NodeID              pfcptype.NodeID
+	Addr                string
+	recoveryTimeStampMu sync.RWMutex
+	recoveryTimeStamp   time.Time
+
+	associationMu         sync.RWMutex
+	associationState      UPFAssociationState
+	associationContext    context.Context
+	cancelAssociation     context.CancelFunc
+	associationGeneration uint64
+	associationLifecycle  bool
+
+	upFunctionFeaturesMu sync.RWMutex
+	upFunctionFeatures   []byte
+
+	// sessionWorkGate coordinates in-flight PFCP Session Establishment and
+	// Modification with PFCP Association Release.
+	sessionWorkGate sync.RWMutex
 
 	SNssaiInfos  []*SnssaiUPFInfo
 	N3Interfaces []*UPFInterfaceInfo
@@ -88,6 +106,365 @@ type UPF struct {
 	barIDGenerator *idgenerator.IDGenerator
 	urrIDGenerator *idgenerator.IDGenerator
 	qerIDGenerator *idgenerator.IDGenerator
+}
+
+// SetUPFunctionFeatures replaces the feature list advertised by the UPF.
+// Copying keeps PFCP receive buffers out of long-lived SMF context.
+func (upf *UPF) SetUPFunctionFeatures(features []byte) {
+	upf.upFunctionFeaturesMu.Lock()
+	upf.upFunctionFeatures = append(upf.upFunctionFeatures[:0], features...)
+	upf.upFunctionFeaturesMu.Unlock()
+}
+
+// UPFunctionFeatures returns a snapshot of the UPF's advertised features.
+func (upf *UPF) UPFunctionFeatures() []byte {
+	upf.upFunctionFeaturesMu.RLock()
+	defer upf.upFunctionFeaturesMu.RUnlock()
+	return append([]byte(nil), upf.upFunctionFeatures...)
+}
+
+// SetRecoveryTimeStamp replaces the UPF recovery-time baseline used by active
+// heartbeat restart detection.
+func (upf *UPF) SetRecoveryTimeStamp(recoveryTime time.Time) {
+	upf.recoveryTimeStampMu.Lock()
+	upf.recoveryTimeStamp = recoveryTime
+	upf.recoveryTimeStampMu.Unlock()
+}
+
+// RecoveryTimeStamp returns the current UPF recovery-time baseline.
+func (upf *UPF) RecoveryTimeStamp() time.Time {
+	upf.recoveryTimeStampMu.RLock()
+	defer upf.recoveryTimeStampMu.RUnlock()
+	return upf.recoveryTimeStamp
+}
+
+// AcceptRecoveryTimeStamp installs the first heartbeat recovery time and
+// atomically compares later values with that baseline. It returns false when
+// the UPF advertises a newer timestamp and has therefore restarted.
+func (upf *UPF) AcceptRecoveryTimeStamp(recoveryTime time.Time) bool {
+	upf.recoveryTimeStampMu.Lock()
+	defer upf.recoveryTimeStampMu.Unlock()
+	if upf.recoveryTimeStamp.IsZero() {
+		upf.recoveryTimeStamp = recoveryTime
+		return true
+	}
+	return !upf.recoveryTimeStamp.Before(recoveryTime)
+}
+
+// AcceptRecoveryTimeStampForGeneration applies the heartbeat recovery-time
+// comparison only while the association generation observed by the caller is
+// still current. The second result reports a newer UPF recovery timestamp.
+func (upf *UPF) AcceptRecoveryTimeStampForGeneration(
+	generation uint64,
+	recoveryTime time.Time,
+) (currentGeneration bool, restarted bool) {
+	upf.associationMu.RLock()
+	defer upf.associationMu.RUnlock()
+	if upf.associationGeneration != generation {
+		return false, false
+	}
+
+	upf.recoveryTimeStampMu.Lock()
+	defer upf.recoveryTimeStampMu.Unlock()
+	if upf.recoveryTimeStamp.IsZero() {
+		upf.recoveryTimeStamp = recoveryTime
+		return true, false
+	}
+	return true, upf.recoveryTimeStamp.Before(recoveryTime)
+}
+
+// AssociationState returns the current node-level PFCP association state.
+func (upf *UPF) AssociationState() UPFAssociationState {
+	upf.associationMu.RLock()
+	defer upf.associationMu.RUnlock()
+	return upf.associationState
+}
+
+// AssociationStateAndGeneration returns one consistent lifecycle snapshot for
+// work that must not affect a replacement association.
+func (upf *UPF) AssociationStateAndGeneration() (UPFAssociationState, uint64) {
+	upf.associationMu.RLock()
+	defer upf.associationMu.RUnlock()
+	return upf.associationState, upf.associationGeneration
+}
+
+// BeginAssociationLifecycle elects one goroutine to own setup, monitoring,
+// cleanup and reconnect ion for this configured UPF.
+func (upf *UPF) BeginAssociationLifecycle() bool {
+	upf.associationMu.Lock()
+	defer upf.associationMu.Unlock()
+	if upf.associationLifecycle {
+		return false
+	}
+	upf.associationLifecycle = true
+	return true
+}
+
+// EndAssociationLifecycle releases lifecycle ownership during SMF shutdown or
+// when the owner cannot continue.
+func (upf *UPF) EndAssociationLifecycle() {
+	upf.associationMu.Lock()
+	upf.associationLifecycle = false
+	upf.associationMu.Unlock()
+}
+
+// BeginAssociationSetup moves a disconnected UPF into setup state. It returns
+// false when another lifecycle operation already owns the association.
+func (upf *UPF) BeginAssociationSetup() bool {
+	upf.associationMu.Lock()
+	defer upf.associationMu.Unlock()
+	if upf.associationState != AssociationDown {
+		return false
+	}
+	upf.associationState = AssociationSettingUp
+	return true
+}
+
+// FailAssociationSetup returns a setup attempt to the disconnected state.
+func (upf *UPF) FailAssociationSetup() {
+	upf.associationMu.Lock()
+	if upf.associationState == AssociationSettingUp {
+		upf.associationState = AssociationDown
+	}
+	upf.associationMu.Unlock()
+}
+
+// EstablishAssociation installs the cancellation context and makes the UPF
+// available for PFCP session work. Association state, context and cancellation
+// ownership are updated together under one lock.
+func (upf *UPF) EstablishAssociation(parent context.Context) context.Context {
+	if parent == nil {
+		parent = context.Background()
+	}
+	associationContext, cancel := context.WithCancel(parent)
+
+	upf.associationMu.Lock()
+	previousCancel := upf.cancelAssociation
+	upf.associationGeneration++
+	generation := upf.associationGeneration
+	upf.associationContext = associationContext
+	upf.cancelAssociation = cancel
+	upf.associationState = AssociationEstablished
+	upf.associationMu.Unlock()
+
+	if previousCancel != nil {
+		previousCancel()
+	}
+	context.AfterFunc(associationContext, func() {
+		upf.associationMu.Lock()
+		if upf.associationGeneration == generation {
+			upf.associationState = AssociationDown
+		}
+		upf.associationMu.Unlock()
+	})
+	return associationContext
+}
+
+// CancelAssociation synchronously marks the UPF disconnected, clears the
+// recovery-time baseline, then wakes goroutines waiting on AssociationDone.
+func (upf *UPF) CancelAssociation() {
+	upf.associationMu.Lock()
+	cancel := upf.cancelAssociationLocked()
+	upf.associationMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+// CancelAssociationIfGeneration invalidates only the association generation
+// observed by the caller. A delayed callback from an older generation is a
+// no-op and cannot tear down a replacement association.
+func (upf *UPF) CancelAssociationIfGeneration(generation uint64) bool {
+	upf.associationMu.Lock()
+	if upf.associationGeneration != generation {
+		upf.associationMu.Unlock()
+		return false
+	}
+	cancel := upf.cancelAssociationLocked()
+	upf.associationMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	return true
+}
+
+// cancelAssociationLocked requires associationMu to be held for writing.
+func (upf *UPF) cancelAssociationLocked() context.CancelFunc {
+	cancel := upf.cancelAssociation
+	upf.associationGeneration++
+	upf.associationState = AssociationDown
+	upf.recoveryTimeStampMu.Lock()
+	upf.recoveryTimeStamp = time.Time{}
+	upf.recoveryTimeStampMu.Unlock()
+	return cancel
+}
+
+// AssociationDone exposes only the cancellation signal; association state is
+// authoritative for lifecycle decisions.
+func (upf *UPF) AssociationDone() <-chan struct{} {
+	upf.associationMu.RLock()
+	associationContext := upf.associationContext
+	upf.associationMu.RUnlock()
+	if associationContext == nil || associationContext.Done() == nil {
+		return closedAssociationDone
+	}
+	return associationContext.Done()
+}
+
+// AssociationContext returns the lifecycle context for the current
+// association. Node and Session transactions should derive cancellation from
+// this context so heartbeat loss, Association Release, or SMF shutdown aborts
+// them together.
+func (upf *UPF) AssociationContext() (context.Context, error) {
+	upf.associationMu.RLock()
+	state := upf.associationState
+	associationContext := upf.associationContext
+	upf.associationMu.RUnlock()
+
+	if state != AssociationEstablished && state != AssociationReleasing {
+		return nil, fmt.Errorf("UPF[%s] not associated with SMF",
+			upf.NodeID.ResolveNodeIdToIp().String())
+	}
+	if associationContext == nil {
+		return nil, fmt.Errorf("UPF[%s] has no association context",
+			upf.NodeID.ResolveNodeIdToIp().String())
+	}
+	if err := associationContext.Err(); err != nil {
+		return nil, fmt.Errorf("UPF[%s] association context is canceled: %w",
+			upf.NodeID.ResolveNodeIdToIp().String(), err)
+	}
+	return associationContext, nil
+}
+
+// BeginSessionWork reserves the UPF for one PFCP Session Establishment or
+// Modification and returns the context of the association being used. The
+// finish function must be called on every exit path.
+func (upf *UPF) BeginSessionWork() (context.Context, func(), error) {
+	upf.sessionWorkGate.RLock()
+	associationContext, err := upf.AssociationContext()
+	if err != nil {
+		upf.sessionWorkGate.RUnlock()
+		return nil, nil, err
+	}
+	if err = upf.IsAvailable(); err != nil {
+		upf.sessionWorkGate.RUnlock()
+		return nil, nil, err
+	}
+	return associationContext, upf.sessionWorkGate.RUnlock, nil
+}
+
+// BeginAssociationRelease changes Established to Releasing, preventing new
+// session work from passing its availability check, and then waits until all
+// Establishment/Modification work that already holds a read lock has finished.
+func (upf *UPF) BeginAssociationRelease() bool {
+	upf.associationMu.Lock()
+	if upf.associationState != AssociationEstablished {
+		upf.associationMu.Unlock()
+		return false
+	}
+	upf.associationState = AssociationReleasing
+	upf.associationMu.Unlock()
+
+	upf.waitForSessionWorkToFinish()
+	return true
+}
+
+// waitForSessionWorkToFinish is an RWMutex barrier. Acquiring the write lock
+// blocks until every BeginSessionWork read lock has been released. No protected
+// operation is needed while the write lock is held because AssociationReleasing
+// already prevents subsequent session work from being accepted.
+func (upf *UPF) waitForSessionWorkToFinish() {
+	upf.sessionWorkGate.Lock()
+	defer upf.sessionWorkGate.Unlock()
+}
+
+func (upf *UPF) IsAssociationReleasing() bool {
+	return upf.AssociationState() == AssociationReleasing
+}
+
+// IsAvailable permits new PFCP Session Establishment and Modification only on
+// a fully established association. Releasing remains associated for reports
+// and Session Deletion, but is not available for new session work.
+func (upf *UPF) IsAvailable() error {
+	upf.associationMu.RLock()
+	defer upf.associationMu.RUnlock()
+	return upf.isAvailableLocked()
+}
+
+// isAvailableLocked reports whether new work may be added to the current
+// association. The caller must hold associationMu for reading or writing.
+func (upf *UPF) isAvailableLocked() error {
+	if upf.associationState != AssociationEstablished {
+		return fmt.Errorf("UPF[%s] is not available for PFCP session work (association state=%s)",
+			upf.NodeID.ResolveNodeIdToIp().String(), upf.associationState)
+	}
+	return nil
+}
+
+// ruleAllocationAvailableLocked preserves the historical "not associated"
+// error for Down/SettingUp while giving Releasing the stricter availability
+// semantics required for new rule allocation.
+func (upf *UPF) ruleAllocationAvailableLocked() error {
+	if upf.associationState == AssociationEstablished {
+		return nil
+	}
+	if upf.associationState == AssociationReleasing {
+		return fmt.Errorf("UPF[%s] is not available for new PFCP rule allocation (association state=%s)",
+			upf.NodeID.ResolveNodeIdToIp().String(), upf.associationState)
+	}
+	return fmt.Errorf("UPF[%s] not associated with SMF",
+		upf.NodeID.ResolveNodeIdToIp().String())
+}
+
+// InvalidatePFCPSessions clears every remote SEID belonging to this UPF before
+// the lifecycle can establish a replacement association. It returns the number
+// of live PFCP sessions invalidated.
+func (upf *UPF) InvalidatePFCPSessions() int {
+	invalidated := 0
+	smContextPool.Range(func(_, value interface{}) bool {
+		smContext, ok := value.(*SMContext)
+		if !ok || smContext == nil {
+			return true
+		}
+		smContext.SMLock.Lock()
+		for _, pfcpSession := range smContext.PFCPContext {
+			if pfcpSession != nil && pfcpSession.RemoteSEID != 0 &&
+				pfcpSession.NodeID.EqualsTo(&upf.NodeID) {
+				pfcpSession.RemoteSEID = 0
+				invalidated++
+			}
+		}
+		smContext.SMLock.Unlock()
+		return true
+	})
+	return invalidated
+}
+
+// CollectAssociationReleasePDUSessions returns each PDU Session that currently
+// has a live PFCP session on this UPF. A PDU Session is returned only once even
+// if its internal representation contains more than one matching PFCP context.
+// Workers re-read mutable PFCP state while holding SMLock instead of relying on
+// a stale SEID snapshot collected here.
+func (upf *UPF) CollectAssociationReleasePDUSessions() []*SMContext {
+	targets := make([]*SMContext, 0)
+	smContextPool.Range(func(_, value interface{}) bool {
+		smContext, ok := value.(*SMContext)
+		if !ok || smContext == nil {
+			return true
+		}
+		smContext.SMLock.Lock()
+		for _, pfcpSession := range smContext.PFCPContext {
+			if pfcpSession == nil || pfcpSession.RemoteSEID == 0 ||
+				!pfcpSession.NodeID.EqualsTo(&upf.NodeID) {
+				continue
+			}
+			targets = append(targets, smContext)
+			break
+		}
+		smContext.SMLock.Unlock()
+		return true
+	})
+	return targets
 }
 
 // UPFSelectionParams ... parameters for upf selection
@@ -236,15 +613,13 @@ func (t *UPTunnel) RemoveDataPath(pathID int64) {
 
 // *** add unit test ***//
 // NewUPF returns a new UPF context in SMF
-func NewUPF(nodeID *pfcpType.NodeID, ifaces []*factory.InterfaceUpfInfoItem) (upf *UPF) {
+func NewUPF(nodeID *pfcptype.NodeID, ifaces []*factory.InterfaceUpfInfoItem) (upf *UPF) {
 	upf = new(UPF)
 	upf.uuid = uuid.New()
 
 	upfPool.Store(upf.UUID(), upf)
 
-	// Initialize context
-	upf.AssociationContext, upf.CancelAssociation = context.WithCancel(context.Background())
-	upf.CancelAssociation() // necessary to avoid nil pointer for checks of AssociationContext before UPF is associated
+	upf.associationState = AssociationDown
 
 	upf.NodeID = *nodeID
 	upf.pdrIDGenerator = idgenerator.NewGenerator(1, math.MaxUint16)
@@ -297,17 +672,17 @@ func (upf *UPF) GetInterface(interfaceType models.Nrf_NFMgmt_UPInterfaceType, dn
 func (upf *UPF) PFCPAddr() *net.UDPAddr {
 	return &net.UDPAddr{
 		IP:   upf.NodeID.ResolveNodeIdToIp(),
-		Port: pfcpUdp.PFCP_PORT,
+		Port: 8805,
 	}
 }
 
 // *** add unit test ***//
-func RetrieveUPFNodeByNodeID(nodeID pfcpType.NodeID) *UPF {
+func RetrieveUPFNodeByNodeID(nodeID pfcptype.NodeID) *UPF {
 	var targetUPF *UPF = nil
 	upfPool.Range(func(key, value interface{}) bool {
 		curUPF := value.(*UPF)
 		if curUPF.NodeID.NodeIdType != nodeID.NodeIdType &&
-			(curUPF.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn || nodeID.NodeIdType == pfcpType.NodeIdTypeFqdn) {
+			(curUPF.NodeID.NodeIdType == pfcptype.NodeIdTypeFqdn || nodeID.NodeIdType == pfcptype.NodeIdTypeFqdn) {
 			curUPFNodeIdIP := curUPF.NodeID.ResolveNodeIdToIp().To4()
 			nodeIdIP := nodeID.ResolveNodeIdToIp().To4()
 			logger.CtxLog.Tracef("RetrieveUPF - upfNodeIdIP:[%+v], nodeIdIP:[%+v]", curUPFNodeIdIP, nodeIdIP)
@@ -326,13 +701,13 @@ func RetrieveUPFNodeByNodeID(nodeID pfcpType.NodeID) *UPF {
 }
 
 // *** add unit test ***//
-func RemoveUPFNodeByNodeID(nodeID pfcpType.NodeID) bool {
+func RemoveUPFNodeByNodeID(nodeID pfcptype.NodeID) bool {
 	upfID := ""
 	upfPool.Range(func(key, value interface{}) bool {
 		upfID = key.(string)
 		upf := value.(*UPF)
 		if upf.NodeID.NodeIdType != nodeID.NodeIdType &&
-			(upf.NodeID.NodeIdType == pfcpType.NodeIdTypeFqdn || nodeID.NodeIdType == pfcpType.NodeIdTypeFqdn) {
+			(upf.NodeID.NodeIdType == pfcptype.NodeIdTypeFqdn || nodeID.NodeIdType == pfcptype.NodeIdTypeFqdn) {
 			upfNodeIdIP := upf.NodeID.ResolveNodeIdToIp().To4()
 			nodeIdIP := nodeID.ResolveNodeIdToIp().To4()
 			logger.CtxLog.Tracef("RemoveUPF - upfNodeIdIP:[%+v], nodeIdIP:[%+v]", upfNodeIdIP, nodeIdIP)
@@ -365,10 +740,6 @@ func (upf *UPF) GetUPFID() string {
 }
 
 func (upf *UPF) pdrID() (pdrID uint16, err error) {
-	if err = upf.IsAssociated(); err != nil {
-		return
-	}
-
 	tmpID, err := upf.pdrIDGenerator.Allocate()
 	if err != nil {
 		return 0, err
@@ -378,10 +749,6 @@ func (upf *UPF) pdrID() (pdrID uint16, err error) {
 }
 
 func (upf *UPF) farID() (farID uint32, err error) {
-	if err = upf.IsAssociated(); err != nil {
-		return
-	}
-
 	tmpID, err := upf.farIDGenerator.Allocate()
 	if err != nil {
 		return 0, err
@@ -391,10 +758,6 @@ func (upf *UPF) farID() (farID uint32, err error) {
 }
 
 func (upf *UPF) barID() (barID uint8, err error) {
-	if err = upf.IsAssociated(); err != nil {
-		return
-	}
-
 	tmpID, err := upf.barIDGenerator.Allocate()
 	if err != nil {
 		return 0, err
@@ -404,10 +767,6 @@ func (upf *UPF) barID() (barID uint8, err error) {
 }
 
 func (upf *UPF) qerID() (qerID uint32, err error) {
-	if err = upf.IsAssociated(); err != nil {
-		return
-	}
-
 	tmpID, err := upf.qerIDGenerator.Allocate()
 	if err != nil {
 		return 0, err
@@ -426,17 +785,26 @@ func (upf *UPF) urrID() (urrID uint32, err error) {
 }
 
 func (upf *UPF) AddPDR() (pdr *PDR, err error) {
-	if err = upf.IsAssociated(); err != nil {
+	upf.associationMu.RLock()
+	defer upf.associationMu.RUnlock()
+	if err = upf.ruleAllocationAvailableLocked(); err != nil {
 		return
 	}
+	return upf.addPDR()
+}
 
+// addPDR allocates a PDR and its FAR for work that already owns association
+// availability (for example, a BeginSessionWork reservation). It deliberately
+// does not acquire sessionWorkGate, avoiding recursive RWMutex read locking.
+func (upf *UPF) addPDR() (pdr *PDR, err error) {
 	pdrID, err := upf.pdrID()
 	if err != nil {
 		return
 	}
 
-	newFAR, err := upf.AddFAR()
+	newFAR, err := upf.addFAR()
 	if err != nil {
+		upf.pdrIDGenerator.FreeID(int64(pdrID))
 		return
 	}
 
@@ -449,10 +817,15 @@ func (upf *UPF) AddPDR() (pdr *PDR, err error) {
 }
 
 func (upf *UPF) AddFAR() (far *FAR, err error) {
-	if err = upf.IsAssociated(); err != nil {
+	upf.associationMu.RLock()
+	defer upf.associationMu.RUnlock()
+	if err = upf.ruleAllocationAvailableLocked(); err != nil {
 		return
 	}
+	return upf.addFAR()
+}
 
+func (upf *UPF) addFAR() (far *FAR, err error) {
 	farID, err := upf.farID()
 	if err != nil {
 		return
@@ -465,7 +838,9 @@ func (upf *UPF) AddFAR() (far *FAR, err error) {
 }
 
 func (upf *UPF) AddBAR() (bar *BAR, err error) {
-	if err = upf.IsAssociated(); err != nil {
+	upf.associationMu.RLock()
+	defer upf.associationMu.RUnlock()
+	if err = upf.ruleAllocationAvailableLocked(); err != nil {
 		return
 	}
 
@@ -481,7 +856,9 @@ func (upf *UPF) AddBAR() (bar *BAR, err error) {
 }
 
 func (upf *UPF) AddQER() (qer *QER, err error) {
-	if err = upf.IsAssociated(); err != nil {
+	upf.associationMu.RLock()
+	defer upf.associationMu.RUnlock()
+	if err = upf.ruleAllocationAvailableLocked(); err != nil {
 		return
 	}
 
@@ -497,7 +874,9 @@ func (upf *UPF) AddQER() (qer *QER, err error) {
 }
 
 func (upf *UPF) AddURR(urrID uint32, opts ...UrrOpt) (urr *URR, err error) {
-	if err = upf.IsAssociated(); err != nil {
+	upf.associationMu.RLock()
+	defer upf.associationMu.RUnlock()
+	if err = upf.ruleAllocationAvailableLocked(); err != nil {
 		return
 	}
 
@@ -520,6 +899,21 @@ func (upf *UPF) AddURR(urrID uint32, opts ...UrrOpt) (urr *URR, err error) {
 
 	upf.urrPool.Store(urr.URRID, urr)
 	return
+}
+
+// discardPDRAndFAR rolls back a PDR/FAR pair that has not been published to a
+// session. It must remain usable after Association Release changes the state to
+// Releasing (or an independent failure cancels the association).
+func (upf *UPF) discardPDRAndFAR(pdr *PDR) {
+	if pdr == nil {
+		return
+	}
+	upf.pdrPool.Delete(pdr.PDRID)
+	upf.pdrIDGenerator.FreeID(int64(pdr.PDRID))
+	if pdr.FAR != nil {
+		upf.farPool.Delete(pdr.FAR.FARID)
+		upf.farIDGenerator.FreeID(int64(pdr.FAR.FARID))
+	}
 }
 
 func (upf *UPF) GetUUID() uuid.UUID {
@@ -599,9 +993,21 @@ func (upf *UPF) isSupportSnssai(snssai *SNssai) bool {
 }
 
 func (upf *UPF) ProcEachSMContext(procFunc func(*SMContext)) {
-	smContextPool.Range(func(key, value interface{}) bool {
-		smContext := value.(*SMContext)
-		if smContext.SelectedUPF != nil && smContext.SelectedUPF.UPF == upf {
+	smContextPool.Range(func(_, value interface{}) bool {
+		smContext, ok := value.(*SMContext)
+		if !ok || smContext == nil {
+			return true
+		}
+		smContext.SMLock.Lock()
+		affected := false
+		for _, pfcpSession := range smContext.PFCPContext {
+			if pfcpSession != nil && pfcpSession.NodeID.EqualsTo(&upf.NodeID) {
+				affected = true
+				break
+			}
+		}
+		smContext.SMLock.Unlock()
+		if affected {
 			procFunc(smContext)
 		}
 		return true
@@ -609,11 +1015,25 @@ func (upf *UPF) ProcEachSMContext(procFunc func(*SMContext)) {
 }
 
 func (upf *UPF) IsAssociated() error {
-	select {
-	case <-upf.AssociationContext.Done():
-		return fmt.Errorf("UPF[%s] not associated with SMF",
-			upf.NodeID.ResolveNodeIdToIp().String())
-	default:
+	state := upf.AssociationState()
+	if state == AssociationEstablished || state == AssociationReleasing {
 		return nil
+	}
+	return fmt.Errorf("UPF[%s] not associated with SMF",
+		upf.NodeID.ResolveNodeIdToIp().String())
+}
+
+func (state UPFAssociationState) String() string {
+	switch state {
+	case AssociationDown:
+		return "down"
+	case AssociationSettingUp:
+		return "setting-up"
+	case AssociationEstablished:
+		return "established"
+	case AssociationReleasing:
+		return "releasing"
+	default:
+		return fmt.Sprintf("unknown(%d)", state)
 	}
 }

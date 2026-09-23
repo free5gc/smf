@@ -1,6 +1,8 @@
 package processor
 
 import (
+	"sync"
+
 	"github.com/free5gc/smf/internal/sbi/consumer"
 	"github.com/free5gc/smf/pkg/app"
 )
@@ -17,6 +19,9 @@ type ProcessorSmf interface {
 
 type Processor struct {
 	ProcessorSmf
+
+	activePFCPMu     sync.RWMutex
+	activePFCPClient ActivePFCPClient
 }
 
 func NewProcessor(smf ProcessorSmf) (*Processor, error) {

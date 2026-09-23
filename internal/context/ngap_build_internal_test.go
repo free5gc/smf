@@ -9,7 +9,7 @@ import (
 	"github.com/free5gc/ngap/aper"
 	ngapie "github.com/free5gc/ngap/ie"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/pfcp/pfcpType"
+	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
@@ -17,7 +17,7 @@ import (
 // default data path so DataPathPool map iteration cannot affect the output.
 func newTestUPTunnel() *UPTunnel {
 	upf := NewUPF(
-		&pfcpType.NodeID{NodeIdType: pfcpType.NodeIdTypeIpv4Address, IP: net.ParseIP("192.168.179.1").To4()},
+		&pfcptype.NodeID{NodeIdType: pfcptype.NodeIdTypeIpv4Address, IP: net.ParseIP("192.168.179.1").To4()},
 		[]*factory.InterfaceUpfInfoItem{{
 			InterfaceType:    models.Nrf_NFMgmt_UPInterfaceType_N3,
 			Endpoints:        []string{"127.0.0.8"},
@@ -124,7 +124,7 @@ func TestGoldenBuildPDUSessionResourceModifyConfirmTransfer(t *testing.T) {
 		// Precedence must not be 255 (default flow is skipped by the builder)
 		node.DownLinkTunnel.PDR = &PDR{
 			Precedence: 100,
-			QER:        []*QER{{QFI: pfcpType.QFI{QFI: 2}}},
+			QER:        []*QER{{QFI: pfcptype.QFI{QFI: 2}}},
 		}
 		return tunnel
 	}

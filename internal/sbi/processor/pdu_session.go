@@ -18,9 +18,9 @@ import (
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/pcf/SMPolCtrl"
 	"github.com/free5gc/openapi/udm/SDM"
-	"github.com/free5gc/pfcp/pfcpType"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 	smf_errors "github.com/free5gc/smf/pkg/errors"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/metrics/sbi"
@@ -316,7 +316,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 			p.EstHandler(isDone, smContext, success)
 		}
 
-		ActivateUPFSession(smContext, handler)
+		p.ActivateUPFSession(smContext, handler)
 
 		smContext.SendUpPathChgNotification("LATE", SendUpPathChgEventExposureNotification)
 
@@ -389,6 +389,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	defer smContext.SMLock.Unlock()
 
 	var sendPFCPModification bool
+	var createdIndirectForwarding bool
+	var removeIndirectForwardingAfterSuccess bool
 	var pfcpResponseStatus smf_context.PFCPSessionResponseStatus
 	var response models.UpdateSmContextResponse200
 	response.JsonData = new(models.Smf_PDUSess_SmContextUpdatedData)
@@ -484,7 +486,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 			smContext.SetState(smf_context.PFCPModification)
 
-			pfcpResponseStatus = releaseSession(smContext)
+			pfcpResponseStatus = p.releaseSession(smContext)
 		case *message.PDUSessRelComplete:
 			smContext.CheckState(smf_context.InActivePending)
 			// Wait till the state becomes Active again
@@ -586,7 +588,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					for curDataPathNode := dataPath.FirstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
 						if curDataPathNode.IsANUPF() {
 							urrList = append(urrList, curDataPathNode.UpLinkTunnel.PDR.URR...)
-							QueryReport(smContext, curDataPathNode.UPF, urrList, models.Chf_ConvCharging_TriggerType_USER_LOCATION_CHANGE)
+							p.QueryReport(smContext, curDataPathNode.UPF, urrList, models.Chf_ConvCharging_TriggerType_USER_LOCATION_CHANGE)
 						}
 					}
 				}
@@ -632,7 +634,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				ANUPF := dataPath.FirstDPNode
 				DLPDR := ANUPF.DownLinkTunnel.PDR
 
-				DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{
+				DLPDR.FAR.ApplyAction = pfcptype.ApplyAction{
 					Buff: false,
 					Drop: false,
 					Dupl: false,
@@ -640,10 +642,10 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					Nocp: false,
 				}
 				DLPDR.FAR.ForwardingParameters = &smf_context.ForwardingParameters{
-					DestinationInterface: pfcpType.DestinationInterface{
-						InterfaceValue: pfcpType.DestinationInterfaceAccess,
+					DestinationInterface: pfcptype.DestinationInterface{
+						InterfaceValue: pfcptype.DestinationInterfaceAccess,
 					},
-					NetworkInstance: &pfcpType.NetworkInstance{
+					NetworkInstance: &pfcptype.NetworkInstance{
 						NetworkInstance: smContext.Dnn,
 						FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
 					},
@@ -685,14 +687,14 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 						continue
 					}
 
-					ULPDR.FAR.ApplyAction = pfcpType.ApplyAction{
+					ULPDR.FAR.ApplyAction = pfcptype.ApplyAction{
 						Buff: false,
 						Drop: false,
 						Dupl: false,
 						Forw: true,
 						Nocp: false,
 					}
-					DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{
+					DLPDR.FAR.ApplyAction = pfcptype.ApplyAction{
 						Buff: false,
 						Drop: false,
 						Dupl: false,
@@ -811,14 +813,14 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 								continue
 							}
 
-							ULPDR.FAR.ApplyAction = pfcpType.ApplyAction{
+							ULPDR.FAR.ApplyAction = pfcptype.ApplyAction{
 								Buff: false,
 								Drop: false,
 								Dupl: false,
 								Forw: true,
 								Nocp: false,
 							}
-							DLPDR.FAR.ApplyAction = pfcpType.ApplyAction{
+							DLPDR.FAR.ApplyAction = pfcptype.ApplyAction{
 								Buff: false,
 								Drop: false,
 								Dupl: false,
@@ -1036,27 +1038,47 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			relatedBytes(body.BinaryDataN2SmInformation), smContext)
 		if err != nil {
 			smContext.Log.Errorf("Handle HandoverRequestAcknowledgeTransfer failed: %+v", err)
+			smContext.SetState(smf_context.Active)
+			// TODO: Classify handover errors before mapping them to an HTTP response.
+			// Malformed NGAP input, missing local tunnel state, TEID exhaustion, and
+			// an unavailable/releasing UPF should not all become UPF_NOT_AVAILABLE.
+			problemDetail := models.Smf_PDUSess_ExtProblemDetails{
+				Status: http.StatusServiceUnavailable,
+				Cause:  "UPF_NOT_AVAILABLE",
+			}
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+			c.JSON(http.StatusServiceUnavailable, models.UpdateSmContextResponse400{
+				JsonData: &models.Smf_PDUSess_SmContextUpdateError{Error: &problemDetail},
+			})
+			return
 		}
 
 		// request UPF establish indirect forwarding path for DL
 		if smContext.DLForwardingType == smf_context.IndirectForwarding {
-			ANUPF := smContext.IndirectForwardingTunnel.FirstDPNode
 			IndirectForwardingPDR := smContext.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel.PDR
 
 			pdrList = append(pdrList, IndirectForwardingPDR)
 			farList = append(farList, IndirectForwardingPDR.FAR)
-
-			// release indirect forwading path
-			if err = ANUPF.UPF.RemovePDR(IndirectForwardingPDR); err != nil {
-				logger.PduSessLog.Errorln("release indirect path: ", err)
-			}
-
+			createdIndirectForwarding = true
 			sendPFCPModification = true
 			smContext.SetState(smf_context.PFCPModification)
 		}
 
 		if n2Buf, err = smf_context.BuildHandoverCommandTransfer(smContext); err != nil {
 			smContext.Log.Errorf("Build HandoverCommandTransfer failed: %v", err)
+			if createdIndirectForwarding {
+				smContext.RemoveIndirectForwardingTunnel()
+			}
+			smContext.SetState(smf_context.Active)
+			problemDetail := models.Smf_PDUSess_ExtProblemDetails{
+				Status: http.StatusInternalServerError,
+				Cause:  "SYSTEM_FAILURE",
+			}
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+			c.JSON(http.StatusInternalServerError, models.UpdateSmContextResponse400{
+				JsonData: &models.Smf_PDUSess_SmContextUpdateError{Error: &problemDetail},
+			})
+			return
 		} else {
 			response.BinaryDataN2SmInformation = related("HANDOVER_CMD", n2Buf)
 			response.JsonData.N2SmInfoType = models.Smf_PDUSess_N2SmInfoType_HANDOVER_CMD
@@ -1088,6 +1110,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			indirectForwardingPDR.FAR.State = smf_context.RULE_REMOVE
 			pdrList = append(pdrList, indirectForwardingPDR)
 			farList = append(farList, indirectForwardingPDR.FAR)
+			removeIndirectForwardingAfterSuccess = true
 		}
 
 		sendPFCPModification = true
@@ -1120,7 +1143,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				}
 			}
 
-			pfcpResponseStatus = releaseSession(smContext)
+			pfcpResponseStatus = p.releaseSession(smContext)
 		default:
 			smContext.Log.Infof("Not needs to send pfcp release")
 		}
@@ -1140,10 +1163,16 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		switch pfcpResponseStatus {
 		case smf_context.SessionUpdateSuccess:
 			smContext.Log.Traceln("In case SessionUpdateSuccess")
+			if removeIndirectForwardingAfterSuccess {
+				smContext.RemoveIndirectForwardingTunnel()
+			}
 			smContext.SetState(smf_context.Active)
 			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 		case smf_context.SessionUpdateFailed:
 			smContext.Log.Traceln("In case SessionUpdateFailed")
+			if createdIndirectForwarding {
+				smContext.RemoveIndirectForwardingTunnel()
+			}
 			smContext.SetState(smf_context.Active)
 			// It is just a template
 			updateSmContextError := models.UpdateSmContextResponse400{
@@ -1274,7 +1303,7 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 		smContext.Log.Infof("PFCP session already released (State: %s), skip PFCP releaseSession", smContext.State().String())
 		pfcpResponseStatus = smf_context.SessionReleaseSuccess
 	} else {
-		pfcpResponseStatus = releaseSession(smContext)
+		pfcpResponseStatus = p.releaseSession(smContext)
 	}
 
 	switch pfcpResponseStatus {
@@ -1378,7 +1407,7 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 		smContext.Log.Infof("PFCP session already released (State: %s), skip PFCP releaseSession", smContext.State().String())
 		pfcpResponseStatus = smf_context.SessionReleaseSuccess
 	} else {
-		pfcpResponseStatus = releaseSession(smContext)
+		pfcpResponseStatus = p.releaseSession(smContext)
 	}
 
 	switch pfcpResponseStatus {
@@ -1414,11 +1443,11 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 	}
 }
 
-func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionResponseStatus {
+func (p *Processor) releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionResponseStatus {
 	smContext.PFCPReleaseDone = false
 	smContext.SetState(smf_context.PFCPModification)
 
-	for _, res := range ReleaseTunnel(smContext) {
+	for _, res := range p.ReleaseTunnel(smContext) {
 		if res.Status != smf_context.SessionReleaseSuccess {
 			return res.Status
 		}
@@ -1428,7 +1457,7 @@ func releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionRes
 		return smf_context.SessionReleaseSuccess
 	}
 
-	for _, res := range ReleaseDcTunnel(smContext) {
+	for _, res := range p.ReleaseDcTunnel(smContext) {
 		if res.Status != smf_context.SessionReleaseSuccess {
 			return res.Status
 		}

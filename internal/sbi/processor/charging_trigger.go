@@ -3,12 +3,12 @@ package processor
 import (
 	"time"
 
+	"github.com/wmnsk/go-pfcp/ie"
+
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/pfcp"
-	"github.com/free5gc/pfcp/pfcpType"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
-	pfcp_message "github.com/free5gc/smf/internal/pfcp/message"
+	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 )
 
 func (p *Processor) CreateChargingSession(smContext *smf_context.SMContext) {
@@ -62,6 +62,10 @@ func (p *Processor) UpdateChargingSession(
 }
 
 func (p *Processor) ReleaseChargingSession(smContext *smf_context.SMContext) {
+	if !smContext.BeginChargingRelease() {
+		logger.ChargingLog.Debugf("Charging Data Request[Termination] already started for SMContext[%s]", smContext.Ref)
+		return
+	}
 	multipleUnitUsage := buildMultiUnitUsageFromUsageReport(smContext)
 
 	_, problemDetails, err := p.Consumer().SendConvergedChargingRequest(smContext,
@@ -118,7 +122,7 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 			logger.ChargingLog.Debugf("Sending PFCP Session Modification to UpfId=%s with %d URRs", upfId, len(urrList))
 			for _, urr := range urrList {
 				logger.ChargingLog.Debugf("URR[%d]: VolumeQuota=%d, Trigger.Volqu=%v",
-					urr.URRID, urr.VolumeQuota, urr.ReportingTrigger.Volqu)
+					urr.URRID, urr.VolumeQuota, urr.ReportingTrigger.HasVOLQU())
 			}
 
 			upf := smf_context.GetUpfById(upfId)
@@ -126,20 +130,24 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 				logger.PduSessLog.Warnf("Cound not find upf %s", upfId)
 				continue
 			}
-			rcvMsg, err_ := pfcp_message.SendPfcpSessionModificationRequest(
-				upf, smContext, nil, nil, nil, nil, urrList)
-			if err_ != nil {
-				logger.PduSessLog.Warnf("Sending PFCP Session Modification Request to AN UPF error: %+v", err_)
+			response, requestErr := p.sendSessionModificationRequest(smContext, &PFCPState{
+				upf: upf, urrList: urrList,
+			})
+			if requestErr != nil {
+				logger.PduSessLog.Warnf("Sending PFCP Session Modification Request to AN UPF error: %+v", requestErr)
 				pfcpResponseStatus = smf_context.SessionUpdateFailed
 			} else {
-				logger.PduSessLog.Infoln("Received PFCP Session Modification Response")
-				pfcpResponseStatus = smf_context.SessionUpdateSuccess
-			}
-
-			rsp := rcvMsg.PfcpMessage.Body.(pfcp.PFCPSessionModificationResponse)
-			if rsp.Cause == nil || rsp.Cause.CauseValue != pfcpType.CauseRequestAccepted {
-				logger.PduSessLog.Warn("Received PFCP Session Modification Not Accepted Response from AN UPF")
-				pfcpResponseStatus = smf_context.SessionUpdateFailed
+				cause, causeErr := response.Cause.Cause()
+				if causeErr != nil || cause != ie.CauseRequestAccepted {
+					logger.PduSessLog.Warnf(
+						"Received PFCP Session Modification Not Accepted Response from AN UPF: cause=%d err=%v",
+						cause, causeErr,
+					)
+					pfcpResponseStatus = smf_context.SessionUpdateFailed
+				} else {
+					logger.PduSessLog.Infoln("Received PFCP Session Modification Accepted Response")
+					pfcpResponseStatus = smf_context.SessionUpdateSuccess
+				}
 			}
 
 			switch pfcpResponseStatus {
@@ -315,7 +323,7 @@ func (p *Processor) updateGrantedQuota(
 		// Update ALL URRs with the same Rating Group
 		for _, urr := range urrs {
 			logger.ChargingLog.Debugf("Will update URR[%d] with quota from RatingGroup[%d]", urr.URRID, rg)
-			trigger := pfcpType.ReportingTriggers{}
+			trigger := pfcptype.ReportingTrigger{}
 			smContext.SetUrrState(upfId, urr.URRID, smf_context.RULE_UPDATE)
 			chgInfo := smContext.ChargingInfo[urr.URRID]
 
@@ -349,7 +357,7 @@ func (p *Processor) updateGrantedQuota(
 									urrList := []*smf_context.URR{urr}
 									upf := smf_context.GetUpfById(ui.UPFID)
 									if upf != nil {
-										QueryReport(smContext, upf, urrList, models.Chf_ConvCharging_TriggerType_VOLUME_LIMIT)
+										p.QueryReport(smContext, upf, urrList, models.Chf_ConvCharging_TriggerType_VOLUME_LIMIT)
 										p.ReportUsageAndUpdateQuota(smContext)
 									}
 								},
@@ -375,7 +383,7 @@ func (p *Processor) updateGrantedQuota(
 									urrList := []*smf_context.URR{urr}
 									upf := smf_context.GetUpfById(ui.UPFID)
 									if upf != nil {
-										QueryReport(smContext, upf, urrList, models.Chf_ConvCharging_TriggerType_VOLUME_LIMIT)
+										p.QueryReport(smContext, upf, urrList, models.Chf_ConvCharging_TriggerType_VOLUME_LIMIT)
 									}
 								},
 								func() {
@@ -395,7 +403,7 @@ func (p *Processor) updateGrantedQuota(
 								urrList := []*smf_context.URR{urr}
 								upf := smf_context.GetUpfById(ui.UPFID)
 								if upf != nil {
-									QueryReport(smContext, upf, urrList, models.Chf_ConvCharging_TriggerType_VOLUME_LIMIT)
+									p.QueryReport(smContext, upf, urrList, models.Chf_ConvCharging_TriggerType_VOLUME_LIMIT)
 									p.ReportUsageAndUpdateQuota(smContext)
 								}
 							},
@@ -409,26 +417,26 @@ func (p *Processor) updateGrantedQuota(
 					}
 				case models.Chf_ConvCharging_TriggerType_QUOTA_THRESHOLD:
 					if ui.VolumeQuotaThreshold != 0 {
-						trigger.Volth = true
+						trigger.SetVOLTH()
 						urr.VolumeThreshold = uint64(ui.VolumeQuotaThreshold)
 					}
 				// The difference between the quota validity time and the volume limit is
 				// that the validity time is counted by the UPF, the volume limit is counted by the SMF
 				case models.Chf_ConvCharging_TriggerType_VALIDITY_TIME:
 					if ui.ValidityTime != 0 {
-						urr.ReportingTrigger.Quvti = true
+						urr.ReportingTrigger.SetQUVTI()
 						urr.QuotaValidityTime = time.Now().Add(time.Second * time.Duration(ui.ValidityTime))
 					}
 				case models.Chf_ConvCharging_TriggerType_QUOTA_EXHAUSTED:
 					if chgInfo.ChargingMethod == models.Chf_ConvCharging_QuotaManagementIndicator_ONLINE_CHARGING {
 						if ui.GrantedUnit != nil {
-							trigger.Volqu = true
+							trigger.SetVOLQU()
 							urr.VolumeQuota = uint64(ui.GrantedUnit.TotalVolume)
 							logger.ChargingLog.Debugf("QUOTA_EXHAUSTED: Setting VolumeQuota=%d", urr.VolumeQuota)
 						} else {
 							// No granted quota, so set the urr.VolumeQuota to 0, upf should stop send traffic
 							logger.ChargingLog.Warnf("No granted quota, setting VolumeQuota=0")
-							trigger.Volqu = true
+							trigger.SetVOLQU()
 							urr.VolumeQuota = 0
 						}
 					}

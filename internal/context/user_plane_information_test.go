@@ -273,7 +273,7 @@ func TestSelectUPFAndAllocUEIP(t *testing.T) {
 	userplaneInformation, err := smf_context.NewUserPlaneInformation(configuration)
 	require.NoError(t, err)
 	for _, upf := range userplaneInformation.UPFs {
-		upf.UPF.AssociationContext = context.Background()
+		upf.UPF.EstablishAssociation(context.Background())
 	}
 
 	for i := 0; i <= 100; i++ {
@@ -491,7 +491,7 @@ func TestGetUEIPPool(t *testing.T) {
 	userplaneInformation, err := smf_context.NewUserPlaneInformation(configForIPPoolAllocate)
 	require.NoError(t, err)
 	for _, upf := range userplaneInformation.UPFs {
-		upf.UPF.AssociationContext = context.Background()
+		upf.UPF.EstablishAssociation(context.Background())
 	}
 
 	for ci, tc := range testCasesOfGetUEIPPool {

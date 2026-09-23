@@ -7,8 +7,8 @@ import (
 
 	ngapie "github.com/free5gc/ngap/ie"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 )
 
 func strNgapCause(cause *ngapie.Cause) string {
@@ -321,55 +321,111 @@ func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) error {
 		if DLForwardingGTPTunnel == nil {
 			return errors.New("handoverRequestAcknowledgeTransfer.DLForwardingUPTNLInformation.Choice")
 		}
-
-		ctx.IndirectForwardingTunnel = NewDataPath()
-		ctx.IndirectForwardingTunnel.FirstDPNode = NewDataPathNode()
-		ctx.IndirectForwardingTunnel.FirstDPNode.UPF = ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode.UPF
-		ctx.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel = &GTPTunnel{}
-
-		ANUPF := ctx.IndirectForwardingTunnel.FirstDPNode.UPF
-
-		var indirectFowardingPDR *PDR
-
-		if pdr, errAddPDR := ANUPF.AddPDR(); errAddPDR != nil {
-			return errAddPDR
-		} else {
-			indirectFowardingPDR = pdr
-		}
-
-		originPDR := ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode.UpLinkTunnel.PDR
-
-		if teid, errGenerateTEID := GenerateTEID(); errGenerateTEID != nil {
-			return errGenerateTEID
-		} else {
-			ctx.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel.TEID = teid
-			ctx.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel.PDR = indirectFowardingPDR
-			indirectFowardingPDR.PDI.LocalFTeid = &pfcpType.FTEID{
-				V4:          originPDR.PDI.LocalFTeid.V4,
-				Teid:        ctx.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel.TEID,
-				Ipv4Address: originPDR.PDI.LocalFTeid.Ipv4Address,
-			}
-			indirectFowardingPDR.OuterHeaderRemoval = &pfcpType.OuterHeaderRemoval{
-				OuterHeaderRemovalDescription: pfcpType.OuterHeaderRemovalGtpUUdpIpv4,
-			}
-
-			indirectFowardingPDR.FAR.ApplyAction = pfcpType.ApplyAction{
-				Forw: true,
-			}
-			indirectFowardingPDR.FAR.ForwardingParameters = &ForwardingParameters{
-				DestinationInterface: pfcpType.DestinationInterface{
-					InterfaceValue: pfcpType.DestinationInterfaceAccess,
-				},
-				OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
-					OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
-					Teid:                           binary.BigEndian.Uint32(DLForwardingGTPTunnel.GTPTEID.Value),
-					Ipv4Address:                    DLForwardingGTPTunnel.TransportLayerAddress.Value.Bytes,
-				},
-			}
+		if err = configureIndirectForwardingTunnel(ctx, DLForwardingGTPTunnel); err != nil {
+			return err
 		}
 	case DirectForwarding:
 		ctx.DLDirectForwardingTunnel = DLForwardingInfo
 	}
 
 	return nil
+}
+
+// configureIndirectForwardingTunnel reserves the AN UPF for the complete local
+// rule/tunnel configuration. Association Release may change the state to
+// Releasing after the reservation is granted, but it must wait for finishWork
+// before cleaning sessions. The unexported addPDR is safe here because the
+// reservation already established this operation's right to finish.
+func configureIndirectForwardingTunnel(ctx *SMContext, forwardingGTP *ngapie.GTPTunnel) error {
+	if ctx.Tunnel == nil {
+		return errors.New("handover has no user-plane tunnel")
+	}
+	defaultPath := ctx.Tunnel.DataPathPool.GetDefaultPath()
+	if defaultPath == nil || defaultPath.FirstDPNode == nil || defaultPath.FirstDPNode.UPF == nil {
+		return errors.New("handover has no default-path AN UPF")
+	}
+	originTunnel := defaultPath.FirstDPNode.UpLinkTunnel
+	if originTunnel == nil || originTunnel.PDR == nil || originTunnel.PDR.PDI.LocalFTeid == nil {
+		return errors.New("handover default path has no local F-TEID")
+	}
+	if forwardingGTP == nil || forwardingGTP.GTPTEID == nil || forwardingGTP.TransportLayerAddress == nil {
+		return errors.New("handover forwarding tunnel is incomplete")
+	}
+
+	ANUPF := defaultPath.FirstDPNode.UPF
+	_, finishWork, err := ANUPF.BeginSessionWork()
+	if err != nil {
+		return err
+	}
+	defer finishWork()
+
+	committed := false
+	teid, err := GenerateTEID()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if !committed {
+			ReleaseTEID(teid)
+		}
+	}()
+
+	indirectForwardingPDR, err := ANUPF.addPDR()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if !committed {
+			ANUPF.discardPDRAndFAR(indirectForwardingPDR)
+		}
+	}()
+
+	originFTEID := originTunnel.PDR.PDI.LocalFTeid
+	indirectForwardingPDR.PDI.LocalFTeid = &pfcptype.FTEID{
+		V4:          originFTEID.V4,
+		Teid:        teid,
+		Ipv4Address: originFTEID.Ipv4Address,
+	}
+	indirectForwardingPDR.OuterHeaderRemoval = &pfcptype.OuterHeaderRemoval{
+		OuterHeaderRemovalDescription: pfcptype.OuterHeaderRemovalGtpUUdpIpv4,
+	}
+	indirectForwardingPDR.FAR.ApplyAction = pfcptype.ApplyAction{Forw: true}
+	indirectForwardingPDR.FAR.ForwardingParameters = &ForwardingParameters{
+		DestinationInterface: pfcptype.DestinationInterface{
+			InterfaceValue: pfcptype.DestinationInterfaceAccess,
+		},
+		OuterHeaderCreation: &pfcptype.OuterHeaderCreation{
+			OuterHeaderCreationDescription: pfcptype.OuterHeaderCreationGtpUUdpIpv4,
+			Teid:                           binary.BigEndian.Uint32(forwardingGTP.GTPTEID.Value),
+			Ipv4Address:                    forwardingGTP.TransportLayerAddress.Value.Bytes,
+		},
+	}
+
+	indirectPath := NewDataPath()
+	indirectPath.FirstDPNode = NewDataPathNode()
+	indirectPath.FirstDPNode.UPF = ANUPF
+	indirectPath.FirstDPNode.UpLinkTunnel.TEID = teid
+	indirectPath.FirstDPNode.UpLinkTunnel.PDR = indirectForwardingPDR
+	ctx.IndirectForwardingTunnel = indirectPath
+	committed = true
+	return nil
+}
+
+// RemoveIndirectForwardingTunnel releases local resources created for an
+// indirect handover. It is valid during Releasing/Down because rollback must
+// not depend on the failed association remaining available.
+func (ctx *SMContext) RemoveIndirectForwardingTunnel() {
+	path := ctx.IndirectForwardingTunnel
+	if path == nil || path.FirstDPNode == nil {
+		ctx.IndirectForwardingTunnel = nil
+		return
+	}
+	node := path.FirstDPNode
+	if node.UPF != nil && node.UpLinkTunnel != nil {
+		node.UPF.discardPDRAndFAR(node.UpLinkTunnel.PDR)
+		if node.UpLinkTunnel.TEID != 0 {
+			ReleaseTEID(node.UpLinkTunnel.TEID)
+		}
+	}
+	ctx.IndirectForwardingTunnel = nil
 }

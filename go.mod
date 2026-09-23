@@ -8,7 +8,6 @@ require (
 	github.com/free5gc/nas v1.3.0
 	github.com/free5gc/ngap v1.2.0
 	github.com/free5gc/openapi v1.3.0
-	github.com/free5gc/pfcp v1.1.2
 	github.com/free5gc/util v1.4.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/uuid v1.6.0
@@ -19,6 +18,7 @@ require (
 	github.com/smartystreets/goconvey v1.8.1
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli/v2 v2.27.7
+	github.com/wmnsk/go-pfcp v0.0.25-0.20251110163217-837df5430868
 	go.uber.org/mock v0.4.0
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -33,7 +33,6 @@ require (
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/free5gc/tlv v1.1.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect

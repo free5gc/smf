@@ -1,120 +1,156 @@
 package context
 
 import (
+	"errors"
+	"fmt"
+
+	"github.com/wmnsk/go-pfcp/ie"
+
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/pfcp"
-	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 )
 
+// HandleReports converts every valid grouped go-pfcp Usage Report IE into the
+// charging domain records consumed by the CHF flow. It returns the decode
+// errors after preserving the valid reports in the same PFCP message.
 func (smContext *SMContext) HandleReports(
-	usageReportRequest []*pfcp.UsageReportPFCPSessionReportRequest,
-	usageReportModification []*pfcp.UsageReportPFCPSessionModificationResponse,
-	usageReportDeletion []*pfcp.UsageReportPFCPSessionDeletionResponse,
-	nodeId pfcpType.NodeID, reportTpye models.Chf_ConvCharging_TriggerType,
-) {
-	var usageReport UsageReport
-	upf := RetrieveUPFNodeByNodeID(nodeId)
-	upfId := upf.UUID()
-
-	for _, report := range usageReportRequest {
-		usageReport.UrrId = report.URRID.UrrIdValue
-		usageReport.UpfId = upfId
-		if report.VolumeMeasurement == nil {
-			logger.PduSessLog.Warnf("UsageReportRequest missing VolumeMeasurement for URRID[%d]", report.URRID.UrrIdValue)
-		} else {
-			usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
-			usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
-			usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
-			usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
-			usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
-			usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
-		}
-		usageReport.ReportTpye = identityTriggerType(report.UsageReportTrigger)
-
-		if reportTpye != "" {
-			usageReport.ReportTpye = reportTpye
-		}
-
-		logger.PduSessLog.Tracef("[HandleReports] Request: URRID=%d, UpfId=%s, ReportType=%s, TotalVol=%d, "+
-			"UlVol=%d, DlVol=%d",
-			usageReport.UrrId, usageReport.UpfId, usageReport.ReportTpye, usageReport.TotalVolume,
-			usageReport.UplinkVolume, usageReport.DownlinkVolume)
-		smContext.UrrReports = append(smContext.UrrReports, usageReport)
-	}
-	for _, report := range usageReportModification {
-		usageReport.UrrId = report.URRID.UrrIdValue
-		usageReport.UpfId = upfId
-		if report.VolumeMeasurement == nil {
-			logger.PduSessLog.Warnf("UsageReportModification missing VolumeMeasurement for URRID[%d]", report.URRID.UrrIdValue)
-		} else {
-			usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
-			usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
-			usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
-			usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
-			usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
-			usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
-		}
-		usageReport.ReportTpye = identityTriggerType(report.UsageReportTrigger)
-
-		if reportTpye != "" {
-			usageReport.ReportTpye = reportTpye
-		}
-
-		logger.PduSessLog.Tracef("[HandleReports] Modification: URRID=%d, UpfId=%s, ReportType=%s, TotalVol=%d, "+
-			"UlVol=%d, DlVol=%d",
-			usageReport.UrrId, usageReport.UpfId, usageReport.ReportTpye, usageReport.TotalVolume,
-			usageReport.UplinkVolume, usageReport.DownlinkVolume)
-		smContext.UrrReports = append(smContext.UrrReports, usageReport)
-	}
-	for _, report := range usageReportDeletion {
-		usageReport.UrrId = report.URRID.UrrIdValue
-		usageReport.UpfId = upfId
-		if report.VolumeMeasurement == nil {
-			logger.PduSessLog.Warnf("UsageReportDeletion missing VolumeMeasurement for URRID[%d]", report.URRID.UrrIdValue)
-		} else {
-			usageReport.TotalVolume = report.VolumeMeasurement.TotalVolume
-			usageReport.UplinkVolume = report.VolumeMeasurement.UplinkVolume
-			usageReport.DownlinkVolume = report.VolumeMeasurement.DownlinkVolume
-			usageReport.TotalPktNum = report.VolumeMeasurement.TotalPktNum
-			usageReport.UplinkPktNum = report.VolumeMeasurement.UplinkPktNum
-			usageReport.DownlinkPktNum = report.VolumeMeasurement.DownlinkPktNum
-		}
-		usageReport.ReportTpye = identityTriggerType(report.UsageReportTrigger)
-
-		if reportTpye != "" {
-			usageReport.ReportTpye = reportTpye
-		}
-
-		logger.PduSessLog.Tracef("[HandleReports] Deletion: URRID=%d, UpfId=%s, ReportType=%s, "+
-			"TotalVol=%d, UlVol=%d, DlVol=%d",
-			usageReport.UrrId, usageReport.UpfId, usageReport.ReportTpye, usageReport.TotalVolume,
-			usageReport.UplinkVolume, usageReport.DownlinkVolume)
-		smContext.UrrReports = append(smContext.UrrReports, usageReport)
-	}
+	reports []*ie.IE,
+	nodeID pfcptype.NodeID,
+	reportType models.Chf_ConvCharging_TriggerType,
+) error {
+	return smContext.handleReports(reports, nodeID, reportType, false)
 }
 
-func identityTriggerType(usarTrigger *pfcpType.UsageReportTrigger) models.Chf_ConvCharging_TriggerType {
-	var trigger models.Chf_ConvCharging_TriggerType
+// HandleReportsAtomically decodes the complete set before changing charging
+// state. It is used for Session Report Requests, where an error response must
+// not accompany a partially applied request.
+func (smContext *SMContext) HandleReportsAtomically(
+	reports []*ie.IE,
+	nodeID pfcptype.NodeID,
+	reportType models.Chf_ConvCharging_TriggerType,
+) error {
+	return smContext.handleReports(reports, nodeID, reportType, true)
+}
 
+func (smContext *SMContext) handleReports(
+	reports []*ie.IE,
+	nodeID pfcptype.NodeID,
+	reportType models.Chf_ConvCharging_TriggerType,
+	atomicBatch bool,
+) error {
+	upf := RetrieveUPFNodeByNodeID(nodeID)
+	if upf == nil {
+		return fmt.Errorf("UPF for Node ID %s not found", nodeID.String())
+	}
+
+	decoded := make([]UsageReport, 0, len(reports))
+	decodeErrors := make([]error, 0)
+	for index, grouped := range reports {
+		report, err := usageReportFromIE(grouped, upf.UUID(), reportType)
+		if err != nil {
+			decodeErrors = append(decodeErrors, fmt.Errorf("usage report[%d]: %w", index, err))
+			continue
+		}
+		decoded = append(decoded, report)
+	}
+	if atomicBatch && len(decodeErrors) != 0 {
+		return errors.Join(decodeErrors...)
+	}
+	for _, report := range decoded {
+		logger.PduSessLog.Tracef(
+			"[HandleReports] URRID=%d, UpfId=%s, ReportType=%s, TotalVol=%d, UlVol=%d, DlVol=%d",
+			report.UrrId, report.UpfId, report.ReportTpye, report.TotalVolume,
+			report.UplinkVolume, report.DownlinkVolume,
+		)
+		smContext.UrrReports = append(smContext.UrrReports, report)
+	}
+	return errors.Join(decodeErrors...)
+}
+
+func usageReportFromIE(
+	grouped *ie.IE,
+	upfID string,
+	override models.Chf_ConvCharging_TriggerType,
+) (UsageReport, error) {
+	if grouped == nil {
+		return UsageReport{}, fmt.Errorf("nil grouped IE")
+	}
+	children, err := grouped.UsageReport()
+	if err != nil {
+		return UsageReport{}, fmt.Errorf("decode grouped IE: %w", err)
+	}
+
+	var urrIDIE, volumeIE, triggerIE *ie.IE
+	for _, child := range children {
+		if child == nil {
+			continue
+		}
+		switch child.Type {
+		case ie.URRID:
+			urrIDIE = child
+		case ie.VolumeMeasurement:
+			volumeIE = child
+		case ie.UsageReportTrigger:
+			triggerIE = child
+		}
+	}
+	if urrIDIE == nil {
+		return UsageReport{}, fmt.Errorf("missing URR ID")
+	}
+	urrID, err := urrIDIE.URRID()
+	if err != nil {
+		return UsageReport{}, fmt.Errorf("decode URR ID: %w", err)
+	}
+	if triggerIE == nil {
+		return UsageReport{}, fmt.Errorf("missing Usage Report Trigger for URR ID %d", urrID)
+	}
+	if _, err = triggerIE.UsageReportTrigger(); err != nil {
+		return UsageReport{}, fmt.Errorf("decode Usage Report Trigger for URR ID %d: %w", urrID, err)
+	}
+
+	report := UsageReport{
+		UrrId:      urrID,
+		UpfId:      upfID,
+		ReportTpye: identityTriggerType(triggerIE),
+	}
+	if override != "" {
+		report.ReportTpye = override
+	}
+	if volumeIE == nil {
+		logger.PduSessLog.Warnf("Usage Report missing Volume Measurement for URRID[%d]", urrID)
+		return report, nil
+	}
+	volume, err := volumeIE.VolumeMeasurement()
+	if err != nil {
+		return UsageReport{}, fmt.Errorf("decode Volume Measurement for URR ID %d: %w", urrID, err)
+	}
+	report.TotalVolume = volume.TotalVolume
+	report.UplinkVolume = volume.UplinkVolume
+	report.DownlinkVolume = volume.DownlinkVolume
+	report.TotalPktNum = volume.TotalNumberOfPackets
+	report.UplinkPktNum = volume.UplinkNumberOfPackets
+	report.DownlinkPktNum = volume.DownlinkNumberOfPackets
+	return report, nil
+}
+
+func identityTriggerType(trigger *ie.IE) models.Chf_ConvCharging_TriggerType {
 	switch {
-	case usarTrigger.Volth:
-		trigger = models.Chf_ConvCharging_TriggerType_QUOTA_THRESHOLD
-	case usarTrigger.Volqu:
-		trigger = models.Chf_ConvCharging_TriggerType_QUOTA_EXHAUSTED
-	case usarTrigger.Quvti:
-		trigger = models.Chf_ConvCharging_TriggerType_VALIDITY_TIME
-	case usarTrigger.Start:
-		trigger = models.Chf_ConvCharging_TriggerType_START_OF_SERVICE_DATA_FLOW
-	case usarTrigger.Immer:
+	case trigger.HasVOLTH():
+		return models.Chf_ConvCharging_TriggerType_QUOTA_THRESHOLD
+	case trigger.HasVOLQU():
+		return models.Chf_ConvCharging_TriggerType_QUOTA_EXHAUSTED
+	case trigger.HasQUVTI():
+		return models.Chf_ConvCharging_TriggerType_VALIDITY_TIME
+	case trigger.HasSTART():
+		return models.Chf_ConvCharging_TriggerType_START_OF_SERVICE_DATA_FLOW
+	case trigger.HasIMMER():
 		logger.PduSessLog.Trace("Reports Query by SMF, trigger should be filled later")
 		return ""
-	case usarTrigger.Termr:
-		trigger = models.Chf_ConvCharging_TriggerType_FINAL
+	case trigger.HasTERMR():
+		return models.Chf_ConvCharging_TriggerType_FINAL
 	default:
 		logger.PduSessLog.Trace("Report is not a charging trigger")
 		return ""
 	}
-
-	return trigger
 }
