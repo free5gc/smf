@@ -754,3 +754,108 @@ func TestHandlePDUSessionSMContextCreate_InvalidDnnSnssaiInputs(t *testing.T) {
 		})
 	}
 }
+
+func TestHandlePDUSessionSMContextCreate_TokenCtxFailureReleasesSMContext(t *testing.T) {
+	openapi.InterceptInnerHttp2Client(t, false)
+	initConfig()
+	initStubPFCP()
+
+	allUPFs := smf_context.GetSelf().UserPlaneInformation.UPFs
+	for _, upfNode := range allUPFs {
+		upfNode.UPF.EstablishAssociation(context.Background())
+	}
+
+	const (
+		supi   = "imsi-208930000001176"
+		pduSID = 11
+		nrfURI = "http://127.0.0.11:8000"
+	)
+
+	smfSelf := smf_context.GetSelf()
+	origOAuth2Required, origNrfURI := smfSelf.OAuth2Required, smfSelf.NrfUri
+	smfSelf.OAuth2Required = true
+	smfSelf.NrfUri = nrfURI
+	t.Cleanup(func() {
+		smfSelf.OAuth2Required = origOAuth2Required
+		smfSelf.NrfUri = origNrfURI
+	})
+
+	// NRF refuses to issue the access token needed for the UDM SDM request.
+	gock.New(nrfURI).
+		Post("/oauth2/token").
+		Persist().
+		Reply(http.StatusInternalServerError)
+
+	mockSmf := service.NewMockSmfAppInterface(gomock.NewController(t))
+	consumer, err := consumer.NewConsumer(mockSmf)
+	require.NoError(t, err)
+
+	processor, err := processor.NewProcessor(mockSmf)
+	require.NoError(t, err)
+
+	service.SMF = mockSmf
+	mockSmf.EXPECT().Context().Return(smfSelf).AnyTimes()
+	mockSmf.EXPECT().Consumer().Return(consumer).AnyTimes()
+
+	httpRecorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(httpRecorder)
+
+	request := models.PostSmContextsRequestBody{
+		JsonData: &models.Smf_PDUSess_SmContextCreateData{
+			Supi:         supi,
+			Pei:          "imeisv-1110000000000000",
+			Gpsi:         "msisdn-0900000000",
+			PduSessionId: pduSID,
+			Dnn:          "internet",
+			SNssai: &models.Snssai{
+				Sst: 1,
+				Sd:  "112232",
+			},
+			ServingNfId: "c8d0ee65-f466-48aa-a42f-235ec771cb52",
+			Guami: &models.Guami{
+				PlmnId: &models.PlmnIdNid{
+					Mcc: "208",
+					Mnc: "93",
+				},
+				AmfId: "cafe00",
+			},
+			AnType: "3GPP_ACCESS",
+			ServingNetwork: &models.PlmnIdNid{
+				Mcc: "208",
+				Mnc: "93",
+			},
+		},
+		BinaryDataN1SmMessage: &multipart.RelatedContent{
+			ContentID: "GSM_NAS", Content: buildPDUSessionEstablishmentRequest(pduSID, 1, nasie.PDUSessType_IPv4),
+		},
+	}
+
+	processor.HandlePDUSessionSMContextCreate(c, request, nil)
+
+	httpResp := httpRecorder.Result()
+	defer func() {
+		require.NoError(t, httpResp.Body.Close())
+	}()
+
+	rawBytes, err := io.ReadAll(httpResp.Body)
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusGatewayTimeout, httpResp.StatusCode)
+
+	actual := models.PostSmContextsResponse403{}
+	err = openapi.Deserialize(&actual, rawBytes, httpResp.Header.Get("Content-Type"))
+	require.NoError(t, err)
+	require.NotNil(t, actual.JsonData)
+	require.NotNil(t, actual.JsonData.Error)
+	require.Equal(t, PDUSession_errors.NetworkFailure.Cause, actual.JsonData.Error.Cause)
+	require.NotNil(t, actual.BinaryDataN1SmMessage)
+	require.Equal(t,
+		buildPDUSessionEstablishmentReject(pduSID, 0, nasie.Cause5GSM_NwFailure),
+		actual.BinaryDataN1SmMessage.Content,
+	)
+
+	// The SM context must not be left behind in the pool.
+	require.Eventually(t, func() bool {
+		return smf_context.GetSMContextById(supi, pduSID) == nil
+	}, time.Second, 10*time.Millisecond)
+}
