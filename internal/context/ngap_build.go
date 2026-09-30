@@ -439,14 +439,16 @@ func BuildHandoverCommandTransfer(ctx *SMContext) ([]byte, error) {
 		handoverCommandTransfer.DLForwardingUPTNLInformation = ctx.DLDirectForwardingTunnel
 	}
 
-	handoverCommandTransfer.QosFlowToBeForwardedList = &ngapie.QosFlowToBeForwardedList{
-		List: []ngapie.QosFlowToBeForwardedItem{
-			{
-				QosFlowIdentifier: &ngapie.QosFlowIdentifier{
-					Value: DefaultNonGBR5QI,
-				},
-			},
-		},
+	if len(ctx.QosFlowsToBeForwarded) > 0 {
+		qosFlowList := make([]ngapie.QosFlowToBeForwardedItem, 0, len(ctx.QosFlowsToBeForwarded))
+		for _, qfi := range ctx.QosFlowsToBeForwarded {
+			qosFlowList = append(qosFlowList, ngapie.QosFlowToBeForwardedItem{
+				QosFlowIdentifier: &ngapie.QosFlowIdentifier{Value: qfi},
+			})
+		}
+		handoverCommandTransfer.QosFlowToBeForwardedList = &ngapie.QosFlowToBeForwardedList{
+			List: qosFlowList,
+		}
 	}
 
 	if buf, err := ngapie.MarshalBinary(&handoverCommandTransfer); err != nil {

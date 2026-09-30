@@ -395,6 +395,7 @@ func TestGoldenBuildPathSwitchRequestAcknowledgeTransfer(t *testing.T) {
 func TestGoldenBuildHandoverCommandTransfer(t *testing.T) {
 	newDirectContext := func() *SMContext {
 		smContext := newGSMTestContext()
+		smContext.QosFlowsToBeForwarded = []int64{1}
 		// zero value of DLForwardingType is IndirectForwarding: ALWAYS set it
 		smContext.DLForwardingType = DirectForwarding
 		smContext.DLDirectForwardingTunnel = &ngapie.UPTransportLayerInformation{
@@ -412,6 +413,7 @@ func TestGoldenBuildHandoverCommandTransfer(t *testing.T) {
 	}
 	newIndirectContext := func() *SMContext {
 		smContext := newGSMTestContext()
+		smContext.QosFlowsToBeForwarded = []int64{1}
 		smContext.DLForwardingType = IndirectForwarding
 		smContext.Tunnel = newTestUPTunnel() // indirect branch reads the N3 IP from Tunnel's ANUPF
 		node2 := NewDataPathNode()
@@ -434,7 +436,7 @@ func TestGoldenBuildHandoverCommandTransfer(t *testing.T) {
 			wantIP:       "127.0.0.10",
 			golden: []byte{
 				0x60, 0x0f, 0x80, 0x7f, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x01, 0x04, 0x00,
-				0x12,
+				0x02,
 			},
 		},
 		{
@@ -444,7 +446,7 @@ func TestGoldenBuildHandoverCommandTransfer(t *testing.T) {
 			wantIP:       "127.0.0.8",
 			golden: []byte{
 				0x60, 0x0f, 0x80, 0x7f, 0x00, 0x00, 0x08, 0x00, 0x00, 0x10, 0x02, 0x00,
-				0x12,
+				0x02,
 			},
 		},
 	}
@@ -470,7 +472,7 @@ func TestGoldenBuildHandoverCommandTransfer(t *testing.T) {
 				gtpTunnel.TransportLayerAddress.Value.Bytes)
 			require.NotNil(t, decoded.QosFlowToBeForwardedList)
 			require.Len(t, decoded.QosFlowToBeForwardedList.List, 1)
-			require.Equal(t, int64(DefaultNonGBR5QI),
+			require.Equal(t, int64(1),
 				decoded.QosFlowToBeForwardedList.List[0].QosFlowIdentifier.Value)
 		})
 	}
