@@ -308,6 +308,42 @@ func (s *npcfService) buildPktFilterInfo(pf nasie.PacketFilter) (*models.Pcf_SMP
 	return pfInfo, nil
 }
 
+func (s *npcfService) SendSMPolicyAssociationUpdateByLocationChange(
+	smContext *smf_context.SMContext,
+) (*models.SmPolicyDecision, error) {
+	updateSMPolicy := models.SmPolicyUpdateContextData{
+		RepPolicyCtrlReqTriggers: []models.PolicyControlRequestTrigger{
+			models.PolicyControlRequestTrigger_AN_CH_COR,
+		},
+		UserLocationInfo: smContext.UeLocation,
+	}
+
+	ctx, _, err := smf_context.GetSelf().
+		GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NrfNfManagementNfType_PCF)
+	if err != nil {
+		return nil, err
+	}
+
+	var client *SMPolicyControl.APIClient
+	for _, service := range smContext.SelectedPCFProfile.NfServices {
+		if service.ServiceName == models.ServiceName_NPCF_SMPOLICYCONTROL {
+			client = s.getSMPolicyControlClient(service.ApiPrefix)
+		}
+	}
+
+	request := &SMPolicyControl.UpdateSMPolicyRequest{
+		SmPolicyId:                &smContext.SMPolicyID,
+		SmPolicyUpdateContextData: &updateSMPolicy,
+	}
+
+	smPolicyDecisionFromPCF, err := client.IndividualSMPolicyDocumentApi.UpdateSMPolicy(ctx, request)
+	if err != nil {
+		return nil, fmt.Errorf("update sm policy [%s] by location change failed: %s", smContext.SMPolicyID, err)
+	}
+	smPolicyDecision := smPolicyDecisionFromPCF.SmPolicyDecision
+	return &smPolicyDecision, nil
+}
+
 func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.SMContext) error {
 	var client *SMPolCtrl.APIClient
 
