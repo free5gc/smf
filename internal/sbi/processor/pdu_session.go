@@ -1430,7 +1430,6 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 				logger.PduSessLog.Traceln("Send SMContext Status Notification successfully")
 			}
 		}
-		p.RemoveSMContextFromAllNF(smContext, false)
 
 	case smf_context.SessionReleaseFailed:
 		logger.CtxLog.Traceln("In case SessionReleaseFailed")
@@ -1441,6 +1440,8 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 		logger.CtxLog.Traceln("In case Unknown")
 		smContext.SetState(smf_context.Active)
 	}
+
+	p.RemoveSMContextFromAllNF(smContext, false)
 }
 
 func (p *Processor) releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionResponseStatus {
