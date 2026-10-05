@@ -18,6 +18,7 @@ import (
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/util/nfheartbeat"
 )
 
 const (
@@ -105,6 +106,8 @@ type Configuration struct {
 	T3592                *TimerValue          `yaml:"t3592" valid:"required"`
 	NwInstFqdnEncoding   bool                 `yaml:"nwInstFqdnEncoding" valid:"type(bool),optional"`
 	RequestedUnit        int32                `yaml:"requestedUnit,omitempty" valid:"optional"`
+	// Fallback NRF (not PFCP) heartbeat interval in seconds, 1..3600; the NRF-assigned value wins.
+	NfHeartBeatTimer int32 `yaml:"nfHeartBeatTimer,omitempty" valid:"optional,range(1|3600)"`
 }
 
 type Logger struct {
@@ -272,6 +275,17 @@ func (m *Metrics) validate() (bool, error) {
 		return false, error(errs)
 	}
 	return true, nil
+}
+
+// GetNfHeartBeatTimer returns the fallback NRF heartbeat interval in seconds.
+func (c *Config) GetNfHeartBeatTimer() int32 {
+	c.RLock()
+	defer c.RUnlock()
+
+	if c.Configuration != nil && c.Configuration.NfHeartBeatTimer > 0 {
+		return c.Configuration.NfHeartBeatTimer
+	}
+	return nfheartbeat.DefaultTimer
 }
 
 func (c *Config) GetNfInstanceId() string {
