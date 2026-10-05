@@ -35,8 +35,15 @@ func (s *nnrfService) getNFManagementClient(uri string) *NFMgmt.APIClient {
 	}
 	s.NFManagementgMu.RLock()
 	client, ok := s.NFManagementClients[uri]
+	s.NFManagementgMu.RUnlock()
 	if ok {
-		s.NFManagementgMu.RUnlock()
+		return client
+	}
+
+	s.NFManagementgMu.Lock()
+	defer s.NFManagementgMu.Unlock()
+	// Another caller may have stored a client while the read lock was down.
+	if client, ok = s.NFManagementClients[uri]; ok {
 		return client
 	}
 
@@ -45,9 +52,6 @@ func (s *nnrfService) getNFManagementClient(uri string) *NFMgmt.APIClient {
 	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = NFMgmt.NewAPIClient(configuration)
 
-	s.NFManagementgMu.RUnlock()
-	s.NFManagementgMu.Lock()
-	defer s.NFManagementgMu.Unlock()
 	s.NFManagementClients[uri] = client
 	return client
 }
@@ -58,8 +62,15 @@ func (s *nnrfService) getNFDiscoveryClient(uri string) *NFDisc.APIClient {
 	}
 	s.NFDiscoveryMu.RLock()
 	client, ok := s.NFDiscoveryClients[uri]
+	s.NFDiscoveryMu.RUnlock()
 	if ok {
-		s.NFDiscoveryMu.RUnlock()
+		return client
+	}
+
+	s.NFDiscoveryMu.Lock()
+	defer s.NFDiscoveryMu.Unlock()
+	// Another caller may have stored a client while the read lock was down.
+	if client, ok = s.NFDiscoveryClients[uri]; ok {
 		return client
 	}
 
@@ -68,9 +79,6 @@ func (s *nnrfService) getNFDiscoveryClient(uri string) *NFDisc.APIClient {
 	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = NFDisc.NewAPIClient(configuration)
 
-	s.NFDiscoveryMu.RUnlock()
-	s.NFDiscoveryMu.Lock()
-	defer s.NFDiscoveryMu.Unlock()
 	s.NFDiscoveryClients[uri] = client
 	return client
 }
