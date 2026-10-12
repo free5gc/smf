@@ -7,6 +7,13 @@ import (
 func (p *Processor) RemoveSMContextFromAllNF(smContext *smf_context.SMContext, sendNotification bool) {
 	smContext.SetState(smf_context.InActive)
 
+	// Release any charging session the caller has not closed yet, so no removal
+	// path can strand an open CDR on the CHF; ReleaseChargingSession is one-shot
+	// (BeginChargingRelease), so this stays idempotent with the success branches.
+	if smContext.ChargingDataRef != "" {
+		p.ReleaseChargingSession(smContext)
+	}
+
 	// Notify BSF about PCF binding release if we have a binding ID
 	if smContext.BSFBindingID != "" {
 		p.Consumer().NotifyBSFBindingRelease(smContext)
@@ -21,12 +28,17 @@ func (p *Processor) RemoveSMContextFromAllNF(smContext *smf_context.SMContext, s
 		}
 	}
 
-	if smf_context.GetSelf().Ues.UeExists(smContext.Supi) {
+	// Run SDM cleanup once for contexts counted at creation.
+	// UnSubscribe decrements the count or deletes the last subscription.
+	// Clear the marker only on success, preserving state if UDM deletion fails.
+	if smContext.SdmCounted && smf_context.GetSelf().Ues.UeExists(smContext.Supi) {
 		problemDetails, err := p.Consumer().UnSubscribe(smContext)
 		if problemDetails != nil {
 			smContext.Log.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
 		} else if err != nil {
 			smContext.Log.Errorf("SDM UnSubscription Error[%+v]", err)
+		} else {
+			smContext.SdmCounted = false
 		}
 	}
 

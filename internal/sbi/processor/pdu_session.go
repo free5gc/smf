@@ -183,6 +183,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 				}
 			} else {
 				p.Context().Ues.IncrementPduSessionCount(smContext.Supi)
+				smContext.SdmCounted = true
 			}
 		}
 	}()
@@ -433,15 +434,6 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					smContext.Log.Errorf("SM Policy Termination failed: %s", err)
 				} else {
 					smContext.SMPolicyID = ""
-				}
-			}
-
-			if smf_context.GetSelf().Ues.UeExists(smContext.Supi) {
-				problemDetails, clientErr := p.Consumer().UnSubscribe(smContext)
-				if problemDetails != nil {
-					logger.PduSessLog.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
-				} else if clientErr != nil {
-					logger.PduSessLog.Errorf("SDM UnSubscription Error[%+v]", err)
 				}
 			}
 
@@ -1276,15 +1268,6 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 		}
 	}
 
-	if p.Context().Ues.UeExists(smContext.Supi) {
-		problemDetails, err := p.Consumer().UnSubscribe(smContext)
-		if problemDetails != nil {
-			logger.PduSessLog.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
-		} else if err != nil {
-			logger.PduSessLog.Errorf("SDM UnSubscription Error[%+v]", err)
-		}
-	}
-
 	if smContext.UeCmRegistered {
 		problemDetails, err := p.Consumer().UeCmDeregistration(smContext)
 		if problemDetails != nil {
@@ -1365,6 +1348,25 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 	p.RemoveSMContextFromAllNF(smContext, false)
 }
 
+// notifyOldAmfOfRelease sends the RELEASED notification to the callback URI the
+// released context was created with, but only when the incoming create carries
+// a different one: a same-URI registrant learns of the replacement through the
+// new context anyway. Terminal branches call it via `go` so a slow or
+// attacker-supplied URI cannot stall the release while SMLock is held.
+func (p *Processor) notifyOldAmfOfRelease(smContext *smf_context.SMContext, newStatusUri string) {
+	if newStatusUri == smContext.SmStatusNotifyUri {
+		return
+	}
+	problemDetails, err := p.Consumer().SendSMContextStatusNotification(smContext.SmStatusNotifyUri)
+	if problemDetails != nil {
+		smContext.Log.Warnf("Send SMContext Status Notification Problem[%+v]", problemDetails)
+	} else if err != nil {
+		smContext.Log.Warnf("Send SMContext Status Notification Error[%v]", err)
+	} else {
+		smContext.Log.Traceln("Send SMContext Status Notification successfully")
+	}
+}
+
 func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 	smContext *smf_context.SMContext, createData *models.Smf_PDUSess_SmContextCreateData,
 ) {
@@ -1377,15 +1379,6 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 			logger.PduSessLog.Errorf("SM Policy Termination failed: %s", err)
 		} else {
 			smContext.SMPolicyID = ""
-		}
-	}
-
-	if p.Context().Ues.UeExists(smContext.Supi) {
-		problemDetails, err := p.Consumer().UnSubscribe(smContext)
-		if problemDetails != nil {
-			logger.PduSessLog.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
-		} else if err != nil {
-			logger.PduSessLog.Errorf("SDM UnSubscription Error[%+v]", err)
 		}
 	}
 
@@ -1412,35 +1405,23 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 
 	switch pfcpResponseStatus {
 	case smf_context.SessionReleaseSuccess:
-		p.ReleaseChargingSession(smContext)
-
 		logger.CtxLog.Traceln("In case SessionReleaseSuccess")
 		smContext.SetState(smf_context.InActivePending)
-		if createData.SmContextStatusUri != smContext.SmStatusNotifyUri {
-			problemDetails, err := p.Consumer().SendSMContextStatusNotification(smContext.SmStatusNotifyUri)
-			if problemDetails != nil || err != nil {
-				if problemDetails != nil {
-					logger.PduSessLog.Warnf("Send SMContext Status Notification Problem[%+v]", problemDetails)
-				}
-
-				if err != nil {
-					logger.PduSessLog.Warnf("Send SMContext Status Notification Error[%v]", err)
-				}
-			} else {
-				logger.PduSessLog.Traceln("Send SMContext Status Notification successfully")
-			}
-		}
-		p.RemoveSMContextFromAllNF(smContext, false)
-
 	case smf_context.SessionReleaseFailed:
 		logger.CtxLog.Traceln("In case SessionReleaseFailed")
-		smContext.SetState(smf_context.Active)
-
 	default:
 		smContext.Log.Warnf("The state shouldn't be [%s]", pfcpResponseStatus)
 		logger.CtxLog.Traceln("In case Unknown")
-		smContext.SetState(smf_context.Active)
 	}
+
+	// Common finalize for every branch: even a failed PFCP release must close
+	// the charging session and remove the context, and the old registrant is
+	// told unless the new create reuses its callback URI. The notification runs
+	// async so a slow or attacker-supplied URI cannot stall the release while
+	// SMLock is held.
+	p.ReleaseChargingSession(smContext)
+	go p.notifyOldAmfOfRelease(smContext, createData.SmContextStatusUri)
+	p.RemoveSMContextFromAllNF(smContext, false)
 }
 
 func (p *Processor) releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionResponseStatus {
