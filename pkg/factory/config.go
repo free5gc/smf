@@ -86,6 +86,7 @@ func (i *Info) validate() (bool, error) {
 }
 
 type Configuration struct {
+	IdleTimeout          *time.Duration       `yaml:"idleTimeout,omitempty" valid:"optional"`
 	SmfName              string               `yaml:"smfName" valid:"type(string),required"`
 	NfInstanceId         string               `yaml:"nfInstanceId,omitempty" valid:"optional,uuidv4"`
 	Sbi                  *Sbi                 `yaml:"sbi" valid:"required"`
@@ -1024,4 +1025,15 @@ func (c *Config) GetCertKeyPath() string {
 	c.RLock()
 	defer c.RUnlock()
 	return c.Configuration.Sbi.Tls.Key
+}
+
+// GetIdleTimeout returns the HTTP server idle timeout. Omitted values preserve
+// the previous 1ms timeout; an explicit zero disables the timeout.
+func (c *Config) GetIdleTimeout() time.Duration {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Configuration == nil || c.Configuration.IdleTimeout == nil {
+		return time.Millisecond
+	}
+	return *c.Configuration.IdleTimeout
 }
