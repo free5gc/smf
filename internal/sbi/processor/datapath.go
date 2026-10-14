@@ -14,6 +14,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	business_metrics "github.com/free5gc/smf/internal/metrics/business"
 	pfcp_message "github.com/free5gc/smf/internal/pfcp/message"
 	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 )
@@ -549,6 +550,7 @@ func (p *Processor) EstHandler(isDone <-chan struct{},
 	if success {
 		p.sendPDUSessionEstablishmentAccept(smContext)
 	} else {
+		business_metrics.IncrPduSessionEstablishmentFailure(business_metrics.ESTABLISHMENT_PFCP_FAILURE)
 		// TODO: set appropriate 5GSM cause according to PFCP cause value
 		p.sendPDUSessionEstablishmentReject(smContext, nasie.Cause5GSM_NwFailure)
 	}
@@ -610,12 +612,14 @@ func (p *Processor) sendPDUSessionEstablishmentAccept(
 	smNasBuf, err := smf_context.BuildGSMPDUSessionEstablishmentAccept(smContext)
 	if err != nil {
 		logger.PduSessLog.Errorf("Build GSM PDUSessionEstablishmentAccept failed: %s", err)
+		business_metrics.IncrPduSessionEstablishmentFailure(business_metrics.ESTABLISHMENT_ACCEPT_BUILD_FAILURE)
 		return
 	}
 
 	n2Pdu, err := smf_context.BuildPDUSessionResourceSetupRequestTransfer(smContext)
 	if err != nil {
 		logger.PduSessLog.Errorf("Build PDUSessionResourceSetupRequestTransfer failed: %s", err)
+		business_metrics.IncrPduSessionEstablishmentFailure(business_metrics.ESTABLISHMENT_ACCEPT_BUILD_FAILURE)
 		return
 	}
 
@@ -647,6 +651,7 @@ func (p *Processor) sendPDUSessionEstablishmentAccept(
 	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFType_AMF)
 	if err != nil {
 		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", err)
+		business_metrics.IncrPduSessionEstablishmentFailure(business_metrics.ESTABLISHMENT_AMF_TOKEN_FAILURE)
 		return
 	}
 
@@ -654,10 +659,12 @@ func (p *Processor) sendPDUSessionEstablishmentAccept(
 		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 	if err != nil || rspData == nil {
 		logger.ConsumerLog.Warnf("N1N2MessageTransfer for sendPDUSessionEstablishmentAccept failed: %+v", err)
+		business_metrics.IncrPduSessionEstablishmentFailure(business_metrics.ESTABLISHMENT_N1N2_FAILURE)
 		return
 	}
 
 	smContext.SetState(smf_context.Active)
+	business_metrics.IncrPduSessionEstablishmentSuccess()
 
 	if rspData.Cause == models.Amf_Comm_N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 		logger.PduSessLog.Warnf("%v", rspData.Cause)

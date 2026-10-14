@@ -28,6 +28,10 @@ const (
 	udpReadRetryMaximumDelay = time.Second
 )
 
+// errRequestTimedOut is wrapped by sendRequestAndWait when every retransmission of a request went
+// unanswered, so callers can tell a timeout apart from other failures with errors.Is.
+var errRequestTimedOut = errors.New("timed out")
+
 type TransType string
 
 const (
@@ -368,10 +372,10 @@ func sendToRcvCh(
 	}
 }
 
-// sendRequest sends one concrete go-pfcp request through the server-owned
+// sendRequestAndWait sends one concrete go-pfcp request through the server-owned
 // transaction layer. Every caller supplies a context, so queueing, response
 // waiting, retransmission, and sequence ownership share one cancellation path.
-func (s *PfcpServer) sendRequest(
+func (s *PfcpServer) sendRequestAndWait(
 	ctx context.Context,
 	request message.Message,
 	addr *net.UDPAddr,
@@ -407,7 +411,7 @@ func (s *PfcpServer) sendRequest(
 			if err := ctx.Err(); err != nil {
 				return nil, fmt.Errorf("send PFCP request to %v: %w", addr, err)
 			}
-			return nil, fmt.Errorf("PFCP request to %v timed out", addr)
+			return nil, fmt.Errorf("PFCP request to %v %w", addr, errRequestTimedOut)
 		}
 		return received.Msg, nil
 	}

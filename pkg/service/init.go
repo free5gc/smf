@@ -14,6 +14,7 @@ import (
 	"github.com/free5gc/openapi/nrf/NFMgmt"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	business_metrics "github.com/free5gc/smf/internal/metrics/business"
 	"github.com/free5gc/smf/internal/sbi"
 	"github.com/free5gc/smf/internal/sbi/consumer"
 	"github.com/free5gc/smf/internal/sbi/processor"
@@ -92,10 +93,9 @@ func NewApp(
 	smf.sbiServer = sbiServer
 
 	features := map[utils.MetricTypeEnabled]bool{utils.SBI: true}
-	customMetrics := make(map[utils.MetricTypeEnabled][]prometheus.Collector)
 	if cfg.AreMetricsEnabled() {
 		if smf.metricsServer, err = metrics.NewServer(
-			getInitMetrics(cfg, features, customMetrics), tlsKeyLogPath, logger.InitLog); err != nil {
+			getInitMetrics(cfg, features, getCustomMetrics(cfg)), tlsKeyLogPath, logger.InitLog); err != nil {
 			return nil, err
 		}
 	}
@@ -105,6 +105,22 @@ func NewApp(
 	SMF = smf
 
 	return smf, nil
+}
+
+func getCustomMetrics(cfg *factory.Config) map[utils.MetricTypeEnabled][]prometheus.Collector {
+	customMetrics := make(map[utils.MetricTypeEnabled][]prometheus.Collector)
+
+	customMetrics[business_metrics.PDU_SESSION_METRICS] = business_metrics.GetPduSessionHandlerMetrics(
+		cfg.GetMetricsNamespace(), smf_context.CountSMContextsByState)
+
+	business_metrics.EnablePduSessionMetrics()
+
+	customMetrics[business_metrics.PFCP_METRICS] = business_metrics.GetPfcpHandlerMetrics(
+		cfg.GetMetricsNamespace())
+
+	business_metrics.EnablePfcpMetrics()
+
+	return customMetrics
 }
 
 func getInitMetrics(

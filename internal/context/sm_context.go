@@ -435,6 +435,20 @@ func RemoveSMContext(ref string) {
 	smContext.Log.Infof("smContext[%s] is deleted from pool", ref)
 }
 
+// CountSMContextsByState returns the number of SM contexts in the pool for each state name.
+// Every state is present, so a state without contexts is reported as 0.
+func CountSMContextsByState() map[string]int {
+	counts := make(map[string]int)
+	for state := InActive; state <= PFCPModification; state++ {
+		counts[state.String()] = 0
+	}
+	smContextPool.Range(func(_, value any) bool {
+		counts[value.(*SMContext).State().String()]++
+		return true
+	})
+	return counts
+}
+
 // *** add unit test ***//
 func GetSMContextBySEID(seid uint64) *SMContext {
 	if value, ok := seidSMContextMap.Load(seid); ok {

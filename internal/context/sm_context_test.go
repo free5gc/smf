@@ -38,6 +38,29 @@ func TestRemoveSMContextKeepsCanonicalRefOfNewerSMContext(t *testing.T) {
 	require.Nil(t, context.GetSMContextById(supi, pduSessionID))
 }
 
+func TestCountSMContextsByState(t *testing.T) {
+	initConfig()
+
+	// Other tests may leave SM contexts in the shared pool, so compare against a baseline.
+	before := context.CountSMContextsByState()
+	require.Len(t, before, 6, "every SM context state must be reported")
+
+	active := context.NewSMContext("imsi-001016100000051", 1)
+	require.NotNil(t, active)
+	active.SetState(context.Active)
+	pending := context.NewSMContext("imsi-001016100000052", 1)
+	require.NotNil(t, pending)
+	pending.SetState(context.ActivePending)
+
+	counts := context.CountSMContextsByState()
+	require.Equal(t, before[context.Active.String()]+1, counts[context.Active.String()])
+	require.Equal(t, before[context.ActivePending.String()]+1, counts[context.ActivePending.String()])
+
+	context.RemoveSMContext(active.Ref)
+	context.RemoveSMContext(pending.Ref)
+	require.Equal(t, before, context.CountSMContextsByState())
+}
+
 func TestSMContextBeginChargingReleaseIsOneShot(t *testing.T) {
 	smContext := &context.SMContext{}
 	if !smContext.BeginChargingRelease() {
