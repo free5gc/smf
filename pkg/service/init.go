@@ -7,10 +7,10 @@ import (
 	"runtime/debug"
 	"sync"
 
+	"github.com/free5gc/openapi"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
-	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/nrf/NFMgmt"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
@@ -58,6 +58,9 @@ func NewApp(
 	ctx context.Context, cfg *factory.Config, tlsKeyLogPath string,
 	pfcpStart func(*SmfApp) error, pfcpTerminate func(),
 ) (*SmfApp, error) {
+	if err := openapi.ConfigureHTTP2Clients(cfg.GetReadIdleTimeout(), cfg.GetPingTimeout()); err != nil {
+		return nil, err
+	}
 	smf_context.Init(cfg)
 	smf := &SmfApp{
 		cfg:           cfg,
