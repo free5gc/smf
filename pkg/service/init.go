@@ -7,10 +7,10 @@ import (
 	"runtime/debug"
 	"sync"
 
-	"github.com/free5gc/openapi"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
+	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/nrf/NFMgmt"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
@@ -98,7 +98,8 @@ func NewApp(
 	customMetrics := make(map[utils.MetricTypeEnabled][]prometheus.Collector)
 	if cfg.AreMetricsEnabled() {
 		if smf.metricsServer, err = metrics.NewServer(
-			getInitMetrics(cfg, features, customMetrics), tlsKeyLogPath, logger.InitLog, cfg.GetIdleTimeout()); err != nil {
+			getInitMetrics(cfg, features, customMetrics), tlsKeyLogPath, logger.InitLog, cfg.GetIdleTimeout(),
+		); err != nil {
 			return nil, err
 		}
 	}
