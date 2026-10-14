@@ -42,6 +42,7 @@ func (f *fakeAssociationState) ValidateAssociationSource(
 ) bool {
 	return true
 }
+
 func (f *fakeAssociationState) SetupAssociation(
 	peer pfcptype.NodeID,
 	recoveryTime time.Time,

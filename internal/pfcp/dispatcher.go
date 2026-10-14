@@ -188,6 +188,7 @@ func (s *PfcpServer) dispatchReceived(received RcvPfcpMsg) {
 	// handlers into an unbounded goroutine backlog.
 	dispatch(received.Msg, &received.RemoteAddr)
 }
+
 func (s *PfcpServer) validAssociationSource(
 	nodeID *ie.IE,
 	addr *net.UDPAddr,
