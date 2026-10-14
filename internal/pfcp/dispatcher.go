@@ -38,7 +38,6 @@ func (s *PfcpServer) Dispatch(msg message.Message, addr *net.UDPAddr) {
 		}
 
 		response, afterResponse = s.handleAssociationSetupRequest(request)
-
 	case *message.AssociationReleaseRequest:
 		if !s.validAssociationSource(request.NodeID, addr) {
 			response = message.NewAssociationReleaseResponse(
@@ -61,7 +60,6 @@ func (s *PfcpServer) Dispatch(msg message.Message, addr *net.UDPAddr) {
 		}
 
 		response, afterResponse = s.handleAssociationUpdateRequest(request)
-
 	case *message.NodeReportRequest:
 		// TODO(go-pfcp migration): parse Node Report Type and the report-specific
 		// grouped IEs. Until then, reject explicitly so the peer and RxTransaction
