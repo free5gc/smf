@@ -167,6 +167,51 @@ func TestNewUserPlaneInformation(t *testing.T) {
 	require.Contains(t, userplaneInformation.UPFs["UPF3"].Links, userplaneInformation.UPFs["UPF4"])
 }
 
+func TestNupfEeApiRootRuntimePropagation(t *testing.T) {
+	const apiRoot = "https://upf.example.com/deployment"
+
+	topology := &factory.UserPlaneInformation{
+		UPNodes: map[string]*factory.UPNode{
+			"AN": {
+				Type:   "AN",
+				NodeID: "192.0.2.1",
+				ANIP:   "192.0.2.1",
+			},
+			"UPF": {
+				Type:          "UPF",
+				NodeID:        "192.0.2.2",
+				NupfEeApiRoot: apiRoot,
+			},
+		},
+		Links: []*factory.UPLink{{A: "AN", B: "UPF"}},
+	}
+
+	userPlaneInformation, err := smf_context.NewUserPlaneInformation(topology)
+	require.NoError(t, err)
+	require.Equal(t, apiRoot, userPlaneInformation.UPFs["UPF"].NupfEeApiRoot)
+	require.Empty(t, userPlaneInformation.AccessNetwork["AN"].NupfEeApiRoot)
+
+	roundTrip := userPlaneInformation.UpNodesToConfiguration()
+	require.Equal(t, apiRoot, roundTrip["UPF"].NupfEeApiRoot)
+	require.Empty(t, roundTrip["AN"].NupfEeApiRoot)
+}
+
+func TestNupfEeApiRootRuntimeAbsence(t *testing.T) {
+	topology := &factory.UserPlaneInformation{
+		UPNodes: map[string]*factory.UPNode{
+			"UPF": {
+				Type:   "UPF",
+				NodeID: "192.0.2.3",
+			},
+		},
+		Links: []*factory.UPLink{},
+	}
+
+	userPlaneInformation, err := smf_context.NewUserPlaneInformation(topology)
+	require.NoError(t, err)
+	require.Empty(t, userPlaneInformation.UPFs["UPF"].NupfEeApiRoot)
+}
+
 func TestGenerateDefaultPath(t *testing.T) {
 	config1 := *configuration
 	config1.Links = []*factory.UPLink{

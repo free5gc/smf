@@ -37,13 +37,14 @@ const (
 
 // UPNode represent the user plane node topology
 type UPNode struct {
-	Name   string
-	Type   UPNodeType
-	NodeID pfcptype.NodeID
-	ANIP   net.IP
-	Dnn    string
-	Links  []*UPNode
-	UPF    *UPF
+	Name          string
+	Type          UPNodeType
+	NodeID        pfcptype.NodeID
+	ANIP          net.IP
+	Dnn           string
+	NupfEeApiRoot string
+	Links         []*UPNode
+	UPF           *UPF
 }
 
 func (u *UPNode) MatchedSelection(selection *UPFSelectionParams) bool {
@@ -97,6 +98,7 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) (*UserPla
 			upNode.ANIP = net.ParseIP(node.ANIP)
 			anPool[name] = upNode
 		case UPNODE_UPF:
+			upNode.NupfEeApiRoot = node.NupfEeApiRoot
 			// ParseIp() always return 16 bytes
 			// so we can't use the length of return ip to separate IPv4 and IPv6
 			// This is just a work around
@@ -240,6 +242,7 @@ func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]*factory.UP
 		switch upNode.Type {
 		case UPNODE_UPF:
 			u.Type = "UPF"
+			u.NupfEeApiRoot = upNode.NupfEeApiRoot
 		case UPNODE_AN:
 			u.Type = "AN"
 			u.ANIP = upNode.ANIP.String()
@@ -407,6 +410,7 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 		upNode.Type = UPNodeType(node.Type)
 		switch upNode.Type {
 		case UPNODE_UPF:
+			upNode.NupfEeApiRoot = node.NupfEeApiRoot
 			// ParseIp() always return 16 bytes
 			// so we can't use the length of return ip to separate IPv4 and IPv6
 			// This is just a work around
