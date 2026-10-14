@@ -26,11 +26,46 @@ func (s *PfcpServer) Dispatch(msg message.Message, addr *net.UDPAddr) {
 	case *message.HeartbeatRequest:
 		response = s.handleHeartbeatRequest(request)
 	case *message.AssociationSetupRequest:
+		if !s.validAssociationSource(request.NodeID, addr) {
+			response = message.NewAssociationSetupResponse(
+				request.Sequence(),
+				s.localNodeIDIE(),
+				ie.NewCause(ie.CauseRequestRejected),
+				ie.NewRecoveryTimeStamp(s.RecoveryTime()),
+				ie.NewCPFunctionFeatures(0),
+			)
+			break
+		}
+
 		response, afterResponse = s.handleAssociationSetupRequest(request)
+
+		response, afterResponse =
+			s.handleAssociationSetupRequest(request)
 	case *message.AssociationReleaseRequest:
+		if !s.validAssociationSource(request.NodeID, addr) {
+			response = message.NewAssociationReleaseResponse(
+				request.Sequence(),
+				s.localNodeIDIE(),
+				ie.NewCause(ie.CauseRequestRejected),
+			)
+			break
+		}
+
 		response = s.handleAssociationReleaseRequest(request)
 	case *message.AssociationUpdateRequest:
+		if !s.validAssociationSource(request.NodeID, addr) {
+			response = message.NewAssociationUpdateResponse(
+				request.Sequence(),
+				s.localNodeIDIE(),
+				ie.NewCause(ie.CauseRequestRejected),
+			)
+			break
+		}
+
 		response, afterResponse = s.handleAssociationUpdateRequest(request)
+
+		response, afterResponse =
+			s.handleAssociationUpdateRequest(request)
 	case *message.NodeReportRequest:
 		// TODO(go-pfcp migration): parse Node Report Type and the report-specific
 		// grouped IEs. Until then, reject explicitly so the peer and RxTransaction
@@ -158,4 +193,24 @@ func (s *PfcpServer) dispatchReceived(received RcvPfcpMsg) {
 	// Synchronous execution is intentional: spawning here would turn blocked
 	// handlers into an unbounded goroutine backlog.
 	dispatch(received.Msg, &received.RemoteAddr)
+}
+func (s *PfcpServer) validAssociationSource(
+	nodeID *ie.IE,
+	addr *net.UDPAddr,
+) bool {
+	if nodeID == nil {
+		return false
+	}
+
+	peer, err := nodeIDFromIE(nodeID)
+	if err != nil {
+		return false
+	}
+
+	s.associationMu.RLock()
+	manager := s.associationState
+	s.associationMu.RUnlock()
+
+	return manager != nil &&
+		manager.ValidateAssociationSource(peer, addr)
 }
