@@ -273,6 +273,11 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	// Update SessionRule from decision
 	if err = smContext.ApplySessionRules(smPolicyDecision); err != nil {
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
+		// Release CHF charging session before cleanup
+		if smContext.ChargingDataRef != "" {
+			p.ReleaseChargingSession(smContext)
+		}
+
 		p.makeEstRejectResAndReleaseSMContext(c, smContext,
 			nasie.Cause5GSM_ReqRejected,
 			&smf_errors.SubscriptionDenied)
