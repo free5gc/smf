@@ -36,6 +36,13 @@ type fakeAssociationState struct {
 	after        func()
 }
 
+func (f *fakeAssociationState) ValidateAssociationSource(
+	_ pfcptype.NodeID,
+	_ *net.UDPAddr,
+) bool {
+	return true
+}
+
 func (f *fakeAssociationState) SetupAssociation(
 	peer pfcptype.NodeID,
 	recoveryTime time.Time,
