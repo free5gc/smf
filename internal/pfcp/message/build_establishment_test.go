@@ -383,7 +383,9 @@ func TestSharedAMBRQEROmitsQFI(t *testing.T) {
 				wire, err = request.Marshal()
 				require.NoError(t, err)
 			} else {
-				request, err := pfcp_message.BuildSessionEstablishmentRequest(*testNodeID, upfIP, "upf", sm, nil, nil, nil, qers, nil)
+				request, err := pfcp_message.BuildSessionEstablishmentRequest(
+					*testNodeID, upfIP, "upf", sm, nil, nil, nil, qers, nil,
+				)
 				require.NoError(t, err)
 				wire, err = request.Marshal()
 				require.NoError(t, err)
@@ -401,8 +403,8 @@ func TestSharedAMBRQEROmitsQFI(t *testing.T) {
 			}
 			require.Len(t, encoded, 3)
 			for index, grouped := range encoded {
-				children, err := grouped.CreateQER()
-				require.NoError(t, err)
+				children, decodeErr := grouped.CreateQER()
+				require.NoError(t, decodeErr)
 				var qfis []*ie.IE
 				for _, child := range children {
 					if child.Type == ie.QFI {
@@ -415,8 +417,8 @@ func TestSharedAMBRQEROmitsQFI(t *testing.T) {
 					requireIEUint64(t, findIE(t, children, ie.MBR), 200000, (*ie.IE).MBRDL)
 				} else {
 					require.Len(t, qfis, 1)
-					qfi, err := qfis[0].QFI()
-					require.NoError(t, err)
+					qfi, qfiErr := qfis[0].QFI()
+					require.NoError(t, qfiErr)
 					require.Equal(t, qers[index].QFI.QFI, qfi)
 				}
 			}
