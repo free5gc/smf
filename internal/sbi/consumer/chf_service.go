@@ -64,7 +64,7 @@ func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMCon
 		SubscriberIdentifier: smContext.Supi,
 		NfConsumerIdentification: &models.Chf_ConvCharging_NFIdentification{
 			NodeFunctionality: models.Chf_ConvCharging_NodeFunctionality_SMF,
-			NFName:            smfContext.Name,
+			NFName:            smfContext.NfInstanceID,
 			// not sure if NFIPv4Address is RegisterIPv4 or BindingIPv4
 			NFIPv4Address: smfContext.RegisterIPv4,
 		},

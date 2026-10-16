@@ -37,3 +37,13 @@ func TestRemoveSMContextKeepsCanonicalRefOfNewerSMContext(t *testing.T) {
 	context.RemoveSMContext(newSMContext.Ref)
 	require.Nil(t, context.GetSMContextById(supi, pduSessionID))
 }
+
+func TestSMContextBeginChargingReleaseIsOneShot(t *testing.T) {
+	smContext := &context.SMContext{}
+	if !smContext.BeginChargingRelease() {
+		t.Fatal("first BeginChargingRelease() = false, want true")
+	}
+	if smContext.BeginChargingRelease() {
+		t.Fatal("second BeginChargingRelease() = true, want false")
+	}
+}

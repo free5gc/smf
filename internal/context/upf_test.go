@@ -4,18 +4,20 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 	"testing"
+	"time"
 
 	. "github.com/smartystreets/goconvey/convey"
 
 	nasie "github.com/free5gc/nas/ie"
-	"github.com/free5gc/pfcp/pfcpType"
 	smf_context "github.com/free5gc/smf/internal/context"
+	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
-var mockIPv4NodeID = &pfcpType.NodeID{
-	NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+var mockIPv4NodeID = &pfcptype.NodeID{
+	NodeIdType: pfcptype.NodeIdTypeIpv4Address,
 	IP:         net.ParseIP("127.0.0.1"),
 }
 
@@ -155,7 +157,7 @@ func TestAddPDR(t *testing.T) {
 		},
 	}
 
-	testCases[0].upf.AssociationContext = context.Background()
+	testCases[0].upf.EstablishAssociation(context.Background())
 
 	Convey("AddPDR should indeed add PDR and report error appropiately", t, func() {
 		for i, testcase := range testCases {
@@ -198,7 +200,7 @@ func TestAddFAR(t *testing.T) {
 		},
 	}
 
-	testCases[0].upf.AssociationContext = context.Background()
+	testCases[0].upf.EstablishAssociation(context.Background())
 
 	Convey("AddFAR should indeed add FAR and report error appropiately", t, func() {
 		for i, testcase := range testCases {
@@ -241,7 +243,7 @@ func TestAddQER(t *testing.T) {
 		},
 	}
 
-	testCases[0].upf.AssociationContext = context.Background()
+	testCases[0].upf.EstablishAssociation(context.Background())
 
 	Convey("AddQER should indeed add QER and report error appropiately", t, func() {
 		for i, testcase := range testCases {
@@ -284,7 +286,7 @@ func TestAddBAR(t *testing.T) {
 		},
 	}
 
-	testCases[0].upf.AssociationContext = context.Background()
+	testCases[0].upf.EstablishAssociation(context.Background())
 
 	Convey("AddBAR should indeed add BAR and report error appropiately", t, func() {
 		for i, testcase := range testCases {
@@ -307,4 +309,170 @@ func TestAddBAR(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestUPFAssociationStateLifecycle(t *testing.T) {
+	upf := smf_context.NewUPF(mockIPv4NodeID, mockIfaces)
+	if got := upf.AssociationState(); got != smf_context.AssociationDown {
+		t.Fatalf("initial AssociationState() = %s, want down", got)
+	}
+	if err := upf.IsAssociated(); err == nil {
+		t.Fatal("new UPF unexpectedly reported an established association")
+	}
+
+	if !upf.BeginAssociationSetup() {
+		t.Fatal("first BeginAssociationSetup() was rejected")
+	}
+	if got := upf.AssociationState(); got != smf_context.AssociationSettingUp {
+		t.Fatalf("AssociationState() = %s, want setting-up", got)
+	}
+	if upf.BeginAssociationSetup() {
+		t.Fatal("concurrent BeginAssociationSetup() was accepted")
+	}
+	upf.FailAssociationSetup()
+	if got := upf.AssociationState(); got != smf_context.AssociationDown {
+		t.Fatalf("state after failed setup = %s, want down", got)
+	}
+
+	if !upf.BeginAssociationSetup() {
+		t.Fatal("second BeginAssociationSetup() was rejected")
+	}
+	parent, cancelParent := context.WithCancel(context.Background())
+	upf.EstablishAssociation(parent)
+	t.Cleanup(upf.CancelAssociation)
+	if got := upf.AssociationState(); got != smf_context.AssociationEstablished {
+		t.Fatalf("state after setup = %s, want established", got)
+	}
+	if err := upf.IsAssociated(); err != nil {
+		t.Fatalf("established UPF reported not associated: %v", err)
+	}
+
+	if !upf.BeginAssociationRelease() {
+		t.Fatal("BeginAssociationRelease() was rejected")
+	}
+	if got := upf.AssociationState(); got != smf_context.AssociationReleasing {
+		t.Fatalf("state during release = %s, want releasing", got)
+	}
+	if err := upf.IsAssociated(); err != nil {
+		t.Fatalf("releasing UPF must remain associated for Session Deletion: %v", err)
+	}
+	if err := upf.IsAvailable(); err == nil {
+		t.Fatal("releasing UPF remained available for new session work")
+	}
+	if upf.BeginAssociationRelease() {
+		t.Fatal("concurrent BeginAssociationRelease() was accepted")
+	}
+
+	associationDone := upf.AssociationDone()
+	cancelParent()
+	select {
+	case <-associationDone:
+	case <-time.After(time.Second):
+		t.Fatal("parent cancellation did not close AssociationDone")
+	}
+	deadline := time.Now().Add(time.Second)
+	for upf.AssociationState() != smf_context.AssociationDown && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if got := upf.AssociationState(); got != smf_context.AssociationDown {
+		t.Fatalf("state after parent cancellation = %s, want down", got)
+	}
+}
+
+func TestUPFAssociationReleaseWaitsForInFlightSessionWork(t *testing.T) {
+	upf := smf_context.NewUPF(mockIPv4NodeID, mockIfaces)
+	upf.EstablishAssociation(context.Background())
+	t.Cleanup(upf.CancelAssociation)
+
+	associationContext, finishSessionWork, err := upf.BeginSessionWork()
+	if err != nil {
+		t.Fatalf("begin session work: %v", err)
+	}
+	if associationContext == nil {
+		t.Fatal("BeginSessionWork returned a nil association context")
+	}
+
+	associationReleaseStarted := make(chan bool, 1)
+	go func() {
+		associationReleaseStarted <- upf.BeginAssociationRelease()
+	}()
+
+	select {
+	case <-associationReleaseStarted:
+		t.Fatal("Association Release started before in-flight session work finished")
+	case <-time.After(20 * time.Millisecond):
+	}
+	if !upf.IsAssociationReleasing() {
+		t.Fatal("UPF remained available while Association Release waited for in-flight work")
+	}
+	if err = upf.IsAvailable(); err == nil {
+		t.Fatal("UPF reported available while Association Release waited for in-flight work")
+	}
+
+	finishSessionWork()
+	select {
+	case started := <-associationReleaseStarted:
+		if !started {
+			t.Fatal("first Association Release attempt was unexpectedly rejected")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Association Release did not start after in-flight session work finished")
+	}
+
+	if _, _, err = upf.BeginSessionWork(); err == nil {
+		t.Fatal("new session work was accepted while Association Release was in progress")
+	}
+
+	upf.CancelAssociation()
+	if !upf.BeginAssociationSetup() {
+		t.Fatal("Association Setup after release was rejected")
+	}
+	upf.EstablishAssociation(context.Background())
+	associationContext, finishSessionWork, err = upf.BeginSessionWork()
+	if err != nil {
+		t.Fatalf("session work was not restored after Association Release ended: %v", err)
+	}
+	if associationContext == nil {
+		t.Fatal("restored Session work returned a nil association context")
+	}
+	finishSessionWork()
+}
+
+func TestUPFRecoveryTimeStampConcurrentAccess(t *testing.T) {
+	nodeID := pfcptype.NodeID{
+		NodeIdType: pfcptype.NodeIdTypeIpv4Address,
+		IP:         net.ParseIP("192.0.2.110").To4(),
+	}
+	upf := smf_context.NewUPF(&nodeID, nil)
+	t.Cleanup(func() { smf_context.RemoveUPFNodeByNodeID(nodeID) })
+
+	baseline := time.Now().Add(-time.Hour).Truncate(time.Second)
+	if !upf.AcceptRecoveryTimeStamp(baseline) {
+		t.Fatal("first recovery timestamp was rejected")
+	}
+	if got := upf.RecoveryTimeStamp(); !got.Equal(baseline) {
+		t.Fatalf("RecoveryTimeStamp() = %v, want %v", got, baseline)
+	}
+	if upf.AcceptRecoveryTimeStamp(baseline.Add(time.Second)) {
+		t.Fatal("newer recovery timestamp did not signal a UPF restart")
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		recoveryTime := baseline.Add(time.Duration(i) * time.Second)
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			upf.SetRecoveryTimeStamp(recoveryTime)
+		}()
+		go func() {
+			defer wg.Done()
+			_ = upf.RecoveryTimeStamp()
+		}()
+		go func() {
+			defer wg.Done()
+			_ = upf.AcceptRecoveryTimeStamp(recoveryTime)
+		}()
+	}
+	wg.Wait()
 }

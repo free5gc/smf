@@ -10,8 +10,8 @@ import (
 	"sync"
 
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/pfcp/pfcpType"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 	"github.com/free5gc/smf/pkg/factory"
 )
 
@@ -37,13 +37,14 @@ const (
 
 // UPNode represent the user plane node topology
 type UPNode struct {
-	Name   string
-	Type   UPNodeType
-	NodeID pfcpType.NodeID
-	ANIP   net.IP
-	Dnn    string
-	Links  []*UPNode
-	UPF    *UPF
+	Name          string
+	Type          UPNodeType
+	NodeID        pfcptype.NodeID
+	ANIP          net.IP
+	Dnn           string
+	NupfEeApiRoot string
+	Links         []*UPNode
+	UPF           *UPF
 }
 
 func (u *UPNode) MatchedSelection(selection *UPFSelectionParams) bool {
@@ -97,6 +98,7 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) (*UserPla
 			upNode.ANIP = net.ParseIP(node.ANIP)
 			anPool[name] = upNode
 		case UPNODE_UPF:
+			upNode.NupfEeApiRoot = node.NupfEeApiRoot
 			// ParseIp() always return 16 bytes
 			// so we can't use the length of return ip to separate IPv4 and IPv6
 			// This is just a work around
@@ -109,18 +111,18 @@ func NewUserPlaneInformation(upTopology *factory.UserPlaneInformation) (*UserPla
 
 			switch len(ip) {
 			case net.IPv4len:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+				upNode.NodeID = pfcptype.NodeID{
+					NodeIdType: pfcptype.NodeIdTypeIpv4Address,
 					IP:         ip,
 				}
 			case net.IPv6len:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeIpv6Address,
+				upNode.NodeID = pfcptype.NodeID{
+					NodeIdType: pfcptype.NodeIdTypeIpv6Address,
 					IP:         ip,
 				}
 			default:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeFqdn,
+				upNode.NodeID = pfcptype.NodeID{
+					NodeIdType: pfcptype.NodeIdTypeFqdn,
 					FQDN:       node.NodeID,
 				}
 			}
@@ -240,6 +242,7 @@ func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]*factory.UP
 		switch upNode.Type {
 		case UPNODE_UPF:
 			u.Type = "UPF"
+			u.NupfEeApiRoot = upNode.NupfEeApiRoot
 		case UPNODE_AN:
 			u.Type = "AN"
 			u.ANIP = upNode.ANIP.String()
@@ -407,6 +410,7 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 		upNode.Type = UPNodeType(node.Type)
 		switch upNode.Type {
 		case UPNODE_UPF:
+			upNode.NupfEeApiRoot = node.NupfEeApiRoot
 			// ParseIp() always return 16 bytes
 			// so we can't use the length of return ip to separate IPv4 and IPv6
 			// This is just a work around
@@ -419,18 +423,18 @@ func (upi *UserPlaneInformation) UpNodesFromConfiguration(upTopology *factory.Us
 
 			switch len(ip) {
 			case net.IPv4len:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeIpv4Address,
+				upNode.NodeID = pfcptype.NodeID{
+					NodeIdType: pfcptype.NodeIdTypeIpv4Address,
 					IP:         ip,
 				}
 			case net.IPv6len:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeIpv6Address,
+				upNode.NodeID = pfcptype.NodeID{
+					NodeIdType: pfcptype.NodeIdTypeIpv6Address,
 					IP:         ip,
 				}
 			default:
-				upNode.NodeID = pfcpType.NodeID{
-					NodeIdType: pfcpType.NodeIdTypeFqdn,
+				upNode.NodeID = pfcptype.NodeID{
+					NodeIdType: pfcptype.NodeIdTypeFqdn,
 					FQDN:       node.NodeID,
 				}
 			}
@@ -614,7 +618,7 @@ func (upi *UserPlaneInformation) GetUPFNameByIp(ip string) string {
 	return upi.UPFIPToName[ip]
 }
 
-func (upi *UserPlaneInformation) GetUPFNodeIDByName(name string) pfcpType.NodeID {
+func (upi *UserPlaneInformation) GetUPFNodeIDByName(name string) pfcptype.NodeID {
 	return upi.UPFs[name].NodeID
 }
 
@@ -943,7 +947,7 @@ func (upi *UserPlaneInformation) SelectUPFAndAllocUEIP(selection *UPFSelectionPa
 	for _, upf := range sortedUPFList {
 		logger.CtxLog.Debugf("check start UPF: %s",
 			upi.GetUPFNameByIp(upf.NodeID.ResolveNodeIdToIp().String()))
-		if err = upf.UPF.IsAssociated(); err != nil {
+		if err = upf.UPF.IsAvailable(); err != nil {
 			logger.CtxLog.Infoln(err)
 			continue
 		}
