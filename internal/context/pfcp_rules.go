@@ -20,6 +20,9 @@ type RuleState uint8
 // Packet Detection Rule. Table 7.5.2.2-1
 type PDR struct {
 	PDRID uint16
+	// Disabled PDRs reserve a tunnel endpoint but have no applicable direction.
+	// They must never be installed as a filterless, catch-all PDR.
+	Disabled bool
 
 	Precedence         uint32
 	PDI                PDI
@@ -53,10 +56,11 @@ type URR struct {
 }
 
 type UrrEntry struct {
-	Rule     *URR      // rule content (RG, Threshold...)
-	State    RuleState // deployment state (INITIAL, CREATE...)
-	RefCount int       // number of PDRs referencing this URR
-	PDRIDs   []uint16  // IDs of PDRs currently referencing this URR
+	Rule               *URR      // rule content (RG, Threshold...)
+	State              RuleState // deployment state (INITIAL, CREATE...)
+	RefCount           int       // number of PDRs referencing this URR
+	PDRIDs             []uint16  // IDs of PDRs currently referencing this URR
+	stateBeforeRemoval RuleState
 }
 
 type UrrOpt func(urr *URR)
@@ -171,6 +175,10 @@ func (c *SMContext) PDRAppendURRs(upfId string, pdr *PDR, urrs []*URR) {
 			logger.PduSessLog.Warnf("[PDRAppendURRs]UPF=%s URR[%d] not in UrrTable", upfId, urr.URRID)
 			continue
 		}
+		if entry.State == RULE_REMOVE {
+			// A replacement path reused this URR before the removal was sent.
+			entry.State = entry.stateBeforeRemoval
+		}
 		entry.RefCount++
 		entry.PDRIDs = append(entry.PDRIDs, pdr.PDRID)
 		logger.PduSessLog.Tracef("[PDRAppendURRs] UPF=%s URR[%d] refCount=%d PDRs=%v",
@@ -202,6 +210,7 @@ func (c *SMContext) PDRReleaseURRs(upfId string, pdr *PDR) {
 			}
 		}
 		if entry.RefCount <= 0 {
+			entry.stateBeforeRemoval = entry.State
 			entry.State = RULE_REMOVE
 			logger.PduSessLog.Tracef("[PDRReleaseURRs] UPF=%s URR[%d] refCount=0 → RULE_REMOVE", upfId, urr.URRID)
 		} else {
@@ -265,7 +274,8 @@ type BAR struct {
 type QER struct {
 	QERID uint32
 
-	QFI pfcptype.QFI
+	// QFI is absent for QERs that only enforce a shared rate, such as Session-AMBR.
+	QFI *pfcptype.QFI
 
 	GateStatus *pfcptype.GateStatus
 	MBR        *pfcptype.MBR

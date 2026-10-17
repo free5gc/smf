@@ -39,7 +39,7 @@ func TestBuildSessionEstablishmentRequestMapsRulesWithGoPFCP(t *testing.T) {
 	}
 	qer := &context.QER{
 		QERID:      300,
-		QFI:        pfcptype.QFI{QFI: 9},
+		QFI:        &pfcptype.QFI{QFI: 9},
 		GateStatus: &pfcptype.GateStatus{ULGate: pfcptype.GateOpen, DLGate: pfcptype.GateClose},
 		MBR:        &pfcptype.MBR{ULMBR: 100_000, DLMBR: 200_000},
 		GBR:        &pfcptype.GBR{ULGBR: 10_000, DLGBR: 20_000},
@@ -356,4 +356,72 @@ func requireIEUint64(
 	got, err := getter(candidate)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
+}
+
+// A dedicated flow shares the Session-AMBR QER but has its own marking QER.
+// Check the encoded messages, including the modification path's Create QERs.
+func TestSharedAMBRQEROmitsQFI(t *testing.T) {
+	for _, modification := range []bool{false, true} {
+		name := "establishment"
+		if modification {
+			name = "modification"
+		}
+		t.Run(name, func(t *testing.T) {
+			initDirectBuilderTestContext(t)
+			const upfIP = "10.4.0.1"
+			sm := context.NewSMContext("imsi-208930000000102", 10)
+			sm.PFCPContext[upfIP] = &context.PFCPSessionContext{LocalSEID: 1, RemoteSEID: 2}
+			qers := []*context.QER{
+				{QERID: 1, GateStatus: &pfcptype.GateStatus{}, MBR: &pfcptype.MBR{ULMBR: 100000, DLMBR: 200000}},
+				{QERID: 2, QFI: &pfcptype.QFI{QFI: 1}, GateStatus: &pfcptype.GateStatus{}},
+				{QERID: 3, QFI: &pfcptype.QFI{QFI: 4}, GateStatus: &pfcptype.GateStatus{}},
+			}
+			var wire []byte
+			if modification {
+				request, err := pfcp_message.BuildSessionModificationRequest(upfIP, "upf", sm, nil, nil, nil, qers, nil)
+				require.NoError(t, err)
+				wire, err = request.Marshal()
+				require.NoError(t, err)
+			} else {
+				request, err := pfcp_message.BuildSessionEstablishmentRequest(
+					*testNodeID, upfIP, "upf", sm, nil, nil, nil, qers, nil,
+				)
+				require.NoError(t, err)
+				wire, err = request.Marshal()
+				require.NoError(t, err)
+			}
+			parsed, err := goPfcpMessage.Parse(wire)
+			require.NoError(t, err)
+			var encoded []*ie.IE
+			switch request := parsed.(type) {
+			case *goPfcpMessage.SessionEstablishmentRequest:
+				encoded = request.CreateQER
+			case *goPfcpMessage.SessionModificationRequest:
+				encoded = request.CreateQER
+			default:
+				t.Fatalf("unexpected message %T", parsed)
+			}
+			require.Len(t, encoded, 3)
+			for index, grouped := range encoded {
+				children, decodeErr := grouped.CreateQER()
+				require.NoError(t, decodeErr)
+				var qfis []*ie.IE
+				for _, child := range children {
+					if child.Type == ie.QFI {
+						qfis = append(qfis, child)
+					}
+				}
+				if index == 0 {
+					require.Empty(t, qfis)
+					requireIEUint64(t, findIE(t, children, ie.MBR), 100000, (*ie.IE).MBRUL)
+					requireIEUint64(t, findIE(t, children, ie.MBR), 200000, (*ie.IE).MBRDL)
+				} else {
+					require.Len(t, qfis, 1)
+					qfi, qfiErr := qfis[0].QFI()
+					require.NoError(t, qfiErr)
+					require.Equal(t, qers[index].QFI.QFI, qfi)
+				}
+			}
+		})
+	}
 }

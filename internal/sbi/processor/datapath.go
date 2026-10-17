@@ -90,6 +90,12 @@ func (p *Processor) ActivateUPFSession(
 				// skip send QER because uplink and downlink shared one QER
 			}
 
+			for _, tunnel := range []*smf_context.GTPTunnel{node.UpLinkTunnel, node.DownLinkTunnel} {
+				if tunnel != nil {
+					pdrList = append(pdrList, tunnel.AdditionalPDRs...)
+				}
+			}
+
 			pfcpState := pfcpPool[node.GetNodeIP()]
 			if pfcpState == nil {
 				pfcpPool[node.GetNodeIP()] = &PFCPState{
