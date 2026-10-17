@@ -37,6 +37,8 @@ type GTPTunnel struct {
 
 	TEID uint32
 	PDR  *PDR
+	// Additional filters share this tunnel's forwarding and QoS rules.
+	AdditionalPDRs []*PDR
 }
 
 type DataPathNode struct {
@@ -222,6 +224,7 @@ func (node *DataPathNode) ActivateDownLinkDcTunnel(smContext *SMContext) error {
 }
 
 func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
+	node.UpLinkTunnel.releaseAdditionalPDRs(smContext, node.UPF)
 	if pdr := node.UpLinkTunnel.PDR; pdr != nil {
 		upfId := node.UPF.UUID()
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
@@ -247,7 +250,7 @@ func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 		if qerList := pdr.QER; qerList != nil {
 			for _, qer := range qerList {
 				if qer != nil {
-					err = node.UPF.RemoveQER(qer)
+					err = smContext.releaseQER(node.UPF, qer)
 					if err != nil {
 						logger.CtxLog.Warnln("Deactivated UpLinkTunnel", err)
 					}
@@ -268,6 +271,7 @@ func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 }
 
 func (node *DataPathNode) DeactivateUpLinkDcTunnel(smContext *SMContext) {
+	node.UpLinkTunnel.releaseAdditionalPDRs(smContext, node.UPF)
 	if pdr := node.UpLinkTunnel.PDR; pdr != nil {
 		upfId := node.UPF.UUID()
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
@@ -293,7 +297,7 @@ func (node *DataPathNode) DeactivateUpLinkDcTunnel(smContext *SMContext) {
 		if qerList := pdr.QER; qerList != nil {
 			for _, qer := range qerList {
 				if qer != nil {
-					err = node.UPF.RemoveQER(qer)
+					err = smContext.releaseQER(node.UPF, qer)
 					if err != nil {
 						logger.CtxLog.Warnln("Deactivated UpLinkDctunnel", err)
 					}
@@ -314,6 +318,7 @@ func (node *DataPathNode) DeactivateUpLinkDcTunnel(smContext *SMContext) {
 }
 
 func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
+	node.DownLinkTunnel.releaseAdditionalPDRs(smContext, node.UPF)
 	if pdr := node.DownLinkTunnel.PDR; pdr != nil {
 		upfId := node.UPF.UUID()
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
@@ -339,7 +344,7 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 		if qerList := pdr.QER; qerList != nil {
 			for _, qer := range qerList {
 				if qer != nil {
-					err = node.UPF.RemoveQER(qer)
+					err = smContext.releaseQER(node.UPF, qer)
 					if err != nil {
 						logger.CtxLog.Warnln("Deactivated DownLinkTunnel", err)
 					}
@@ -360,6 +365,7 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 }
 
 func (node *DataPathNode) DeactivateDownLinkDcTunnel(smContext *SMContext) {
+	node.DownLinkTunnel.releaseAdditionalPDRs(smContext, node.UPF)
 	if pdr := node.DownLinkTunnel.PDR; pdr != nil {
 		upfId := node.UPF.UUID()
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
@@ -385,7 +391,7 @@ func (node *DataPathNode) DeactivateDownLinkDcTunnel(smContext *SMContext) {
 		if qerList := pdr.QER; qerList != nil {
 			for _, qer := range qerList {
 				if qer != nil {
-					err = node.UPF.RemoveQER(qer)
+					err = smContext.releaseQER(node.UPF, qer)
 					if err != nil {
 						logger.CtxLog.Warnln("Deactivated DownLinkDctunnel", err)
 					}
@@ -1184,6 +1190,13 @@ func (dataPath *DataPath) DeactivateDcTunnelAndPDR(smContext *SMContext) {
 
 func (p *DataPath) RemovePDR() {
 	for curDPNode := p.FirstDPNode; curDPNode != nil; curDPNode = curDPNode.Next() {
+		for _, tunnel := range []*GTPTunnel{curDPNode.UpLinkTunnel, curDPNode.DownLinkTunnel} {
+			if tunnel != nil {
+				for _, pdr := range tunnel.AdditionalPDRs {
+					pdr.State = RULE_REMOVE
+				}
+			}
+		}
 		if curDPNode.DownLinkTunnel != nil && curDPNode.DownLinkTunnel.PDR != nil {
 			curDPNode.DownLinkTunnel.PDR.State = RULE_REMOVE
 			curDPNode.DownLinkTunnel.PDR.FAR.State = RULE_REMOVE
@@ -1333,8 +1346,9 @@ func (p *DataPath) GetOrCreateUrr(smContext *SMContext, upf *UPF,
 }
 
 func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.Pcf_SMPolCtrl_QosData) {
-	// QFI = 1 -> default QFI
-	if qos == nil && qfi != 1 {
+	session := smContext.SelectedSessionRule()
+	defaultFlow := session != nil && qfi == session.DefQosQFI
+	if qfi == 0 || (qos == nil && !defaultFlow) {
 		return
 	}
 	logger.PduSessLog.Debugf("AddQoS called: QFI=%d, QosData=%+v", qfi, qos)
@@ -1357,7 +1371,10 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.Pcf_SMPol
 					ULGate: pfcptype.GateOpen,
 					DLGate: pfcptype.GateOpen,
 				}
-				if isGBRFlow(qos) {
+				if defaultFlow {
+					// The existing default flow supplies QoS; Session-AMBR has
+					// its own QER. A default-flow indication is not a new profile.
+				} else if isGBRFlow(qos) {
 					logger.PduSessLog.Debugf("AddQoS: GBR flow detected for QFI=%d", qfi)
 					logger.PduSessLog.Debugf("AddQoS GBR fields: GbrUl='%s', GbrDl='%s', MaxbrUl='%s', MaxbrDl='%s'",
 						qos.GbrUl, qos.GbrDl, qos.MaxbrUl, qos.MaxbrDl)
@@ -1437,10 +1454,10 @@ func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.Pcf_SMPol
 		}
 		if qer != nil {
 			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-				node.UpLinkTunnel.PDR.QER = append(node.UpLinkTunnel.PDR.QER, qer)
+				appendQER(node.UpLinkTunnel.PDR, qer)
 			}
 			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-				node.DownLinkTunnel.PDR.QER = append(node.DownLinkTunnel.PDR.QER, qer)
+				appendQER(node.DownLinkTunnel.PDR, qer)
 			}
 		}
 	}

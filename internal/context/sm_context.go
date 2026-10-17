@@ -985,10 +985,13 @@ func (smContextState SMContextState) String() string {
 
 func (smContext *SMContext) AssignQFI(qosId string) uint8 {
 	qfi, ok := smContext.qosDataToQFI[qosId]
-	if !ok {
+	for !ok {
 		newId, err := smContext.QFIGenerator.Allocate()
 		if err != nil {
 			return 0
+		}
+		if session := smContext.SelectedSessionRule(); session != nil && uint8(newId) == session.DefQosQFI {
+			continue // Keep the session's default QFI reserved.
 		}
 		smContext.qosDataToQFI[qosId] = uint8(newId)
 		return uint8(newId)

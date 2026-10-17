@@ -80,6 +80,10 @@ func BuildSessionEstablishmentRequest(
 		if pdr == nil {
 			return nil, fmt.Errorf("build Create PDR at index %d: nil PDR", index)
 		}
+		if pdr.Disabled {
+			continue
+		}
+
 		if pdr.State == context.RULE_INITIAL {
 			createPDR, buildErr := newCreatePDRIE(pdr)
 			if buildErr != nil {
