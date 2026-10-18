@@ -291,18 +291,26 @@ func HandleHandoverRequiredTransfer(b []byte, ctx *SMContext) error {
 	return nil
 }
 
+// ErrN2SmTransferProtocol identifies a malformed or incomplete NGAP transfer
+// IE received from the AMF/gNB (a decode failure, or a missing mandatory IE),
+// as opposed to a genuine UPF-unavailability error. Callers should use
+// errors.Is against this sentinel to distinguish the two cases and map them
+// to the appropriate SBI cause code, rather than collapsing every error from
+// this function into UPF_NOT_AVAILABLE.
+var ErrN2SmTransferProtocol = errors.New("malformed or incomplete N2 SM transfer IE")
+
 func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) error {
 	handoverRequestAcknowledgeTransfer := ngapie.HandoverRequestAcknowledgeTransfer{}
 	ctx.QosFlowsToBeForwarded = nil
 
 	err := ngapie.UnmarshalBinary(b, &handoverRequestAcknowledgeTransfer)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: decode HandoverRequestAcknowledgeTransfer: %v", ErrN2SmTransferProtocol, err)
 	}
 
 	DLNGUUPGTPTunnel := gtpTunnelFromUPTransport(handoverRequestAcknowledgeTransfer.DLNGUUPTNLInformation)
 	if DLNGUUPGTPTunnel == nil {
-		return errors.New("handoverRequestAcknowledgeTransfer.DLNGUUPTNLInformation.Choice")
+		return fmt.Errorf("%w: handoverRequestAcknowledgeTransfer.DLNGUUPTNLInformation.Choice", ErrN2SmTransferProtocol)
 	}
 
 	ctx.Tunnel.UpdateANInformation(
