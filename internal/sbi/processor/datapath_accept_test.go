@@ -131,6 +131,14 @@ func acceptTestStatusURIPath(pduSessionID int32) string {
 // createAcceptTestSMContext runs the SM Context Create handler. The handler
 // hands SMLock to the establishment goroutine before it returns, so a later
 // SMLock.Lock() in the test waits for that goroutine to finish.
+// createAcceptTestSMContext runs the SM Context Create handler. The handler
+// starts the PFCP/Accept goroutine before it returns, and that goroutine can
+// run to completion - including removing the SMContext - before this
+// function resolves its ref. When the caller passes a nil isDone, this
+// function supplies its own gate and only releases it after the ref has been
+// resolved, so the removal can never race ahead of the lookup below. Callers
+// that pass their own channel keep full control of when the goroutine
+// proceeds, same as before.
 func createAcceptTestSMContext(
 	t *testing.T,
 	p *processor.Processor,
@@ -138,6 +146,14 @@ func createAcceptTestSMContext(
 	isDone <-chan struct{},
 ) *smf_context.SMContext {
 	t.Helper()
+	gate := isDone
+	var closeGate func()
+	if gate == nil {
+		ownGate := make(chan struct{})
+		gate = ownGate
+		closeGate = func() { close(ownGate) }
+	}
+
 	snssaiInfo := testConfig.Configuration.SNssaiInfo[0]
 	plmnID := &models.PlmnIdNid{Mcc: "208", Mnc: "93"}
 	request := models.PostSmContextsRequestBody{
@@ -159,7 +175,7 @@ func createAcceptTestSMContext(
 
 	httpRecorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(httpRecorder)
-	p.HandlePDUSessionSMContextCreate(c, request, isDone)
+	p.HandlePDUSessionSMContextCreate(c, request, gate)
 	require.Equal(t, http.StatusCreated, httpRecorder.Code)
 
 	ref, err := smf_context.ResolveRef(acceptTestSupi, pduSessionID)
@@ -171,6 +187,10 @@ func createAcceptTestSMContext(
 		defer smContext.SMLock.Unlock()
 		smf_context.RemoveSMContext(ref)
 	})
+
+	if closeGate != nil {
+		closeGate()
+	}
 	return smContext
 }
 
