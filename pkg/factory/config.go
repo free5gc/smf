@@ -7,8 +7,10 @@ package factory
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,7 +37,7 @@ const (
 	SmfMetricsDefaultScheme      = "https"
 	SmfMetricsDefaultNamespace   = "free5gc"
 	SmfDefaultNrfUri             = "https://127.0.0.10:8000"
-	SmfEventExposureResUriPrefix = "/nsmf_event-exposure/v1"
+	SmfEventExposureResUriPrefix = "/nsmf-event-exposure/v1"
 	SmfPdusessionResUriPrefix    = "/nsmf-pdusession/v1"
 	SmfOamUriPrefix              = "/nsmf-oam/v1"
 	SmfCallbackUriPrefix         = "/nsmf-callback/v1"
@@ -54,7 +56,7 @@ type Config struct {
 
 func (c *Config) Validate() (bool, error) {
 	govalidator.TagMap["scheme"] = func(str string) bool {
-		return str == "https" || str == "http"
+		return str == SmfSbiDefaultScheme || str == "http"
 	}
 
 	if configuration := c.Configuration; configuration != nil {
@@ -86,6 +88,9 @@ func (i *Info) validate() (bool, error) {
 }
 
 type Configuration struct {
+	ReadIdleTimeout      *time.Duration       `yaml:"readIdleTimeout,omitempty" valid:"optional"`
+	PingTimeout          *time.Duration       `yaml:"pingTimeout,omitempty" valid:"optional"`
+	IdleTimeout          *time.Duration       `yaml:"idleTimeout,omitempty" valid:"optional"`
 	SmfName              string               `yaml:"smfName" valid:"type(string),required"`
 	NfInstanceId         string               `yaml:"nfInstanceId,omitempty" valid:"optional,uuidv4"`
 	Sbi                  *Sbi                 `yaml:"sbi" valid:"required"`
@@ -618,6 +623,7 @@ type UPNode struct {
 	Addr                 string                  `json:"addr" yaml:"addr" valid:"host,optional"`
 	ANIP                 string                  `json:"anIP" yaml:"anIP" valid:"host,optional"`
 	Dnn                  string                  `json:"dnn" yaml:"dnn" valid:"type(string),minstringlength(1),optional"`
+	NupfEeApiRoot        string                  `json:"nupfEeApiRoot,omitempty" yaml:"nupfEeApiRoot,omitempty"`
 	SNssaiInfos          []*SnssaiUpfInfoItem    `json:"sNssaiUpfInfos" yaml:"sNssaiUpfInfos,omitempty" valid:"optional"`
 	InterfaceUpfInfoList []*InterfaceUpfInfoItem `json:"interfaces" yaml:"interfaces,omitempty" valid:"optional"`
 }
@@ -626,6 +632,17 @@ func (u *UPNode) validate() (bool, error) {
 	govalidator.TagMap["upNodeType"] = govalidator.Validator(func(str string) bool {
 		return str == "AN" || str == "UPF"
 	})
+	if u.NupfEeApiRoot != "" {
+		if u.Type != "UPF" {
+			return false, errors.New("nupfEeApiRoot is only valid for a UPF node")
+		}
+
+		normalized, err := normalizeNupfEeApiRoot(u.NupfEeApiRoot)
+		if err != nil {
+			return false, err
+		}
+		u.NupfEeApiRoot = normalized
+	}
 
 	for _, snssaiInfo := range u.SNssaiInfos {
 		if result, err := snssaiInfo.Validate(); err != nil {
@@ -655,6 +672,20 @@ func (u *UPNode) validate() (bool, error) {
 	}
 	result, err := govalidator.ValidateStruct(u)
 	return result, appendInvalid(err)
+}
+
+func normalizeNupfEeApiRoot(raw string) (string, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") ||
+		parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
+		return "", fmt.Errorf("invalid nupfEeApiRoot")
+	}
+
+	if strings.Contains(parsed.Path, "/nupf-ee/v1") || strings.Contains(parsed.Path, "/ee-subscriptions") {
+		return "", fmt.Errorf("nupfEeApiRoot must not include the Nupf Event Exposure service path")
+	}
+
+	return strings.TrimRight(raw, "/"), nil
 }
 
 type InterfaceUpfInfoItem struct {
@@ -1024,4 +1055,35 @@ func (c *Config) GetCertKeyPath() string {
 	c.RLock()
 	defer c.RUnlock()
 	return c.Configuration.Sbi.Tls.Key
+}
+
+// GetIdleTimeout returns the HTTP server idle timeout. Omitted values preserve
+// the previous 1ms timeout; an explicit zero disables the timeout.
+func (c *Config) GetIdleTimeout() time.Duration {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Configuration == nil || c.Configuration.IdleTimeout == nil {
+		return time.Millisecond
+	}
+	return *c.Configuration.IdleTimeout
+}
+
+// GetReadIdleTimeout returns the HTTP/2 client health-check timeout.
+func (c *Config) GetReadIdleTimeout() time.Duration {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Configuration == nil || c.Configuration.ReadIdleTimeout == nil {
+		return time.Second
+	}
+	return *c.Configuration.ReadIdleTimeout
+}
+
+// GetPingTimeout returns the HTTP/2 client health-check timeout.
+func (c *Config) GetPingTimeout() time.Duration {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Configuration == nil || c.Configuration.PingTimeout == nil {
+		return 2 * time.Second
+	}
+	return *c.Configuration.PingTimeout
 }

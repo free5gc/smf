@@ -59,6 +59,9 @@ func NewApp(
 	ctx context.Context, cfg *factory.Config, tlsKeyLogPath string,
 	pfcpStart func(*SmfApp) error, pfcpTerminate func(),
 ) (*SmfApp, error) {
+	if err := openapi.ConfigureHTTP2Clients(cfg.GetReadIdleTimeout(), cfg.GetPingTimeout()); err != nil {
+		return nil, err
+	}
 	smf_context.Init(cfg)
 	smf := &SmfApp{
 		cfg:           cfg,
@@ -95,7 +98,8 @@ func NewApp(
 	features := map[utils.MetricTypeEnabled]bool{utils.SBI: true}
 	if cfg.AreMetricsEnabled() {
 		if smf.metricsServer, err = metrics.NewServer(
-			getInitMetrics(cfg, features, getCustomMetrics(cfg)), tlsKeyLogPath, logger.InitLog); err != nil {
+			getInitMetrics(cfg, features, getCustomMetrics(cfg)), tlsKeyLogPath, logger.InitLog, cfg.GetIdleTimeout(),
+		); err != nil {
 			return nil, err
 		}
 	}

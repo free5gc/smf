@@ -9,6 +9,7 @@ import (
 	"github.com/free5gc/openapi/smf/PDUSess"
 	"github.com/free5gc/openapi/udm/SDM"
 	"github.com/free5gc/openapi/udm/UECM"
+	"github.com/free5gc/openapi/upf/EvtExpos"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/app"
 )
@@ -24,6 +25,7 @@ type Consumer struct {
 	*nudmService
 	*nnrfService
 	*nbsfService // BSF service for PCF binding discovery
+	*nupfEventExposureService
 }
 
 func NewConsumer(smf app.App) (*Consumer, error) {
@@ -65,6 +67,11 @@ func NewConsumer(smf app.App) (*Consumer, error) {
 
 	c.nbsfService = &nbsfService{
 		consumer: c,
+	}
+
+	c.nupfEventExposureService = &nupfEventExposureService{
+		consumer: c,
+		clients:  make(map[string]*EvtExpos.APIClient),
 	}
 
 	return c, nil
