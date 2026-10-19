@@ -170,6 +170,11 @@ type SMContext struct {
 	PFCPContext                         map[string]*PFCPSessionContext
 	PFCPReleaseDone                     bool
 	PDUSessionRelease_DUE_TO_DUP_PDU_ID bool
+	// Set when this context's create incremented the UE's PDU session count.
+	// RemoveSMContextFromAllNF consumes it so each release advances the SDM
+	// bookkeeping exactly once; contexts rejected before subscribing never set
+	// it and never touch a sibling's slot.
+	SdmCounted bool
 
 	DNNInfo *SnssaiSmfDnnInfo
 
