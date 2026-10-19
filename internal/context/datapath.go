@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -1334,113 +1335,73 @@ func validateQosFlowBinding(c *SMContext, qfi uint8, qos *models.Pcf_SMPolCtrl_Q
 	return nil
 }
 
+// flowQER reuses an identical profile, but gives a changed profile a new ID.
+// Retiring PDRs keep the old QER until PFCP removes its last reference. A new
+// Create QER also makes removal of optional MBR/GBR fields unambiguous.
 func flowQER(smContext *SMContext, upf *UPF, qfi uint8, qos *models.Pcf_SMPolCtrl_QosData) (*QER, error) {
-	session := smContext.SelectedSessionRule()
-	defaultFlow := session != nil && qfi == session.DefQosQFI
-	logger.PduSessLog.Debugf("AddQoS called: QFI=%d, QosData=%+v", qfi, qos)
-	var qer *QER
-
-	currentUUID := upf.GetUUID()
-	id := getQosIdKey(currentUUID, qfi)
-
-	if qerId, ok := smContext.QerUpfMap[id]; !ok {
-		logger.PduSessLog.Debugf("AddQoS: QER not exist for ID=%s, creating new QER", id)
-		if newQER, err := upf.AddQER(); err != nil {
-			logger.PduSessLog.Errorln("new QER failed")
-			return nil, err
-		} else {
-			newQER.QFI = &pfcptype.QFI{
-				QFI: qfi,
-			}
-			newQER.GateStatus = &pfcptype.GateStatus{
-				ULGate: pfcptype.GateOpen,
-				DLGate: pfcptype.GateOpen,
-			}
-			if defaultFlow {
-				// The existing default flow supplies QoS; Session-AMBR has
-				// its own QER. A default-flow indication is not a new profile.
-			} else if isGBRFlow(qos) {
-				logger.PduSessLog.Debugf("AddQoS: GBR flow detected for QFI=%d", qfi)
-				logger.PduSessLog.Debugf("AddQoS GBR fields: GbrUl='%s', GbrDl='%s', MaxbrUl='%s', MaxbrDl='%s'",
-					qos.GbrUl, qos.GbrDl, qos.MaxbrUl, qos.MaxbrDl)
-				var bitRateKbpsQoSGBRUL uint64
-				var bitRateKbpsQoSGBRDL uint64
-				var bitRateKbpsQoSMBRUL uint64
-				var bitRateKbpsQoSMBRDL uint64
-				var bitRateConvertErr error
-				bitRateKbpsQoSGBRUL, bitRateConvertErr = util.BitRateTokbps(qos.GbrUl)
-				if bitRateConvertErr != nil {
-					logger.PduSessLog.Errorln("Cannot get the unit of GBRUL, please check the settings in web console")
-					return nil, bitRateConvertErr
-				}
-
-				bitRateKbpsQoSGBRDL, bitRateConvertErr = util.BitRateTokbps(qos.GbrDl)
-				if bitRateConvertErr != nil {
-					logger.PduSessLog.Errorln("Cannot get the unit of GBRDL, please check the settings in web console")
-					return nil, bitRateConvertErr
-				}
-
-				bitRateKbpsQoSMBRUL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrUl)
-				if bitRateConvertErr != nil {
-					logger.PduSessLog.Errorln("Cannot get the unit of MBRUL, please check the settings in web console")
-					return nil, bitRateConvertErr
-				}
-
-				bitRateKbpsQoSMBRDL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrDl)
-				if bitRateConvertErr != nil {
-					logger.PduSessLog.Errorln("Cannot get the unit of MBRDL, please check the settings in web console")
-					return nil, bitRateConvertErr
-				}
-
-				logger.PduSessLog.Debugf("AddQoS: Setting GBR/MBR on QER: ULGBR=%d, DLGBR=%d, ULMBR=%d, DLMBR=%d",
-					bitRateKbpsQoSGBRUL, bitRateKbpsQoSGBRDL, bitRateKbpsQoSMBRUL, bitRateKbpsQoSMBRDL)
-				newQER.GBR = &pfcptype.GBR{
-					ULGBR: bitRateKbpsQoSGBRUL,
-					DLGBR: bitRateKbpsQoSGBRDL,
-				}
-				newQER.MBR = &pfcptype.MBR{
-					ULMBR: bitRateKbpsQoSMBRUL,
-					DLMBR: bitRateKbpsQoSMBRDL,
-				}
-			} else if qos.MaxbrUl != "" || qos.MaxbrDl != "" {
-				logger.PduSessLog.Debugf("AddQoS: Non-GBR flow for QFI=%d", qfi)
-				var bitRateKbpsQoSMBRUL uint64
-				var bitRateKbpsQoSMBRDL uint64
-				var bitRateConvertErr error
-				bitRateKbpsQoSMBRUL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrUl)
-				if bitRateConvertErr != nil {
-					logger.PduSessLog.Error("Cannot get the unit of MBRUL, please check the settings in web console")
-					return nil, bitRateConvertErr
-				}
-				bitRateKbpsQoSMBRDL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrDl)
-
-				if bitRateConvertErr != nil {
-					logger.PduSessLog.Error("Cannot get the unit of MBRDL, please check the settings in web console")
-					return nil, bitRateConvertErr
-				}
-				// Apply the MBR from the PCC rule's referenced QoS data.
-				// Session-AMBR is enforced by a separate shared QER.
-				newQER.MBR = &pfcptype.MBR{
-					ULMBR: bitRateKbpsQoSMBRUL,
-					DLMBR: bitRateKbpsQoSMBRDL,
-				}
-			}
-			qer = newQER
+	profile, err := flowQERProfile(smContext, qfi, qos)
+	if err != nil {
+		return nil, err
+	}
+	id := getQosIdKey(upf.GetUUID(), qfi)
+	if qerID, ok := smContext.QerUpfMap[id]; ok {
+		existing := upf.GetQERById(qerID)
+		if existing == nil {
+			return nil, fmt.Errorf("missing flow QER for UPF %s QFI %d", upf.UUID(), qfi)
 		}
-		logger.PduSessLog.Debugf("AddQoS: New QER created with ID=%s, QERID=%d", id, qer.QERID)
-		smContext.QerUpfMap[id] = qer.QERID
-	} else {
-		logger.PduSessLog.Debugf("AddQoS: QER already exists for ID=%s, qerId=%d, retrieving existing QER", id, qerId)
-		oldQER := upf.GetQERById(qerId)
-		if oldQER != nil {
-			logger.PduSessLog.Debugf("AddQoS: Using existing QER with QERID=%d", qerId)
-			qer = oldQER
+		if reflect.DeepEqual(existing.QFI, profile.QFI) &&
+			reflect.DeepEqual(existing.GateStatus, profile.GateStatus) &&
+			reflect.DeepEqual(existing.MBR, profile.MBR) && reflect.DeepEqual(existing.GBR, profile.GBR) {
+			return existing, nil
 		}
 	}
-	if qer == nil {
-		return nil, fmt.Errorf("missing flow QER for UPF %s QFI %d", upf.UUID(), qfi)
+	qer, err := upf.AddQER()
+	if err != nil {
+		return nil, err
 	}
+	qer.QFI, qer.GateStatus, qer.MBR, qer.GBR = profile.QFI, profile.GateStatus, profile.MBR, profile.GBR
+	smContext.QerUpfMap[id] = qer.QERID
 	return qer, nil
+}
+
+// Parse the complete desired profile before allocating or changing any QER.
+func flowQERProfile(c *SMContext, qfi uint8, qos *models.Pcf_SMPolCtrl_QosData) (*QER, error) {
+	if err := validateQosFlowBinding(c, qfi, qos); err != nil {
+		return nil, err
+	}
+	profile := &QER{
+		QFI:        &pfcptype.QFI{QFI: qfi},
+		GateStatus: &pfcptype.GateStatus{ULGate: pfcptype.GateOpen, DLGate: pfcptype.GateOpen},
+	}
+	if qfi == c.SelectedSessionRule().DefQosQFI {
+		// Default-flow indication refers to the existing profile. Session-AMBR
+		// is enforced separately, not as per-flow MBR.
+		return profile, nil
+	}
+	gbrFlow := isGBRFlow(qos)
+	if gbrFlow || qos.MaxbrUl != "" || qos.MaxbrDl != "" {
+		ul, err := util.BitRateTokbps(qos.MaxbrUl)
+		if err != nil {
+			return nil, fmt.Errorf("flow QFI %d MBR uplink: %w", qfi, err)
+		}
+		dl, err := util.BitRateTokbps(qos.MaxbrDl)
+		if err != nil {
+			return nil, fmt.Errorf("flow QFI %d MBR downlink: %w", qfi, err)
+		}
+		profile.MBR = &pfcptype.MBR{ULMBR: ul, DLMBR: dl}
+	}
+	if gbrFlow {
+		ul, err := util.BitRateTokbps(qos.GbrUl)
+		if err != nil {
+			return nil, fmt.Errorf("flow QFI %d GBR uplink: %w", qfi, err)
+		}
+		dl, err := util.BitRateTokbps(qos.GbrDl)
+		if err != nil {
+			return nil, fmt.Errorf("flow QFI %d GBR downlink: %w", qfi, err)
+		}
+		profile.GBR = &pfcptype.GBR{ULGBR: ul, DLGBR: dl}
+	}
+	return profile, nil
 }
 
 func (p *DataPath) UpdateFlowDescription(ulFlowDesc, dlFlowDesc string) {
