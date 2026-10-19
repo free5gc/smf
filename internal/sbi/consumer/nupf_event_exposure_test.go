@@ -3,20 +3,23 @@ package consumer
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/upf/EvtExpos"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/factory"
+	"github.com/stretchr/testify/require"
 )
 
 type nupfTestApp struct {
@@ -421,4 +424,35 @@ func assertNupfFailure(t *testing.T, err error, statusCode int, timedOut bool) {
 	require.Equal(t, statusCode, classified.StatusCode)
 	require.Equal(t, timedOut, classified.TimedOut)
 	require.Equal(t, nupfEventExposureFailure, err.Error())
+}
+
+type tlsBSFTestApp struct {
+	*nupfTestApp
+	cfg *factory.Config
+}
+
+func (a *tlsBSFTestApp) Config() *factory.Config { return a.cfg }
+
+func TestSBIBsfTLSVerification(t *testing.T) {
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	server.Config.ErrorLog = log.New(io.Discard, "", 0)
+	server.StartTLS()
+	defer server.Close()
+	for _, verify := range []bool{false, true} {
+		cfg := &factory.Config{Configuration: &factory.Configuration{Sbi: &factory.Sbi{Tls: &factory.Tls{Verify: verify}}}}
+		service := &nbsfService{consumer: &Consumer{App: &tlsBSFTestApp{nupfTestApp: &nupfTestApp{}, cfg: cfg}}}
+		client := service.getHTTPClient()
+		resp, err := client.Get(server.URL)
+		if resp != nil {
+			resp.Body.Close()
+		}
+		if verify {
+			var unknown x509.UnknownAuthorityError
+			if !errors.As(err, &unknown) {
+				t.Fatalf("expected certificate rejection, got %v", err)
+			}
+		} else if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
