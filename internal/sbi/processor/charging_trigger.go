@@ -167,10 +167,14 @@ func buildMultiUnitUsageFromUsageReport(
 ) []models.Chf_ConvCharging_MultipleUnitUsage {
 	logger.ChargingLog.Infof("build MultiUnitUsageFromUsageReport")
 
-	var ratingGroupUnitUsagesMap map[int32]models.Chf_ConvCharging_MultipleUnitUsage
+	type usageKey struct {
+		ratingGroup int32
+		upfID       string
+	}
+	var ratingGroupUnitUsagesMap map[usageKey]models.Chf_ConvCharging_MultipleUnitUsage
 	var multipleUnitUsage []models.Chf_ConvCharging_MultipleUnitUsage
 
-	ratingGroupUnitUsagesMap = make(map[int32]models.Chf_ConvCharging_MultipleUnitUsage)
+	ratingGroupUnitUsagesMap = make(map[usageKey]models.Chf_ConvCharging_MultipleUnitUsage)
 	for _, ur := range smContext.UrrReports {
 		logger.ChargingLog.Debugf("Processing Usage Report: URR ID=%d, ReportType=%s", ur.UrrId, ur.ReportTpye)
 		if ur.ReportTpye != "" {
@@ -242,29 +246,27 @@ func buildMultiUnitUsageFromUsageReport(
 				UplinkVolume:             int32(ur.UplinkVolume),
 				TotalVolume:              int32(ur.TotalVolume),
 			}
-			if unitUsage, ok := ratingGroupUnitUsagesMap[rg]; !ok {
-				requestUnit := &models.Chf_ConvCharging_RequestedUnit{}
-
-				// Only online charging should request unit
-				// offline charging is only for recording usage
-				if chgInfo.ChargingMethod == models.Chf_ConvCharging_QuotaManagementIndicator_ONLINE_CHARGING {
-					requestUnit = &models.Chf_ConvCharging_RequestedUnit{
-						TotalVolume:    smContext.RequestedUnit,
-						DownlinkVolume: smContext.RequestedUnit,
-						UplinkVolume:   smContext.RequestedUnit,
-					}
-				}
-
-				ratingGroupUnitUsagesMap[rg] = models.Chf_ConvCharging_MultipleUnitUsage{
-					RatingGroup:       rg,
-					UPFID:             ur.UpfId,
-					UsedUnitContainer: []models.Chf_ConvCharging_UsedUnitContainer{uu},
-					RequestedUnit:     requestUnit,
-				}
-			} else {
-				unitUsage.UsedUnitContainer = append(unitUsage.UsedUnitContainer, uu)
-				ratingGroupUnitUsagesMap[rg] = unitUsage
+			upfID := ur.UpfId
+			if upfID == "" {
+				upfID = chgInfo.UpfId
 			}
+			key := usageKey{ratingGroup: rg, upfID: upfID}
+			unitUsage, exists := ratingGroupUnitUsagesMap[key]
+			if !exists {
+				unitUsage.RatingGroup, unitUsage.UPFID = rg, upfID
+			}
+			unitUsage.UsedUnitContainer = append(unitUsage.UsedUnitContainer, uu)
+			// Preserve final usage, but request credit only for a live service.
+			// A later live report can share a group with an earlier final report.
+			if chgInfo.ChargingMethod == models.Chf_ConvCharging_QuotaManagementIndicator_ONLINE_CHARGING &&
+				ur.ReportTpye != models.Chf_ConvCharging_TriggerType_FINAL &&
+				len(getUrrsByRg(smContext, upfID, rg)) != 0 {
+				unitUsage.RequestedUnit = &models.Chf_ConvCharging_RequestedUnit{
+					TotalVolume: smContext.RequestedUnit, DownlinkVolume: smContext.RequestedUnit,
+					UplinkVolume: smContext.RequestedUnit,
+				}
+			}
+			ratingGroupUnitUsagesMap[key] = unitUsage
 		} else {
 			logger.PduSessLog.Tracef("Report for urr (%d) will not be charged", ur.UrrId)
 		}
@@ -284,8 +286,8 @@ func getUrrsByRg(smContext *smf_context.SMContext, upfId string, rg int32) []*sm
 
 	if entries, ok := smContext.UrrTable[upfId]; ok {
 		for urrID, entry := range entries {
-			if smContext.ChargingInfo[urrID] != nil &&
-				smContext.ChargingInfo[urrID].RatingGroup == rg {
+			if entry.State != smf_context.RULE_REMOVE && entry.RefCount > 0 &&
+				smContext.ChargingInfo[urrID] != nil && smContext.ChargingInfo[urrID].RatingGroup == rg {
 				foundUrrs = append(foundUrrs, entry.Rule)
 				logger.ChargingLog.Debugf("Found URR[%d] for RatingGroup[%d], UpfId=%s", urrID, rg, upfId)
 			}
@@ -295,8 +297,6 @@ func getUrrsByRg(smContext *smf_context.SMContext, upfId string, rg int32) []*sm
 	if len(foundUrrs) > 1 {
 		logger.ChargingLog.Debugf("Multiple URRs (%d) found for RatingGroup[%d], UpfId=%s - Will update ALL of them",
 			len(foundUrrs), rg, upfId)
-	} else if len(foundUrrs) == 0 {
-		logger.ChargingLog.Errorf("No URR found for RatingGroup[%d], UpfId=%s", rg, upfId)
 	}
 
 	return foundUrrs
@@ -316,6 +316,17 @@ func (p *Processor) updateGrantedQuota(
 
 		urrs := getUrrsByRg(smContext, upfId, rg)
 		if len(urrs) == 0 {
+			retired := false
+			for _, info := range smContext.ChargingInfo {
+				if info.UpfId == upfId && info.RatingGroup == rg {
+					retired = true
+					break
+				}
+			}
+			if retired {
+				logger.ChargingLog.Debugf("Ignore quota for retired RatingGroup[%d], UpfId=%s", rg, upfId)
+				continue
+			}
 			logger.ChargingLog.Errorf("Cannot find URR for RatingGroup[%d], UpfId=%s - Quota will NOT be updated", rg, upfId)
 			continue
 		}
@@ -354,6 +365,10 @@ func (p *Processor) updateGrantedQuota(
 								func(expireTimes int32) {
 									smContext.SMLock.Lock()
 									defer smContext.SMLock.Unlock()
+									entry := smContext.UrrTable[ui.UPFID][urr.URRID]
+									if entry == nil || entry.RefCount == 0 || entry.State == smf_context.RULE_REMOVE {
+										return
+									}
 									urrList := []*smf_context.URR{urr}
 									upf := smf_context.GetUpfById(ui.UPFID)
 									if upf != nil {
@@ -380,6 +395,10 @@ func (p *Processor) updateGrantedQuota(
 								func(expireTimes int32) {
 									smContext.SMLock.Lock()
 									defer smContext.SMLock.Unlock()
+									entry := smContext.UrrTable[ui.UPFID][urr.URRID]
+									if entry == nil || entry.RefCount == 0 || entry.State == smf_context.RULE_REMOVE {
+										return
+									}
 									urrList := []*smf_context.URR{urr}
 									upf := smf_context.GetUpfById(ui.UPFID)
 									if upf != nil {
@@ -400,6 +419,10 @@ func (p *Processor) updateGrantedQuota(
 							func(expireTimes int32) {
 								smContext.SMLock.Lock()
 								defer smContext.SMLock.Unlock()
+								entry := smContext.UrrTable[ui.UPFID][urr.URRID]
+								if entry == nil || entry.RefCount == 0 || entry.State == smf_context.RULE_REMOVE {
+									return
+								}
 								urrList := []*smf_context.URR{urr}
 								upf := smf_context.GetUpfById(ui.UPFID)
 								if upf != nil {

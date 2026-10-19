@@ -97,11 +97,34 @@ func (p *DataPath) applyFlowInfos(c *SMContext, infos []models.Pcf_SMPolCtrl_Flo
 }
 
 func (tunnel *GTPTunnel) releaseAdditionalPDRs(c *SMContext, upf *UPF) {
-	for _, pdr := range tunnel.AdditionalPDRs {
+	tunnel.releaseFilterPDRs(c, upf, tunnel.AdditionalPDRs)
+	tunnel.AdditionalPDRs = nil
+	tunnel.releaseRetiredPDRs(c, upf)
+}
+
+func (tunnel *GTPTunnel) releaseRetiredPDRs(c *SMContext, upf *UPF) {
+	tunnel.releaseFilterPDRs(c, upf, tunnel.RetiringPDRs)
+	tunnel.RetiringPDRs = nil
+}
+
+func (tunnel *GTPTunnel) releaseFilterPDRs(c *SMContext, upf *UPF, pdrs []*PDR) {
+	for _, pdr := range pdrs {
 		c.RemovePDRfromPFCPSession(upf.NodeID, pdr)
 		if err := upf.RemovePDR(pdr); err != nil {
 			c.Log.Warnf("Remove filter PDR: %v", err)
 		}
+		for _, qer := range pdr.QER {
+			if err := c.releaseQER(upf, qer); err != nil {
+				c.Log.Warnf("Remove filter QER: %v", err)
+			}
+		}
+		for _, urr := range pdr.URR {
+			if c.GetUrrState(upf.UUID(), urr.URRID) == RULE_REMOVE {
+				if err := upf.RemoveURR(urr); err != nil {
+					c.Log.Warnf("Remove filter URR: %v", err)
+				}
+				c.DeleteFromUrrTable(upf.UUID(), urr.URRID)
+			}
+		}
 	}
-	tunnel.AdditionalPDRs = nil
 }

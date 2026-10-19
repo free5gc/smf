@@ -281,7 +281,7 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 	c.TrafficControlDatas = finalTcDatas
 	c.QosDatas = finalQosDatas
 	c.ChargingData = finalChgDatas
-	return nil
+	return c.refreshULCLQoSBindings()
 }
 
 func (c *SMContext) ApplyDcPccRulesOnDcTunnel() error {
@@ -540,6 +540,7 @@ func (c *SMContext) PostRemoveDataPath() {
 		c.Tunnel.RemoveDataPath(id)
 		delete(c.DataPathToBeRemoved, id)
 	}
+	c.removeRetiredULCLPDRs()
 }
 
 func applyFlowInfoOrPFD(c *SMContext, pcc *PCCRule) error {

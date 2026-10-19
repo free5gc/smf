@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"fmt"
 	"net"
 	"reflect"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 	"github.com/free5gc/smf/pkg/factory"
-	"github.com/free5gc/util/flowdesc"
 )
 
 func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) error {
@@ -35,7 +33,13 @@ func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) err
 			}
 
 			// Allocate Path PDR and TEID
-			bpMGR.ActivatingPath.ActivateTunnelAndPDR(smContext, 255)
+			bindings, err := bpMGR.ActivatingPath.ULCLQoSBindings(smContext)
+			if err != nil {
+				return err
+			}
+			if err = bpMGR.ActivatingPath.ActivateTunnelAndPDR(smContext, 255, bindings...); err != nil {
+				return err
+			}
 			// N1N2MessageTransfer Here
 
 			// Establish PSA2
@@ -76,41 +80,26 @@ func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 
 			logger.PduSessLog.Traceln("Send to upf addr: ", addr.String())
 
-			upLinkPDR := node.UpLinkTunnel.PDR
-
-			pdrList := []*context.PDR{upLinkPDR}
-			farList := []*context.FAR{upLinkPDR.FAR}
-			barList := []*context.BAR{}
-			qerList := upLinkPDR.QER
-			urrList := upLinkPDR.URR
+			tunnels := []*context.GTPTunnel{node.UpLinkTunnel}
+			lastNode := node.Prev()
+			if lastNode != nil && !reflect.DeepEqual(lastNode.UPF.NodeID, ulcl.NodeID) {
+				tunnels = append(tunnels, node.DownLinkTunnel)
+			}
+			pfcpState := pfcpStateForTunnels(node.UPF, tunnels...)
 
 			chgUrrList := []*context.URR{}
-			for _, urr := range urrList {
+			for _, urr := range pfcpState.urrList {
 				if urr.ReportingTrigger.HasSTART() {
 					chgUrrList = append(chgUrrList, urr)
 				}
 			}
 
 			// According to 32.255 5.2.2.7, Addition of additional PDU Session Anchor is a charging event
-			p.UpdateChargingSession(smContext, chgUrrList, models.Chf_ConvCharging_Trigger{
-				TriggerType:     models.Chf_ConvCharging_TriggerType_ADDITION_OF_UPF,
-				TriggerCategory: models.Chf_ConvCharging_TriggerCategory_IMMEDIATE_REPORT,
-			})
-
-			lastNode := node.Prev()
-
-			if lastNode != nil && !reflect.DeepEqual(lastNode.UPF.NodeID, ulcl.NodeID) {
-				downLinkPDR := node.DownLinkTunnel.PDR
-				pdrList = append(pdrList, downLinkPDR)
-				farList = append(farList, downLinkPDR.FAR)
-			}
-			pfcpState := &PFCPState{
-				upf:     node.UPF,
-				pdrList: pdrList,
-				farList: farList,
-				barList: barList,
-				qerList: qerList,
-				urrList: urrList,
+			if len(chgUrrList) != 0 {
+				p.UpdateChargingSession(smContext, chgUrrList, models.Chf_ConvCharging_Trigger{
+					TriggerType:     models.Chf_ConvCharging_TriggerType_ADDITION_OF_UPF,
+					TriggerCategory: models.Chf_ConvCharging_TriggerCategory_IMMEDIATE_REPORT,
+				})
 			}
 
 			curDPNodeIP := node.UPF.NodeID.ResolveNodeIdToIp().String()
@@ -140,7 +129,6 @@ func (p *Processor) EstablishULCL(smContext *context.SMContext) error {
 
 	bpMGR := smContext.BPManager
 	activatingPath := bpMGR.ActivatingPath
-	dest := activatingPath.Destination
 	ulcl := bpMGR.ULCL
 	resChan := make(chan SendPfcpResult)
 	pendingUPFs := []string{}
@@ -149,117 +137,8 @@ func (p *Processor) EstablishULCL(smContext *context.SMContext) error {
 	for curDPNode := activatingPath.FirstDPNode; curDPNode != nil; curDPNode = curDPNode.Next() {
 		smContext.Log.Traceln("Current DP Node IP: ", curDPNode.UPF.NodeID.ResolveNodeIdToIp().String())
 
-		if curDPNode.IsAnchorUPF() {
-			var pduLevelChargingUrrs []*context.URR
-
-			// Select PDU session level charging URRs from pcc rule
-			for _, pccRule := range smContext.PCCRules {
-				if chargingLevel, err := pccRule.IdentifyChargingLevel(); err != nil {
-					continue
-				} else if chargingLevel == context.PduSessionCharging {
-					pduLevelChargingUrrs = pccRule.Datapath.GetChargingUrr(smContext)
-					break
-				}
-			}
-
-			// For online/offline charging, create new URR for PSA2 anchor
-			if len(pduLevelChargingUrrs) > 0 {
-				urrId := pduLevelChargingUrrs[0].URRID
-				chargingMethod := smContext.ChargingInfo[urrId].ChargingMethod
-				if chargingMethod == models.Chf_ConvCharging_QuotaManagementIndicator_ONLINE_CHARGING ||
-					chargingMethod == models.Chf_ConvCharging_QuotaManagementIndicator_OFFLINE_CHARGING {
-					var urr *context.URR
-					currentUUID := curDPNode.UPF.UUID()
-					newChgInfo := &context.ChargingInfo{
-						RatingGroup:   smContext.ChargingInfo[urrId].RatingGroup,
-						ChargingLevel: smContext.ChargingInfo[urrId].ChargingLevel,
-						UpfId:         currentUUID,
-					}
-
-					newUrrId, err := smContext.UrrIDGenerator.Allocate()
-					if err != nil {
-						logger.PduSessLog.Errorln("Generate URR Id failed")
-						return err
-					}
-
-					if chargingMethod == models.Chf_ConvCharging_QuotaManagementIndicator_ONLINE_CHARGING {
-						if newURR, err2 := curDPNode.UPF.AddURR(uint32(newUrrId),
-							context.NewMeasureInformation(false, false),
-							context.SetStartOfSDFTrigger()); err2 != nil {
-							logger.PduSessLog.Errorln("new URR failed")
-							return fmt.Errorf("new URR failed for up node [%s]", currentUUID)
-						} else {
-							urr = newURR
-							newChgInfo.ChargingMethod = models.Chf_ConvCharging_QuotaManagementIndicator_ONLINE_CHARGING
-						}
-					} else {
-						if newURR, err2 := curDPNode.UPF.AddURR(uint32(newUrrId),
-							context.NewMeasureInformation(false, false),
-							context.NewVolumeThreshold(smContext.UrrReportThreshold)); err2 != nil {
-							logger.PduSessLog.Errorln("new URR failed")
-							return fmt.Errorf("new URR failed for up node [%s]", currentUUID)
-						} else {
-							urr = newURR
-							newChgInfo.ChargingMethod = models.Chf_ConvCharging_QuotaManagementIndicator_OFFLINE_CHARGING
-						}
-					}
-
-					smContext.RegisterUrr(currentUUID, urr)
-					smContext.Log.Tracef("Successfully add URR %d for Rating group %d",
-						urr.URRID, smContext.ChargingInfo[urrId].RatingGroup)
-					smContext.ChargingInfo[urr.URRID] = newChgInfo
-					pduLevelChargingUrrs = pduLevelChargingUrrs[:0]
-					pduLevelChargingUrrs = append(pduLevelChargingUrrs, urr)
-				}
-			}
-
-			// Append URRs to anchor UPF
-			if curDPNode.UpLinkTunnel != nil && curDPNode.UpLinkTunnel.PDR != nil {
-				smContext.PDRAppendURRs(curDPNode.UPF.UUID(), curDPNode.UpLinkTunnel.PDR, pduLevelChargingUrrs)
-			}
-			if curDPNode.DownLinkTunnel != nil && curDPNode.DownLinkTunnel.PDR != nil {
-				smContext.PDRAppendURRs(curDPNode.UPF.UUID(), curDPNode.DownLinkTunnel.PDR, pduLevelChargingUrrs)
-			}
-		}
-
 		if reflect.DeepEqual(ulcl.NodeID, curDPNode.UPF.NodeID) {
-			UPLinkPDR := curDPNode.UpLinkTunnel.PDR
-			DownLinkPDR := curDPNode.DownLinkTunnel.PDR
-			UPLinkPDR.State = context.RULE_INITIAL
-
-			// new IPFilterRule with action:"permit" and direction:"out"
-			FlowDespcription := flowdesc.NewIPFilterRule()
-			FlowDespcription.Src = dest.DestinationIP
-			if dstPort, err := flowdesc.ParsePorts(dest.DestinationPort); err != nil {
-				FlowDespcription.SrcPorts = dstPort
-			}
-			FlowDespcription.Dst = smContext.PDUAddress.To4().String()
-
-			FlowDespcriptionStr, err := flowdesc.Encode(FlowDespcription)
-			if err != nil {
-				logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
-			}
-
-			UPLinkPDR.PDI.SDFFilter = &pfcptype.SDFFilter{
-				Bid:                     false,
-				Fl:                      false,
-				Spi:                     false,
-				Ttc:                     false,
-				Fd:                      true,
-				LengthOfFlowDescription: uint16(len(FlowDespcriptionStr)),
-				FlowDescription:         []byte(FlowDespcriptionStr),
-			}
-
-			UPLinkPDR.Precedence = 30
-
-			pfcpState := &PFCPState{
-				upf:     ulcl,
-				pdrList: []*context.PDR{UPLinkPDR, DownLinkPDR},
-				farList: []*context.FAR{UPLinkPDR.FAR, DownLinkPDR.FAR},
-				barList: []*context.BAR{},
-				qerList: UPLinkPDR.QER,
-				urrList: UPLinkPDR.URR,
-			}
+			pfcpState := pfcpStateForTunnels(ulcl, curDPNode.UpLinkTunnel, curDPNode.DownLinkTunnel)
 
 			curDPNodeIP := ulcl.NodeID.ResolveNodeIdToIp().String()
 			pendingUPFs = append(pendingUPFs, curDPNodeIP)
@@ -290,18 +169,10 @@ func (p *Processor) UpdatePSA2DownLink(smContext *context.SMContext) {
 
 		if lastNode != nil {
 			if reflect.DeepEqual(lastNode.UPF.NodeID, ulcl.NodeID) {
-				downLinkPDR := node.DownLinkTunnel.PDR
-				downLinkPDR.State = context.RULE_INITIAL
-				downLinkPDR.FAR.State = context.RULE_INITIAL
-
-				pfcpState := &PFCPState{
-					upf:     node.UPF,
-					pdrList: []*context.PDR{downLinkPDR},
-					farList: []*context.FAR{downLinkPDR.FAR},
-					barList: []*context.BAR{},
-					qerList: downLinkPDR.QER,
-					urrList: downLinkPDR.URR,
+				for _, pdr := range node.DownLinkTunnel.PDRs() {
+					pdr.State, pdr.FAR.State = context.RULE_INITIAL, context.RULE_INITIAL
 				}
+				pfcpState := pfcpStateForTunnels(node.UPF, node.DownLinkTunnel)
 
 				curDPNodeIP := node.UPF.NodeID.ResolveNodeIdToIp().String()
 				pendingUPFs = append(pendingUPFs, curDPNodeIP)
@@ -366,7 +237,6 @@ func (p *Processor) UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 	logger.PduSessLog.Traceln("In UpdateRANAndIUPFUpLink")
 	bpMGR := smContext.BPManager
 	activatingPath := bpMGR.ActivatingPath
-	dest := activatingPath.Destination
 	ulcl := bpMGR.ULCL
 	resChan := make(chan SendPfcpResult)
 	pendingUPFs := []string{}
@@ -375,46 +245,12 @@ func (p *Processor) UpdateRANAndIUPFUpLink(smContext *context.SMContext) {
 		if reflect.DeepEqual(ulcl.NodeID, curDPNode.UPF.NodeID) {
 			break
 		} else {
-			UPLinkPDR := curDPNode.UpLinkTunnel.PDR
-			DownLinkPDR := curDPNode.DownLinkTunnel.PDR
-			UPLinkPDR.State = context.RULE_INITIAL
-			DownLinkPDR.State = context.RULE_INITIAL
-
-			if _, exist := bpMGR.UpdatedBranchingPoint[curDPNode.UPF]; exist {
-				// add SDF Filter
-				// new IPFilterRule with action:"permit" and direction:"out"
-				FlowDespcription := flowdesc.NewIPFilterRule()
-				FlowDespcription.Src = dest.DestinationIP
-				if dstPort, err := flowdesc.ParsePorts(dest.DestinationPort); err != nil {
-					FlowDespcription.SrcPorts = dstPort
-				}
-				FlowDespcription.Dst = smContext.PDUAddress.To4().String()
-
-				FlowDespcriptionStr, err := flowdesc.Encode(FlowDespcription)
-				if err != nil {
-					logger.PduSessLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
-				}
-
-				UPLinkPDR.PDI.SDFFilter = &pfcptype.SDFFilter{
-					Bid:                     false,
-					Fl:                      false,
-					Spi:                     false,
-					Ttc:                     false,
-					Fd:                      true,
-					LengthOfFlowDescription: uint16(len(FlowDespcriptionStr)),
-					FlowDescription:         []byte(FlowDespcriptionStr),
+			for _, tunnel := range []*context.GTPTunnel{curDPNode.UpLinkTunnel, curDPNode.DownLinkTunnel} {
+				for _, pdr := range tunnel.PDRs() {
+					pdr.State = context.RULE_INITIAL
 				}
 			}
-			UPLinkPDR.Precedence = 30
-
-			pfcpState := &PFCPState{
-				upf:     curDPNode.UPF,
-				pdrList: []*context.PDR{UPLinkPDR, DownLinkPDR},
-				farList: []*context.FAR{UPLinkPDR.FAR, DownLinkPDR.FAR},
-				barList: []*context.BAR{},
-				qerList: UPLinkPDR.QER,
-				urrList: UPLinkPDR.URR,
-			}
+			pfcpState := pfcpStateForTunnels(curDPNode.UPF, curDPNode.UpLinkTunnel, curDPNode.DownLinkTunnel)
 
 			curDPNodeIP := curDPNode.UPF.NodeID.ResolveNodeIdToIp().String()
 			pendingUPFs = append(pendingUPFs, curDPNodeIP)

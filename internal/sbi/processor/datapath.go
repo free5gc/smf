@@ -66,35 +66,8 @@ func (p *Processor) ActivateUPFSession(
 			continue
 		}
 		for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
-			pdrList := make([]*smf_context.PDR, 0, 2)
-			farList := make([]*smf_context.FAR, 0, 2)
-			qerList := make([]*smf_context.QER, 0, 2)
-			urrList := make([]*smf_context.URR, 0, 2)
-
-			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-				pdrList = append(pdrList, node.UpLinkTunnel.PDR)
-				farList = append(farList, node.UpLinkTunnel.PDR.FAR)
-				if node.UpLinkTunnel.PDR.QER != nil {
-					qerList = append(qerList, node.UpLinkTunnel.PDR.QER...)
-				}
-				if node.UpLinkTunnel.PDR.URR != nil {
-					urrList = append(urrList, node.UpLinkTunnel.PDR.URR...)
-				}
-			}
-			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-				pdrList = append(pdrList, node.DownLinkTunnel.PDR)
-				farList = append(farList, node.DownLinkTunnel.PDR.FAR)
-				if node.DownLinkTunnel.PDR.URR != nil {
-					urrList = append(urrList, node.DownLinkTunnel.PDR.URR...)
-				}
-				// skip send QER because uplink and downlink shared one QER
-			}
-
-			for _, tunnel := range []*smf_context.GTPTunnel{node.UpLinkTunnel, node.DownLinkTunnel} {
-				if tunnel != nil {
-					pdrList = append(pdrList, tunnel.AdditionalPDRs...)
-				}
-			}
+			state := pfcpStateForTunnels(node.UPF, node.UpLinkTunnel, node.DownLinkTunnel)
+			pdrList, farList, qerList, urrList := state.pdrList, state.farList, state.qerList, state.urrList
 
 			pfcpState := pfcpPool[node.GetNodeIP()]
 			if pfcpState == nil {

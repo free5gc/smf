@@ -228,6 +228,18 @@ func (c *SMContext) DeleteFromUrrTable(upfId string, urrID uint32) {
 	if entries, ok := c.UrrTable[upfId]; ok {
 		delete(entries, urrID)
 	}
+	// Keep ChargingInfo for the final usage report, but stop querying a URR
+	// that has already been removed from the UPF.
+	if info := c.ChargingInfo[urrID]; info != nil && info.UpfId == upfId {
+		if info.VolumeLimitExpiryTimer != nil {
+			info.VolumeLimitExpiryTimer.Stop()
+			info.VolumeLimitExpiryTimer = nil
+		}
+		if info.EventLimitExpiryTimer != nil {
+			info.EventLimitExpiryTimer.Stop()
+			info.EventLimitExpiryTimer = nil
+		}
+	}
 }
 
 // Packet Detection. 7.5.2.2-2
