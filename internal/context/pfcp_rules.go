@@ -1,6 +1,7 @@
 package context
 
 import (
+	"strings"
 	"time"
 
 	"github.com/free5gc/smf/internal/logger"
@@ -294,4 +295,67 @@ type QER struct {
 	GBR        *pfcptype.GBR
 
 	State RuleState
+}
+
+// appendQER avoids duplicate references when activation already attached the
+// default-flow QER before applying an explicit default-flow PCC rule.
+func appendQER(pdr *PDR, qer *QER) {
+	for _, current := range pdr.QER {
+		if current != nil && current.QERID == qer.QERID {
+			return
+		}
+	}
+	pdr.QER = append(pdr.QER, qer)
+}
+
+// A QER may be shared by both directions and several PCC datapaths. Its ID
+// remains allocated until the last PDR leaves the UPF's local pool.
+func (c *SMContext) releaseQER(upf *UPF, qer *QER) error {
+	inUse := false
+	upf.pdrPool.Range(func(_, value interface{}) bool {
+		for _, current := range value.(*PDR).QER {
+			if current != nil && current.QERID == qer.QERID {
+				inUse = true
+				return false
+			}
+		}
+		return true
+	})
+	if inUse || upf.GetQERById(qer.QERID) == nil {
+		return nil
+	}
+	if err := upf.RemoveQER(qer); err != nil {
+		return err
+	}
+	for key, id := range c.QerUpfMap {
+		if id == qer.QERID && strings.HasPrefix(key, upf.UUID()+":") {
+			delete(c.QerUpfMap, key)
+		}
+	}
+	if c.AMBRQerMap[upf.GetUUID()] == qer.QERID {
+		delete(c.AMBRQerMap, upf.GetUUID())
+	}
+	return nil
+}
+
+// Compare normalized rule values without IDs or transient installation states.
+func sameQERProfile(a, b *QER) bool {
+	return sameOptionalValue(a.QFI, b.QFI) && sameOptionalValue(a.GateStatus, b.GateStatus) &&
+		sameOptionalValue(a.MBR, b.MBR) && sameOptionalValue(a.GBR, b.GBR)
+}
+
+func sameOptionalValue[T comparable](a, b *T) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
+// Each UPF owns its mutable rule fields; the compiled plan remains immutable.
+func cloneOptionalValue[T comparable](value *T) *T {
+	if value == nil {
+		return nil
+	}
+	copyValue := *value
+	return &copyValue
 }

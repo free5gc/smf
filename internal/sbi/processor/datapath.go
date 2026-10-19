@@ -838,3 +838,72 @@ func (p *Processor) deletePfcpSession(
 	}
 	resCh <- SendPfcpResult{Status: smf_context.SessionReleaseSuccess}
 }
+
+// Include rules from every classifier, including downlink-only QoS/charging.
+func pfcpStateForTunnels(upf *smf_context.UPF, tunnels ...*smf_context.GTPTunnel) *PFCPState {
+	state := &PFCPState{upf: upf}
+	pdrs, fars := make(map[uint16]bool), make(map[uint32]bool)
+	qers, urrs := make(map[uint32]bool), make(map[uint32]bool)
+	for _, tunnel := range tunnels {
+		for _, pdr := range tunnel.PDRs() {
+			if pdrs[pdr.PDRID] {
+				continue
+			}
+			pdrs[pdr.PDRID] = true
+			state.pdrList = append(state.pdrList, pdr)
+			if pdr.FAR != nil && !fars[pdr.FAR.FARID] {
+				fars[pdr.FAR.FARID] = true
+				state.farList = append(state.farList, pdr.FAR)
+			}
+			for _, qer := range pdr.QER {
+				if !qers[qer.QERID] {
+					qers[qer.QERID] = true
+					state.qerList = append(state.qerList, qer)
+				}
+			}
+			for _, urr := range pdr.URR {
+				if !urrs[urr.URRID] {
+					urrs[urr.URRID] = true
+					state.urrList = append(state.urrList, urr)
+				}
+			}
+		}
+	}
+	return state
+}
+
+// Match the operations encoded by BuildSessionModificationRequest. Established
+// UPFs with no pending operations need neither a request nor a response waiter.
+func (state *PFCPState) hasPendingChanges(c *smf_context.SMContext) bool {
+	pending := func(ruleState smf_context.RuleState) bool {
+		return ruleState == smf_context.RULE_INITIAL || ruleState == smf_context.RULE_UPDATE ||
+			ruleState == smf_context.RULE_REMOVE
+	}
+	for _, pdr := range state.pdrList {
+		if !pdr.Disabled && pending(pdr.State) {
+			return true
+		}
+	}
+	for _, far := range state.farList {
+		if pending(far.State) {
+			return true
+		}
+	}
+	for _, bar := range state.barList {
+		if bar.State == smf_context.RULE_INITIAL {
+			return true
+		}
+	}
+	for _, qer := range state.qerList {
+		if qer.State == smf_context.RULE_INITIAL {
+			return true
+		}
+	}
+	for _, urr := range state.urrList {
+		ruleState := c.GetUrrState(state.upf.UUID(), urr.URRID)
+		if pending(ruleState) || ruleState == smf_context.RULE_QUERY {
+			return true
+		}
+	}
+	return false
+}
