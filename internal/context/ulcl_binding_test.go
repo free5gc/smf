@@ -26,7 +26,7 @@ func installULCLService(t *testing.T, sm *smf_context.SMContext, id, description
 	return sm.PCCRules[id].QFI
 }
 
-func activateStaticMEC(t *testing.T, sm *smf_context.SMContext) *smf_context.DataPath {
+func activateStaticMEC(t testing.TB, sm *smf_context.SMContext) *smf_context.DataPath {
 	t.Helper()
 	path := staticMECPath(sm)
 	path.FirstDPNode.AddNext(nil)
@@ -155,7 +155,7 @@ func TestStaticULCLRefreshAfterPCCChanges(t *testing.T) {
 	installDefault(t, sm)
 	path := activateStaticMEC(t, sm)
 	original := path.FirstDPNode.DownLinkTunnel.PDR
-	qfi := installULCLService(t, sm, "service", "permit out ip from 10.100.100.10/32 to assigned", 100, "BIDIRECTIONAL")
+	qfi := installULCLService(t, sm, "service", staticServiceDescription, 100, "BIDIRECTIONAL")
 	selected := staticPacketPDR(t, path.FirstDPNode.DownLinkTunnel, "10.100.100.10", 6, 443, 12345)
 	require.Equal(t, qfi, markingQFI(t, selected))
 	require.Equal(t, smf_context.RULE_REMOVE, original.State)
@@ -174,7 +174,7 @@ func TestStaticULCLRefreshAfterPCCChanges(t *testing.T) {
 func TestStaticULCLRejectsUnrepresentablePolicyBeforeAllocation(t *testing.T) {
 	sm := newTIPolicyContext(t)
 	installDefault(t, sm)
-	installULCLService(t, sm, "service", "permit out ip from 10.100.100.10/32 to assigned", 1, "BIDIRECTIONAL")
+	installULCLService(t, sm, "service", staticServiceDescription, 1, "BIDIRECTIONAL")
 	path := staticMECPath(sm)
 	_, err := path.ULCLQoSBindings(sm)
 	require.ErrorContains(t, err, "precedence space")
@@ -186,7 +186,7 @@ func TestStaticULCLPreservesChargingAndGBR(t *testing.T) {
 	base := installDefault(t, sm)
 	base.RefChgData = []string{"session-charging"}
 	service := tiPCC("gbr", "gbr-qos", "", 100)
-	service.FlowInfos[0].FlowDescription = "permit out ip from 10.100.100.10/32 to assigned"
+	service.FlowInfos[0].FlowDescription = staticServiceDescription
 	service.RefChgData = []string{"flow-charging"}
 	require.NoError(t, sm.ApplyPccRules(&models.Pcf_SMPolCtrl_SmPolicyDecision{
 		PccRules: map[string]*models.Pcf_SMPolCtrl_PccRule{"default": base, "gbr": service},
@@ -253,7 +253,7 @@ func TestStaticULCLDoesNotOverrideExplicitTIRouting(t *testing.T) {
 	sm := newTIPolicyContext(t)
 	installDefault(t, sm)
 	rule := tiPCC("ti", "ti-default", "ti-route", 23)
-	rule.FlowInfos[0].FlowDescription = "permit out ip from 10.100.100.10/32 to assigned"
+	rule.FlowInfos[0].FlowDescription = staticServiceDescription
 	require.NoError(t, sm.ApplyPccRules(&models.Pcf_SMPolCtrl_SmPolicyDecision{
 		PccRules: map[string]*models.Pcf_SMPolCtrl_PccRule{"ti": rule},
 		QosDecs:  map[string]*models.Pcf_SMPolCtrl_QosData{"ti-default": {QosId: "ti-default", DefQosFlowIndication: true}},

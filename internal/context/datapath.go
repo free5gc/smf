@@ -2,7 +2,6 @@ package context
 
 import (
 	"fmt"
-	"reflect"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -1338,20 +1337,15 @@ func validateQosFlowBinding(c *SMContext, qfi uint8, qos *models.Pcf_SMPolCtrl_Q
 // flowQER reuses an identical profile, but gives a changed profile a new ID.
 // Retiring PDRs keep the old QER until PFCP removes its last reference. A new
 // Create QER also makes removal of optional MBR/GBR fields unambiguous.
-func flowQER(smContext *SMContext, upf *UPF, qfi uint8, qos *models.Pcf_SMPolCtrl_QosData) (*QER, error) {
-	profile, err := flowQERProfile(smContext, qfi, qos)
-	if err != nil {
-		return nil, err
-	}
+func flowQER(smContext *SMContext, upf *UPF, profile *QER) (*QER, error) {
+	qfi := profile.QFI.QFI
 	id := getQosIdKey(upf.GetUUID(), qfi)
 	if qerID, ok := smContext.QerUpfMap[id]; ok {
 		existing := upf.GetQERById(qerID)
 		if existing == nil {
 			return nil, fmt.Errorf("missing flow QER for UPF %s QFI %d", upf.UUID(), qfi)
 		}
-		if reflect.DeepEqual(existing.QFI, profile.QFI) &&
-			reflect.DeepEqual(existing.GateStatus, profile.GateStatus) &&
-			reflect.DeepEqual(existing.MBR, profile.MBR) && reflect.DeepEqual(existing.GBR, profile.GBR) {
+		if sameQERProfile(existing, profile) {
 			return existing, nil
 		}
 	}
@@ -1359,7 +1353,8 @@ func flowQER(smContext *SMContext, upf *UPF, qfi uint8, qos *models.Pcf_SMPolCtr
 	if err != nil {
 		return nil, err
 	}
-	qer.QFI, qer.GateStatus, qer.MBR, qer.GBR = profile.QFI, profile.GateStatus, profile.MBR, profile.GBR
+	qer.QFI, qer.GateStatus = cloneOptionalValue(profile.QFI), cloneOptionalValue(profile.GateStatus)
+	qer.MBR, qer.GBR = cloneOptionalValue(profile.MBR), cloneOptionalValue(profile.GBR)
 	smContext.QerUpfMap[id] = qer.QERID
 	return qer, nil
 }

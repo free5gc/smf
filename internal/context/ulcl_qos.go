@@ -172,51 +172,86 @@ func (p *DataPath) ULCLQoSBindings(c *SMContext) ([]PathQoSBinding, error) {
 	return bindings, nil
 }
 
-func (c *SMContext) ulclChargingURRs(path *DataPath, source *PCCRule, upf *UPF) ([]*URR, error) {
+// chargingRule contains only the authorization that changes a charging URR.
+// Runtime quota, timers and URR IDs are deliberately excluded.
+type chargingRule struct {
+	ratingGroup int32
+	level       ChargingLevel
+	online      bool
+}
+
+func (c *SMContext) ulclSessionChargingRules() map[chargingRule]struct{} {
+	result := make(map[chargingRule]struct{})
+	for _, rule := range c.PCCRules {
+		data := c.ChargingData[rule.RefChgDataID()]
+		if data == nil || (!data.Online && !data.Offline) {
+			continue
+		}
+		if level, err := rule.IdentifyChargingLevel(); err == nil && level == PduSessionCharging {
+			result[chargingRule{data.RatingGroup, level, data.Online}] = struct{}{}
+		}
+	}
+	return result
+}
+
+func (c *SMContext) ulclChargingRules(
+	source *PCCRule, session map[chargingRule]struct{},
+) (map[chargingRule]struct{}, error) {
 	if source == nil {
+		return nil, nil
+	}
+	data := c.ChargingData[source.RefChgDataID()]
+	if (data == nil || (!data.Online && !data.Offline)) && len(session) == 0 {
 		return nil, nil
 	}
 	level, err := source.IdentifyChargingLevel()
 	if err != nil {
 		return nil, err
 	}
+	result := make(map[chargingRule]struct{}, len(session)+1)
+	if data != nil && (data.Online || data.Offline) {
+		result[chargingRule{data.RatingGroup, level, data.Online}] = struct{}{}
+	}
+	if level != PduSessionCharging {
+		for rule := range session {
+			result[rule] = struct{}{}
+		}
+	}
+	return result, nil
+}
+
+func chargingIdentity(info *ChargingInfo) chargingRule {
+	return chargingRule{
+		info.RatingGroup, info.ChargingLevel,
+		info.ChargingMethod == models.Chf_ConvCharging_QuotaManagementIndicator_ONLINE_CHARGING,
+	}
+}
+
+func (c *SMContext) ulclChargingURRs(path *DataPath, rules map[chargingRule]struct{}, upf *UPF) ([]*URR, error) {
 	var result []*URR
-	add := func(data *models.Pcf_SMPolCtrl_ChargingData, chargingLevel ChargingLevel) error {
-		if data == nil || (!data.Online && !data.Offline) {
-			return nil
-		}
-		method := models.Chf_ConvCharging_QuotaManagementIndicator_OFFLINE_CHARGING
-		if data.Online {
-			method = models.Chf_ConvCharging_QuotaManagementIndicator_ONLINE_CHARGING
-		}
+	for rule := range rules {
+		var existing *URR
 		for id, info := range c.ChargingInfo {
-			if info.UpfId == upf.UUID() && info.RatingGroup == data.RatingGroup &&
-				info.ChargingLevel == chargingLevel && info.ChargingMethod == method {
+			if info.UpfId == upf.UUID() && chargingIdentity(info) == rule {
 				if urr := c.GetUrrRule(upf.UUID(), id); urr != nil {
-					result = append(result, urr)
-					return nil
+					existing = urr
+					break
 				}
 			}
 		}
-		urr, info := path.CreateUrrAndChgInfo(c, data, chargingLevel, upf)
+		if existing != nil {
+			result = append(result, existing)
+			continue
+		}
+		data := &models.Pcf_SMPolCtrl_ChargingData{
+			RatingGroup: rule.ratingGroup, Online: rule.online, Offline: !rule.online,
+		}
+		urr, info := path.CreateUrrAndChgInfo(c, data, rule.level, upf)
 		if urr == nil || info == nil {
-			return fmt.Errorf("cannot create static route charging URR for rating group %d", data.RatingGroup)
+			return nil, fmt.Errorf("cannot create static route charging URR for rating group %d", rule.ratingGroup)
 		}
 		c.ChargingInfo[urr.URRID] = info
 		result = append(result, urr)
-		return nil
-	}
-	if err = add(c.ChargingData[source.RefChgDataID()], level); err != nil {
-		return nil, err
-	}
-	if level != PduSessionCharging {
-		for _, rule := range c.PCCRules {
-			if chargingLevel, levelErr := rule.IdentifyChargingLevel(); levelErr == nil && chargingLevel == PduSessionCharging {
-				if err = add(c.ChargingData[rule.RefChgDataID()], PduSessionCharging); err != nil {
-					return nil, err
-				}
-			}
-		}
 	}
 	return result, nil
 }

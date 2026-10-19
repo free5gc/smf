@@ -89,16 +89,21 @@ func (p *Processor) ActivateUPFSession(
 
 	resChan := make(chan SendPfcpResult)
 	establishmentTargets := make(map[string]*PFCPState)
+	pendingTargets := 0
 
 	for ip, pfcp := range pfcpPool {
+		sessionContext := smContext.PFCPContext[ip]
+		if sessionContext != nil && sessionContext.RemoteSEID != 0 && !pfcp.hasPendingChanges(smContext) {
+			continue
+		}
+		pendingTargets++
 		urrIds := []uint32{}
 		for _, urr := range pfcp.urrList {
 			urrIds = append(urrIds, urr.URRID)
 		}
 		logger.PduSessLog.Tracef("[ActivateUPFSession] About to send to UPF[%s]: %d PDRs, %d FARs, "+
 			"%d URRs (aggregated IDs: %v)", ip, len(pfcp.pdrList), len(pfcp.farList), len(pfcp.urrList), urrIds)
-		sessionContext, exist := smContext.PFCPContext[ip]
-		if !exist || sessionContext == nil || sessionContext.RemoteSEID == 0 {
+		if sessionContext == nil || sessionContext.RemoteSEID == 0 {
 			establishmentTargets[ip] = pfcp
 			go p.establishPfcpSession(smContext, pfcp, resChan)
 		} else {
@@ -106,7 +111,7 @@ func (p *Processor) ActivateUPFSession(
 		}
 	}
 
-	success := waitAllPfcpRsp(smContext, len(pfcpPool), resChan, nil)
+	success := waitAllPfcpRsp(smContext, pendingTargets, resChan, nil)
 	close(resChan)
 
 	// Initial PDU Session Establishment is atomic across every required UPF.

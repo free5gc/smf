@@ -11,7 +11,7 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 )
 
-func newTIPolicyContext(t *testing.T) *smf_context.SMContext {
+func newTIPolicyContext(t testing.TB) *smf_context.SMContext {
 	t.Helper()
 	initConfig()
 	upi, err := smf_context.NewUserPlaneInformation(&userPlaneConfig)
@@ -55,7 +55,7 @@ func tiPCC(id, qos, tc string, precedence int32) *models.Pcf_SMPolCtrl_PccRule {
 	return rule
 }
 
-func installDefault(t *testing.T, sm *smf_context.SMContext) *models.Pcf_SMPolCtrl_PccRule {
+func installDefault(t testing.TB, sm *smf_context.SMContext) *models.Pcf_SMPolCtrl_PccRule {
 	t.Helper()
 	rule := tiPCC("default", "", "", 255)
 	rule.FlowInfos[0].FlowDescription = "permit out ip from any to assigned"

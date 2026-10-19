@@ -34,3 +34,38 @@ func pfcpStateForTunnels(upf *context.UPF, tunnels ...*context.GTPTunnel) *PFCPS
 	}
 	return state
 }
+
+// Match the operations encoded by BuildSessionModificationRequest. Established
+// UPFs with no pending operations need neither a request nor a response waiter.
+func (state *PFCPState) hasPendingChanges(c *context.SMContext) bool {
+	pending := func(ruleState context.RuleState) bool {
+		return ruleState == context.RULE_INITIAL || ruleState == context.RULE_UPDATE || ruleState == context.RULE_REMOVE
+	}
+	for _, pdr := range state.pdrList {
+		if !pdr.Disabled && pending(pdr.State) {
+			return true
+		}
+	}
+	for _, far := range state.farList {
+		if pending(far.State) {
+			return true
+		}
+	}
+	for _, bar := range state.barList {
+		if bar.State == context.RULE_INITIAL {
+			return true
+		}
+	}
+	for _, qer := range state.qerList {
+		if qer.State == context.RULE_INITIAL {
+			return true
+		}
+	}
+	for _, urr := range state.urrList {
+		ruleState := c.GetUrrState(state.upf.UUID(), urr.URRID)
+		if pending(ruleState) || ruleState == context.RULE_QUERY {
+			return true
+		}
+	}
+	return false
+}

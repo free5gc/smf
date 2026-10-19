@@ -42,3 +42,25 @@ func (c *SMContext) releaseQER(upf *UPF, qer *QER) error {
 	}
 	return nil
 }
+
+// Compare normalized rule values without IDs or transient installation states.
+func sameQERProfile(a, b *QER) bool {
+	return sameOptionalValue(a.QFI, b.QFI) && sameOptionalValue(a.GateStatus, b.GateStatus) &&
+		sameOptionalValue(a.MBR, b.MBR) && sameOptionalValue(a.GBR, b.GBR)
+}
+
+func sameOptionalValue[T comparable](a, b *T) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
+// Each UPF owns its mutable rule fields; the compiled plan remains immutable.
+func cloneOptionalValue[T comparable](value *T) *T {
+	if value == nil {
+		return nil
+	}
+	copyValue := *value
+	return &copyValue
+}
