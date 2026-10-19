@@ -1044,13 +1044,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		if err != nil {
 			smContext.Log.Errorf("Handle HandoverRequestAcknowledgeTransfer failed: %+v", err)
 			smContext.SetState(smf_context.Active)
-			// A malformed/undecodable NGAP transfer IE or a missing mandatory IE
-			// from the AMF/gNB is a protocol error, not a UPF-availability
-			// problem: an AMF that sees UPF_NOT_AVAILABLE will back off and
-			// retry as though the UPF is down, which will not fix a bad IE.
-			// Only genuine UPF failures (e.g. association/resource errors
-			// surfaced while configuring the forwarding tunnel) are reported
-			// as UPF_NOT_AVAILABLE.
+			// Default to UPF_NOT_AVAILABLE; overridden below for protocol errors.
 			problemDetail := models.Smf_PDUSess_ExtProblemDetails{
 				Status: http.StatusServiceUnavailable,
 				Cause:  "UPF_NOT_AVAILABLE",
