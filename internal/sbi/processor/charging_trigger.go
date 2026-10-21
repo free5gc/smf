@@ -80,10 +80,10 @@ func (p *Processor) ReleaseChargingSession(smContext *smf_context.SMContext) err
 		}
 	}
 
-	// The builder consumes UrrReports. Retain the original reports on failure
-	// so the context still contains its final usage while settlement is pending.
+	// Final usage stays in the context until CHF reports success. The consumer
+	// freezes the complete request before attempting any network operation.
 	reports := smContext.UrrReports
-	multipleUnitUsage := buildMultiUnitUsageFromUsageReport(smContext)
+	multipleUnitUsage := buildMultiUnitUsage(smContext, reports)
 
 	_, problemDetails, err := p.Consumer().SendConvergedChargingRequest(smContext,
 		smf_context.CHARGING_RELEASE, multipleUnitUsage)
@@ -94,9 +94,9 @@ func (p *Processor) ReleaseChargingSession(smContext *smf_context.SMContext) err
 		err = fmt.Errorf("charging release failed: %w", err)
 	}
 	if err != nil {
-		smContext.UrrReports = append(reports, smContext.UrrReports...)
 		logger.ChargingLog.Errorf("Send Charging Data Request[Termination] failed: %v", err)
 	} else {
+		smContext.UrrReports = smContext.UrrReports[len(reports):]
 		logger.ChargingLog.Infof("Send Charging Data Request[Termination] successfully")
 	}
 	smContext.FinishChargingRelease(err)
@@ -189,6 +189,14 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 func buildMultiUnitUsageFromUsageReport(
 	smContext *smf_context.SMContext,
 ) []models.Chf_ConvCharging_MultipleUnitUsage {
+	multipleUnitUsage := buildMultiUnitUsage(smContext, smContext.UrrReports)
+	smContext.UrrReports = []smf_context.UsageReport{}
+	return multipleUnitUsage
+}
+
+func buildMultiUnitUsage(
+	smContext *smf_context.SMContext, reports []smf_context.UsageReport,
+) []models.Chf_ConvCharging_MultipleUnitUsage {
 	logger.ChargingLog.Infof("build MultiUnitUsageFromUsageReport")
 
 	type usageKey struct {
@@ -199,7 +207,7 @@ func buildMultiUnitUsageFromUsageReport(
 	var multipleUnitUsage []models.Chf_ConvCharging_MultipleUnitUsage
 
 	ratingGroupUnitUsagesMap = make(map[usageKey]models.Chf_ConvCharging_MultipleUnitUsage)
-	for _, ur := range smContext.UrrReports {
+	for _, ur := range reports {
 		logger.ChargingLog.Debugf("Processing Usage Report: URR ID=%d, ReportType=%s", ur.UrrId, ur.ReportTpye)
 		if ur.ReportTpye != "" {
 			var triggers []models.Chf_ConvCharging_Trigger
@@ -295,8 +303,6 @@ func buildMultiUnitUsageFromUsageReport(
 			logger.PduSessLog.Tracef("Report for urr (%d) will not be charged", ur.UrrId)
 		}
 	}
-
-	smContext.UrrReports = []smf_context.UsageReport{}
 
 	for _, unitUsage := range ratingGroupUnitUsagesMap {
 		multipleUnitUsage = append(multipleUnitUsage, unitUsage)
