@@ -561,14 +561,14 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		}
 		smContext.UpCnxState = models.Smf_PDUSess_UpCnxState_ACTIVATING
 	case models.Smf_PDUSess_UpCnxState_DEACTIVATED:
-		smContext.CheckState(smf_context.Active)
-		// Wait till the state becomes Active again
-		// TODO: implement sleep wait in concurrent architecture
-
-		// If the PDU session has been released, skip sending PFCP Session Modification Request
-		if smContext.CheckState(smf_context.InActivePending) {
-			logger.CtxLog.Infof("Skip sending PFCP Session Modification Request of PDUSessionID:%d of SUPI:%s",
-				smContext.PDUSessionID, smContext.Supi)
+		// The N4 session exists only while the SM context is Active.  Once a
+		// UE-requested release has deleted it (InActivePending) or completed
+		// (InActive), a deactivation indication must not run a PFCP
+		// modification against the deleted SEIDs and must not resurrect the
+		// released context.
+		if smContext.State() != smf_context.Active {
+			logger.CtxLog.Infof("Skip sending PFCP Session Modification Request of PDUSessionID:%d of SUPI:%s (state %s)",
+				smContext.PDUSessionID, smContext.Supi, smContext.State().String())
 			response.JsonData.UpCnxState = models.Smf_PDUSess_UpCnxState_DEACTIVATED
 			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 			return
