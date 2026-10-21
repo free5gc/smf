@@ -1302,9 +1302,12 @@ func (p *DataPath) GetOrCreateUrr(smContext *SMContext, upf *UPF,
 ) *URR {
 	currentUUID := upf.UUID()
 
-	for _, info := range smContext.ChargingInfo {
+	for urrID, info := range smContext.ChargingInfo {
 		if info.UpfId == upf.UUID() && info.ChargingLevel == PduSessionCharging && info.RatingGroup == chgData.RatingGroup {
-			return nil
+			entry := smContext.UrrTable[currentUUID][urrID]
+			if entry != nil && entry.Rule != nil && entry.RefCount > 0 && entry.State != RULE_REMOVE {
+				return entry.Rule
+			}
 		}
 	}
 

@@ -121,7 +121,10 @@ func TestPathActivationRejectsInvalidQoSBindingBeforeAllocation(t *testing.T) {
 	}
 }
 
-const updatedFlowMBR = "20 Mbps"
+const (
+	updatedFlowMBR     = "20 Mbps"
+	qosTestPFCPAddress = "127.0.0.1"
+)
 
 // Marshal and parse the actual pending rules on each UPF, as activation does.
 func qosUpdateRequests(t *testing.T, sm *smf_context.SMContext) map[string]*goPfcpMessage.SessionModificationRequest {
@@ -195,7 +198,7 @@ func TestSameQoSIDUpdatesFlowQERProfileOnWire(t *testing.T) {
 			sm := newTIPolicyContext(t)
 			self := smf_context.GetSelf()
 			originalAddress := self.ExternalAddr
-			self.ExternalAddr = "127.0.0.1"
+			self.ExternalAddr = qosTestPFCPAddress
 			t.Cleanup(func() { self.ExternalAddr = originalAddress })
 			installDefault(t, sm)
 			tc.before.QosId, tc.after.QosId = "same-qos", "same-qos"
@@ -357,6 +360,103 @@ func TestNormalAndDCActivationReplaceChangedFlowQER(t *testing.T) {
 			require.Equal(t, uint64(10000), before.MBR.DLMBR)
 			// Keep the old QER while old paths still use it.
 			require.Same(t, before, first.FirstDPNode.UPF.GetQERById(before.QERID))
+		})
+	}
+}
+
+func TestSessionChargingURRSharedWithServicePDRs(t *testing.T) {
+	for _, online := range []bool{false, true} {
+		name := "offline"
+		if online {
+			name = "online"
+		}
+		t.Run(name, func(t *testing.T) {
+			sm := newTIPolicyContext(t)
+			self := smf_context.GetSelf()
+			originalAddress := self.ExternalAddr
+			self.ExternalAddr = qosTestPFCPAddress
+			t.Cleanup(func() { self.ExternalAddr = originalAddress })
+			defaultRule := tiPCC("default", "", "", 255)
+			defaultRule.FlowInfos[0].FlowDescription = "permit out ip from any to assigned"
+			defaultRule.RefChgData = []string{"session-charge"}
+			service := tiPCC("service", "qos", "", 128)
+			service.RefChgData = []string{"service-charge"}
+			require.NoError(t, sm.ApplyPccRules(&models.Pcf_SMPolCtrl_SmPolicyDecision{
+				PccRules: map[string]*models.Pcf_SMPolCtrl_PccRule{"default": defaultRule, "service": service},
+				QosDecs: map[string]*models.Pcf_SMPolCtrl_QosData{
+					"qos": {QosId: "qos", Var5qi: 8, MaxbrUl: "20 Mbps", MaxbrDl: "20 Mbps"},
+				},
+				ChgDecs: map[string]*models.Pcf_SMPolCtrl_ChargingData{
+					"session-charge": {ChgId: "session-charge", RatingGroup: 1, Online: online, Offline: !online},
+					"service-charge": {ChgId: "service-charge", RatingGroup: 2, Online: online, Offline: !online},
+				},
+			}))
+			var anchor *smf_context.DataPathNode
+			for node := sm.PCCRules["service"].Datapath.FirstDPNode; node != nil; node = node.Next() {
+				if node.IsAnchorUPF() {
+					anchor = node
+				}
+			}
+			require.NotNil(t, anchor)
+			var sessionURR *smf_context.URR
+			for id, info := range sm.ChargingInfo {
+				if info.UpfId == anchor.UPF.UUID() && info.RatingGroup == 1 {
+					sessionURR = sm.GetUrrRule(info.UpfId, id)
+				}
+			}
+			require.NotNil(t, sessionURR)
+			for _, pdr := range []*smf_context.PDR{anchor.UpLinkTunnel.PDR, anchor.DownLinkTunnel.PDR} {
+				require.Contains(t, pdr.URR, sessionURR)
+			}
+			require.Equal(t, 4, sm.UrrTable[anchor.UPF.UUID()][sessionURR.URRID].RefCount)
+
+			request := qosUpdateRequests(t, sm)[anchor.GetNodeIP()]
+			require.NotNil(t, request)
+			for _, pdr := range []*smf_context.PDR{anchor.UpLinkTunnel.PDR, anchor.DownLinkTunnel.PDR} {
+				found := false
+				for _, group := range request.CreatePDR {
+					children, err := group.CreatePDR()
+					require.NoError(t, err)
+					var id uint16
+					var urrIDs []uint32
+					for _, child := range children {
+						switch child.Type {
+						case ie.PDRID:
+							id, err = child.PDRID()
+						case ie.URRID:
+							var urrID uint32
+							urrID, err = child.URRID()
+							urrIDs = append(urrIDs, urrID)
+						}
+						require.NoError(t, err)
+					}
+					if id == pdr.PDRID {
+						require.Contains(t, urrIDs, sessionURR.URRID, "service PDR must reference session usage on the wire")
+						found = true
+					}
+				}
+				require.True(t, found)
+			}
+			// Removing the service must preserve the default path's shared URR.
+			require.NoError(t, sm.ApplyPccRules(&models.Pcf_SMPolCtrl_SmPolicyDecision{
+				PccRules: map[string]*models.Pcf_SMPolCtrl_PccRule{"service": nil},
+			}))
+			sm.PostRemoveDataPath()
+			require.Equal(t, 2, sm.UrrTable[anchor.UPF.UUID()][sessionURR.URRID].RefCount)
+			require.NotEqual(t, smf_context.RULE_REMOVE, sm.GetUrrState(anchor.UPF.UUID(), sessionURR.URRID))
+
+			// Final charging metadata remains after deletion; it must not hide
+			// a new live URR when the old session URR has left the UPF.
+			require.NoError(t, sm.ApplyPccRules(&models.Pcf_SMPolCtrl_SmPolicyDecision{
+				PccRules: map[string]*models.Pcf_SMPolCtrl_PccRule{"default": nil},
+			}))
+			sm.PostRemoveDataPath()
+			require.Nil(t, sm.GetUrrRule(anchor.UPF.UUID(), sessionURR.URRID))
+			replacement := (&smf_context.DataPath{}).GetOrCreateUrr(sm, anchor.UPF,
+				&models.Pcf_SMPolCtrl_ChargingData{RatingGroup: 1, Online: online, Offline: !online},
+				smf_context.PduSessionCharging)
+			require.NotNil(t, replacement)
+			require.NotEqual(t, sessionURR.URRID, replacement.URRID)
 		})
 	}
 }
