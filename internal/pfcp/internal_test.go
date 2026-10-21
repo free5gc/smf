@@ -88,6 +88,7 @@ func TestHandleAssociationSetupRequestWithoutLocalNodeIDDoesNotPanic(t *testing.
 	response, _ := s.handleAssociationSetupRequest(request)
 	if response == nil {
 		t.Fatal("handler returned nil response")
+		return
 	}
 	if response.NodeID != nil {
 		t.Fatal("response unexpectedly contains a local Node ID")
