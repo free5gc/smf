@@ -5,21 +5,21 @@ import (
 )
 
 func (p *Processor) RemoveSMContextFromAllNF(smContext *smf_context.SMContext, sendNotification bool) {
-	smContext.SetState(smf_context.InActive)
-
-	// Release any charging session the caller has not closed yet, so no removal
-	// path can strand an open CDR on the CHF; ReleaseChargingSession is one-shot
-	// (BeginChargingRelease), so this stays idempotent with the success branches.
-	if smContext.ChargingDataRef != "" {
-		p.ReleaseChargingSession(smContext)
+	// A failed or in-flight settlement must also block later cleanup callers.
+	// ReleaseChargingSession reuses the recorded result without sending again.
+	if err := p.ReleaseChargingSession(smContext); err != nil {
+		smContext.SetState(smf_context.InActivePending)
+		smContext.Log.Warnf("Retain SMContext and policy for unsettled charging: %v", err)
+		return
 	}
+	smContext.SetState(smf_context.InActive)
 
 	// Notify BSF about PCF binding release if we have a binding ID
 	if smContext.BSFBindingID != "" {
 		p.Consumer().NotifyBSFBindingRelease(smContext)
 	}
 
-	// remove SM Policy Association
+	// Delete policy-owned charging data only after CHF reports a successful release.
 	if smContext.SMPolicyID != "" {
 		if err := p.Consumer().SendSMPolicyAssociationTermination(smContext); err != nil {
 			smContext.Log.Errorf("SM Policy Termination failed: %s", err)

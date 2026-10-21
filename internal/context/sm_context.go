@@ -221,8 +221,9 @@ type SMContext struct {
 	ChargingID    int32
 	RequestedUnit int32
 
-	chargingReleaseMu   sync.Mutex
-	chargingReleaseDone bool
+	chargingReleaseMu      sync.Mutex
+	chargingReleaseState   ChargingReleaseState
+	chargingReleaseLastErr error
 	// key = urrid
 	// All urr can map to a rating group
 	// However, a rating group may map to more than one urr
@@ -496,17 +497,38 @@ func (smContext *SMContext) State() SMContextState {
 	return SMContextState(atomic.LoadUint32((*uint32)(&smContext.state)))
 }
 
-// BeginChargingRelease elects exactly one caller to send the CHF termination
-// request. Association-triggered release can race a later AMF/UE completion,
-// but a charging session must be terminated only once.
+// BeginChargingRelease elects one caller to send the CHF termination request.
+// Only NotStarted can enter InProgress. Failed attempts remain blocked until
+// CHF supports duplicate detection and settlement can be retried safely.
 func (smContext *SMContext) BeginChargingRelease() bool {
 	smContext.chargingReleaseMu.Lock()
 	defer smContext.chargingReleaseMu.Unlock()
-	if smContext.chargingReleaseDone {
+	if smContext.chargingReleaseState != ChargingReleaseNotStarted {
 		return false
 	}
-	smContext.chargingReleaseDone = true
+
+	smContext.chargingReleaseState = ChargingReleaseInProgress
 	return true
+}
+
+// FinishChargingRelease records the outcome; LastErr describes a failure only.
+func (smContext *SMContext) FinishChargingRelease(err error) {
+	smContext.chargingReleaseMu.Lock()
+	defer smContext.chargingReleaseMu.Unlock()
+	smContext.chargingReleaseLastErr = err
+	if err != nil {
+		smContext.chargingReleaseState = ChargingReleaseFailed
+	} else {
+		smContext.chargingReleaseState = ChargingReleaseSucceeded
+	}
+}
+
+// ChargingReleaseResult returns state and failure details in one locked snapshot.
+// A nil error alone does not imply success: NotStarted and InProgress have no error.
+func (smContext *SMContext) ChargingReleaseResult() (ChargingReleaseState, error) {
+	smContext.chargingReleaseMu.Lock()
+	defer smContext.chargingReleaseMu.Unlock()
+	return smContext.chargingReleaseState, smContext.chargingReleaseLastErr
 }
 
 func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) pfcptype.NodeID {

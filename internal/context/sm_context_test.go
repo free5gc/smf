@@ -1,6 +1,7 @@
 package context_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -45,5 +46,36 @@ func TestSMContextBeginChargingReleaseIsOneShot(t *testing.T) {
 	}
 	if smContext.BeginChargingRelease() {
 		t.Fatal("second BeginChargingRelease() = true, want false")
+	}
+}
+
+func TestChargingReleaseStateTracksOutcome(t *testing.T) {
+	failure := errors.New("CHF settlement failed")
+	for _, tc := range []struct {
+		name  string
+		err   error
+		state context.ChargingReleaseState
+	}{
+		{name: "success", state: context.ChargingReleaseSucceeded},
+		{name: "failure", err: failure, state: context.ChargingReleaseFailed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			smContext := &context.SMContext{}
+			state, lastErr := smContext.ChargingReleaseResult()
+			require.Equal(t, context.ChargingReleaseNotStarted, state)
+			require.NoError(t, lastErr)
+
+			require.True(t, smContext.BeginChargingRelease())
+			state, lastErr = smContext.ChargingReleaseResult()
+			require.Equal(t, context.ChargingReleaseInProgress, state)
+			require.NoError(t, lastErr, "pending state must not be encoded as a stored error")
+			require.False(t, smContext.BeginChargingRelease(), "only one sender is allowed")
+
+			smContext.FinishChargingRelease(tc.err)
+			state, lastErr = smContext.ChargingReleaseResult()
+			require.Equal(t, tc.state, state)
+			require.ErrorIs(t, lastErr, tc.err)
+			require.False(t, smContext.BeginChargingRelease(), "terminal states must not send again")
+		})
 	}
 }

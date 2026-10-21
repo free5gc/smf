@@ -23,6 +23,16 @@ const (
 	CHARGING_RELEASE
 )
 
+// ChargingReleaseState describes the lifecycle of the final CHF request.
+type ChargingReleaseState uint8
+
+const (
+	ChargingReleaseNotStarted ChargingReleaseState = iota
+	ChargingReleaseInProgress
+	ChargingReleaseSucceeded
+	ChargingReleaseFailed
+)
+
 type ChargingInfo struct {
 	ChargingMethod         models.Chf_ConvCharging_QuotaManagementIndicator
 	VolumeLimitExpiryTimer *Timer

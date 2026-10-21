@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/wmnsk/go-pfcp/ie"
@@ -61,22 +62,45 @@ func (p *Processor) UpdateChargingSession(
 	}
 }
 
-func (p *Processor) ReleaseChargingSession(smContext *smf_context.SMContext) {
-	if !smContext.BeginChargingRelease() {
-		logger.ChargingLog.Debugf("Charging Data Request[Termination] already started for SMContext[%s]", smContext.Ref)
-		return
+func (p *Processor) ReleaseChargingSession(smContext *smf_context.SMContext) error {
+	if smContext.ChargingDataRef == "" {
+		return nil
 	}
+	if !smContext.BeginChargingRelease() {
+		state, lastErr := smContext.ChargingReleaseResult()
+		switch state {
+		case smf_context.ChargingReleaseSucceeded:
+			return nil
+		case smf_context.ChargingReleaseFailed:
+			return lastErr
+		case smf_context.ChargingReleaseInProgress:
+			return fmt.Errorf("charging release is in progress")
+		default:
+			return fmt.Errorf("unexpected charging release state: %d", state)
+		}
+	}
+
+	// The builder consumes UrrReports. Retain the original reports on failure
+	// so the context still contains its final usage while settlement is pending.
+	reports := smContext.UrrReports
 	multipleUnitUsage := buildMultiUnitUsageFromUsageReport(smContext)
 
 	_, problemDetails, err := p.Consumer().SendConvergedChargingRequest(smContext,
 		smf_context.CHARGING_RELEASE, multipleUnitUsage)
 	if problemDetails != nil {
-		logger.ChargingLog.Errorf("Send Charging Data Request[Termination] Failed Problem[%+v]", problemDetails)
+		err = fmt.Errorf("charging release failed: status=%d cause=%s detail=%s",
+			problemDetails.Status, problemDetails.Cause, problemDetails.Detail)
 	} else if err != nil {
-		logger.ChargingLog.Errorf("Send Charging Data Request[Termination] Error[%+v]", err)
+		err = fmt.Errorf("charging release failed: %w", err)
+	}
+	if err != nil {
+		smContext.UrrReports = append(reports, smContext.UrrReports...)
+		logger.ChargingLog.Errorf("Send Charging Data Request[Termination] failed: %v", err)
 	} else {
 		logger.ChargingLog.Infof("Send Charging Data Request[Termination] successfully")
 	}
+	smContext.FinishChargingRelease(err)
+	return err
 }
 
 // Report usage report to the CHF and update the URR with the charging information in the charging response
