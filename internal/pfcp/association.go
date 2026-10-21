@@ -19,6 +19,10 @@ type AssociationStateManager interface {
 	SetupAssociation(peer pfcptype.NodeID, recoveryTime time.Time) (cause uint8, afterResponse func())
 	UpdateAssociation(peer pfcptype.NodeID, request *message.AssociationUpdateRequest) (cause uint8, afterResponse func())
 	ReleaseAssociation(peer pfcptype.NodeID) (cause uint8)
+	ValidateAssociationSource(
+		peer pfcptype.NodeID,
+		remote *net.UDPAddr,
+	) bool
 }
 
 func (s *PfcpServer) SetAssociationStateManager(manager AssociationStateManager) {

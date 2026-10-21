@@ -13,6 +13,47 @@ import (
 	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 )
 
+// validPFCPSource checks whether the sender matches
+// the configured PFCP address of the claimed UPF.
+func validPFCPSource(
+	upf *smf_context.UPF,
+	remote *net.UDPAddr,
+) bool {
+	if upf == nil || remote == nil || remote.IP == nil {
+		return false
+	}
+
+	expected := upf.PFCPAddr()
+	if expected == nil || expected.IP == nil {
+		return false
+	}
+
+	if expected.IP.IsUnspecified() {
+		return false
+	}
+
+	return remote.IP.Equal(expected.IP)
+}
+
+// ValidateAssociationSource verifies the sender
+// against the configured UPF PFCP address.
+func (p *Processor) ValidateAssociationSource(
+	peer pfcptype.NodeID,
+	remote *net.UDPAddr,
+) bool {
+	upf := smf_context.RetrieveUPFNodeByNodeID(peer)
+
+	if !validPFCPSource(upf, remote) {
+		logger.PfcpLog.Warnf(
+			"Reject PFCP Association: NodeID=%s, source=%v",
+			peer.String(), remote,
+		)
+		return false
+	}
+
+	return true
+}
+
 // SetupAssociation validates a passive setup against the configured UPF and
 // defers recovery-time handling until its response has been sent. A newer
 // timestamp invalidates the current generation; the lifecycle owner performs
