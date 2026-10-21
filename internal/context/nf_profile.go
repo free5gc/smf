@@ -1,7 +1,6 @@
 package context
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/free5gc/openapi/models"
@@ -37,7 +36,6 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 			Versions:          *c.NfProfile.NFServiceVersion,
 			Scheme:            GetSelf().URIScheme,
 			NfServiceStatus:   models.Nrf_NFMgmt_NFServiceStatus_REGISTERED,
-			ApiPrefix:         fmt.Sprintf("%s://%s:%d", GetSelf().URIScheme, GetSelf().RegisterIPv4, GetSelf().SBIPort),
 			IpEndPoints: []models.Nrf_NFMgmt_IpEndPoint{
 				{
 					Ipv4Address: GetSelf().RegisterIPv4,

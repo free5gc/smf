@@ -21,6 +21,7 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/pfcp/pfcptype"
+	"github.com/free5gc/smf/internal/util"
 	smf_errors "github.com/free5gc/smf/pkg/errors"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/metrics/sbi"
@@ -212,10 +213,11 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		smContext.Log.Traceln("Send NF Discovery Serving AMF successfully")
 	}
 
-	for _, service := range smContext.AMFProfile.NfServices {
-		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NAMF_COMM {
-			smContext.CommunicationClientApiPrefix = service.ApiPrefix
-		}
+	// Store a complete API root for subsequent AMF N1/N2 requests.
+	smContext.CommunicationClientApiPrefix = util.SearchNFServiceUri(
+		&smContext.AMFProfile, models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
+	if smContext.CommunicationClientApiPrefix == "" {
+		smContext.Log.Warnln("No usable AMF Communication API root from NRF discovery")
 	}
 
 	if err := smContext.AllocUeIP(); err != nil {

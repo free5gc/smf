@@ -11,6 +11,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/util"
 	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 )
 
@@ -127,11 +128,9 @@ func (s *nchfService) SendConvergedChargingRequest(
 
 	var client *ConvCharging.APIClient
 	// Create Converged Charging Client for this SM Context
-	for _, service := range smContext.SelectedCHFProfile.NfServices {
-		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING {
-			client = s.getConvergedChargingClient(service.ApiPrefix)
-		}
-	}
+	chfURI := util.SearchNFServiceUri(&smContext.SelectedCHFProfile,
+		models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
+	client = s.getConvergedChargingClient(chfURI)
 	if client == nil {
 		errMsg := "no CONVERGEDCHARGING-CHF found"
 		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf("%s", errMsg)
