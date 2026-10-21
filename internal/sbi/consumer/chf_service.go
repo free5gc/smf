@@ -68,8 +68,9 @@ func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMCon
 			// not sure if NFIPv4Address is RegisterIPv4 or BindingIPv4
 			NFIPv4Address: smfContext.RegisterIPv4,
 		},
-		InvocationTimeStamp: &date,
-		Triggers:            triggers,
+		InvocationTimeStamp:      &date,
+		InvocationSequenceNumber: smContext.NextChargingSequenceNumber(),
+		Triggers:                 triggers,
 		PDUSessionChargingInformation: &models.Chf_ConvCharging_PDUSessionChargingInformation{
 			ChargingId: smContext.ChargingID,
 			UserInformation: &models.Chf_ConvCharging_UserInformation{
@@ -103,6 +104,29 @@ func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMCon
 	return req
 }
 
+// prepareConvergedChargingRequest reuses the full final request instead of
+// rebuilding it from mutable session data and assigning a new invocation ID.
+func (s *nchfService) prepareConvergedChargingRequest(
+	smContext *smf_context.SMContext,
+	requestType smf_context.RequestType,
+	multipleUnitUsage []models.Chf_ConvCharging_MultipleUnitUsage,
+) (*models.Chf_ConvCharging_ChargingDataRequest, string, error) {
+	if requestType != smf_context.CHARGING_RELEASE {
+		return s.buildConvergedChargingRequest(smContext, multipleUnitUsage), smContext.ChargingDataRef, nil
+	}
+
+	ref, request, err := smContext.PendingChargingRelease()
+	if err != nil || request != nil {
+		return request, ref, err
+	}
+	request = s.buildConvergedChargingRequest(smContext, multipleUnitUsage)
+	if err = smContext.StorePendingChargingRelease(smContext.ChargingDataRef, request); err != nil {
+		return nil, "", err
+	}
+	ref, request, err = smContext.PendingChargingRelease()
+	return request, ref, err
+}
+
 func (s *nchfService) SendConvergedChargingRequest(
 	smContext *smf_context.SMContext,
 	requestType smf_context.RequestType,
@@ -112,7 +136,10 @@ func (s *nchfService) SendConvergedChargingRequest(
 ) {
 	logger.ChargingLog.Info("Handle SendConvergedChargingRequest")
 
-	req := s.buildConvergedChargingRequest(smContext, multipleUnitUsage)
+	req, chargingDataRef, err := s.prepareConvergedChargingRequest(smContext, requestType, multipleUnitUsage)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	ctx, pd, err := smf_context.GetSelf().
 		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, models.Nrf_NFMgmt_NFType_CHF)
@@ -166,7 +193,7 @@ func (s *nchfService) SendConvergedChargingRequest(
 		}
 	case smf_context.CHARGING_UPDATE:
 		updateChargingDataRequest := &ConvCharging.ChargingdataChargingDataRefUpdatePostRequest{
-			ChargingDataRef: &smContext.ChargingDataRef,
+			ChargingDataRef: &chargingDataRef,
 			RequestBody:     req,
 		}
 		rspUpdate, localErr := client.DefaultApi.ChargingdataChargingDataRefUpdatePost(ctx, updateChargingDataRequest)
@@ -190,7 +217,7 @@ func (s *nchfService) SendConvergedChargingRequest(
 		}
 	case smf_context.CHARGING_RELEASE:
 		releaseChargingDataRequest := &ConvCharging.ChargingdataChargingDataRefReleasePostRequest{
-			ChargingDataRef: &smContext.ChargingDataRef,
+			ChargingDataRef: &chargingDataRef,
 			RequestBody:     req,
 		}
 		_, localErr := client.DefaultApi.ChargingdataChargingDataRefReleasePost(ctx, releaseChargingDataRequest)

@@ -3,9 +3,11 @@ package context_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/context"
 )
 
@@ -78,4 +80,36 @@ func TestChargingReleaseStateTracksOutcome(t *testing.T) {
 			require.False(t, smContext.BeginChargingRelease(), "terminal states must not send again")
 		})
 	}
+}
+
+func TestPendingChargingReleaseOwnsItsSnapshot(t *testing.T) {
+	smContext := &context.SMContext{}
+	timestamp := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+	request := &models.Chf_ConvCharging_ChargingDataRequest{
+		SubscriberIdentifier:     "imsi-208930000001226",
+		InvocationSequenceNumber: 3,
+		InvocationTimeStamp:      &timestamp,
+		MultipleUnitUsage: []models.Chf_ConvCharging_MultipleUnitUsage{{
+			RatingGroup: 10, UPFID: "upf-a",
+			UsedUnitContainer: []models.Chf_ConvCharging_UsedUnitContainer{{TotalVolume: 40}},
+		}},
+	}
+	require.NoError(t, smContext.StorePendingChargingRelease("original-ref", request))
+	require.Error(t, smContext.StorePendingChargingRelease("replacement-ref", request),
+		"a pending settlement must not be overwritten")
+
+	request.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume = 999
+	timestamp = timestamp.Add(time.Hour)
+	ref, snapshot, err := smContext.PendingChargingRelease()
+	require.NoError(t, err)
+	require.Equal(t, "original-ref", ref)
+	require.Equal(t, int32(40), snapshot.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume)
+	require.Equal(t, 12, snapshot.InvocationTimeStamp.Hour())
+
+	snapshot.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume = 123
+	snapshot.InvocationSequenceNumber = 99
+	_, again, err := smContext.PendingChargingRelease()
+	require.NoError(t, err)
+	require.Equal(t, int32(40), again.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume)
+	require.Equal(t, int32(3), again.InvocationSequenceNumber)
 }

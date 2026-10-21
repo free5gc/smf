@@ -280,6 +280,9 @@ func TestChargingReleaseConnectionFailureReturnsRecordedError(t *testing.T) {
 	firstErr := p.ReleaseChargingSession(sm)
 	require.Error(t, firstErr)
 	require.Len(t, sm.UrrReports, 1)
+	_, pending, pendingErr := sm.PendingChargingRelease()
+	require.NoError(t, pendingErr)
+	require.NotNil(t, pending, "transport failure must preserve the prepared request")
 	require.ErrorIs(t, p.ReleaseChargingSession(sm), firstErr)
 	require.Len(t, sm.UrrReports, 1, "repeated cleanup must not duplicate restored usage")
 }
@@ -318,6 +321,10 @@ func TestChargingReleaseInProgressBlocksCleanup(t *testing.T) {
 	state, lastErr := sm.ChargingReleaseResult()
 	require.Equal(t, smf_context.ChargingReleaseInProgress, state)
 	require.NoError(t, lastErr, "an in-flight request has no failure result yet")
+	require.Len(t, sm.UrrReports, 1, "final usage must remain until CHF acknowledges it")
+	_, pending, pendingErr := sm.PendingChargingRelease()
+	require.NoError(t, pendingErr)
+	require.NotNil(t, pending, "the full request must be saved before waiting for CHF")
 	releaseResponse()
 	select {
 	case err := <-result:
@@ -333,4 +340,89 @@ func TestChargingReleaseWithoutChargingSession(t *testing.T) {
 	sm := &smf_context.SMContext{}
 	require.NoError(t, p.ReleaseChargingSession(sm), "no CHF resource means no settlement is needed")
 	require.True(t, sm.BeginChargingRelease(), "a no-op must not consume the release guard")
+}
+
+func TestChargingReleaseFailureKeepsOriginalRequest(t *testing.T) {
+	p, sm := chargingReleaseOrderSession(t)
+	originalRef := sm.ChargingDataRef
+	var calls atomic.Int32
+	received := make(chan models.Chf_ConvCharging_ChargingDataRequest, 1)
+	server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		var request models.Chf_ConvCharging_ChargingDataRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Errorf("decode final charging request: %v", err)
+		}
+		received <- request
+		chargingReleaseOrderFailure(t, w)
+	})
+	sm.SelectedCHFProfile = chargingReleaseOrderProfile(
+		models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
+	firstErr := p.ReleaseChargingSession(sm)
+	require.Error(t, firstErr)
+	wireRequest := <-received
+	ref, snapshot, err := sm.PendingChargingRelease()
+	require.NoError(t, err)
+	require.Equal(t, originalRef, ref)
+	require.Equal(t, wireRequest, *snapshot)
+	require.Positive(t, snapshot.InvocationSequenceNumber)
+	require.NotNil(t, snapshot.InvocationTimeStamp)
+	require.Len(t, sm.UrrReports, 1)
+
+	// Neither changing the live context nor editing a returned copy may change
+	// the request that identifies this unsettled operation.
+	sm.ChargingDataRef = "changed-resource"
+	sm.Supi = "imsi-changed"
+	sm.SNssai.Sd = "ffffff"
+	sm.UrrReports[0].TotalVolume = 999
+	snapshot.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume = 123
+	ref, snapshot, err = sm.PendingChargingRelease()
+	require.NoError(t, err)
+	require.Equal(t, originalRef, ref)
+	require.Equal(t, wireRequest, *snapshot)
+	require.ErrorIs(t, p.ReleaseChargingSession(sm), firstErr)
+	require.Equal(t, int32(1), calls.Load(), "preserving a request must not enable automatic retries")
+}
+
+func TestChargingInvocationSequenceAcrossRequestTypes(t *testing.T) {
+	p, sm := chargingReleaseOrderSession(t)
+	received := make(chan models.Chf_ConvCharging_ChargingDataRequest, 3)
+	server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		var request models.Chf_ConvCharging_ChargingDataRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Errorf("decode charging request: %v", err)
+		}
+		received <- request
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/chargingdata"):
+			w.Header().Set("Location", "http://"+r.Host+"/nchf-convergedcharging/v3/chargingdata/charging-1226")
+			w.WriteHeader(http.StatusCreated)
+		case strings.HasSuffix(r.URL.Path, "/release"):
+			w.WriteHeader(http.StatusNoContent)
+			return
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+		if err := json.NewEncoder(w).Encode(models.Chf_ConvCharging_ChargingDataResponse{}); err != nil {
+			t.Errorf("write charging response: %v", err)
+		}
+	})
+	sm.SelectedCHFProfile = chargingReleaseOrderProfile(
+		models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
+	for _, requestType := range []smf_context.RequestType{smf_context.CHARGING_INIT, smf_context.CHARGING_UPDATE} {
+		_, problem, err := p.Consumer().SendConvergedChargingRequest(sm, requestType, nil)
+		require.Nil(t, problem)
+		require.NoError(t, err)
+	}
+	require.NoError(t, p.ReleaseChargingSession(sm))
+	for expected := int32(1); expected <= 3; expected++ {
+		request := <-received
+		require.Equal(t, expected, request.InvocationSequenceNumber)
+		require.NotNil(t, request.InvocationTimeStamp)
+	}
+	_, pending, err := sm.PendingChargingRelease()
+	require.NoError(t, err)
+	require.Nil(t, pending, "successful settlement must remove its pending request")
+	require.Empty(t, sm.UrrReports)
 }
