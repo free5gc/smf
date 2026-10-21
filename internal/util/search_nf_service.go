@@ -1,7 +1,10 @@
 package util
 
 import (
+	"errors"
 	"fmt"
+	"log"
+	"sort"
 
 	"github.com/free5gc/openapi/models"
 )
@@ -9,30 +12,55 @@ import (
 func SearchNFServiceUri(nfProfile *models.Nrf_NFDisc_NFProfile, serviceName models.Nrf_NFMgmt_ServiceName,
 	nfServiceStatus models.Nrf_NFMgmt_NFServiceStatus,
 ) (nfUri string) {
-	if nfProfile.NfServices != nil {
-		for _, service := range nfProfile.NfServices {
-			if service.ServiceName == serviceName && service.NfServiceStatus == nfServiceStatus {
-				if nfProfile.Fqdn != "" {
-					nfUri = nfProfile.Fqdn
-				} else if service.Fqdn != "" {
-					nfUri = service.Fqdn
-				} else if service.ApiPrefix != "" {
-					nfUri = service.ApiPrefix
-				} else if service.IpEndPoints != nil {
-					point := service.IpEndPoints[0]
-					if point.Ipv4Address != "" {
-						nfUri = getSbiUri(service.Scheme, point.Ipv4Address, point.Port)
-					} else if len(nfProfile.Ipv4Addresses) != 0 {
-						nfUri = getSbiUri(service.Scheme, nfProfile.Ipv4Addresses[0], point.Port)
-					}
-				}
-			}
-			if nfUri != "" {
-				break
-			}
-		}
+	if nfProfile == nil {
+		return ""
 	}
-	return
+	uri, err := ResolveNFServiceURI(*nfProfile, serviceName, nfServiceStatus,
+		ServiceURIOptions{AllowLegacyAbsoluteAPIPrefix: true})
+	if err != nil {
+		log.Printf("[WARN][SMF] NFService URI resolution failed: %v", err)
+		return ""
+	}
+	return uri
+}
+
+// ResolveNFServiceURI builds an NF service API root using 3GPP NRF discovery fields.
+func ResolveNFServiceURI(profile models.Nrf_NFDisc_NFProfile, name models.Nrf_NFMgmt_ServiceName,
+	status models.Nrf_NFMgmt_NFServiceStatus, opts ServiceURIOptions,
+) (string, error) {
+	var lastAddressError error
+	for _, service := range profile.NfServices {
+		if service.ServiceName != name || service.NfServiceStatus != status {
+			continue
+		}
+		uri, err := buildNFServiceURI(profile, service, opts)
+		if errors.Is(err, errNFServiceAddressUnavailable) {
+			lastAddressError = err
+			continue
+		}
+		return uri, err
+	}
+	keys := make([]string, 0, len(profile.NfServiceList))
+	for key := range profile.NfServiceList {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		service := profile.NfServiceList[key]
+		if service.ServiceName != name || service.NfServiceStatus != status {
+			continue
+		}
+		uri, err := buildNFServiceURI(profile, service, opts)
+		if errors.Is(err, errNFServiceAddressUnavailable) {
+			lastAddressError = err
+			continue
+		}
+		return uri, err
+	}
+	if lastAddressError != nil {
+		return "", lastAddressError
+	}
+	return "", fmt.Errorf("NF service %q with status %q not found", name, status)
 }
 
 func getSbiUri(scheme models.UriScheme, ipv4Address string, port int32) (uri string) {

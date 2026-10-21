@@ -13,9 +13,9 @@ import (
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/nrf/NFDisc"
 	"github.com/free5gc/openapi/nrf/NFMgmt"
-	"github.com/free5gc/openapi/udm/SDM"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/util"
 	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 )
 
@@ -305,12 +305,9 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 		}
 		smfContext.UDMProfile = result.NfInstances[0]
 
-		var client *SDM.APIClient
-		for _, service := range smfContext.UDMProfile.NfServices {
-			if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NUDM_SDM {
-				client = s.consumer.nudmService.getSubscribeDataManagementClient(service.ApiPrefix)
-			}
-		}
+		udmURI := util.SearchNFServiceUri(&smfContext.UDMProfile,
+			models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
+		client := s.consumer.nudmService.getSubscribeDataManagementClient(udmURI)
 		if client == nil {
 			logger.ConsumerLog.Traceln("Get Subscribe Data Management Client Failed")
 			return nil, fmt.Errorf("get Subscribe Data Management Client Failed")

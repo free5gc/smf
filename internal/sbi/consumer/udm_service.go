@@ -189,14 +189,9 @@ func (s *nudmService) GetSmData(ctx context.Context, supi string,
 	[]models.Udm_SDM_SessionManagementSubscriptionData, error,
 ) {
 	var client *SDM.APIClient
-	for _, service := range s.consumer.Context().UDMProfile.NfServices {
-		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NUDM_SDM {
-			client = s.getSubscribeDataManagementClient(service.ApiPrefix)
-			if client != nil {
-				break
-			}
-		}
-	}
+	udmURI := util.SearchNFServiceUri(&s.consumer.Context().UDMProfile,
+		models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
+	client = s.getSubscribeDataManagementClient(udmURI)
 
 	if client == nil {
 		return nil, fmt.Errorf("sdm client failed")
@@ -220,14 +215,9 @@ func (s *nudmService) Subscribe(ctx context.Context, smCtx *smf_context.SMContex
 	*models.ProblemDetails, error,
 ) {
 	var client *SDM.APIClient
-	for _, service := range s.consumer.Context().UDMProfile.NfServices {
-		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NUDM_SDM {
-			client = s.getSubscribeDataManagementClient(service.ApiPrefix)
-			if client != nil {
-				break
-			}
-		}
-	}
+	udmURI := util.SearchNFServiceUri(&s.consumer.Context().UDMProfile,
+		models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
+	client = s.getSubscribeDataManagementClient(udmURI)
 
 	if client == nil {
 		return nil, fmt.Errorf("sdm client failed")
@@ -280,14 +270,9 @@ func (s *nudmService) UnSubscribe(smCtx *smf_context.SMContext) (
 
 	if s.consumer.Context().Ues.IsLastPduSession(smCtx.Supi) {
 		var client *SDM.APIClient
-		for _, service := range s.consumer.Context().UDMProfile.NfServices {
-			if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NUDM_SDM {
-				client = s.getSubscribeDataManagementClient(service.ApiPrefix)
-				if client != nil {
-					break
-				}
-			}
-		}
+		udmURI := util.SearchNFServiceUri(&s.consumer.Context().UDMProfile,
+			models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
+		client = s.getSubscribeDataManagementClient(udmURI)
 
 		if client == nil {
 			return nil, fmt.Errorf("sdm client failed")
