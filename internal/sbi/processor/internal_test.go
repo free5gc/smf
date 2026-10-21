@@ -1326,6 +1326,7 @@ func TestApplyCreatedPDRsUpdatesUPFAllocatedFTEID(t *testing.T) {
 	got := pdr.PDI.LocalFTeid
 	if got == nil {
 		t.Fatal("LocalFTeid was not updated")
+		return
 	}
 	if got.Teid != 0x10203040 || !got.V4 || got.V6 {
 		t.Fatalf("LocalFTeid = %+v, want IPv4 TEID %#x", got, uint32(0x10203040))

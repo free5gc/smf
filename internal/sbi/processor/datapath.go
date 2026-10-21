@@ -66,29 +66,8 @@ func (p *Processor) ActivateUPFSession(
 			continue
 		}
 		for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
-			pdrList := make([]*smf_context.PDR, 0, 2)
-			farList := make([]*smf_context.FAR, 0, 2)
-			qerList := make([]*smf_context.QER, 0, 2)
-			urrList := make([]*smf_context.URR, 0, 2)
-
-			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-				pdrList = append(pdrList, node.UpLinkTunnel.PDR)
-				farList = append(farList, node.UpLinkTunnel.PDR.FAR)
-				if node.UpLinkTunnel.PDR.QER != nil {
-					qerList = append(qerList, node.UpLinkTunnel.PDR.QER...)
-				}
-				if node.UpLinkTunnel.PDR.URR != nil {
-					urrList = append(urrList, node.UpLinkTunnel.PDR.URR...)
-				}
-			}
-			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-				pdrList = append(pdrList, node.DownLinkTunnel.PDR)
-				farList = append(farList, node.DownLinkTunnel.PDR.FAR)
-				if node.DownLinkTunnel.PDR.URR != nil {
-					urrList = append(urrList, node.DownLinkTunnel.PDR.URR...)
-				}
-				// skip send QER because uplink and downlink shared one QER
-			}
+			state := pfcpStateForTunnels(node.UPF, node.UpLinkTunnel, node.DownLinkTunnel)
+			pdrList, farList, qerList, urrList := state.pdrList, state.farList, state.qerList, state.urrList
 
 			pfcpState := pfcpPool[node.GetNodeIP()]
 			if pfcpState == nil {
@@ -110,16 +89,21 @@ func (p *Processor) ActivateUPFSession(
 
 	resChan := make(chan SendPfcpResult)
 	establishmentTargets := make(map[string]*PFCPState)
+	pendingTargets := 0
 
 	for ip, pfcp := range pfcpPool {
+		sessionContext := smContext.PFCPContext[ip]
+		if sessionContext != nil && sessionContext.RemoteSEID != 0 && !pfcp.hasPendingChanges(smContext) {
+			continue
+		}
+		pendingTargets++
 		urrIds := []uint32{}
 		for _, urr := range pfcp.urrList {
 			urrIds = append(urrIds, urr.URRID)
 		}
 		logger.PduSessLog.Tracef("[ActivateUPFSession] About to send to UPF[%s]: %d PDRs, %d FARs, "+
 			"%d URRs (aggregated IDs: %v)", ip, len(pfcp.pdrList), len(pfcp.farList), len(pfcp.urrList), urrIds)
-		sessionContext, exist := smContext.PFCPContext[ip]
-		if !exist || sessionContext == nil || sessionContext.RemoteSEID == 0 {
+		if sessionContext == nil || sessionContext.RemoteSEID == 0 {
 			establishmentTargets[ip] = pfcp
 			go p.establishPfcpSession(smContext, pfcp, resChan)
 		} else {
@@ -127,7 +111,7 @@ func (p *Processor) ActivateUPFSession(
 		}
 	}
 
-	success := waitAllPfcpRsp(smContext, len(pfcpPool), resChan, nil)
+	success := waitAllPfcpRsp(smContext, pendingTargets, resChan, nil)
 	close(resChan)
 
 	// Initial PDU Session Establishment is atomic across every required UPF.
@@ -853,4 +837,73 @@ func (p *Processor) deletePfcpSession(
 		}
 	}
 	resCh <- SendPfcpResult{Status: smf_context.SessionReleaseSuccess}
+}
+
+// Include rules from every classifier, including downlink-only QoS/charging.
+func pfcpStateForTunnels(upf *smf_context.UPF, tunnels ...*smf_context.GTPTunnel) *PFCPState {
+	state := &PFCPState{upf: upf}
+	pdrs, fars := make(map[uint16]bool), make(map[uint32]bool)
+	qers, urrs := make(map[uint32]bool), make(map[uint32]bool)
+	for _, tunnel := range tunnels {
+		for _, pdr := range tunnel.PDRs() {
+			if pdrs[pdr.PDRID] {
+				continue
+			}
+			pdrs[pdr.PDRID] = true
+			state.pdrList = append(state.pdrList, pdr)
+			if pdr.FAR != nil && !fars[pdr.FAR.FARID] {
+				fars[pdr.FAR.FARID] = true
+				state.farList = append(state.farList, pdr.FAR)
+			}
+			for _, qer := range pdr.QER {
+				if !qers[qer.QERID] {
+					qers[qer.QERID] = true
+					state.qerList = append(state.qerList, qer)
+				}
+			}
+			for _, urr := range pdr.URR {
+				if !urrs[urr.URRID] {
+					urrs[urr.URRID] = true
+					state.urrList = append(state.urrList, urr)
+				}
+			}
+		}
+	}
+	return state
+}
+
+// Match the operations encoded by BuildSessionModificationRequest. Established
+// UPFs with no pending operations need neither a request nor a response waiter.
+func (state *PFCPState) hasPendingChanges(c *smf_context.SMContext) bool {
+	pending := func(ruleState smf_context.RuleState) bool {
+		return ruleState == smf_context.RULE_INITIAL || ruleState == smf_context.RULE_UPDATE ||
+			ruleState == smf_context.RULE_REMOVE
+	}
+	for _, pdr := range state.pdrList {
+		if !pdr.Disabled && pending(pdr.State) {
+			return true
+		}
+	}
+	for _, far := range state.farList {
+		if pending(far.State) {
+			return true
+		}
+	}
+	for _, bar := range state.barList {
+		if bar.State == smf_context.RULE_INITIAL {
+			return true
+		}
+	}
+	for _, qer := range state.qerList {
+		if qer.State == smf_context.RULE_INITIAL {
+			return true
+		}
+	}
+	for _, urr := range state.urrList {
+		ruleState := c.GetUrrState(state.upf.UUID(), urr.URRID)
+		if pending(ruleState) || ruleState == smf_context.RULE_QUERY {
+			return true
+		}
+	}
+	return false
 }

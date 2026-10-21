@@ -59,6 +59,12 @@ func (c *SMContext) ApplySessionRules(
 }
 
 func (c *SMContext) AddQosFlow(qfi uint8, qos *models.Pcf_SMPolCtrl_QosData) {
+	if session := c.SelectedSessionRule(); session != nil && qfi == session.DefQosQFI {
+		return
+	}
+	if existing := c.AdditionalQosFlows[qfi]; existing != nil && reflect.DeepEqual(existing.QoSProfile, qos) {
+		return
+	}
 	qosFlow := NewQoSFlow(qfi, qos)
 	if qosFlow != nil {
 		c.AdditionalQosFlows[qfi] = qosFlow
@@ -78,6 +84,15 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 	finalTcDatas := make(map[string]*TrafficControlData)
 	finalQosDatas := make(map[string]*models.Pcf_SMPolCtrl_QosData)
 	finalChgDatas := make(map[string]*models.Pcf_SMPolCtrl_ChargingData)
+
+	// Validate all explicit classifiers before retiring any working paths.
+	for _, rule := range decision.PccRules {
+		if rule != nil && len(rule.FlowInfos) != 0 {
+			if _, _, err := directionalSDFFilters(rule.FlowInfos); err != nil {
+				return err
+			}
+		}
+	}
 
 	// Handle QoSData Deletion
 	for id, qos := range decision.QosDecs {
@@ -114,7 +129,23 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 		_, tgtQosData := c.getSrcTgtQosData(decision.QosDecs, tgtQosID)
 
 		if tgtQosID != "" {
-			tgtPcc.SetQFI(c.AssignQFI(tgtQosID))
+			if tgtQosData == nil {
+				return fmt.Errorf("PCC rule %s references missing QoS data %s", id, tgtQosID)
+			}
+			var qfi uint8
+			if tgtQosData.DefQosFlowIndication {
+				session := c.SelectedSessionRule()
+				if session == nil || session.DefQosQFI == 0 || session.DefQosQFI > 63 {
+					return fmt.Errorf("PCC rule %s has no valid default QoS flow", id)
+				}
+				qfi = session.DefQosQFI
+			} else {
+				qfi = c.AssignQFI(tgtQosID)
+				if qfi == 0 {
+					return fmt.Errorf("no QFI available for QoS data %s", tgtQosID)
+				}
+			}
+			tgtPcc.SetQFI(qfi)
 		}
 
 		var srcTcData *TrafficControlData
@@ -130,7 +161,7 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 		if err := c.CreatePccRuleDataPath(tgtPcc, tgtTcData, tgtQosData, tgtChgData, pduChgDatas); err != nil {
 			return err
 		}
-		if err := applyFlowInfoOrPFD(tgtPcc); err != nil {
+		if err := applyFlowInfoOrPFD(c, tgtPcc); err != nil {
 			return err
 		}
 		if err := checkUpPathChangeEvt(c, srcTcData, tgtTcData); err != nil {
@@ -241,11 +272,16 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 		}
 	}
 
+	for qosID := range c.qosDataToQFI {
+		if finalQosDatas[qosID] == nil {
+			c.RemoveQFI(qosID)
+		}
+	}
 	c.PCCRules = finalPccRules
 	c.TrafficControlDatas = finalTcDatas
 	c.QosDatas = finalQosDatas
 	c.ChargingData = finalChgDatas
-	return nil
+	return c.refreshULCLQoSBindings()
 }
 
 func (c *SMContext) ApplyDcPccRulesOnDcTunnel() error {
@@ -363,7 +399,7 @@ func (c *SMContext) ApplyDcPccRulesOnDcTunnel() error {
 				c.Log.Errorf("CreateDcPccRuleDataPathOnDcTunnel (PDU Level) for PCCRule[%s] failed: %v", id, err2)
 				continue
 			}
-			if err3 := applyFlowInfoOrPFD(pcc); err3 != nil {
+			if err3 := applyFlowInfoOrPFD(c, pcc); err3 != nil {
 				c.Log.Errorf("applyFlowInfoOrPFD for PCCRule[%s] failed: %v", id, err3)
 				continue
 			}
@@ -405,7 +441,7 @@ func (c *SMContext) ApplyDcPccRulesOnDcTunnel() error {
 				c.Log.Errorf("CreateDcPccRuleDataPathOnDcTunnel (Flow Level) for PCCRule[%s] failed: %v", id, err2)
 				continue
 			}
-			if err3 := applyFlowInfoOrPFD(pcc); err3 != nil {
+			if err3 := applyFlowInfoOrPFD(c, pcc); err3 != nil {
 				c.Log.Errorf("applyFlowInfoOrPFD for PCCRule[%s] failed: %v", id, err3)
 				continue
 			}
@@ -476,7 +512,24 @@ func (c *SMContext) PreRemoveDataPath(dp *DataPath) {
 	if dp == nil {
 		return
 	}
+	if _, pending := c.DataPathToBeRemoved[dp.PathID]; pending {
+		return
+	}
+	for node := dp.FirstDPNode; node != nil; node = node.Next() {
+		for _, tunnel := range []*GTPTunnel{node.UpLinkTunnel, node.DownLinkTunnel} {
+			if tunnel == nil {
+				continue
+			}
+			c.PDRReleaseURRs(node.UPF.UUID(), tunnel.PDR)
+			for _, pdr := range tunnel.AdditionalPDRs {
+				c.PDRReleaseURRs(node.UPF.UUID(), pdr)
+			}
+		}
+	}
 	dp.RemovePDR()
+	// The replacement must acquire default ownership before activation creates
+	// its marking QER. Keep the old path until the PFCP update has completed.
+	dp.IsDefaultPath = false
 	c.DataPathToBeRemoved[dp.PathID] = dp
 }
 
@@ -487,9 +540,10 @@ func (c *SMContext) PostRemoveDataPath() {
 		c.Tunnel.RemoveDataPath(id)
 		delete(c.DataPathToBeRemoved, id)
 	}
+	c.removeRetiredULCLPDRs()
 }
 
-func applyFlowInfoOrPFD(pcc *PCCRule) error {
+func applyFlowInfoOrPFD(c *SMContext, pcc *PCCRule) error {
 	appID := pcc.AppId
 
 	if len(pcc.FlowInfos) == 0 && appID == "" {
@@ -497,11 +551,8 @@ func applyFlowInfoOrPFD(pcc *PCCRule) error {
 	}
 
 	// Apply flow description if it presents
-	if flowDesc := pcc.FlowDescription(); flowDesc != "" {
-		if err := pcc.UpdateDataPathFlowDescription(flowDesc); err != nil {
-			return err
-		}
-		return nil
+	if len(pcc.FlowInfos) != 0 {
+		return pcc.Datapath.applyFlowInfos(c, pcc.FlowInfos)
 	}
 	logger.CfgLog.Tracef("applyFlowInfoOrPFD %+v", pcc.FlowDescription())
 

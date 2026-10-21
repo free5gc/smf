@@ -662,6 +662,7 @@ func TestApplyPccRules(t *testing.T) {
 	}
 	smctx.SelectedPDUSessionType = 1
 	smctx.SessionRules["SessRuleId-1"] = &smf_context.SessionRule{
+		DefQosQFI: 1,
 		Pcf_SMPolCtrl_SessionRule: &models.Pcf_SMPolCtrl_SessionRule{
 			AuthSessAmbr: &models.Ambr{
 				Uplink:   "1000 Kbps",
