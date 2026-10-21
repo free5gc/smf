@@ -23,6 +23,16 @@ const (
 	CHARGING_RELEASE
 )
 
+// ChargingReleaseState describes the lifecycle of the final CHF request.
+type ChargingReleaseState uint8
+
+const (
+	ChargingReleaseNotStarted ChargingReleaseState = iota
+	ChargingReleaseInProgress
+	ChargingReleaseSucceeded
+	ChargingReleaseFailed
+)
+
 type ChargingInfo struct {
 	ChargingMethod         models.Chf_ConvCharging_QuotaManagementIndicator
 	VolumeLimitExpiryTimer *Timer
@@ -40,15 +50,36 @@ func IsChargingRelatedUrr(urr *URR) bool {
 	return !urr.MeasurementInformation.HasMNOP() && !urr.MeasurementInformation.HasMBQE()
 }
 
-// BeginChargingRelease elects exactly one caller to send the CHF termination
-// request. Association-triggered release can race a later AMF/UE completion,
-// but a charging session must be terminated only once.
+// BeginChargingRelease elects one caller to send the CHF termination request.
+// Only NotStarted can enter InProgress. Failed attempts remain blocked until
+// CHF supports duplicate detection and settlement can be retried safely.
 func (smContext *SMContext) BeginChargingRelease() bool {
 	smContext.chargingReleaseMu.Lock()
 	defer smContext.chargingReleaseMu.Unlock()
-	if smContext.chargingReleaseDone {
+	if smContext.chargingReleaseState != ChargingReleaseNotStarted {
 		return false
 	}
-	smContext.chargingReleaseDone = true
+
+	smContext.chargingReleaseState = ChargingReleaseInProgress
 	return true
+}
+
+// FinishChargingRelease records the outcome; LastErr describes a failure only.
+func (smContext *SMContext) FinishChargingRelease(err error) {
+	smContext.chargingReleaseMu.Lock()
+	defer smContext.chargingReleaseMu.Unlock()
+	smContext.chargingReleaseLastErr = err
+	if err != nil {
+		smContext.chargingReleaseState = ChargingReleaseFailed
+	} else {
+		smContext.chargingReleaseState = ChargingReleaseSucceeded
+	}
+}
+
+// ChargingReleaseResult returns state and failure details in one locked snapshot.
+// A nil error alone does not imply success: NotStarted and InProgress have no error.
+func (smContext *SMContext) ChargingReleaseResult() (ChargingReleaseState, error) {
+	smContext.chargingReleaseMu.Lock()
+	defer smContext.chargingReleaseMu.Unlock()
+	return smContext.chargingReleaseState, smContext.chargingReleaseLastErr
 }
