@@ -560,6 +560,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "PDUSessionResourceSetupRequestTransfer"}
 		}
 		smContext.UpCnxState = models.Smf_PDUSess_UpCnxState_ACTIVATING
+		if response.BinaryDataN2SmInformation != nil {
+			smContext.N2SetupResponsePending = true
+		}
 	case models.Smf_PDUSess_UpCnxState_DEACTIVATED:
 		smContext.CheckState(smf_context.Active)
 		// Wait till the state becomes Active again
@@ -618,6 +621,17 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 	switch smContextUpdateData.N2SmInfoType {
 	case models.Smf_PDUSess_N2SmInfoType_PDU_RES_SETUP_RSP:
+		// TS 38.413 8.2.1.2: this message answers a PDU Session Resource
+		// Setup Request. Accept it once per request; a duplicate with no
+		// outstanding procedure must not re-point the DL tunnel or run a
+		// second N4 modification for the same session.
+		if !smContext.N2SetupResponsePending {
+			smContext.Log.Warnf(
+				"Ignore PDU Session Resource Setup Response without a pending Setup Request")
+			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
+			return
+		}
+		smContext.N2SetupResponsePending = false
 		smContext.CheckState(smf_context.Active)
 		// Wait till the state becomes Active again
 		// TODO: implement sleep wait in concurrent architecture

@@ -634,6 +634,10 @@ func (p *Processor) sendPDUSessionEstablishmentAccept(
 		return
 	}
 
+	// The AMF may deliver this N2 information to the gNB before this call
+	// returns, so record the outstanding procedure first; the next matching
+	// Setup Response completes it.
+	smContext.N2SetupResponsePending = true
 	rspData, err := p.Consumer().
 		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 	if err != nil || rspData == nil {

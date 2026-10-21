@@ -130,6 +130,12 @@ type SMContext struct {
 
 	UpCnxState models.Smf_PDUSess_UpCnxState
 
+	// N2SetupResponsePending records that the SMF sent a PDU Session Resource
+	// Setup Request and has not consumed the gNB's answer yet. A second Setup
+	// Response for the same procedure must not re-apply the tunnel or trigger
+	// another N4 modification (TS 38.413 8.2.1.2).
+	N2SetupResponsePending bool
+
 	HoState models.Smf_PDUSess_HoState
 
 	SelectionParam         *UPFSelectionParams
