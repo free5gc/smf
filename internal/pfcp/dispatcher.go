@@ -26,11 +26,11 @@ func (s *PfcpServer) Dispatch(msg message.Message, addr *net.UDPAddr) {
 	case *message.HeartbeatRequest:
 		response = s.handleHeartbeatRequest(request)
 	case *message.AssociationSetupRequest:
-		response, afterResponse = s.handleAssociationSetupRequest(request)
+		response, afterResponse = s.handleAssociationSetupRequest(request, addr)
 	case *message.AssociationReleaseRequest:
-		response = s.handleAssociationReleaseRequest(request)
+		response = s.handleAssociationReleaseRequest(request, addr)
 	case *message.AssociationUpdateRequest:
-		response, afterResponse = s.handleAssociationUpdateRequest(request)
+		response, afterResponse = s.handleAssociationUpdateRequest(request, addr)
 	case *message.NodeReportRequest:
 		// TODO(go-pfcp migration): parse Node Report Type and the report-specific
 		// grouped IEs. Until then, reject explicitly so the peer and RxTransaction

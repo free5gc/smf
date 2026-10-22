@@ -22,6 +22,8 @@ import (
 )
 
 // Tests consolidated from association_internal_test.go.
+var testPeerAddr = &net.UDPAddr{IP: net.ParseIP("192.0.2.200"), Port: 8805}
+
 type fakeAssociationState struct {
 	mu           sync.Mutex
 	setupCause   uint8
@@ -33,14 +35,17 @@ type fakeAssociationState struct {
 	update       *message.AssociationUpdateRequest
 	updateCalled bool
 	recoveryTime time.Time
+	remote       *net.UDPAddr
 	after        func()
 }
 
 func (f *fakeAssociationState) SetupAssociation(
 	peer pfcptype.NodeID,
 	recoveryTime time.Time,
+	remote *net.UDPAddr,
 ) (uint8, func()) {
 	f.mu.Lock()
+	f.remote = remote
 	f.setupPeer = peer
 	f.recoveryTime = recoveryTime
 	f.mu.Unlock()
@@ -50,8 +55,10 @@ func (f *fakeAssociationState) SetupAssociation(
 func (f *fakeAssociationState) UpdateAssociation(
 	peer pfcptype.NodeID,
 	request *message.AssociationUpdateRequest,
+	remote *net.UDPAddr,
 ) (uint8, func()) {
 	f.mu.Lock()
+	f.remote = remote
 	f.updatePeer = peer
 	f.update = request
 	f.updateCalled = true
@@ -59,8 +66,9 @@ func (f *fakeAssociationState) UpdateAssociation(
 	return f.updateCause, f.after
 }
 
-func (f *fakeAssociationState) ReleaseAssociation(peer pfcptype.NodeID) uint8 {
+func (f *fakeAssociationState) ReleaseAssociation(peer pfcptype.NodeID, remote *net.UDPAddr) uint8 {
 	f.mu.Lock()
+	f.remote = remote
 	f.releasePeer = peer
 	f.mu.Unlock()
 	return f.releaseCause
@@ -68,7 +76,7 @@ func (f *fakeAssociationState) ReleaseAssociation(peer pfcptype.NodeID) uint8 {
 
 func TestHandleAssociationSetupRequestMissingMandatoryIE(t *testing.T) {
 	s := NewPfcpServer(nil, "127.0.0.1")
-	response, afterResponse := s.handleAssociationSetupRequest(message.NewAssociationSetupRequest(7))
+	response, afterResponse := s.handleAssociationSetupRequest(message.NewAssociationSetupRequest(7), testPeerAddr)
 	if afterResponse != nil {
 		t.Fatal("afterResponse is non-nil for an invalid request")
 	}
@@ -85,7 +93,7 @@ func TestHandleAssociationSetupRequestWithoutLocalNodeIDDoesNotPanic(t *testing.
 		ie.NewNodeIDHeuristic("192.0.2.10"),
 		ie.NewRecoveryTimeStamp(time.Now()),
 	)
-	response, _ := s.handleAssociationSetupRequest(request)
+	response, _ := s.handleAssociationSetupRequest(request, testPeerAddr)
 	if response == nil {
 		t.Fatal("handler returned nil response")
 		return
@@ -110,7 +118,7 @@ func TestHandleAssociationSetupRequestUsesStateManager(t *testing.T) {
 		ie.NewRecoveryTimeStamp(recoveryTime),
 	)
 
-	response, afterResponse := s.handleAssociationSetupRequest(request)
+	response, afterResponse := s.handleAssociationSetupRequest(request, testPeerAddr)
 	assertCause(t, response.Cause, ie.CauseRequestAccepted)
 	if afterResponse == nil {
 		t.Fatal("accepted setup did not return afterResponse")
@@ -186,7 +194,7 @@ func TestAssociationSetupDispatchRunsAfterResponse(t *testing.T) {
 func TestHandleAssociationUpdateRequestMissingNodeID(t *testing.T) {
 	s := NewPfcpServer(nil, "127.0.0.1")
 	response, afterResponse := s.handleAssociationUpdateRequest(
-		message.NewAssociationUpdateRequest(12),
+		message.NewAssociationUpdateRequest(12), testPeerAddr,
 	)
 	if afterResponse != nil {
 		t.Fatal("afterResponse is non-nil for an invalid request")
@@ -215,7 +223,7 @@ func TestHandleAssociationUpdateRequestUsesStateManager(t *testing.T) {
 		ie.NewPFCPAUReqFlags(0x01),
 	)
 
-	response, afterResponse := s.handleAssociationUpdateRequest(request)
+	response, afterResponse := s.handleAssociationUpdateRequest(request, testPeerAddr)
 	assertCause(t, response.Cause, ie.CauseRequestAccepted)
 	if response.NodeID == nil || response.CPFunctionFeatures == nil {
 		t.Fatal("accepted response is missing local Node ID or CP Function Features")
@@ -261,6 +269,7 @@ func TestHandleAssociationUpdateRequestRejectsGracePeriodWithoutReleaseIE(t *tes
 			ie.NewNodeIDHeuristic("192.0.2.21"),
 			ie.NewGracefulReleasePeriod(time.Minute),
 		),
+		testPeerAddr,
 	)
 	if afterResponse != nil {
 		t.Fatal("afterResponse is non-nil for an invalid request")
@@ -331,7 +340,7 @@ func TestHandleAssociationReleaseRequest(t *testing.T) {
 	response := s.handleAssociationReleaseRequest(message.NewAssociationReleaseRequest(
 		13,
 		ie.NewNodeIDHeuristic("upf.example.net"),
-	))
+	), testPeerAddr)
 	assertCause(t, response.Cause, ie.CauseRequestAccepted)
 	if got := state.releasePeer.String(); got != "upf.example.net" {
 		t.Fatalf("release peer = %q, want upf.example.net", got)
@@ -2247,5 +2256,32 @@ func TestUnsupportedNodeRequestsReturnCachedRejection(t *testing.T) {
 				t.Fatalf("dispatch count after retransmission = %d, want %d", got, want)
 			}
 		})
+	}
+}
+
+func TestAssociationHandlersForwardUDPSource(t *testing.T) {
+	state := &fakeAssociationState{
+		setupCause:   ie.CauseRequestAccepted,
+		updateCause:  ie.CauseRequestAccepted,
+		releaseCause: ie.CauseRequestAccepted,
+	}
+	s := NewPfcpServer(nil, "127.0.0.1")
+	s.SetAssociationStateManager(state)
+	nodeID := ie.NewNodeIDHeuristic("192.0.2.30")
+
+	s.handleAssociationSetupRequest(message.NewAssociationSetupRequest(
+		1, nodeID, ie.NewRecoveryTimeStamp(time.Now())), testPeerAddr)
+	if state.remote != testPeerAddr {
+		t.Fatalf("setup remote = %v, want %v", state.remote, testPeerAddr)
+	}
+	state.remote = nil
+	s.handleAssociationUpdateRequest(message.NewAssociationUpdateRequest(2, nodeID), testPeerAddr)
+	if state.remote != testPeerAddr {
+		t.Fatalf("update remote = %v, want %v", state.remote, testPeerAddr)
+	}
+	state.remote = nil
+	s.handleAssociationReleaseRequest(message.NewAssociationReleaseRequest(3, nodeID), testPeerAddr)
+	if state.remote != testPeerAddr {
+		t.Fatalf("release remote = %v, want %v", state.remote, testPeerAddr)
 	}
 }
