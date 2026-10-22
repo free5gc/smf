@@ -13,6 +13,18 @@ import (
 	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 )
 
+// validPFCPSource accepts an association request only from an address of the
+// configured UPF Node ID. It runs after mandatory IE checks and the UPF lookup
+// so the TS 29.244 Cause values for those cases are preserved.
+func validPFCPSource(upf *smf_context.UPF, remote *net.UDPAddr) bool {
+	if remote != nil && upf.MatchesPFCPSource(remote.IP) {
+		return true
+	}
+	logger.PfcpLog.Warnf("reject PFCP association request for UPF[%s] from unexpected source %v",
+		upf.NodeID.String(), remote)
+	return false
+}
+
 // SetupAssociation validates a passive setup against the configured UPF and
 // defers recovery-time handling until its response has been sent. A newer
 // timestamp invalidates the current generation; the lifecycle owner performs
@@ -20,9 +32,13 @@ import (
 func (p *Processor) SetupAssociation(
 	peer pfcptype.NodeID,
 	recoveryTime time.Time,
+	remote *net.UDPAddr,
 ) (uint8, func()) {
 	upf := smf_context.RetrieveUPFNodeByNodeID(peer)
 	if upf == nil {
+		return ie.CauseRequestRejected, nil
+	}
+	if !validPFCPSource(upf, remote) {
 		return ie.CauseRequestRejected, nil
 	}
 	_, generation := upf.AssociationStateAndGeneration()
@@ -51,6 +67,7 @@ func (p *Processor) SetupAssociation(
 func (p *Processor) UpdateAssociation(
 	peer pfcptype.NodeID,
 	request *message.AssociationUpdateRequest,
+	remote *net.UDPAddr,
 ) (uint8, func()) {
 	if request == nil {
 		return ie.CauseRequestRejected, nil
@@ -58,6 +75,9 @@ func (p *Processor) UpdateAssociation(
 	upf := smf_context.RetrieveUPFNodeByNodeID(peer)
 	if upf == nil || upf.IsAssociated() != nil {
 		return ie.CauseNoEstablishedPFCPAssociation, nil
+	}
+	if !validPFCPSource(upf, remote) {
+		return ie.CauseRequestRejected, nil
 	}
 	var features []byte
 	if request.UPFunctionFeatures != nil {
@@ -162,10 +182,13 @@ func (p *Processor) releaseAssociationRequestedByUPF(
 // ReleaseAssociation invalidates the existing association without deleting the
 // configured UPF topology. The active state machine performs session cleanup
 // and decides whether to establish the configured association again.
-func (p *Processor) ReleaseAssociation(peer pfcptype.NodeID) uint8 {
+func (p *Processor) ReleaseAssociation(peer pfcptype.NodeID, remote *net.UDPAddr) uint8 {
 	upf := smf_context.RetrieveUPFNodeByNodeID(peer)
 	if upf == nil {
 		return ie.CauseNoEstablishedPFCPAssociation
+	}
+	if !validPFCPSource(upf, remote) {
+		return ie.CauseRequestRejected
 	}
 	cancelUPFAssociation(upf)
 	return ie.CauseRequestAccepted

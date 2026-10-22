@@ -676,6 +676,34 @@ func (upf *UPF) PFCPAddr() *net.UDPAddr {
 	}
 }
 
+const pfcpSourceLookupTimeout = time.Second
+
+// MatchesPFCPSource reports whether source is an address of the configured
+// Node ID. An FQDN Node ID matches any of its resolved addresses; a failed or
+// slow lookup matches nothing.
+func (upf *UPF) MatchesPFCPSource(source net.IP) bool {
+	if upf == nil || source == nil || source.IsUnspecified() {
+		return false
+	}
+	switch upf.NodeID.NodeIdType {
+	case pfcptype.NodeIdTypeIpv4Address, pfcptype.NodeIdTypeIpv6Address:
+		return source.Equal(upf.NodeID.IP)
+	case pfcptype.NodeIdTypeFqdn:
+		ctx, cancel := context.WithTimeout(context.Background(), pfcpSourceLookupTimeout)
+		defer cancel()
+		addresses, err := net.DefaultResolver.LookupIPAddr(ctx, upf.NodeID.FQDN)
+		if err != nil {
+			return false
+		}
+		for _, address := range addresses {
+			if source.Equal(address.IP) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // *** add unit test ***//
 func RetrieveUPFNodeByNodeID(nodeID pfcptype.NodeID) *UPF {
 	var targetUPF *UPF = nil
