@@ -1036,15 +1036,16 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		if err != nil {
 			smContext.Log.Errorf("Handle HandoverRequestAcknowledgeTransfer failed: %+v", err)
 			smContext.SetState(smf_context.Active)
-			// TODO: Classify handover errors before mapping them to an HTTP response.
-			// Malformed NGAP input, missing local tunnel state, TEID exhaustion, and
-			// an unavailable/releasing UPF should not all become UPF_NOT_AVAILABLE.
+			// Default to UPF_NOT_AVAILABLE; overridden below for protocol errors.
 			problemDetail := models.Smf_PDUSess_ExtProblemDetails{
 				Status: http.StatusServiceUnavailable,
 				Cause:  "UPF_NOT_AVAILABLE",
 			}
+			if errors.Is(err, smf_context.ErrN2SmTransferProtocol) {
+				problemDetail = smf_errors.N2SmError
+			}
 			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
-			c.JSON(http.StatusServiceUnavailable, models.UpdateSmContextResponse400{
+			c.JSON(int(problemDetail.Status), models.UpdateSmContextResponse400{
 				JsonData: &models.Smf_PDUSess_SmContextUpdateError{Error: &problemDetail},
 			})
 			return

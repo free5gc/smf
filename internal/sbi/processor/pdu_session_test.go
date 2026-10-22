@@ -631,6 +631,120 @@ func TestHandlePDUSessionSMContextCreate(t *testing.T) {
 	}
 }
 
+// TestHandlePDUSessionSMContextUpdate_HandoverAckErrorClassification pins the
+// fix for the bug where HandlePDUSessionSMContextUpdate's HoState_PREPARED
+// branch mapped every error from HandleHandoverRequestAcknowledgeTransfer to
+// 503 UPF_NOT_AVAILABLE, even when the real cause was a malformed/incomplete
+// NGAP transfer IE from the AMF/gNB (a protocol error, not a UPF-availability
+// problem). A malformed handover transfer must now produce 403 N2_SM_ERROR,
+// while a genuine UPF-side configuration failure must still produce 503
+// UPF_NOT_AVAILABLE.
+func TestHandlePDUSessionSMContextUpdate_HandoverAckErrorClassification(t *testing.T) {
+	initConfig()
+
+	mockSmf := service.NewMockSmfAppInterface(gomock.NewController(t))
+	smfConsumer, err := consumer.NewConsumer(mockSmf)
+	if err != nil {
+		t.Fatalf("Failed to create consumer: %+v", err)
+	}
+	proc, err := processor.NewProcessor(mockSmf)
+	if err != nil {
+		t.Fatalf("Failed to create processor: %+v", err)
+	}
+	service.SMF = mockSmf
+	mockSmf.EXPECT().Context().Return(smf_context.GetSelf()).AnyTimes()
+	mockSmf.EXPECT().Consumer().Return(smfConsumer).AnyTimes()
+
+	// Well-formed Handover Request Acknowledge Transfer carrying both a DL
+	// NG-U tunnel and a DL forwarding tunnel (golden bytes reused from
+	// github.com/free5gc/ngap/ie's own
+	// TestHandoverRequestAcknowledgeTransferMarshalBinary "Case 1"). Decoding
+	// succeeds, so with no default-path AN UPF configured for indirect
+	// forwarding, the resulting error is a genuine UPF-side failure.
+	genuineUPFFailureTransfer := []byte{
+		0x40, 0x07, 0xc0, 0xac, 0x10, 0x1f, 0x33, 0x00, 0x00, 0x00, 0x01, 0x01, 0xf0, 0xac, 0x10, 0x1f,
+		0x33, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01,
+	}
+
+	testCases := []struct {
+		name                string
+		supi                string
+		pduSessionID        int32
+		n2SmInformation     []byte
+		setDLForwardingType bool
+		wantStatus          int
+		wantCause           string
+	}{
+		{
+			name:            "malformed NGAP transfer is a protocol error, not UPF_NOT_AVAILABLE",
+			supi:            "imsi-handover-ack-protocol-error",
+			pduSessionID:    1,
+			n2SmInformation: []byte{0x00},
+			wantStatus:      http.StatusForbidden,
+			wantCause:       "N2_SM_ERROR",
+		},
+		{
+			name:                "genuine UPF failure still reports UPF_NOT_AVAILABLE",
+			supi:                "imsi-handover-ack-upf-failure",
+			pduSessionID:        2,
+			n2SmInformation:     genuineUPFFailureTransfer,
+			setDLForwardingType: true,
+			wantStatus:          http.StatusServiceUnavailable,
+			wantCause:           "UPF_NOT_AVAILABLE",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			smContext := smf_context.NewSMContext(tc.supi, tc.pduSessionID)
+			if smContext == nil {
+				t.Fatal("failed to create SMContext")
+			}
+			t.Cleanup(func() { smf_context.RemoveSMContext(smContext.Ref) })
+			smContext.SetState(smf_context.Active)
+			if tc.setDLForwardingType {
+				smContext.DLForwardingType = smf_context.IndirectForwarding
+			}
+
+			body := models.UpdateSmContextRequestBody{
+				JsonData: &models.Smf_PDUSess_SmContextUpdateData{
+					HoState: models.Smf_PDUSess_HoState_PREPARED,
+				},
+				BinaryDataN2SmInformation: &multipart.RelatedContent{
+					ContentID: "HANDOVER_REQ_ACK",
+					Content:   tc.n2SmInformation,
+				},
+			}
+
+			httpRecorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(httpRecorder)
+
+			proc.HandlePDUSessionSMContextUpdate(c, body, smContext.Ref)
+
+			httpResp := httpRecorder.Result()
+			defer func() {
+				if errClose := httpResp.Body.Close(); errClose != nil {
+					t.Fatalf("Failed to close response body: %+v", errClose)
+				}
+			}()
+			require.Equal(t, tc.wantStatus, httpResp.StatusCode)
+
+			rawBytes, errReadAll := io.ReadAll(httpResp.Body)
+			if errReadAll != nil {
+				t.Fatalf("Failed to read response body: %+v", errReadAll)
+			}
+
+			var errResp models.UpdateSmContextResponse400
+			if err = openapi.Deserialize(&errResp, rawBytes, httpResp.Header.Get("Content-Type")); err != nil {
+				t.Fatalf("Failed to deserialize response body: %+v", err)
+			}
+			require.NotNil(t, errResp.JsonData)
+			require.NotNil(t, errResp.JsonData.Error)
+			require.Equal(t, tc.wantCause, errResp.JsonData.Error.Cause)
+		})
+	}
+}
+
 func TestHandlePDUSessionSMContextCreate_InvalidDnnSnssaiInputs(t *testing.T) {
 	openapi.InterceptInnerHttp2Client(t, false)
 	initConfig()
