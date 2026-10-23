@@ -503,45 +503,6 @@ func (smContext *SMContext) State() SMContextState {
 	return SMContextState(atomic.LoadUint32((*uint32)(&smContext.state)))
 }
 
-// BeginChargingRelease elects one caller to send the CHF termination request.
-// Only NotStarted can enter InProgress here. Background recovery uses
-// BeginChargingRetry to resend a frozen failed invocation.
-func (smContext *SMContext) BeginChargingRelease() bool {
-	smContext.chargingMu.Lock()
-	defer smContext.chargingMu.Unlock()
-	if smContext.chargingReleaseState != ChargingReleaseNotStarted {
-		return false
-	}
-
-	if smContext.chargingUpdateState != ChargingUpdateIdle || smContext.chargingUpdateRequest != nil {
-		return false
-	}
-
-	smContext.chargingReleaseState = ChargingReleaseInProgress
-	return true
-}
-
-// FinishChargingRelease records the outcome; LastErr describes a failure only.
-func (smContext *SMContext) FinishChargingRelease(err error) {
-	smContext.chargingMu.Lock()
-	defer smContext.chargingMu.Unlock()
-	smContext.chargingReleaseLastErr = err
-	if err != nil {
-		smContext.chargingReleaseState = ChargingReleaseFailed
-	} else {
-		smContext.chargingReleaseState = ChargingReleaseSucceeded
-		smContext.chargingReleaseRequest = nil
-	}
-}
-
-// ChargingReleaseResult returns state and failure details in one locked snapshot.
-// A nil error alone does not imply success: NotStarted and InProgress have no error.
-func (smContext *SMContext) ChargingReleaseResult() (ChargingReleaseState, error) {
-	smContext.chargingMu.Lock()
-	defer smContext.chargingMu.Unlock()
-	return smContext.chargingReleaseState, smContext.chargingReleaseLastErr
-}
-
 func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) pfcptype.NodeID {
 	for _, pfcpCtx := range smContext.PFCPContext {
 		if pfcpCtx.LocalSEID == seid {

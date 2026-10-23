@@ -183,71 +183,65 @@ func (s *nchfService) SendConvergedChargingRequestContext(
 		ctx = context.WithValue(ctx, openapi.ContextOAuth2, token)
 	}
 
-	// select the appropriate converged charging service based on trigger type
+	var (
+		response   *models.Chf_ConvCharging_ChargingDataResponse
+		location   string
+		requestErr error
+	)
+	// Keep each generated API request explicit, then handle HTTP errors once.
 	switch requestType {
 	case smf_context.CHARGING_INIT:
-		postChargingDataRequest := &ConvCharging.ChargingdataPostRequest{
-			RequestBody: req,
-		}
-		rspPost, localErr := client.DefaultApi.ChargingdataPost(ctx, postChargingDataRequest)
-
-		switch err := localErr.(type) {
-		case openapi.GenericOpenAPIError:
-			return nil, chargingHTTPProblem(err), nil
-		case error:
-			return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
-		case nil:
-			chargingDataRef := strings.Split(rspPost.Location, "/")
-			smContext.ChargingDataRef = chargingDataRef[len(chargingDataRef)-1]
-			return rspPost.Chf_ConvCharging_ChargingDataResponse, nil, nil
-		default:
-			return nil, nil, openapi.ReportError("server no response")
+		request := &ConvCharging.ChargingdataPostRequest{RequestBody: req}
+		rsp, localErr := client.DefaultApi.ChargingdataPost(ctx, request)
+		requestErr = localErr
+		if localErr == nil {
+			response, location = rsp.Chf_ConvCharging_ChargingDataResponse, rsp.Location
 		}
 	case smf_context.CHARGING_UPDATE:
-		updateChargingDataRequest := &ConvCharging.ChargingdataChargingDataRefUpdatePostRequest{
+		request := &ConvCharging.ChargingdataChargingDataRefUpdatePostRequest{
 			ChargingDataRef: &chargingDataRef,
 			RequestBody:     req,
 		}
-		rspUpdate, localErr := client.DefaultApi.ChargingdataChargingDataRefUpdatePost(ctx, updateChargingDataRequest)
-
-		switch err := localErr.(type) {
-		case openapi.GenericOpenAPIError:
-			return nil, chargingHTTPProblem(err), nil
-		case error:
-			return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
-		case nil:
-			if rspUpdate == nil || rspUpdate.Chf_ConvCharging_ChargingDataResponse == nil {
-				return nil, nil, fmt.Errorf("charging update returned no response body")
-			}
-			response := rspUpdate.Chf_ConvCharging_ChargingDataResponse
-			if response.InvocationSequenceNumber != req.InvocationSequenceNumber {
-				return nil, nil, fmt.Errorf("%w: got %d want %d", smf_context.ErrChargingResponseSequence,
-					response.InvocationSequenceNumber, req.InvocationSequenceNumber)
-			}
-			return response, nil, nil
-		default:
-			return nil, nil, openapi.ReportError("server no response")
+		rsp, localErr := client.DefaultApi.ChargingdataChargingDataRefUpdatePost(ctx, request)
+		requestErr = localErr
+		if localErr == nil && rsp != nil {
+			response = rsp.Chf_ConvCharging_ChargingDataResponse
 		}
 	case smf_context.CHARGING_RELEASE:
-		releaseChargingDataRequest := &ConvCharging.ChargingdataChargingDataRefReleasePostRequest{
+		request := &ConvCharging.ChargingdataChargingDataRefReleasePostRequest{
 			ChargingDataRef: &chargingDataRef,
 			RequestBody:     req,
 		}
-		_, localErr := client.DefaultApi.ChargingdataChargingDataRefReleasePost(ctx, releaseChargingDataRequest)
-
-		switch err := localErr.(type) {
-		case openapi.GenericOpenAPIError:
-			return nil, chargingHTTPProblem(err), nil
-		case error:
-			return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
-		case nil:
-			return nil, nil, nil
-		default:
-			return nil, nil, openapi.ReportError("server no response")
-		}
+		_, requestErr = client.DefaultApi.ChargingdataChargingDataRefReleasePost(ctx, request)
 	default:
 		return nil, nil, openapi.ReportError("invalid request type")
 	}
+
+	switch err := requestErr.(type) {
+	case openapi.GenericOpenAPIError:
+		return nil, chargingHTTPProblem(err), nil
+	case error:
+		return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
+	case nil:
+		// Validate and apply the successful response below.
+	default:
+		return nil, nil, openapi.ReportError("server no response")
+	}
+
+	switch requestType {
+	case smf_context.CHARGING_INIT:
+		parts := strings.Split(location, "/")
+		smContext.ChargingDataRef = parts[len(parts)-1]
+	case smf_context.CHARGING_UPDATE:
+		if response == nil {
+			return nil, nil, fmt.Errorf("charging update returned no response body")
+		}
+		if response.InvocationSequenceNumber != req.InvocationSequenceNumber {
+			return nil, nil, fmt.Errorf("%w: got %d want %d", smf_context.ErrChargingResponseSequence,
+				response.InvocationSequenceNumber, req.InvocationSequenceNumber)
+		}
+	}
+	return response, nil, nil
 }
 
 // Preserve the actual HTTP status even for union response models or statuses
