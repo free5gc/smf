@@ -45,9 +45,8 @@ func (p *Processor) completeSMContextRelease(ctx context.Context, work *charging
 			smContext.Log.Errorf("SM Policy Termination failed: %s", err)
 			p.deferSMContextRelease(work)
 			return
-		} else {
-			smContext.SMPolicyID = ""
 		}
+		smContext.SMPolicyID = ""
 	}
 
 	// Run SDM cleanup once for contexts counted at creation.
@@ -59,13 +58,13 @@ func (p *Processor) completeSMContextRelease(ctx context.Context, work *charging
 			smContext.Log.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
 			p.deferSMContextRelease(work)
 			return
-		} else if err != nil {
+		}
+		if err != nil {
 			smContext.Log.Errorf("SDM UnSubscription Error[%+v]", err)
 			p.deferSMContextRelease(work)
 			return
-		} else {
-			smContext.SdmCounted = false
 		}
+		smContext.SdmCounted = false
 	}
 
 	// Because the amfUE who called this SMF API is being locked until the API Handler returns,

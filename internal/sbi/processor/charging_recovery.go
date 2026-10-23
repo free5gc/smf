@@ -192,14 +192,12 @@ func (p *Processor) runChargingWork(
 	}
 	// Trigger-only ULCL notifications precede PFCP establishment and have no
 	// usage batch/quota continuation. Preserve their notification behavior.
-	if !work.quotaDelivery {
-		sm.FinishChargingUpdate(nil)
-		return response, nil
-	}
-	sm.ChargingQuotaPending(nil)
-	work.retryable = true
-	if err = p.deliverChargingQuota(ctx, work, response); err != nil {
-		return response, err
+	if work.quotaDelivery {
+		sm.ChargingQuotaPending(nil)
+		work.retryable = true
+		if err = p.deliverChargingQuota(ctx, work, response); err != nil {
+			return response, err
+		}
 	}
 	sm.FinishChargingUpdate(nil)
 	return response, nil
