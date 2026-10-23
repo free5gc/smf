@@ -104,26 +104,26 @@ func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMCon
 	return req
 }
 
-// prepareConvergedChargingRequest reuses the full final request instead of
-// rebuilding it from mutable session data and assigning a new invocation ID.
+// prepareConvergedChargingRequest preserves unsettled update/release requests
+// instead of rebuilding them with different content or a new invocation ID.
 func (s *nchfService) prepareConvergedChargingRequest(
 	smContext *smf_context.SMContext,
 	requestType smf_context.RequestType,
 	multipleUnitUsage []models.Chf_ConvCharging_MultipleUnitUsage,
 ) (*models.Chf_ConvCharging_ChargingDataRequest, string, error) {
-	if requestType != smf_context.CHARGING_RELEASE {
+	if requestType == smf_context.CHARGING_INIT {
 		return s.buildConvergedChargingRequest(smContext, multipleUnitUsage), smContext.ChargingDataRef, nil
 	}
 
-	ref, request, err := smContext.PendingChargingRelease()
+	ref, request, err := smContext.PendingChargingRequest(requestType)
 	if err != nil || request != nil {
 		return request, ref, err
 	}
 	request = s.buildConvergedChargingRequest(smContext, multipleUnitUsage)
-	if err = smContext.StorePendingChargingRelease(smContext.ChargingDataRef, request); err != nil {
+	if err = smContext.StorePendingChargingRequest(requestType, smContext.ChargingDataRef, request); err != nil {
 		return nil, "", err
 	}
-	ref, request, err = smContext.PendingChargingRelease()
+	ref, request, err = smContext.PendingChargingRequest(requestType)
 	return request, ref, err
 }
 

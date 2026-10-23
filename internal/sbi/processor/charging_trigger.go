@@ -51,15 +51,42 @@ func (p *Processor) UpdateChargingSession(
 		}
 	}
 
-	_, problemDetails, err := p.Consumer().SendConvergedChargingRequest(smContext,
-		smf_context.CHARGING_UPDATE, multipleUnitUsage)
-	if problemDetails != nil {
-		logger.ChargingLog.Errorf("Send Charging Data Request[Init] Failed Problem[%+v]", problemDetails)
-	} else if err != nil {
-		logger.ChargingLog.Errorf("Send Charging Data Request[Init] Error[%+v]", err)
+	if _, err := p.sendChargingUpdate(smContext, multipleUnitUsage, 0); err != nil {
+		logger.ChargingLog.Errorf("Send Charging Data Request[Update] failed: %v", err)
 	} else {
-		logger.ChargingLog.Infof("Send Charging Data Request[Init] successfully")
+		logger.ChargingLog.Infof("Send Charging Data Request[Update] successfully")
 	}
+}
+
+// sendChargingUpdate requires the caller's session serialization. Acknowledged
+// usage is removed before allowing another charging operation to start.
+func (p *Processor) sendChargingUpdate(
+	smContext *smf_context.SMContext,
+	multipleUnitUsage []models.Chf_ConvCharging_MultipleUnitUsage,
+	reportCount int,
+) (*models.Chf_ConvCharging_ChargingDataResponse, error) {
+	if smContext.ChargingDataRef == "" {
+		return nil, fmt.Errorf("charging session has no resource reference")
+	}
+	if err := smContext.BeginChargingUpdate(); err != nil {
+		return nil, err
+	}
+
+	rsp, problemDetails, err := p.Consumer().SendConvergedChargingRequest(
+		smContext, smf_context.CHARGING_UPDATE, multipleUnitUsage)
+	if problemDetails != nil {
+		err = fmt.Errorf("charging update failed: status=%d cause=%s detail=%s",
+			problemDetails.Status, problemDetails.Cause, problemDetails.Detail)
+	} else if err != nil {
+		err = fmt.Errorf("charging update failed: %w", err)
+	} else if rsp == nil {
+		err = fmt.Errorf("charging update returned no response body")
+	}
+	if err == nil {
+		smContext.UrrReports = smContext.UrrReports[reportCount:]
+	}
+	smContext.FinishChargingUpdate(err)
+	return rsp, err
 }
 
 func (p *Processor) ReleaseChargingSession(smContext *smf_context.SMContext) error {
@@ -75,6 +102,8 @@ func (p *Processor) ReleaseChargingSession(smContext *smf_context.SMContext) err
 			return lastErr
 		case smf_context.ChargingReleaseInProgress:
 			return fmt.Errorf("charging release is in progress")
+		case smf_context.ChargingReleaseNotStarted:
+			return fmt.Errorf("charging release blocked by an unsettled update")
 		default:
 			return fmt.Errorf("unexpected charging release state: %d", state)
 		}
@@ -105,28 +134,23 @@ func (p *Processor) ReleaseChargingSession(smContext *smf_context.SMContext) err
 
 // Report usage report to the CHF and update the URR with the charging information in the charging response
 func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) {
-	multipleUnitUsage := buildMultiUnitUsageFromUsageReport(smContext)
+	reports := smContext.UrrReports
+	multipleUnitUsage := buildMultiUnitUsage(smContext, reports)
 
 	if len(multipleUnitUsage) == 0 {
 		logger.ChargingLog.Infof("No report need to be charged")
 		return
 	}
 
-	rsp, problemDetails, errSendConvergedChargingRequest := p.Consumer().SendConvergedChargingRequest(smContext,
-		smf_context.CHARGING_UPDATE, multipleUnitUsage)
-
-	if problemDetails != nil {
-		logger.ChargingLog.Errorf("Send Charging Data Request[Update] Failed Problem[%+v]", problemDetails)
-	} else if errSendConvergedChargingRequest != nil {
-		logger.ChargingLog.Errorf("Send Charging Data Request[Update] Error[%+v]", errSendConvergedChargingRequest)
+	rsp, err := p.sendChargingUpdate(smContext, multipleUnitUsage, len(reports))
+	if err != nil {
+		logger.ChargingLog.Errorf("Send Charging Data Request[Update] failed: %v", err)
 	} else {
 		var pfcpResponseStatus smf_context.PFCPSessionResponseStatus
 
 		upfUrrMap := make(map[string][]*smf_context.URR)
 
 		logger.ChargingLog.Infof("Send Charging Data Request[Update] successfully")
-		smContext.SetState(smf_context.PFCPModification)
-
 		p.updateGrantedQuota(smContext, rsp.MultipleUnitInformation)
 		// Usually only the anchor UPF need	to be updated
 		for upfId, entries := range smContext.UrrTable {
@@ -141,6 +165,8 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 			logger.ChargingLog.Infof("Do not have urr that need to update charging information")
 			return
 		}
+
+		smContext.SetState(smf_context.PFCPModification)
 
 		for upfId, urrList := range upfUrrMap {
 			logger.ChargingLog.Debugf("Sending PFCP Session Modification to UpfId=%s with %d URRs", upfId, len(urrList))
@@ -186,18 +212,10 @@ func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) 
 	}
 }
 
-func buildMultiUnitUsageFromUsageReport(
-	smContext *smf_context.SMContext,
-) []models.Chf_ConvCharging_MultipleUnitUsage {
-	multipleUnitUsage := buildMultiUnitUsage(smContext, smContext.UrrReports)
-	smContext.UrrReports = []smf_context.UsageReport{}
-	return multipleUnitUsage
-}
-
 func buildMultiUnitUsage(
 	smContext *smf_context.SMContext, reports []smf_context.UsageReport,
 ) []models.Chf_ConvCharging_MultipleUnitUsage {
-	logger.ChargingLog.Infof("build MultiUnitUsageFromUsageReport")
+	logger.ChargingLog.Infof("build MultiUnitUsage")
 
 	type usageKey struct {
 		ratingGroup int32

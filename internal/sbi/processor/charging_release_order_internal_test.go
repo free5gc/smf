@@ -410,11 +410,11 @@ func TestChargingInvocationSequenceAcrossRequestTypes(t *testing.T) {
 	})
 	sm.SelectedCHFProfile = chargingReleaseOrderProfile(
 		models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
-	for _, requestType := range []smf_context.RequestType{smf_context.CHARGING_INIT, smf_context.CHARGING_UPDATE} {
-		_, problem, err := p.Consumer().SendConvergedChargingRequest(sm, requestType, nil)
-		require.Nil(t, problem)
-		require.NoError(t, err)
-	}
+	_, problem, err := p.Consumer().SendConvergedChargingRequest(sm, smf_context.CHARGING_INIT, nil)
+	require.Nil(t, problem)
+	require.NoError(t, err)
+	_, err = p.sendChargingUpdate(sm, nil, 0)
+	require.NoError(t, err)
 	require.NoError(t, p.ReleaseChargingSession(sm))
 	for expected := int32(1); expected <= 3; expected++ {
 		request := <-received

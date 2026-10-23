@@ -36,59 +36,132 @@ const (
 	ChargingReleaseFailed
 )
 
-// pendingChargingRelease owns an immutable JSON snapshot. It stays in SMContext
-// until CHF reports success; it is not a restart-persistent settlement queue.
-type pendingChargingRelease struct {
+// ChargingUpdateState serializes recurring updates. Success returns to Idle;
+// a failed operation must be resolved before another update or final release.
+type ChargingUpdateState uint8
+
+const (
+	ChargingUpdateIdle ChargingUpdateState = iota
+	ChargingUpdateInProgress
+	ChargingUpdateFailed
+)
+
+// pendingChargingRequest owns an immutable JSON snapshot kept until CHF reports
+// success. These snapshots are not persisted across SMF restarts.
+type pendingChargingRequest struct {
 	chargingDataRef string
 	body            []byte
 }
 
 func (smContext *SMContext) NextChargingSequenceNumber() int32 {
-	smContext.chargingReleaseMu.Lock()
-	defer smContext.chargingReleaseMu.Unlock()
+	smContext.chargingMu.Lock()
+	defer smContext.chargingMu.Unlock()
 	smContext.chargingInvocationSequenceNumber++
 	return smContext.chargingInvocationSequenceNumber
 }
 
-// StorePendingChargingRelease freezes the resource reference and full request,
-// including its invocation sequence, timestamps and nested session metadata.
+func (smContext *SMContext) BeginChargingUpdate() error {
+	smContext.chargingMu.Lock()
+	defer smContext.chargingMu.Unlock()
+	if smContext.chargingReleaseState != ChargingReleaseNotStarted || smContext.chargingReleaseRequest != nil {
+		return fmt.Errorf("charging session is terminating")
+	}
+	if smContext.chargingUpdateState == ChargingUpdateFailed {
+		return fmt.Errorf("previous charging update remains unsettled: %w", smContext.chargingUpdateLastErr)
+	}
+	if smContext.chargingUpdateState != ChargingUpdateIdle || smContext.chargingUpdateRequest != nil {
+		return fmt.Errorf("charging update is already pending")
+	}
+	smContext.chargingUpdateState = ChargingUpdateInProgress
+	return nil
+}
+
+func (smContext *SMContext) FinishChargingUpdate(err error) {
+	smContext.chargingMu.Lock()
+	defer smContext.chargingMu.Unlock()
+	smContext.chargingUpdateLastErr = err
+	if err != nil {
+		smContext.chargingUpdateState = ChargingUpdateFailed
+	} else {
+		smContext.chargingUpdateState = ChargingUpdateIdle
+		smContext.chargingUpdateRequest = nil
+	}
+}
+
+func (smContext *SMContext) ChargingUpdateResult() (ChargingUpdateState, error) {
+	smContext.chargingMu.Lock()
+	defer smContext.chargingMu.Unlock()
+	return smContext.chargingUpdateState, smContext.chargingUpdateLastErr
+}
+
 func (smContext *SMContext) StorePendingChargingRelease(
 	chargingDataRef string, request *models.Chf_ConvCharging_ChargingDataRequest,
 ) error {
+	return smContext.StorePendingChargingRequest(CHARGING_RELEASE, chargingDataRef, request)
+}
+
+func (smContext *SMContext) PendingChargingRelease() (
+	string, *models.Chf_ConvCharging_ChargingDataRequest, error,
+) {
+	return smContext.PendingChargingRequest(CHARGING_RELEASE)
+}
+
+// StorePendingChargingRequest freezes the resource reference and full request,
+// including its invocation sequence, timestamps and nested session metadata.
+func (smContext *SMContext) StorePendingChargingRequest(
+	requestType RequestType, chargingDataRef string, request *models.Chf_ConvCharging_ChargingDataRequest,
+) error {
 	if chargingDataRef == "" || request == nil {
-		return fmt.Errorf("charging release requires a resource reference and request")
+		return fmt.Errorf("charging request requires a resource reference and body")
 	}
 	body, err := json.Marshal(request)
 	if err != nil {
-		return fmt.Errorf("encode pending charging release: %w", err)
+		return fmt.Errorf("encode pending charging request: %w", err)
 	}
-	smContext.chargingReleaseMu.Lock()
-	defer smContext.chargingReleaseMu.Unlock()
-	if smContext.chargingReleaseRequest != nil {
-		return fmt.Errorf("charging release request is already pending")
-	}
-	smContext.chargingReleaseRequest = &pendingChargingRelease{
-		chargingDataRef: chargingDataRef,
-		body:            body,
+	pending := &pendingChargingRequest{chargingDataRef: chargingDataRef, body: body}
+
+	smContext.chargingMu.Lock()
+	defer smContext.chargingMu.Unlock()
+	switch requestType {
+	case CHARGING_UPDATE:
+		if smContext.chargingUpdateRequest != nil {
+			return fmt.Errorf("charging update request is already pending")
+		}
+		smContext.chargingUpdateRequest = pending
+	case CHARGING_RELEASE:
+		if smContext.chargingReleaseRequest != nil {
+			return fmt.Errorf("charging release request is already pending")
+		}
+		smContext.chargingReleaseRequest = pending
+	default:
+		return fmt.Errorf("unsupported pending charging request type: %d", requestType)
 	}
 	return nil
 }
 
-// PendingChargingRelease returns a detached copy so callers cannot mutate the
-// stored request through slices or pointers returned by this method.
-func (smContext *SMContext) PendingChargingRelease() (
+// PendingChargingRequest returns a detached copy that cannot mutate the snapshot.
+func (smContext *SMContext) PendingChargingRequest(requestType RequestType) (
 	string, *models.Chf_ConvCharging_ChargingDataRequest, error,
 ) {
-	smContext.chargingReleaseMu.Lock()
-	pending := smContext.chargingReleaseRequest
-	smContext.chargingReleaseMu.Unlock()
+	smContext.chargingMu.Lock()
+	var pending *pendingChargingRequest
+	switch requestType {
+	case CHARGING_UPDATE:
+		pending = smContext.chargingUpdateRequest
+	case CHARGING_RELEASE:
+		pending = smContext.chargingReleaseRequest
+	default:
+		smContext.chargingMu.Unlock()
+		return "", nil, fmt.Errorf("unsupported pending charging request type: %d", requestType)
+	}
+	smContext.chargingMu.Unlock()
 	if pending == nil {
 		return "", nil, nil
 	}
 
 	var request models.Chf_ConvCharging_ChargingDataRequest
 	if err := json.Unmarshal(pending.body, &request); err != nil {
-		return "", nil, fmt.Errorf("decode pending charging release: %w", err)
+		return "", nil, fmt.Errorf("decode pending charging request: %w", err)
 	}
 	return pending.chargingDataRef, &request, nil
 }
