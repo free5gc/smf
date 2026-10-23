@@ -3,7 +3,9 @@ package consumer
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -273,7 +275,14 @@ func (s *nudmService) Subscribe(ctx context.Context, smCtx *smf_context.SMContex
 func (s *nudmService) UnSubscribe(smCtx *smf_context.SMContext) (
 	*models.ProblemDetails, error,
 ) {
-	ctx, _, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_NFType_UDM)
+	return s.UnSubscribeContext(context.Background(), smCtx)
+}
+
+func (s *nudmService) UnSubscribeContext(parent context.Context, smCtx *smf_context.SMContext) (
+	*models.ProblemDetails, error,
+) {
+	tokenCtx, _, err := s.consumer.Context().
+		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_NFType_UDM)
 	if err != nil {
 		return nil, err
 	}
@@ -300,13 +309,24 @@ func (s *nudmService) UnSubscribe(smCtx *smf_context.SMContext) (
 			SubscriptionId: &subscriptionId,
 		}
 
+		ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+		defer cancel()
+		if token := tokenCtx.Value(openapi.ContextOAuth2); token != nil {
+			ctx = context.WithValue(ctx, openapi.ContextOAuth2, token)
+		}
 		_, localErr := client.SubscriptionDeletionApi.Unsubscribe(ctx, request)
+		if apiError, ok := localErr.(openapi.GenericOpenAPIError); ok && apiError.ErrorStatus == http.StatusNotFound {
+			localErr = nil // Already deleted by an earlier attempt whose reply was lost.
+		}
 
 		switch err := localErr.(type) {
 		case openapi.GenericOpenAPIError:
 			switch errModel := err.Model().(type) {
 			case SDM.UnsubscribeError:
-				return errModel.ProblemDetails, nil
+				if errModel.ProblemDetails != nil {
+					return errModel.ProblemDetails, nil
+				}
+				return nil, fmt.Errorf("SDM unsubscription failed: %w", err)
 			case error:
 				return openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
 			default:

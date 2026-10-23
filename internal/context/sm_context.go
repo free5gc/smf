@@ -214,6 +214,7 @@ type SMContext struct {
 	RequestedUnit int32
 
 	chargingMu                       sync.Mutex
+	chargingReleaseRequested         bool
 	chargingReleaseState             ChargingReleaseState
 	chargingReleaseLastErr           error
 	chargingReleaseRequest           *pendingChargingRequest

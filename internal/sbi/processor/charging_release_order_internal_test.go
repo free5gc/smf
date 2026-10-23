@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"net/http"
@@ -23,7 +24,12 @@ import (
 	"github.com/free5gc/util/idgenerator"
 )
 
-const chargingReleaseOrderPolicyID = "policy-1226"
+const (
+	chargingReleaseOrderPolicyID = "policy-1226"
+	chargingAMFRelease           = "AMF release"
+	chargingCommonCleanup        = "common cleanup"
+	chargingReleasedPath         = "/released"
+)
 
 // PCF and CHF are local HTTP/2 stubs. The cached FINAL report represents
 // an already deleted PFCP session whose charging data must survive settlement.
@@ -107,7 +113,7 @@ func chargingReleaseOrderFailure(t *testing.T, w http.ResponseWriter) {
 }
 
 func TestChargingReleasePrecedesPolicyDeletion(t *testing.T) {
-	for _, path := range []string{"AMF release", "local release"} {
+	for _, path := range []string{chargingAMFRelease, "local release"} {
 		t.Run(path, func(t *testing.T) {
 			p, sm := chargingReleaseOrderSession(t)
 			var mu sync.Mutex
@@ -146,7 +152,7 @@ func TestChargingReleasePrecedesPolicyDeletion(t *testing.T) {
 			sm.SelectedCHFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING,
 				server.URL)
 			status := 0
-			if path == "AMF release" {
+			if path == chargingAMFRelease {
 				recorder := httptest.NewRecorder()
 				ctx, _ := gin.CreateTestContext(recorder)
 				p.HandlePDUSessionSMContextRelease(ctx, models.ReleaseSmContextRequestBody{}, sm.Ref)
@@ -177,7 +183,7 @@ func TestChargingReleasePrecedesPolicyDeletion(t *testing.T) {
 }
 
 func TestChargingReleaseFailurePreservesPolicyAndContext(t *testing.T) {
-	for _, path := range []string{"AMF release", "local release", "UE release", "common cleanup"} {
+	for _, path := range []string{chargingAMFRelease, "local release", "UE release", chargingCommonCleanup} {
 		t.Run(path, func(t *testing.T) {
 			p, sm := chargingReleaseOrderSession(t)
 			if path == "UE release" {
@@ -215,7 +221,7 @@ func TestChargingReleaseFailurePreservesPolicyAndContext(t *testing.T) {
 				models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
 			for attempt := 0; attempt < 2; attempt++ {
 				switch path {
-				case "AMF release":
+				case chargingAMFRelease:
 					recorder := httptest.NewRecorder()
 					ctx, _ := gin.CreateTestContext(recorder)
 					p.HandlePDUSessionSMContextRelease(ctx, models.ReleaseSmContextRequestBody{}, sm.Ref)
@@ -243,7 +249,7 @@ func TestChargingReleaseFailurePreservesPolicyAndContext(t *testing.T) {
 					} else {
 						p.RemoveSMContextFromAllNF(sm, false)
 					}
-				case "common cleanup":
+				case chargingCommonCleanup:
 					sm.SMLock.Lock()
 					p.RemoveSMContextFromAllNF(sm, false)
 					sm.SMLock.Unlock()
@@ -404,7 +410,9 @@ func TestChargingInvocationSequenceAcrossRequestTypes(t *testing.T) {
 		default:
 			w.WriteHeader(http.StatusOK)
 		}
-		if err := json.NewEncoder(w).Encode(models.Chf_ConvCharging_ChargingDataResponse{}); err != nil {
+		if err := json.NewEncoder(w).Encode(models.Chf_ConvCharging_ChargingDataResponse{
+			InvocationSequenceNumber: request.InvocationSequenceNumber,
+		}); err != nil {
 			t.Errorf("write charging response: %v", err)
 		}
 	})
@@ -425,4 +433,350 @@ func TestChargingInvocationSequenceAcrossRequestTypes(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, pending, "successful settlement must remove its pending request")
 	require.Empty(t, sm.UrrReports)
+}
+
+func TestChargingReleaseRecoveryResumesAuthorizedCleanup(t *testing.T) {
+	for _, path := range []string{chargingAMFRelease, "local release", chargingCommonCleanup} {
+		t.Run(path, func(t *testing.T) {
+			p, sm := chargingReleaseOrderSession(t)
+			sm.SMPolicyID = chargingReleaseOrderPolicyID
+			var calls, deletes, notifications atomic.Int32
+			bodies := make(chan models.Chf_ConvCharging_ChargingDataRequest, 2)
+			server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/release"):
+					var request models.Chf_ConvCharging_ChargingDataRequest
+					require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+					bodies <- request
+					if calls.Add(1) == 1 {
+						chargingReleaseOrderFailure(t, w)
+						return
+					}
+					w.WriteHeader(http.StatusNoContent)
+				case strings.HasSuffix(r.URL.Path, "/delete"):
+					require.Equal(t, int32(2), calls.Load(), "settlement must precede policy deletion")
+					deletes.Add(1)
+					w.WriteHeader(http.StatusNoContent)
+				case r.URL.Path == chargingReleasedPath:
+					notifications.Add(1)
+					w.WriteHeader(http.StatusNoContent)
+				default:
+					t.Errorf("unexpected cleanup request: %s", r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+				}
+			})
+			sm.SmStatusNotifyUri = server.URL + chargingReleasedPath
+			sm.SelectedCHFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
+			sm.SelectedPCFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, server.URL)
+			switch path {
+			case chargingAMFRelease:
+				recorder := httptest.NewRecorder()
+				ctx, _ := gin.CreateTestContext(recorder)
+				p.HandlePDUSessionSMContextRelease(ctx, models.ReleaseSmContextRequestBody{}, sm.Ref)
+				ctx.Writer.WriteHeaderNow()
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+			case "local release":
+				// Same callback URI avoids the separate old-registrant notification.
+				p.HandlePDUSessionSMContextLocalRelease(sm, &models.Smf_PDUSess_SmContextCreateData{
+					SmContextStatusUri: sm.SmStatusNotifyUri,
+				})
+			case chargingCommonCleanup:
+				sm.SMLock.Lock()
+				p.RemoveSMContextFromAllNF(sm, true)
+				sm.SMLock.Unlock()
+			}
+			require.Same(t, sm, smf_context.GetSMContextByRef(sm.Ref))
+			require.Equal(t, chargingReleaseOrderPolicyID, sm.SMPolicyID)
+			require.Zero(t, deletes.Load())
+			recoverChargingNow(p)
+			require.Eventually(t, func() bool { return smf_context.GetSMContextByRef(sm.Ref) == nil },
+				time.Second, time.Millisecond)
+			require.Equal(t, <-bodies, <-bodies, "Release retry must retain its full original request")
+			require.Equal(t, int32(1), deletes.Load())
+			wantNotifications := int32(0)
+			if path == chargingCommonCleanup {
+				wantNotifications = 1
+			}
+			require.Equal(t, wantNotifications, notifications.Load())
+			recoverChargingNow(p)
+			require.Equal(t, int32(2), calls.Load(), "removed work must not run again")
+		})
+	}
+}
+
+func TestChargingReleaseWaitsForPendingUpdateThenSettlesRemainingUsage(t *testing.T) {
+	p, sm := chargingReleaseOrderSession(t)
+	sm.SMPolicyID = chargingReleaseOrderPolicyID
+	updates := make(chan models.Chf_ConvCharging_ChargingDataRequest, 2)
+	releases := make(chan models.Chf_ConvCharging_ChargingDataRequest, 1)
+	var updateCalls, releaseCalls, policyDeletes atomic.Int32
+	server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/update"):
+			var request models.Chf_ConvCharging_ChargingDataRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+			updates <- request
+			if updateCalls.Add(1) == 1 {
+				chargingReleaseOrderFailure(t, w)
+				return
+			}
+			chargingSuccess(t, w, &request)
+		case strings.HasSuffix(r.URL.Path, "/release"):
+			require.Equal(t, int32(2), updateCalls.Load())
+			var request models.Chf_ConvCharging_ChargingDataRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+			releases <- request
+			releaseCalls.Add(1)
+			w.WriteHeader(http.StatusNoContent)
+		case strings.HasSuffix(r.URL.Path, "/delete"):
+			require.Equal(t, int32(1), releaseCalls.Load())
+			policyDeletes.Add(1)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected request: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	sm.SelectedCHFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
+	sm.SelectedPCFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, server.URL)
+	sm.SMLock.Lock()
+	p.ReportUsageAndUpdateQuota(sm)
+	sm.UrrReports = append(sm.UrrReports, smf_context.UsageReport{
+		UrrId: 1, UpfId: "upf-a", TotalVolume: 20, ReportTpye: models.Chf_ConvCharging_TriggerType_FINAL,
+	})
+	p.RemoveSMContextFromAllNF(sm, true)
+	require.Error(t, sm.BeginChargingUpdate(), "remembered Release must block fresh updates")
+	require.Zero(t, releaseCalls.Load(), "unsettled Update must finish first")
+	require.Zero(t, policyDeletes.Load())
+	require.Len(t, sm.UrrReports, 2)
+	sm.SMLock.Unlock()
+	recoverChargingNow(p)
+	require.Eventually(t, func() bool { return smf_context.GetSMContextByRef(sm.Ref) == nil },
+		time.Second, time.Millisecond)
+	original, replay := <-updates, <-updates
+	require.Equal(t, original, replay)
+	final := <-releases
+	require.Equal(t, original.InvocationSequenceNumber+1, final.InvocationSequenceNumber)
+	require.Len(t, final.MultipleUnitUsage, 1)
+	require.Len(t, final.MultipleUnitUsage[0].UsedUnitContainer, 1)
+	require.Equal(t, int32(20), final.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume,
+		"Release must charge only the reports not acknowledged by Update")
+	require.Nil(t, final.MultipleUnitUsage[0].RequestedUnit)
+	require.Equal(t, int32(1), policyDeletes.Load())
+}
+
+func TestChargingCleanupRetriesOnlyIncompleteStages(t *testing.T) {
+	p, sm := chargingReleaseOrderSession(t)
+	sm.SMPolicyID = chargingReleaseOrderPolicyID
+	self := smf_context.GetSelf()
+	previousUes, previousUDM := self.Ues, self.UDMProfile
+	self.Ues = smf_context.InitSmfUeData()
+	t.Cleanup(func() { self.Ues, self.UDMProfile = previousUes, previousUDM })
+	self.Ues.IncrementPduSessionCount(sm.Supi)
+	self.Ues.SetSubscriptionId(sm.Supi, "subscription-1226")
+	sm.SdmCounted = true
+	var chfCalls, policyCalls, udmCalls, notifications atomic.Int32
+	server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/release"):
+			chfCalls.Add(1)
+			w.WriteHeader(http.StatusNoContent)
+		case strings.HasSuffix(r.URL.Path, "/delete"):
+			if policyCalls.Add(1) == 1 {
+				chargingReleaseOrderFailure(t, w)
+				return
+			}
+			// Model a successful prior deletion whose acknowledgement was lost.
+			w.Header().Set("Content-Type", "application/problem+json")
+			w.WriteHeader(http.StatusNotFound)
+			require.NoError(t, json.NewEncoder(w).Encode(models.ProblemDetails{Status: 404, Cause: "CONTEXT_NOT_FOUND"}))
+		case strings.HasSuffix(r.URL.Path, "/sdm-subscriptions/subscription-1226"):
+			if udmCalls.Add(1) == 1 {
+				chargingReleaseOrderFailure(t, w)
+				return
+			}
+			w.Header().Set("Content-Type", "application/problem+json")
+			w.WriteHeader(http.StatusNotFound)
+			require.NoError(t, json.NewEncoder(w).Encode(models.ProblemDetails{Status: 404, Cause: "CONTEXT_NOT_FOUND"}))
+		case r.URL.Path == chargingReleasedPath:
+			notifications.Add(1)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected request: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	sm.SmStatusNotifyUri = server.URL + chargingReleasedPath
+	sm.SelectedCHFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
+	sm.SelectedPCFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, server.URL)
+	self.UDMProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NUDM_SDM, server.URL)
+	sm.SMLock.Lock()
+	p.RemoveSMContextFromAllNF(sm, true)
+	sm.SMLock.Unlock()
+	require.Equal(t, chargingReleaseOrderPolicyID, sm.SMPolicyID)
+	require.Same(t, sm, smf_context.GetSMContextByRef(sm.Ref))
+	// Polling and repeated callers must respect the cleanup backoff.
+	p.recoverPendingCharging(context.Background(), time.Now())
+	require.Equal(t, int32(1), policyCalls.Load())
+	recoverChargingNow(p)
+	require.Empty(t, sm.SMPolicyID, "acknowledged policy deletion must not repeat")
+	require.True(t, sm.SdmCounted, "failed SDM deletion must retain its bookkeeping slot")
+	require.Same(t, sm, smf_context.GetSMContextByRef(sm.Ref))
+	require.Zero(t, notifications.Load())
+	recoverChargingNow(p)
+	require.Eventually(t, func() bool { return smf_context.GetSMContextByRef(sm.Ref) == nil },
+		time.Second, time.Millisecond)
+	require.Equal(t, int32(1), chfCalls.Load(), "cleanup retries must never repeat final settlement")
+	require.Equal(t, int32(2), policyCalls.Load())
+	require.Equal(t, int32(2), udmCalls.Load())
+	require.Equal(t, int32(1), notifications.Load())
+	require.False(t, self.Ues.UeExists(sm.Supi))
+	require.False(t, sm.SdmCounted)
+}
+
+func TestChargingCleanupRunsOnceAndPreservesReplacementSession(t *testing.T) {
+	p, sm := chargingReleaseOrderSession(t)
+	self := smf_context.GetSelf()
+	previousUes := self.Ues
+	self.Ues = smf_context.InitSmfUeData()
+	t.Cleanup(func() { self.Ues = previousUes })
+	self.Ues.IncrementPduSessionCount(sm.Supi)
+	self.Ues.IncrementPduSessionCount(sm.Supi)
+	sm.SdmCounted = true
+	replacement := smf_context.NewSMContext(sm.Supi, sm.PDUSessionID)
+	require.NotNil(t, replacement)
+	t.Cleanup(func() { smf_context.RemoveSMContext(replacement.Ref) })
+	var calls, notifications atomic.Int32
+	server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == chargingReleasedPath {
+			notifications.Add(1)
+		} else {
+			calls.Add(1)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	sm.SmStatusNotifyUri = server.URL + chargingReleasedPath
+	sm.SelectedCHFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
+	sm.SMLock.Lock()
+	p.RemoveSMContextFromAllNF(sm, false)
+	p.RemoveSMContextFromAllNF(sm, true)
+	p.RemoveSMContextFromAllNF(sm, true)
+	require.Equal(t, 1, self.Ues.GetPduSessionCount(sm.Supi))
+	sm.SMLock.Unlock()
+	require.Eventually(t, func() bool { return smf_context.GetSMContextByRef(sm.Ref) == nil },
+		time.Second, time.Millisecond)
+	require.Same(t, replacement, smf_context.GetSMContextById(sm.Supi, sm.PDUSessionID))
+	require.Equal(t, int32(1), calls.Load())
+	require.Equal(t, int32(1), notifications.Load(), "pending notification requirements must merge")
+	require.Equal(t, 1, self.Ues.GetPduSessionCount(sm.Supi), "replacement's SDM slot must survive")
+	require.Eventually(t, func() bool {
+		_, retained := p.chargingReleases.Load(sm.Ref)
+		return !retained
+	}, time.Second, time.Millisecond)
+}
+
+func TestChargingReleaseRecoveryWaitsForUECompletionBeforeCleanup(t *testing.T) {
+	p, sm := chargingReleaseOrderSession(t)
+	self := smf_context.GetSelf()
+	previousUPI, previousConfig := self.UserPlaneInformation, factory.SmfConfig
+	self.UserPlaneInformation = &smf_context.UserPlaneInformation{}
+	factory.SmfConfig = &factory.Config{Configuration: &factory.Configuration{
+		T3592: &factory.TimerValue{Enable: false},
+	}}
+	t.Cleanup(func() { self.UserPlaneInformation, factory.SmfConfig = previousUPI, previousConfig })
+	sm.SMPolicyID = chargingReleaseOrderPolicyID
+	var calls, deletes atomic.Int32
+	server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/delete") {
+			deletes.Add(1)
+		} else if calls.Add(1) == 1 {
+			chargingReleaseOrderFailure(t, w)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	sm.SelectedCHFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
+	sm.SelectedPCFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, server.URL)
+	releaseRequest, err := nas_message.Marshal(&nas_message.PDUSessRelReq{
+		PDUSessId: 1, PTI: 1,
+	}, nil, nas_message.SecHdrTypePlainNas)
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	p.HandlePDUSessionSMContextUpdate(ctx, models.UpdateSmContextRequestBody{
+		JsonData:              &models.Smf_PDUSess_SmContextUpdateData{},
+		BinaryDataN1SmMessage: related("GSM_NAS", releaseRequest),
+	}, sm.Ref)
+	ctx.Writer.WriteHeaderNow()
+	require.Equal(t, http.StatusInternalServerError, recorder.Code)
+	recoverChargingNow(p)
+	state, chargingErr := sm.ChargingReleaseResult()
+	require.Equal(t, smf_context.ChargingReleaseSucceeded, state)
+	require.NoError(t, chargingErr)
+	require.Zero(t, deletes.Load(), "CHF success must not bypass UE/AMF completion")
+	require.Same(t, sm, smf_context.GetSMContextByRef(sm.Ref))
+	require.Equal(t, smf_context.InActivePending, sm.State())
+	complete, err := nas_message.Marshal(&nas_message.PDUSessRelComplete{
+		PDUSessId: 1, PTI: 1,
+	}, nil, nas_message.SecHdrTypePlainNas)
+	require.NoError(t, err)
+	recorder = httptest.NewRecorder()
+	ctx, _ = gin.CreateTestContext(recorder)
+	p.HandlePDUSessionSMContextUpdate(ctx, models.UpdateSmContextRequestBody{
+		JsonData:              &models.Smf_PDUSess_SmContextUpdateData{},
+		BinaryDataN1SmMessage: related("GSM_NAS", complete),
+	}, sm.Ref)
+	require.Eventually(t, func() bool { return smf_context.GetSMContextByRef(sm.Ref) == nil },
+		time.Second, time.Millisecond)
+	require.Equal(t, int32(1), deletes.Load())
+	require.Equal(t, int32(2), calls.Load(), "UE completion must reuse successful settlement")
+}
+
+func TestChargingCleanupCancellationKeepsIncompletePolicy(t *testing.T) {
+	p, sm := chargingReleaseOrderSession(t)
+	sm.SMPolicyID = chargingReleaseOrderPolicyID
+	started := make(chan struct{})
+	finish := make(chan struct{})
+	defer close(finish)
+	var calls atomic.Int32
+	server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/release") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if calls.Add(1) == 1 {
+			chargingReleaseOrderFailure(t, w)
+			return
+		}
+		close(started)
+		select {
+		case <-r.Context().Done():
+		case <-finish:
+		}
+	})
+	sm.SelectedCHFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
+	sm.SelectedPCFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, server.URL)
+	sm.SMLock.Lock()
+	p.RemoveSMContextFromAllNF(sm, false)
+	sm.SMLock.Unlock()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		p.recoverPendingCharging(ctx, time.Now().Add(time.Hour))
+		close(done)
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("cleanup retry did not start")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("policy cleanup ignored cancellation")
+	}
+	require.Same(t, sm, smf_context.GetSMContextByRef(sm.Ref))
+	require.Equal(t, chargingReleaseOrderPolicyID, sm.SMPolicyID)
 }

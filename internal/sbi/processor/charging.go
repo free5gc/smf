@@ -1,10 +1,9 @@
 package processor
 
 import (
+	"context"
 	"fmt"
 	"time"
-
-	"github.com/wmnsk/go-pfcp/ie"
 
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
@@ -57,38 +56,36 @@ func (p *Processor) UpdateChargingSession(
 	}
 }
 
-// sendChargingUpdate requires the caller's session serialization. Acknowledged
-// usage is removed before allowing another charging operation to start.
+// sendChargingUpdate requires SMLock. Its pending work survives CHF and PFCP
+// failures and consumes only the original report batch after acknowledgement.
 func (p *Processor) sendChargingUpdate(
-	smContext *smf_context.SMContext,
-	multipleUnitUsage []models.Chf_ConvCharging_MultipleUnitUsage,
-	reportCount int,
+	smContext *smf_context.SMContext, multipleUnitUsage []models.Chf_ConvCharging_MultipleUnitUsage, reportCount int,
 ) (*models.Chf_ConvCharging_ChargingDataResponse, error) {
 	if smContext.ChargingDataRef == "" {
 		return nil, fmt.Errorf("charging session has no resource reference")
 	}
+	if reportCount < 0 || reportCount > len(smContext.UrrReports) {
+		return nil, fmt.Errorf("invalid charging report count")
+	}
 	if err := smContext.BeginChargingUpdate(); err != nil {
 		return nil, err
 	}
-
-	rsp, problemDetails, err := p.Consumer().SendConvergedChargingRequest(
-		smContext, smf_context.CHARGING_UPDATE, multipleUnitUsage)
-	if problemDetails != nil {
-		err = fmt.Errorf("charging update failed: status=%d cause=%s detail=%s",
-			problemDetails.Status, problemDetails.Cause, problemDetails.Detail)
-	} else if err != nil {
-		err = fmt.Errorf("charging update failed: %w", err)
-	} else if rsp == nil {
-		err = fmt.Errorf("charging update returned no response body")
-	}
-	if err == nil {
-		smContext.UrrReports = smContext.UrrReports[reportCount:]
-	}
-	smContext.FinishChargingUpdate(err)
-	return rsp, err
+	work := p.newChargingWork(smContext, smf_context.CHARGING_UPDATE, multipleUnitUsage, reportCount)
+	return p.runChargingWork(context.Background(), work, multipleUnitUsage)
 }
 
+// ReleaseChargingSession requires SMLock. Remember termination even when an
+// unresolved Update prevents sending Release yet. NF cleanup is requested
+// separately, when the owning UE/AMF release path permits context removal.
 func (p *Processor) ReleaseChargingSession(smContext *smf_context.SMContext) error {
+	if smContext.ChargingDataRef == "" {
+		return nil
+	}
+	p.rememberChargingRelease(smContext)
+	return p.startChargingRelease(context.Background(), smContext)
+}
+
+func (p *Processor) startChargingRelease(ctx context.Context, smContext *smf_context.SMContext) error {
 	if smContext.ChargingDataRef == "" {
 		return nil
 	}
@@ -101,113 +98,25 @@ func (p *Processor) ReleaseChargingSession(smContext *smf_context.SMContext) err
 			return lastErr
 		case smf_context.ChargingReleaseInProgress:
 			return fmt.Errorf("charging release is in progress")
-		case smf_context.ChargingReleaseNotStarted:
-			return fmt.Errorf("charging release blocked by an unsettled update")
 		default:
-			return fmt.Errorf("unexpected charging release state: %d", state)
+			return fmt.Errorf("charging release blocked by an unsettled update")
 		}
 	}
-
-	// Final usage stays in the context until CHF reports success. The consumer
-	// freezes the complete request before attempting any network operation.
 	reports := smContext.UrrReports
-	multipleUnitUsage := buildMultiUnitUsage(smContext, reports)
-
-	_, problemDetails, err := p.Consumer().SendConvergedChargingRequest(smContext,
-		smf_context.CHARGING_RELEASE, multipleUnitUsage)
-	if problemDetails != nil {
-		err = fmt.Errorf("charging release failed: status=%d cause=%s detail=%s",
-			problemDetails.Status, problemDetails.Cause, problemDetails.Detail)
-	} else if err != nil {
-		err = fmt.Errorf("charging release failed: %w", err)
-	}
-	if err != nil {
-		logger.ChargingLog.Errorf("Send Charging Data Request[Termination] failed: %v", err)
-	} else {
-		smContext.UrrReports = smContext.UrrReports[len(reports):]
-		logger.ChargingLog.Infof("Send Charging Data Request[Termination] successfully")
-	}
-	smContext.FinishChargingRelease(err)
+	usage := buildMultiUnitUsage(smContext, reports)
+	work := p.newChargingWork(smContext, smf_context.CHARGING_RELEASE, usage, len(reports))
+	_, err := p.runChargingWork(ctx, work, usage)
 	return err
 }
 
-// Report usage report to the CHF and update the URR with the charging information in the charging response
 func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) {
 	reports := smContext.UrrReports
-	multipleUnitUsage := buildMultiUnitUsage(smContext, reports)
-
-	if len(multipleUnitUsage) == 0 {
-		logger.ChargingLog.Infof("No report need to be charged")
+	usage := buildMultiUnitUsage(smContext, reports)
+	if len(usage) == 0 {
 		return
 	}
-
-	rsp, err := p.sendChargingUpdate(smContext, multipleUnitUsage, len(reports))
-	if err != nil {
+	if _, err := p.sendChargingUpdate(smContext, usage, len(reports)); err != nil {
 		logger.ChargingLog.Errorf("Send Charging Data Request[Update] failed: %v", err)
-	} else {
-		var pfcpResponseStatus smf_context.PFCPSessionResponseStatus
-
-		upfUrrMap := make(map[string][]*smf_context.URR)
-
-		logger.ChargingLog.Infof("Send Charging Data Request[Update] successfully")
-		p.updateGrantedQuota(smContext, rsp.MultipleUnitInformation)
-		// Usually only the anchor UPF need	to be updated
-		for upfId, entries := range smContext.UrrTable {
-			for _, entry := range entries {
-				if entry.State == smf_context.RULE_UPDATE {
-					upfUrrMap[upfId] = append(upfUrrMap[upfId], entry.Rule)
-				}
-			}
-		}
-
-		if len(upfUrrMap) == 0 {
-			logger.ChargingLog.Infof("Do not have urr that need to update charging information")
-			return
-		}
-
-		smContext.SetState(smf_context.PFCPModification)
-
-		for upfId, urrList := range upfUrrMap {
-			logger.ChargingLog.Debugf("Sending PFCP Session Modification to UpfId=%s with %d URRs", upfId, len(urrList))
-			for _, urr := range urrList {
-				logger.ChargingLog.Debugf("URR[%d]: VolumeQuota=%d, Trigger.Volqu=%v",
-					urr.URRID, urr.VolumeQuota, urr.ReportingTrigger.HasVOLQU())
-			}
-
-			upf := smf_context.GetUpfById(upfId)
-			if upf == nil {
-				logger.PduSessLog.Warnf("Cound not find upf %s", upfId)
-				continue
-			}
-			response, requestErr := p.sendSessionModificationRequest(smContext, &PFCPState{
-				upf: upf, urrList: urrList,
-			})
-			if requestErr != nil {
-				logger.PduSessLog.Warnf("Sending PFCP Session Modification Request to AN UPF error: %+v", requestErr)
-				pfcpResponseStatus = smf_context.SessionUpdateFailed
-			} else {
-				cause, causeErr := response.Cause.Cause()
-				if causeErr != nil || cause != ie.CauseRequestAccepted {
-					logger.PduSessLog.Warnf(
-						"Received PFCP Session Modification Not Accepted Response from AN UPF: cause=%d err=%v",
-						cause, causeErr,
-					)
-					pfcpResponseStatus = smf_context.SessionUpdateFailed
-				} else {
-					logger.PduSessLog.Infoln("Received PFCP Session Modification Accepted Response")
-					pfcpResponseStatus = smf_context.SessionUpdateSuccess
-				}
-			}
-
-			switch pfcpResponseStatus {
-			case smf_context.SessionUpdateSuccess:
-				logger.PfcpLog.Traceln("In case SessionUpdateSuccess")
-				smContext.SetState(smf_context.Active)
-			case smf_context.SessionUpdateFailed:
-				logger.PfcpLog.Traceln("In case SessionUpdateFailed")
-				smContext.SetState(smf_context.Active)
-			}
-		}
 	}
 }
 

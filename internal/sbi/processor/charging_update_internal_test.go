@@ -85,7 +85,9 @@ func TestChargingUpdateSuccessConsumesAcknowledgedUsage(t *testing.T) {
 		}
 		received <- request
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(models.Chf_ConvCharging_ChargingDataResponse{}); err != nil {
+		if err := json.NewEncoder(w).Encode(models.Chf_ConvCharging_ChargingDataResponse{
+			InvocationSequenceNumber: request.InvocationSequenceNumber,
+		}); err != nil {
 			t.Errorf("write update response: %v", err)
 		}
 	})
@@ -145,12 +147,18 @@ func TestChargingUpdateInProgressBlocksOtherAccounting(t *testing.T) {
 	defer allowResponse()
 	var calls atomic.Int32
 	server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		var request models.Chf_ConvCharging_ChargingDataRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Errorf("decode charging request: %v", err)
+		}
 		if calls.Add(1) == 1 {
 			close(started)
 			<-unblock
 		}
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(models.Chf_ConvCharging_ChargingDataResponse{}); err != nil {
+		if err := json.NewEncoder(w).Encode(models.Chf_ConvCharging_ChargingDataResponse{
+			InvocationSequenceNumber: request.InvocationSequenceNumber,
+		}); err != nil {
 			t.Errorf("write update response: %v", err)
 		}
 	})
@@ -187,8 +195,14 @@ func TestChargingUpdateInProgressBlocksOtherAccounting(t *testing.T) {
 func TestChargingUpdateTriggerDoesNotConsumeUnreportedUsage(t *testing.T) {
 	p, sm := chargingReleaseOrderSession(t)
 	server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		var request models.Chf_ConvCharging_ChargingDataRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Errorf("decode charging request: %v", err)
+		}
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(models.Chf_ConvCharging_ChargingDataResponse{}); err != nil {
+		if err := json.NewEncoder(w).Encode(models.Chf_ConvCharging_ChargingDataResponse{
+			InvocationSequenceNumber: request.InvocationSequenceNumber,
+		}); err != nil {
 			t.Errorf("write update response: %v", err)
 		}
 	})
