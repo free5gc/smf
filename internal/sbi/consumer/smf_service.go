@@ -55,7 +55,7 @@ func (s *nsmfService) SendSMContextStatusNotification(uri string) (*models.Probl
 		client := s.getPDUSessionClient(uri)
 
 		ctx, pd, err := smf_context.GetSelf().GetTokenCtx(
-			models.Nrf_NFMgmt_ServiceName("namf-callback"), models.Nrf_NFMgmt_NFType_AMF)
+			smf_context.ServiceNameNamfCallback, models.Nrf_NFMgmt_NFType_AMF)
 		if err != nil {
 			logger.CtxLog.Warnf("[SMF] Get token for AMF callback failed: %+v", pd)
 			return pd, err
