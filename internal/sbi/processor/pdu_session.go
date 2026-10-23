@@ -1178,6 +1178,10 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				c.JSON(http.StatusInternalServerError, models.UpdateSmContextResponse400{
 					JsonData: &models.Smf_PDUSess_SmContextUpdateError{Error: problem},
 				})
+				smContext.PostRemoveDataPath()
+				if smContext.PDUSessionRelease_DUE_TO_DUP_PDU_ID {
+					p.RemoveSMContextFromAllNF(smContext, true)
+				}
 				return
 			}
 
@@ -1290,6 +1294,7 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 			problem := openapi.ProblemDetailsSystemFailure("Final charging settlement failed")
 			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problem.Cause)
 			c.JSON(http.StatusInternalServerError, problem)
+			p.RemoveSMContextFromAllNF(smContext, false)
 			return
 		}
 
@@ -1411,7 +1416,6 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 	go p.notifyOldAmfOfRelease(smContext, createData.SmContextStatusUri)
 	if chargingErr != nil {
 		smContext.SetState(smf_context.InActivePending)
-		return
 	}
 	p.RemoveSMContextFromAllNF(smContext, false)
 }

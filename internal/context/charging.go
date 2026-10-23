@@ -2,6 +2,7 @@ package context
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/free5gc/openapi/models"
@@ -44,12 +45,15 @@ const (
 	ChargingUpdateIdle ChargingUpdateState = iota
 	ChargingUpdateInProgress
 	ChargingUpdateFailed
+	// CHF acknowledged; UPF delivery is not yet complete.
+	ChargingUpdateQuotaPending
 )
 
-// pendingChargingRequest owns an immutable JSON snapshot kept until CHF reports
-// success. These snapshots are not persisted across SMF restarts.
+// pendingChargingRequest owns an immutable JSON snapshot retained until the
+// invocation and its local continuation complete. It does not survive restart.
 type pendingChargingRequest struct {
 	chargingDataRef string
+	target          string
 	body            []byte
 }
 
@@ -60,10 +64,19 @@ func (smContext *SMContext) NextChargingSequenceNumber() int32 {
 	return smContext.chargingInvocationSequenceNumber
 }
 
+// RequestChargingRelease blocks new updates while the existing invocation drains.
+// It does not change that invocation or consume the final-release send guard.
+func (smContext *SMContext) RequestChargingRelease() {
+	smContext.chargingMu.Lock()
+	defer smContext.chargingMu.Unlock()
+	smContext.chargingReleaseRequested = true
+}
+
 func (smContext *SMContext) BeginChargingUpdate() error {
 	smContext.chargingMu.Lock()
 	defer smContext.chargingMu.Unlock()
-	if smContext.chargingReleaseState != ChargingReleaseNotStarted || smContext.chargingReleaseRequest != nil {
+	if smContext.chargingReleaseRequested ||
+		smContext.chargingReleaseState != ChargingReleaseNotStarted || smContext.chargingReleaseRequest != nil {
 		return fmt.Errorf("charging session is terminating")
 	}
 	if smContext.chargingUpdateState == ChargingUpdateFailed {
@@ -181,4 +194,64 @@ func IsChargingRelatedUrr(urr *URR) bool {
 		return false
 	}
 	return !urr.MeasurementInformation.HasMNOP() && !urr.MeasurementInformation.HasMBQE()
+}
+
+// BeginChargingRetry requires the session lock and an existing frozen request.
+// Ordinary callers still cannot start a new invocation over a failed one.
+func (smContext *SMContext) BeginChargingRetry(requestType RequestType) bool {
+	smContext.chargingMu.Lock()
+	defer smContext.chargingMu.Unlock()
+	switch requestType {
+	case CHARGING_UPDATE:
+		if smContext.chargingUpdateRequest == nil ||
+			(smContext.chargingUpdateState != ChargingUpdateFailed &&
+				smContext.chargingUpdateState != ChargingUpdateQuotaPending) {
+			return false
+		}
+		smContext.chargingUpdateState = ChargingUpdateInProgress
+	case CHARGING_RELEASE:
+		if smContext.chargingReleaseRequest == nil || smContext.chargingReleaseState != ChargingReleaseFailed ||
+			smContext.chargingUpdateState != ChargingUpdateIdle {
+			return false
+		}
+		smContext.chargingReleaseState = ChargingReleaseInProgress
+	default:
+		return false
+	}
+	return true
+}
+
+func (smContext *SMContext) ChargingQuotaPending(err error) {
+	smContext.chargingMu.Lock()
+	defer smContext.chargingMu.Unlock()
+	smContext.chargingUpdateState = ChargingUpdateQuotaPending
+	smContext.chargingUpdateLastErr = err
+}
+
+var ErrChargingResponseSequence = errors.New("CHF response invocation sequence does not match request")
+
+// ChargingTarget freezes the destination alongside the request, before I/O.
+// Once frozen, later CHF discovery changes cannot redirect an unsettled request.
+func (smContext *SMContext) ChargingTarget(requestType RequestType, candidate string) (string, error) {
+	smContext.chargingMu.Lock()
+	defer smContext.chargingMu.Unlock()
+	var pending *pendingChargingRequest
+	switch requestType {
+	case CHARGING_UPDATE:
+		pending = smContext.chargingUpdateRequest
+	case CHARGING_RELEASE:
+		pending = smContext.chargingReleaseRequest
+	default:
+		return candidate, nil
+	}
+	if pending == nil {
+		return "", fmt.Errorf("charging request has not been prepared")
+	}
+	if pending.target == "" {
+		pending.target = candidate
+	}
+	if pending.target == "" {
+		return "", fmt.Errorf("charging request has no CHF destination")
+	}
+	return pending.target, nil
 }

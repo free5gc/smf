@@ -222,6 +222,7 @@ type SMContext struct {
 	RequestedUnit int32
 
 	chargingMu                       sync.Mutex
+	chargingReleaseRequested         bool
 	chargingReleaseState             ChargingReleaseState
 	chargingReleaseLastErr           error
 	chargingReleaseRequest           *pendingChargingRequest
@@ -503,8 +504,8 @@ func (smContext *SMContext) State() SMContextState {
 }
 
 // BeginChargingRelease elects one caller to send the CHF termination request.
-// Only NotStarted can enter InProgress. Failed attempts remain blocked until
-// CHF supports duplicate detection and settlement can be retried safely.
+// Only NotStarted can enter InProgress here. Background recovery uses
+// BeginChargingRetry to resend a frozen failed invocation.
 func (smContext *SMContext) BeginChargingRelease() bool {
 	smContext.chargingMu.Lock()
 	defer smContext.chargingMu.Unlock()

@@ -1,16 +1,20 @@
 package consumer
 
 import (
+	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 
 	nasie "github.com/free5gc/nas/ie"
+	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/pcf/SMPolCtrl"
 	smf_context "github.com/free5gc/smf/internal/context"
@@ -309,6 +313,12 @@ func (s *npcfService) buildPktFilterInfo(pf nasie.PacketFilter) (*models.Pcf_SMP
 }
 
 func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.SMContext) error {
+	return s.SendSMPolicyAssociationTerminationContext(context.Background(), smContext)
+}
+
+func (s *npcfService) SendSMPolicyAssociationTerminationContext(
+	parent context.Context, smContext *smf_context.SMContext,
+) error {
 	var client *SMPolCtrl.APIClient
 
 	// Create SMPolicyControl Client for this SM Context
@@ -322,10 +332,15 @@ func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.
 		return errors.Errorf("smContext not selected PCF")
 	}
 
-	ctx, _, err := smf_context.GetSelf().
+	tokenCtx, _, err := smf_context.GetSelf().
 		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, models.Nrf_NFMgmt_NFType_PCF)
 	if err != nil {
 		return err
+	}
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+	defer cancel()
+	if token := tokenCtx.Value(openapi.ContextOAuth2); token != nil {
+		ctx = context.WithValue(ctx, openapi.ContextOAuth2, token)
 	}
 
 	request := &SMPolCtrl.DeleteSMPolicyRequest{
@@ -334,6 +349,10 @@ func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.
 	}
 
 	_, err = client.IndividualSMPolicyDocumentApi.DeleteSMPolicy(ctx, request)
+	// A previous deletion can have succeeded even if its reply was lost.
+	if apiError, ok := err.(openapi.GenericOpenAPIError); ok && apiError.ErrorStatus == http.StatusNotFound {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("SM Policy termination failed: %v", err)
 	}
