@@ -9,8 +9,6 @@ import (
 	"github.com/free5gc/smf/pkg/factory"
 )
 
-// SM Policy related operation
-
 // SelectedSessionRule - return the SMF selected session rule for this SM Context
 func (c *SMContext) SelectedSessionRule() *SessionRule {
 	if c.SelectedSessionRuleID == "" {
