@@ -49,6 +49,7 @@ func BuildSessionModificationRequest(
 	}
 
 	ies := []*ie.IE{ie.NewFSEID(sessionContext.LocalSEID, cpIPv4, cpIPv6)}
+	retiredQERs := unreferencedRetiringQERs(sessionContext.PDRs, pdrList)
 
 	// TODO(go-pfcp migration): This builder still commits RULE_CREATE before a
 	// validated accepted response. Replace it with a prepared change set and
@@ -57,6 +58,10 @@ func BuildSessionModificationRequest(
 		if pdr == nil {
 			return nil, fmt.Errorf("build Session Modification PDR at index %d: nil PDR", index)
 		}
+		if pdr.Disabled {
+			continue
+		}
+
 		var ruleIE *ie.IE
 		var err error
 		switch pdr.State {
@@ -122,6 +127,13 @@ func BuildSessionModificationRequest(
 	}
 	for _, qerID := range sortedRuleIDs(qerByID) {
 		qer := qerByID[qerID]
+		if retiredQERs[qerID] {
+			if qer.State != context.RULE_INITIAL {
+				ies = append(ies, ie.NewRemoveQER(ie.NewQERID(qerID)))
+			}
+			qer.State = context.RULE_REMOVE
+			continue
+		}
 		if qer.State == context.RULE_INITIAL {
 			createQER, err := newCreateQERIE(qer)
 			if err != nil {
@@ -307,4 +319,36 @@ func newUpdateURRIE(urr *context.URR) (*ie.IE, error) {
 		children = append(children, ie.NewQuotaValidityTime(urr.QuotaValidityTime.Sub(pfcpTimeEpoch)))
 	}
 	return ie.NewUpdateURR(children...), nil
+}
+
+// Evaluate before building PDR IEs mutates their pending states. A partial
+// update must also account for live PDRs omitted from the current batch.
+func unreferencedRetiringQERs(existing map[uint16]*context.PDR, pending []*context.PDR) map[uint32]bool {
+	retiring := make(map[uint32]bool)
+	live := make(map[uint32]bool)
+	visit := func(pdr *context.PDR, inBatch bool) {
+		if pdr == nil || pdr.Disabled {
+			return
+		}
+		for _, qer := range pdr.QER {
+			if qer == nil {
+				continue
+			}
+			if pdr.State != context.RULE_REMOVE {
+				live[qer.QERID] = true
+			} else if inBatch {
+				retiring[qer.QERID] = true
+			}
+		}
+	}
+	for _, pdr := range existing {
+		visit(pdr, false)
+	}
+	for _, pdr := range pending {
+		visit(pdr, true)
+	}
+	for id := range live {
+		delete(retiring, id)
+	}
+	return retiring
 }

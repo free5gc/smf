@@ -669,7 +669,10 @@ func (c *SMContext) SelectDefaultDataPath() error {
 	}
 
 	if !defaultPath.Activated {
-		defaultPath.ActivateTunnelAndPDR(c, DefaultPrecedence)
+		binding := PathQoSBinding{QFI: c.SelectedSessionRule().DefQosQFI}
+		if err := defaultPath.ActivateTunnelAndPDR(c, DefaultPrecedence, binding); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -704,8 +707,15 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 		createdDataPath.IsDefaultPath = true
 	}
 
-	createdDataPath.GBRFlow = isGBRFlow(qosData)
-	createdDataPath.ActivateTunnelAndPDR(c, uint32(pccRule.Precedence))
+	qfi := pccRule.QFI
+	if pccRule.RefQosDataID() == "" {
+		qfi = c.SelectedSessionRule().DefQosQFI
+	}
+	binding := PathQoSBinding{QFI: qfi, QosData: qosData}
+	if err := createdDataPath.ActivateTunnelAndPDR(c, uint32(pccRule.Precedence), binding); err != nil {
+		return err
+	}
+	pccRule.SetQFI(qfi)
 	c.Tunnel.AddDataPath(createdDataPath)
 	pccRule.Datapath = createdDataPath
 	pccRule.AddDataPathForwardingParameters(c, &targetRoute)
@@ -717,7 +727,6 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	}
 
 	if pccRule.RefQosDataID() != "" {
-		pccRule.Datapath.AddQoS(c, pccRule.QFI, qosData)
 		c.AddQosFlow(pccRule.QFI, qosData)
 	}
 	return nil
@@ -752,8 +761,15 @@ func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
 		createdDataPath.IsDefaultPath = true
 	}
 
-	createdDataPath.GBRFlow = isGBRFlow(qosData)
-	createdDataPath.ActivateDcTunnelAndPDR(c, uint32(pccRule.Precedence))
+	qfi := pccRule.QFI
+	if pccRule.RefQosDataID() == "" {
+		qfi = c.SelectedSessionRule().DefQosQFI
+	}
+	binding := PathQoSBinding{QFI: qfi, QosData: qosData}
+	if err := createdDataPath.ActivateDcTunnelAndPDR(c, uint32(pccRule.Precedence), binding); err != nil {
+		return err
+	}
+	pccRule.SetQFI(qfi)
 	c.DCTunnel.AddDataPath(createdDataPath)
 	pccRule.Datapath = createdDataPath
 	pccRule.AddDataPathForwardingParametersOnDcTunnel(c, &targetRoute)
@@ -765,7 +781,6 @@ func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
 	}
 
 	if pccRule.RefQosDataID() != "" {
-		pccRule.Datapath.AddQoS(c, pccRule.QFI, qosData)
 		c.AddQosFlow(pccRule.QFI, qosData)
 	}
 
@@ -990,10 +1005,13 @@ func (smContextState SMContextState) String() string {
 
 func (smContext *SMContext) AssignQFI(qosId string) uint8 {
 	qfi, ok := smContext.qosDataToQFI[qosId]
-	if !ok {
+	for !ok {
 		newId, err := smContext.QFIGenerator.Allocate()
 		if err != nil {
 			return 0
+		}
+		if session := smContext.SelectedSessionRule(); session != nil && uint8(newId) == session.DefQosQFI {
+			continue // Keep the session's default QFI reserved.
 		}
 		smContext.qosDataToQFI[qosId] = uint8(newId)
 		return uint8(newId)

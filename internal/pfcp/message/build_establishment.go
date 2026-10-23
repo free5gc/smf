@@ -80,6 +80,10 @@ func BuildSessionEstablishmentRequest(
 		if pdr == nil {
 			return nil, fmt.Errorf("build Create PDR at index %d: nil PDR", index)
 		}
+		if pdr.Disabled {
+			continue
+		}
+
 		if pdr.State == context.RULE_INITIAL {
 			createPDR, buildErr := newCreatePDRIE(pdr)
 			if buildErr != nil {
@@ -325,7 +329,7 @@ func newCreateBARIE(bar *context.BAR) *ie.IE {
 }
 
 func newCreateQERIE(qer *context.QER) (*ie.IE, error) {
-	if qer.QFI.QFI > 63 {
+	if qer.QFI != nil && qer.QFI.QFI > 63 {
 		return nil, fmt.Errorf("QFI %d exceeds 6 bits", qer.QFI.QFI)
 	}
 	children := []*ie.IE{ie.NewQERID(qer.QERID)}
@@ -347,7 +351,9 @@ func newCreateQERIE(qer *context.QER) (*ie.IE, error) {
 		}
 		children = append(children, ie.NewGBR(gbr.ULGBR, gbr.DLGBR))
 	}
-	children = append(children, ie.NewQFI(qer.QFI.QFI))
+	if qer.QFI != nil {
+		children = append(children, ie.NewQFI(qer.QFI.QFI))
+	}
 	return ie.NewCreateQER(children...), nil
 }
 

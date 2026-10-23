@@ -293,6 +293,9 @@ func BuildPDUSessionResourceModifyConfirmTransfer(
 			}
 
 			for _, qer := range DLPDR.QER {
+				if qer.QFI == nil {
+					continue
+				}
 				qosList.List = append(qosList.List, ngapie.QosFlowModifyConfirmItem{
 					QosFlowIdentifier: &ngapie.QosFlowIdentifier{
 						Value: int64(qer.QFI.QFI),

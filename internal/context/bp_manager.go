@@ -1,6 +1,7 @@
 package context
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/free5gc/openapi/models"
@@ -74,13 +75,14 @@ func (bpMGR *BPManager) SelectPSA2(smContext *SMContext) {
 }
 
 func (bpMGR *BPManager) FindULCL(smContext *SMContext) error {
+	bpMGR.ULCL = nil
 	bpMGR.UpdatedBranchingPoint = make(map[*UPF]int)
 	activatingPath := bpMGR.ActivatingPath
 	for _, psa1Path := range bpMGR.ActivatedPaths {
 		depth := 0
 		psa1CurDPNode := psa1Path.FirstDPNode
 		for psa2CurDPNode := activatingPath.FirstDPNode; psa2CurDPNode != nil; psa2CurDPNode = psa2CurDPNode.Next() {
-			if reflect.DeepEqual(psa2CurDPNode.UPF.NodeID, psa1CurDPNode.UPF.NodeID) {
+			if psa1CurDPNode != nil && reflect.DeepEqual(psa2CurDPNode.UPF.NodeID, psa1CurDPNode.UPF.NodeID) {
 				psa1CurDPNode = psa1CurDPNode.Next()
 				depth++
 
@@ -99,6 +101,9 @@ func (bpMGR *BPManager) FindULCL(smContext *SMContext) error {
 			bpMGR.ULCL = upf
 			maxDepth = depth
 		}
+	}
+	if bpMGR.ULCL == nil {
+		return fmt.Errorf("no common ULCL found for static route")
 	}
 	return nil
 }

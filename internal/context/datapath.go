@@ -37,6 +37,9 @@ type GTPTunnel struct {
 
 	TEID uint32
 	PDR  *PDR
+	// Additional filters share this tunnel's forwarding and QoS rules.
+	AdditionalPDRs []*PDR
+	RetiringPDRs   []*PDR
 }
 
 type DataPathNode struct {
@@ -222,6 +225,7 @@ func (node *DataPathNode) ActivateDownLinkDcTunnel(smContext *SMContext) error {
 }
 
 func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
+	node.UpLinkTunnel.releaseAdditionalPDRs(smContext, node.UPF)
 	if pdr := node.UpLinkTunnel.PDR; pdr != nil {
 		upfId := node.UPF.UUID()
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
@@ -247,7 +251,7 @@ func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 		if qerList := pdr.QER; qerList != nil {
 			for _, qer := range qerList {
 				if qer != nil {
-					err = node.UPF.RemoveQER(qer)
+					err = smContext.releaseQER(node.UPF, qer)
 					if err != nil {
 						logger.CtxLog.Warnln("Deactivated UpLinkTunnel", err)
 					}
@@ -268,6 +272,7 @@ func (node *DataPathNode) DeactivateUpLinkTunnel(smContext *SMContext) {
 }
 
 func (node *DataPathNode) DeactivateUpLinkDcTunnel(smContext *SMContext) {
+	node.UpLinkTunnel.releaseAdditionalPDRs(smContext, node.UPF)
 	if pdr := node.UpLinkTunnel.PDR; pdr != nil {
 		upfId := node.UPF.UUID()
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
@@ -293,7 +298,7 @@ func (node *DataPathNode) DeactivateUpLinkDcTunnel(smContext *SMContext) {
 		if qerList := pdr.QER; qerList != nil {
 			for _, qer := range qerList {
 				if qer != nil {
-					err = node.UPF.RemoveQER(qer)
+					err = smContext.releaseQER(node.UPF, qer)
 					if err != nil {
 						logger.CtxLog.Warnln("Deactivated UpLinkDctunnel", err)
 					}
@@ -314,6 +319,7 @@ func (node *DataPathNode) DeactivateUpLinkDcTunnel(smContext *SMContext) {
 }
 
 func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
+	node.DownLinkTunnel.releaseAdditionalPDRs(smContext, node.UPF)
 	if pdr := node.DownLinkTunnel.PDR; pdr != nil {
 		upfId := node.UPF.UUID()
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
@@ -339,7 +345,7 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 		if qerList := pdr.QER; qerList != nil {
 			for _, qer := range qerList {
 				if qer != nil {
-					err = node.UPF.RemoveQER(qer)
+					err = smContext.releaseQER(node.UPF, qer)
 					if err != nil {
 						logger.CtxLog.Warnln("Deactivated DownLinkTunnel", err)
 					}
@@ -360,6 +366,7 @@ func (node *DataPathNode) DeactivateDownLinkTunnel(smContext *SMContext) {
 }
 
 func (node *DataPathNode) DeactivateDownLinkDcTunnel(smContext *SMContext) {
+	node.DownLinkTunnel.releaseAdditionalPDRs(smContext, node.UPF)
 	if pdr := node.DownLinkTunnel.PDR; pdr != nil {
 		upfId := node.UPF.UUID()
 		smContext.RemovePDRfromPFCPSession(node.UPF.NodeID, pdr)
@@ -385,7 +392,7 @@ func (node *DataPathNode) DeactivateDownLinkDcTunnel(smContext *SMContext) {
 		if qerList := pdr.QER; qerList != nil {
 			for _, qer := range qerList {
 				if qer != nil {
-					err = node.UPF.RemoveQER(qer)
+					err = smContext.releaseQER(node.UPF, qer)
 					if err != nil {
 						logger.CtxLog.Warnln("Deactivated DownLinkDctunnel", err)
 					}
@@ -557,7 +564,24 @@ func (datapath *DataPath) addUrrToPath(smContext *SMContext) {
 	}
 }
 
-func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence uint32) {
+func (dataPath *DataPath) ActivateTunnelAndPDR(
+	smContext *SMContext, precedence uint32, bindings ...PathQoSBinding,
+) error {
+	if len(bindings) == 0 {
+		return fmt.Errorf("missing path QoS binding")
+	}
+	for _, binding := range bindings {
+		if err := validateQosFlowBinding(smContext, binding.QFI, binding.QosData); err != nil {
+			return err
+		}
+		if len(binding.FlowInfos) != 0 {
+			if _, _, err := directionalSDFFilters(binding.FlowInfos); err != nil {
+				return err
+			}
+		}
+	}
+	dataPath.GBRFlow = len(bindings) == 1 && bindings[0].QFI != smContext.SelectedSessionRule().DefQosQFI &&
+		isGBRFlow(bindings[0].QosData)
 	smContext.AllocateLocalSEIDForDataPath(dataPath)
 
 	firstDPNode := dataPath.FirstDPNode
@@ -568,11 +592,11 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 		logger.PduSessLog.Traceln("Current DP Node IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
 		if err := node.ActivateUpLinkTunnel(smContext); err != nil {
 			logger.CtxLog.Warnln(err)
-			return
+			return err
 		}
 		if err := node.ActivateDownLinkTunnel(smContext); err != nil {
 			logger.CtxLog.Warnln(err)
-			return
+			return err
 		}
 	}
 
@@ -589,13 +613,12 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 
 	// Activate PDR
 	for curDataPathNode := firstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
-		var defaultQER *QER
 		var ambrQER *QER
 		currentUUID := curDataPathNode.UPF.uuid
-		if qerId, okCurrentId := smContext.AMBRQerMap[currentUUID]; !okCurrentId {
+		if _, okCurrentId := smContext.AMBRQerMap[currentUUID]; !okCurrentId {
 			if newQER, err := curDataPathNode.UPF.AddQER(); err != nil {
 				logger.PduSessLog.Errorln("new QER failed")
-				return
+				return err
 			} else {
 				var bitRateKbpsULMBR uint64
 				var bitRateKbpsDLMBR uint64
@@ -603,14 +626,14 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				bitRateKbpsULMBR, bitRateConvertErr = util.BitRateTokbps(sessionRule.AuthSessAmbr.Uplink)
 				if bitRateConvertErr != nil {
 					logger.PduSessLog.Errorln("Cannot get the unit of ULMBR, please check the settings in web console")
-					return
+					return bitRateConvertErr
 				}
 				bitRateKbpsDLMBR, bitRateConvertErr = util.BitRateTokbps(sessionRule.AuthSessAmbr.Downlink)
 				if bitRateConvertErr != nil {
 					logger.PduSessLog.Errorln("Cannot get the unit of DLMBR, please check the settings in web console")
-					return
+					return bitRateConvertErr
 				}
-				newQER.QFI.QFI = sessionRule.DefQosQFI
+				// Session-AMBR is shared across non-GBR flows; it does not select a QFI.
 				newQER.GateStatus = &pfcptype.GateStatus{
 					ULGate: pfcptype.GateOpen,
 					DLGate: pfcptype.GateOpen,
@@ -622,28 +645,6 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				ambrQER = newQER
 			}
 			smContext.AMBRQerMap[currentUUID] = ambrQER.QERID
-		} else if oldQER, okQerId := curDataPathNode.UPF.qerPool.Load(qerId); okQerId {
-			ambrQER = oldQER.(*QER)
-		}
-
-		if dataPath.IsDefaultPath {
-			id := getQosIdKey(currentUUID, sessionRule.DefQosQFI)
-			if qerId, okId := smContext.QerUpfMap[id]; !okId {
-				if newQER, err := curDataPathNode.UPF.AddQER(); err != nil {
-					logger.PduSessLog.Errorln("new QER failed")
-					return
-				} else {
-					newQER.QFI.QFI = sessionRule.DefQosQFI
-					newQER.GateStatus = &pfcptype.GateStatus{
-						ULGate: pfcptype.GateOpen,
-						DLGate: pfcptype.GateOpen,
-					}
-					defaultQER = newQER
-				}
-				smContext.QerUpfMap[id] = defaultQER.QERID
-			} else if oldQER, okQerId := curDataPathNode.UPF.qerPool.Load(qerId); okQerId {
-				defaultQER = oldQER.(*QER)
-			}
 		}
 
 		logger.CtxLog.Traceln("Calculate ", curDataPathNode.UPF.PFCPAddr().String())
@@ -654,12 +655,6 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 		if curULTunnel != nil {
 			ULPDR := curULTunnel.PDR
 			ULDestUPF := curULTunnel.DestEndPoint.UPF
-			if defaultQER != nil {
-				ULPDR.QER = append(ULPDR.QER, defaultQER)
-			}
-			if ambrQER != nil && !dataPath.GBRFlow {
-				ULPDR.QER = append(ULPDR.QER, ambrQER)
-			}
 
 			ULPDR.Precedence = precedence
 
@@ -672,12 +667,12 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 
 			if iface == nil {
 				logger.CtxLog.Errorln("Can not get interface")
-				return
+				return fmt.Errorf("UPF %s has no required interface", curDataPathNode.GetNodeIP())
 			}
 
 			if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
 				logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
-				return
+				return err
 			} else {
 				ULPDR.PDI = PDI{
 					SourceInterface: pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceAccess},
@@ -728,7 +723,7 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 
 				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
 					logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
-					return
+					return err
 				} else {
 					ULFAR.ForwardingParameters.OuterHeaderCreation = &pfcptype.OuterHeaderCreation{
 						OuterHeaderCreationDescription: pfcptype.OuterHeaderCreationGtpUUdpIpv4,
@@ -744,12 +739,6 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 			var iface *UPFInterfaceInfo
 			DLPDR := curDLTunnel.PDR
 			DLDestUPF := curDLTunnel.DestEndPoint.UPF
-			if defaultQER != nil {
-				DLPDR.QER = append(DLPDR.QER, defaultQER)
-			}
-			if ambrQER != nil && !dataPath.GBRFlow {
-				DLPDR.QER = append(DLPDR.QER, ambrQER)
-			}
 
 			DLPDR.Precedence = precedence
 
@@ -776,7 +765,7 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				iface = DLDestUPF.GetInterface(models.Nrf_NFMgmt_UPInterfaceType_N9, smContext.Dnn)
 				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
 					logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
-					return
+					return err
 				} else {
 					DLPDR.PDI = PDI{
 						SourceInterface: pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceCore},
@@ -819,7 +808,7 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 
 				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
 					logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
-					return
+					return err
 				} else {
 					DLFAR.ForwardingParameters = &ForwardingParameters{
 						DestinationInterface: pfcptype.DestinationInterface{InterfaceValue: pfcptype.DestinationInterfaceAccess},
@@ -853,10 +842,31 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 		}
 	}
 
+	if err := dataPath.applyQoSBindings(smContext, precedence, bindings); err != nil {
+		return err
+	}
 	dataPath.Activated = true
+	return nil
 }
 
-func (dataPath *DataPath) ActivateDcTunnelAndPDR(smContext *SMContext, precedence uint32) {
+func (dataPath *DataPath) ActivateDcTunnelAndPDR(
+	smContext *SMContext, precedence uint32, bindings ...PathQoSBinding,
+) error {
+	if len(bindings) == 0 {
+		return fmt.Errorf("missing path QoS binding")
+	}
+	for _, binding := range bindings {
+		if err := validateQosFlowBinding(smContext, binding.QFI, binding.QosData); err != nil {
+			return err
+		}
+		if len(binding.FlowInfos) != 0 {
+			if _, _, err := directionalSDFFilters(binding.FlowInfos); err != nil {
+				return err
+			}
+		}
+	}
+	dataPath.GBRFlow = len(bindings) == 1 && bindings[0].QFI != smContext.SelectedSessionRule().DefQosQFI &&
+		isGBRFlow(bindings[0].QosData)
 	smContext.AllocateLocalSEIDForDataPath(dataPath)
 
 	firstDPNode := dataPath.FirstDPNode
@@ -867,9 +877,11 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(smContext *SMContext, precedenc
 		logger.PduSessLog.Traceln("Current DP Node IP: ", node.UPF.NodeID.ResolveNodeIdToIp().String())
 		if err := node.ActivateUpLinkDcTunnel(smContext); err != nil {
 			logger.PduSessLog.Errorln("ActivateUpLinkDcTunnel failed", err)
+			return err
 		}
 		if err := node.ActivateDownLinkDcTunnel(smContext); err != nil {
 			logger.PduSessLog.Errorln("ActivateDownLinkDcTunnel failed", err)
+			return err
 		}
 	}
 
@@ -886,13 +898,12 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(smContext *SMContext, precedenc
 
 	// Activate PDR
 	for curDataPathNode := firstDPNode; curDataPathNode != nil; curDataPathNode = curDataPathNode.Next() {
-		var defaultQER *QER
 		var ambrQER *QER
 		currentUUID := curDataPathNode.UPF.uuid
-		if qerId, okCurrentId := smContext.AMBRQerMap[currentUUID]; !okCurrentId {
+		if _, okCurrentId := smContext.AMBRQerMap[currentUUID]; !okCurrentId {
 			if newQER, err := curDataPathNode.UPF.AddQER(); err != nil {
 				logger.PduSessLog.Errorln("new QER failed")
-				return
+				return err
 			} else {
 				var bitRateKbpsULMBR uint64
 				var bitRateKbpsDLMBR uint64
@@ -900,14 +911,14 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(smContext *SMContext, precedenc
 				bitRateKbpsULMBR, bitRateConvertErr = util.BitRateTokbps(sessionRule.AuthSessAmbr.Uplink)
 				if bitRateConvertErr != nil {
 					logger.PduSessLog.Errorln("Cannot get the unit of ULMBR, please check the settings in web console")
-					return
+					return bitRateConvertErr
 				}
 				bitRateKbpsDLMBR, bitRateConvertErr = util.BitRateTokbps(sessionRule.AuthSessAmbr.Downlink)
 				if bitRateConvertErr != nil {
 					logger.PduSessLog.Errorln("Cannot get the unit of DLMBR, please check the settings in web console")
-					return
+					return bitRateConvertErr
 				}
-				newQER.QFI.QFI = sessionRule.DefQosQFI
+				// Session-AMBR is shared across non-GBR flows; it does not select a QFI.
 				newQER.GateStatus = &pfcptype.GateStatus{
 					ULGate: pfcptype.GateOpen,
 					DLGate: pfcptype.GateOpen,
@@ -919,28 +930,6 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(smContext *SMContext, precedenc
 				ambrQER = newQER
 			}
 			smContext.AMBRQerMap[currentUUID] = ambrQER.QERID
-		} else if oldQER, okQerId := curDataPathNode.UPF.qerPool.Load(qerId); okQerId {
-			ambrQER = oldQER.(*QER)
-		}
-
-		if dataPath.IsDefaultPath {
-			id := getQosIdKey(currentUUID, sessionRule.DefQosQFI)
-			if qerId, okId := smContext.QerUpfMap[id]; !okId {
-				if newQER, err := curDataPathNode.UPF.AddQER(); err != nil {
-					logger.PduSessLog.Errorln("new QER failed")
-					return
-				} else {
-					newQER.QFI.QFI = sessionRule.DefQosQFI
-					newQER.GateStatus = &pfcptype.GateStatus{
-						ULGate: pfcptype.GateOpen,
-						DLGate: pfcptype.GateOpen,
-					}
-					defaultQER = newQER
-				}
-				smContext.QerUpfMap[id] = defaultQER.QERID
-			} else if oldQER, okQerId := curDataPathNode.UPF.qerPool.Load(qerId); okQerId {
-				defaultQER = oldQER.(*QER)
-			}
 		}
 
 		logger.CtxLog.Traceln("Calculate ", curDataPathNode.UPF.PFCPAddr().String())
@@ -951,12 +940,6 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(smContext *SMContext, precedenc
 		if curULTunnel != nil {
 			ULPDR := curULTunnel.PDR
 			ULDestUPF := curULTunnel.DestEndPoint.UPF
-			if defaultQER != nil {
-				ULPDR.QER = append(ULPDR.QER, defaultQER)
-			}
-			if ambrQER != nil && !dataPath.GBRFlow {
-				ULPDR.QER = append(ULPDR.QER, ambrQER)
-			}
 
 			ULPDR.Precedence = precedence
 
@@ -969,12 +952,12 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(smContext *SMContext, precedenc
 
 			if iface == nil {
 				logger.CtxLog.Errorln("Can not get interface")
-				return
+				return fmt.Errorf("UPF %s has no required interface", curDataPathNode.GetNodeIP())
 			}
 
 			if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
 				logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
-				return
+				return err
 			} else {
 				ULPDR.PDI = PDI{
 					SourceInterface: pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceAccess},
@@ -1025,7 +1008,7 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(smContext *SMContext, precedenc
 
 				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
 					logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
-					return
+					return err
 				} else {
 					ULFAR.ForwardingParameters.OuterHeaderCreation = &pfcptype.OuterHeaderCreation{
 						OuterHeaderCreationDescription: pfcptype.OuterHeaderCreationGtpUUdpIpv4,
@@ -1041,12 +1024,6 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(smContext *SMContext, precedenc
 			var iface *UPFInterfaceInfo
 			DLPDR := curDLTunnel.PDR
 			DLDestUPF := curDLTunnel.DestEndPoint.UPF
-			if defaultQER != nil {
-				DLPDR.QER = append(DLPDR.QER, defaultQER)
-			}
-			if ambrQER != nil && !dataPath.GBRFlow {
-				DLPDR.QER = append(DLPDR.QER, ambrQER)
-			}
 
 			DLPDR.Precedence = precedence
 
@@ -1073,7 +1050,7 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(smContext *SMContext, precedenc
 				iface = DLDestUPF.GetInterface(models.Nrf_NFMgmt_UPInterfaceType_N9, smContext.Dnn)
 				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
 					logger.CtxLog.Errorln("ActivateDcTunnelAndPDR failed", err)
-					return
+					return err
 				} else {
 					DLPDR.PDI = PDI{
 						SourceInterface: pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceCore},
@@ -1113,7 +1090,7 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(smContext *SMContext, precedenc
 
 				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
 					logger.CtxLog.Errorln("ActivateDcTunnelAndPDR failed", err)
-					return
+					return err
 				} else {
 					DLFAR.ForwardingParameters = &ForwardingParameters{
 						DestinationInterface: pfcptype.DestinationInterface{InterfaceValue: pfcptype.DestinationInterfaceAccess},
@@ -1147,7 +1124,11 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(smContext *SMContext, precedenc
 		}
 	}
 
+	if err := dataPath.applyQoSBindings(smContext, precedence, bindings); err != nil {
+		return err
+	}
 	dataPath.Activated = true
+	return nil
 }
 
 func (dataPath *DataPath) DeactivateTunnelAndPDR(smContext *SMContext) {
@@ -1184,6 +1165,13 @@ func (dataPath *DataPath) DeactivateDcTunnelAndPDR(smContext *SMContext) {
 
 func (p *DataPath) RemovePDR() {
 	for curDPNode := p.FirstDPNode; curDPNode != nil; curDPNode = curDPNode.Next() {
+		for _, tunnel := range []*GTPTunnel{curDPNode.UpLinkTunnel, curDPNode.DownLinkTunnel} {
+			if tunnel != nil {
+				for _, pdr := range tunnel.AdditionalPDRs {
+					pdr.State = RULE_REMOVE
+				}
+			}
+		}
 		if curDPNode.DownLinkTunnel != nil && curDPNode.DownLinkTunnel.PDR != nil {
 			curDPNode.DownLinkTunnel.PDR.State = RULE_REMOVE
 			curDPNode.DownLinkTunnel.PDR.FAR.State = RULE_REMOVE
@@ -1314,9 +1302,12 @@ func (p *DataPath) GetOrCreateUrr(smContext *SMContext, upf *UPF,
 ) *URR {
 	currentUUID := upf.UUID()
 
-	for _, info := range smContext.ChargingInfo {
+	for urrID, info := range smContext.ChargingInfo {
 		if info.UpfId == upf.UUID() && info.ChargingLevel == PduSessionCharging && info.RatingGroup == chgData.RatingGroup {
-			return nil
+			entry := smContext.UrrTable[currentUUID][urrID]
+			if entry != nil && entry.Rule != nil && entry.RefCount > 0 && entry.State != RULE_REMOVE {
+				return entry.Rule
+			}
 		}
 	}
 
@@ -1332,117 +1323,83 @@ func (p *DataPath) GetOrCreateUrr(smContext *SMContext, upf *UPF,
 	return nil
 }
 
-func (p *DataPath) AddQoS(smContext *SMContext, qfi uint8, qos *models.Pcf_SMPolCtrl_QosData) {
-	// QFI = 1 -> default QFI
-	if qos == nil && qfi != 1 {
-		return
+func validateQosFlowBinding(c *SMContext, qfi uint8, qos *models.Pcf_SMPolCtrl_QosData) error {
+	session := c.SelectedSessionRule()
+	if session == nil || session.AuthSessAmbr == nil {
+		return fmt.Errorf("missing authorized session rule for QoS flow binding")
 	}
-	logger.PduSessLog.Debugf("AddQoS called: QFI=%d, QosData=%+v", qfi, qos)
-	for node := p.FirstDPNode; node != nil; node = node.Next() {
-		var qer *QER
+	if qfi == 0 || qfi > 63 {
+		return fmt.Errorf("invalid bound QFI %d", qfi)
+	}
+	if qfi != session.DefQosQFI && (qos == nil || qos.DefQosFlowIndication) {
+		return fmt.Errorf("QFI %d requires dedicated QoS data", qfi)
+	}
+	return nil
+}
 
-		currentUUID := node.UPF.GetUUID()
-		id := getQosIdKey(currentUUID, qfi)
-
-		if qerId, ok := smContext.QerUpfMap[id]; !ok {
-			logger.PduSessLog.Debugf("AddQoS: QER not exist for ID=%s, creating new QER", id)
-			if newQER, err := node.UPF.AddQER(); err != nil {
-				logger.PduSessLog.Errorln("new QER failed")
-				return
-			} else {
-				newQER.QFI = pfcptype.QFI{
-					QFI: qfi,
-				}
-				newQER.GateStatus = &pfcptype.GateStatus{
-					ULGate: pfcptype.GateOpen,
-					DLGate: pfcptype.GateOpen,
-				}
-				if isGBRFlow(qos) {
-					logger.PduSessLog.Debugf("AddQoS: GBR flow detected for QFI=%d", qfi)
-					logger.PduSessLog.Debugf("AddQoS GBR fields: GbrUl='%s', GbrDl='%s', MaxbrUl='%s', MaxbrDl='%s'",
-						qos.GbrUl, qos.GbrDl, qos.MaxbrUl, qos.MaxbrDl)
-					var bitRateKbpsQoSGBRUL uint64
-					var bitRateKbpsQoSGBRDL uint64
-					var bitRateKbpsQoSMBRUL uint64
-					var bitRateKbpsQoSMBRDL uint64
-					var bitRateConvertErr error
-					bitRateKbpsQoSGBRUL, bitRateConvertErr = util.BitRateTokbps(qos.GbrUl)
-					if bitRateConvertErr != nil {
-						logger.PduSessLog.Panicln("Cannot get the unit of GBRUL, please check the settings in web console")
-						return
-					}
-
-					bitRateKbpsQoSGBRDL, bitRateConvertErr = util.BitRateTokbps(qos.GbrDl)
-					if bitRateConvertErr != nil {
-						logger.PduSessLog.Panicln("Cannot get the unit of GBRDL, please check the settings in web console")
-						return
-					}
-
-					bitRateKbpsQoSMBRUL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrUl)
-					if bitRateConvertErr != nil {
-						logger.PduSessLog.Panicln("Cannot get the unit of MBRUL, please check the settings in web console")
-						return
-					}
-
-					bitRateKbpsQoSMBRDL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrDl)
-					if bitRateConvertErr != nil {
-						logger.PduSessLog.Panicln("Cannot get the unit of MBRDL, please check the settings in web console")
-						return
-					}
-
-					logger.PduSessLog.Debugf("AddQoS: Setting GBR/MBR on QER: ULGBR=%d, DLGBR=%d, ULMBR=%d, DLMBR=%d",
-						bitRateKbpsQoSGBRUL, bitRateKbpsQoSGBRDL, bitRateKbpsQoSMBRUL, bitRateKbpsQoSMBRDL)
-					newQER.GBR = &pfcptype.GBR{
-						ULGBR: bitRateKbpsQoSGBRUL,
-						DLGBR: bitRateKbpsQoSGBRDL,
-					}
-					newQER.MBR = &pfcptype.MBR{
-						ULMBR: bitRateKbpsQoSMBRUL,
-						DLMBR: bitRateKbpsQoSMBRDL,
-					}
-				} else {
-					logger.PduSessLog.Debugf("AddQoS: Non-GBR flow for QFI=%d", qfi)
-					var bitRateKbpsSessionAmbrMBRUL uint64
-					var bitRateKbpsSessionAmbrMBRDL uint64
-					var bitRateConvertErr error
-					bitRateKbpsSessionAmbrMBRUL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrUl)
-					if bitRateConvertErr != nil {
-						logger.PduSessLog.Error("Cannot get the unit of MBRUL, please check the settings in web console")
-						return
-					}
-					bitRateKbpsSessionAmbrMBRDL, bitRateConvertErr = util.BitRateTokbps(qos.MaxbrDl)
-
-					if bitRateConvertErr != nil {
-						logger.PduSessLog.Error("Cannot get the unit of MBRDL, please check the settings in web console")
-						return
-					}
-					// Non-GBR flow should follows session-AMBR
-					newQER.MBR = &pfcptype.MBR{
-						ULMBR: bitRateKbpsSessionAmbrMBRUL,
-						DLMBR: bitRateKbpsSessionAmbrMBRDL,
-					}
-				}
-				qer = newQER
-			}
-			logger.PduSessLog.Debugf("AddQoS: New QER created with ID=%s, QERID=%d", id, qer.QERID)
-			smContext.QerUpfMap[id] = qer.QERID
-		} else {
-			logger.PduSessLog.Debugf("AddQoS: QER already exists for ID=%s, qerId=%d, retrieving existing QER", id, qerId)
-			oldQER := node.UPF.GetQERById(qerId)
-			if oldQER != nil {
-				logger.PduSessLog.Debugf("AddQoS: Using existing QER with QERID=%d", qerId)
-				qer = oldQER
-			}
+// flowQER reuses an identical profile, but gives a changed profile a new ID.
+// Retiring PDRs keep the old QER until PFCP removes its last reference. A new
+// Create QER also makes removal of optional MBR/GBR fields unambiguous.
+func flowQER(smContext *SMContext, upf *UPF, profile *QER) (*QER, error) {
+	qfi := profile.QFI.QFI
+	id := getQosIdKey(upf.GetUUID(), qfi)
+	if qerID, ok := smContext.QerUpfMap[id]; ok {
+		existing := upf.GetQERById(qerID)
+		if existing == nil {
+			return nil, fmt.Errorf("missing flow QER for UPF %s QFI %d", upf.UUID(), qfi)
 		}
-		if qer != nil {
-			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-				node.UpLinkTunnel.PDR.QER = append(node.UpLinkTunnel.PDR.QER, qer)
-			}
-			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-				node.DownLinkTunnel.PDR.QER = append(node.DownLinkTunnel.PDR.QER, qer)
-			}
+		if sameQERProfile(existing, profile) {
+			return existing, nil
 		}
 	}
+	qer, err := upf.AddQER()
+	if err != nil {
+		return nil, err
+	}
+	qer.QFI, qer.GateStatus = cloneOptionalValue(profile.QFI), cloneOptionalValue(profile.GateStatus)
+	qer.MBR, qer.GBR = cloneOptionalValue(profile.MBR), cloneOptionalValue(profile.GBR)
+	smContext.QerUpfMap[id] = qer.QERID
+	return qer, nil
+}
+
+// Parse the complete desired profile before allocating or changing any QER.
+func flowQERProfile(c *SMContext, qfi uint8, qos *models.Pcf_SMPolCtrl_QosData) (*QER, error) {
+	if err := validateQosFlowBinding(c, qfi, qos); err != nil {
+		return nil, err
+	}
+	profile := &QER{
+		QFI:        &pfcptype.QFI{QFI: qfi},
+		GateStatus: &pfcptype.GateStatus{ULGate: pfcptype.GateOpen, DLGate: pfcptype.GateOpen},
+	}
+	if qfi == c.SelectedSessionRule().DefQosQFI {
+		// Default-flow indication refers to the existing profile. Session-AMBR
+		// is enforced separately, not as per-flow MBR.
+		return profile, nil
+	}
+	gbrFlow := isGBRFlow(qos)
+	if gbrFlow || qos.MaxbrUl != "" || qos.MaxbrDl != "" {
+		ul, err := util.BitRateTokbps(qos.MaxbrUl)
+		if err != nil {
+			return nil, fmt.Errorf("flow QFI %d MBR uplink: %w", qfi, err)
+		}
+		dl, err := util.BitRateTokbps(qos.MaxbrDl)
+		if err != nil {
+			return nil, fmt.Errorf("flow QFI %d MBR downlink: %w", qfi, err)
+		}
+		profile.MBR = &pfcptype.MBR{ULMBR: ul, DLMBR: dl}
+	}
+	if gbrFlow {
+		ul, err := util.BitRateTokbps(qos.GbrUl)
+		if err != nil {
+			return nil, fmt.Errorf("flow QFI %d GBR uplink: %w", qfi, err)
+		}
+		dl, err := util.BitRateTokbps(qos.GbrDl)
+		if err != nil {
+			return nil, fmt.Errorf("flow QFI %d GBR downlink: %w", qfi, err)
+		}
+		profile.GBR = &pfcptype.GBR{ULGBR: ul, DLGBR: dl}
+	}
+	return profile, nil
 }
 
 func (p *DataPath) UpdateFlowDescription(ulFlowDesc, dlFlowDesc string) {
