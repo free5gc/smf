@@ -14,9 +14,9 @@ func (p *Processor) RemoveSMContextFromAllNF(smContext *smf_context.SMContext, s
 		return
 	}
 	work := p.rememberChargingRelease(smContext)
-	work.cleanup = true
+	work.cleanupRequested = true
 	work.sendNotification = work.sendNotification || sendNotification
-	if work.removing || time.Now().Before(work.retryAt) {
+	if work.removalScheduled || time.Now().Before(work.retryAt) {
 		return
 	}
 	if err := p.startChargingRelease(context.Background(), smContext); err != nil {
@@ -29,7 +29,7 @@ func (p *Processor) RemoveSMContextFromAllNF(smContext *smf_context.SMContext, s
 
 func (p *Processor) completeSMContextRelease(ctx context.Context, work *chargingReleaseContinuation) {
 	smContext := work.sm
-	if ctx.Err() != nil || work.removing {
+	if ctx.Err() != nil || work.removalScheduled {
 		return
 	}
 	smContext.SetState(smf_context.InActive)
@@ -71,7 +71,7 @@ func (p *Processor) completeSMContextRelease(ctx context.Context, work *charging
 	// Because the amfUE who called this SMF API is being locked until the API Handler returns,
 	// sending SMContext Status Notification should run asynchronously
 	// so that this function returns immediately.
-	work.removing = true
+	work.removalScheduled = true
 	go p.sendSMContextStatusNotificationAndRemoveSMContext(work)
 }
 
@@ -113,9 +113,9 @@ func (p *Processor) SendReleaseNotification(smContext *smf_context.SMContext) {
 // handshake allows NF cleanup, so cleanup is an explicit, separate intent.
 type chargingReleaseContinuation struct {
 	sm               *smf_context.SMContext
-	cleanup          bool
+	cleanupRequested bool
 	sendNotification bool
-	removing         bool
+	removalScheduled bool
 	retryAt          time.Time
 	attempts         int
 }
@@ -150,7 +150,7 @@ func (p *Processor) recoverChargingReleases(ctx context.Context, now time.Time) 
 			p.chargingReleases.CompareAndDelete(sm.Ref, work)
 			return true
 		}
-		if work.removing || now.Before(work.retryAt) {
+		if work.removalScheduled || now.Before(work.retryAt) {
 			return true
 		}
 		// The existing invocation owns its retries, including permanent or
@@ -162,7 +162,7 @@ func (p *Processor) recoverChargingReleases(ctx context.Context, now time.Time) 
 			sm.Log.Warnf("Final charging settlement remains pending: %v", err)
 			return true
 		}
-		if work.cleanup {
+		if work.cleanupRequested {
 			p.completeSMContextRelease(ctx, work)
 		} else {
 			// UE/AMF completion will explicitly request removal later.
