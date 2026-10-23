@@ -153,6 +153,9 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_NFType_UDM)
 	if oauthErr != nil {
 		smContext.Log.Errorf("Get Token Context Error[%v]", oauthErr)
+		p.makeEstRejectResAndReleaseSMContext(c, smContext,
+			nasie.Cause5GSM_NwFailure,
+			&smf_errors.NetworkFailure)
 		return
 	}
 
