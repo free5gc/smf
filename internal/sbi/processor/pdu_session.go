@@ -274,11 +274,6 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	// Update SessionRule from decision
 	if err = smContext.ApplySessionRules(smPolicyDecision); err != nil {
 		smContext.Log.Errorf("PDUSessionSMContextCreate err: %v", err)
-		// Release CHF charging session before cleanup
-		if smContext.ChargingDataRef != "" {
-			p.ReleaseChargingSession(smContext)
-		}
-
 		p.makeEstRejectResAndReleaseSMContext(c, smContext,
 			nasie.Cause5GSM_ReqRejected,
 			&smf_errors.SubscriptionDenied)
@@ -431,15 +426,6 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				upi.ReleaseUEIP(smContext.SelectedUPF, smContext.PDUAddress, smContext.UseStaticIP)
 				smContext.PDUAddress = nil
 				// keep SelectedUPF until PDU Session Release is completed
-			}
-
-			// remove SM Policy Association
-			if smContext.SMPolicyID != "" {
-				if err = p.Consumer().SendSMPolicyAssociationTermination(smContext); err != nil {
-					smContext.Log.Errorf("SM Policy Termination failed: %s", err)
-				} else {
-					smContext.SMPolicyID = ""
-				}
 			}
 
 			if smContext.UeCmRegistered {
@@ -1181,7 +1167,23 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			c.JSON(http.StatusForbidden, updateSmContextError)
 
 		case smf_context.SessionReleaseSuccess:
-			p.ReleaseChargingSession(smContext)
+			if chargingErr := p.ReleaseChargingSession(smContext); chargingErr != nil {
+				smContext.SetState(smf_context.InActivePending)
+				problem := &models.Smf_PDUSess_ExtProblemDetails{
+					Status: http.StatusInternalServerError,
+					Cause:  "SYSTEM_FAILURE",
+					Detail: "Final charging settlement failed",
+				}
+				c.Set(sbi.IN_PB_DETAILS_CTX_STR, problem.Cause)
+				c.JSON(http.StatusInternalServerError, models.UpdateSmContextResponse400{
+					JsonData: &models.Smf_PDUSess_SmContextUpdateError{Error: problem},
+				})
+				smContext.PostRemoveDataPath()
+				if smContext.PDUSessionRelease_DUE_TO_DUP_PDU_ID {
+					p.RemoveSMContextFromAllNF(smContext, true)
+				}
+				return
+			}
 
 			smContext.Log.Traceln("In case SessionReleaseSuccess")
 			smContext.SetState(smf_context.InActivePending)
@@ -1264,15 +1266,6 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 	smContext.StopT3591()
 	smContext.StopT3592()
 
-	// remove SM Policy Association
-	if smContext.SMPolicyID != "" {
-		if err := p.Consumer().SendSMPolicyAssociationTermination(smContext); err != nil {
-			smContext.Log.Errorf("SM Policy Termination failed: %s", err)
-		} else {
-			smContext.SMPolicyID = ""
-		}
-	}
-
 	if smContext.UeCmRegistered {
 		problemDetails, err := p.Consumer().UeCmDeregistration(smContext)
 		if problemDetails != nil {
@@ -1296,7 +1289,14 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 
 	switch pfcpResponseStatus {
 	case smf_context.SessionReleaseSuccess:
-		p.ReleaseChargingSession(smContext)
+		if chargingErr := p.ReleaseChargingSession(smContext); chargingErr != nil {
+			smContext.SetState(smf_context.InActivePending)
+			problem := openapi.ProblemDetailsSystemFailure("Final charging settlement failed")
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problem.Cause)
+			c.JSON(http.StatusInternalServerError, problem)
+			p.RemoveSMContextFromAllNF(smContext, false)
+			return
+		}
 
 		smContext.Log.Traceln("In case SessionReleaseSuccess")
 		smContext.SetState(smf_context.InActive)
@@ -1378,15 +1378,6 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 	smContext.SMLock.Lock()
 	defer smContext.SMLock.Unlock()
 
-	// remove SM Policy Association
-	if smContext.SMPolicyID != "" {
-		if err := p.Consumer().SendSMPolicyAssociationTermination(smContext); err != nil {
-			logger.PduSessLog.Errorf("SM Policy Termination failed: %s", err)
-		} else {
-			smContext.SMPolicyID = ""
-		}
-	}
-
 	if smContext.UeCmRegistered {
 		problemDetails, err := p.Consumer().UeCmDeregistration(smContext)
 		if problemDetails != nil {
@@ -1419,13 +1410,13 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 		logger.CtxLog.Traceln("In case Unknown")
 	}
 
-	// Common finalize for every branch: even a failed PFCP release must close
-	// the charging session and remove the context, and the old registrant is
-	// told unless the new create reuses its callback URI. The notification runs
-	// async so a slow or attacker-supplied URI cannot stall the release while
-	// SMLock is held.
-	p.ReleaseChargingSession(smContext)
+	// Notify the old registrant even if charging fails, but retain the context
+	// and policy until settlement succeeds. PFCP release has already been attempted.
+	chargingErr := p.ReleaseChargingSession(smContext)
 	go p.notifyOldAmfOfRelease(smContext, createData.SmContextStatusUri)
+	if chargingErr != nil {
+		smContext.SetState(smf_context.InActivePending)
+	}
 	p.RemoveSMContextFromAllNF(smContext, false)
 }
 

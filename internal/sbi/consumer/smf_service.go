@@ -1,7 +1,9 @@
 package consumer
 
 import (
+	"context"
 	"sync"
+	"time"
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
@@ -61,6 +63,9 @@ func (s *nsmfService) SendSMContextStatusNotification(uri string) (*models.Probl
 			return pd, err
 		}
 
+		// An unreachable callback must not hold local resource removal indefinitely.
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
 		logger.CtxLog.Infoln("[SMF] Send SMContext Status Notification")
 		_, localErr := client.SMContextsCollectionApi.
 			PostSmContextsSmContextStatusNotification(ctx, uri, request)

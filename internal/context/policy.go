@@ -13,6 +13,42 @@ import (
 	"github.com/free5gc/util/flowdesc"
 )
 
+// SessionRule - A session rule consists of policy information elements
+// associated with PDU session.
+type SessionRule struct {
+	*models.Pcf_SMPolCtrl_SessionRule
+	DefQosQFI uint8
+}
+
+// NewSessionRule - create session rule from OpenAPI models
+func NewSessionRule(model *models.Pcf_SMPolCtrl_SessionRule) *SessionRule {
+	if model == nil {
+		return nil
+	}
+
+	return &SessionRule{
+		Pcf_SMPolCtrl_SessionRule: model,
+		DefQosQFI:                 1,
+	}
+}
+
+// TrafficControlData - Traffic control data defines how traffic data flows
+// associated with a rule are treated (e.g. blocked, redirected).
+type TrafficControlData struct {
+	*models.Pcf_SMPolCtrl_TrafficControlData
+}
+
+// NewTrafficControlData - create the traffic control data from OpenAPI model
+func NewTrafficControlData(model *models.Pcf_SMPolCtrl_TrafficControlData) *TrafficControlData {
+	if model == nil {
+		return nil
+	}
+
+	return &TrafficControlData{
+		Pcf_SMPolCtrl_TrafficControlData: model,
+	}
+}
+
 // PCCRule - Policy and Charging Rule
 type PCCRule struct {
 	*models.Pcf_SMPolCtrl_PccRule

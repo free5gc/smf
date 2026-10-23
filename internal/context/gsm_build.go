@@ -6,6 +6,13 @@ import (
 	"github.com/free5gc/smf/internal/logger"
 )
 
+type ProtocolConfigurationOptions struct {
+	DNSIPv4Request     bool
+	DNSIPv6Request     bool
+	PCSCFIPv4Request   bool
+	IPv4LinkMTURequest bool
+}
+
 func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error) {
 	sessRule := smContext.SelectedSessionRule()
 	authDefQos := sessRule.AuthDefQos

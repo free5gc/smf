@@ -31,7 +31,7 @@ func TestRetiredTIUsageDoesNotRequestNewQuota(t *testing.T) {
 			{UrrId: 8, UpfId: upfID, ReportTpye: models.Chf_ConvCharging_TriggerType_START_OF_SERVICE_DATA_FLOW},
 		},
 	}
-	usages := buildMultiUnitUsageFromUsageReport(sm)
+	usages := buildMultiUnitUsage(sm, sm.UrrReports)
 	require.Len(t, usages, 2)
 	for _, usage := range usages {
 		if usage.RatingGroup == 6 {
@@ -58,7 +58,7 @@ func TestRetiredTIUsageDoesNotRequestNewQuota(t *testing.T) {
 		{UrrId: 10, UpfId: upfID, ReportTpye: models.Chf_ConvCharging_TriggerType_FINAL, TotalVolume: 1234},
 		{UrrId: 8, UpfId: upfID, ReportTpye: models.Chf_ConvCharging_TriggerType_QUOTA_EXHAUSTED},
 	}
-	usages = buildMultiUnitUsageFromUsageReport(sm)
+	usages = buildMultiUnitUsage(sm, sm.UrrReports)
 	require.Len(t, usages, 1)
 	require.Len(t, usages[0].UsedUnitContainer, 2)
 	require.NotNil(t, usages[0].RequestedUnit, "retiring TI must not suppress the live service's credit request")
@@ -85,7 +85,7 @@ func TestDeletingTIURRStopsTimersButKeepsFinalChargingIdentity(t *testing.T) {
 	require.Nil(t, info.VolumeLimitExpiryTimer)
 	require.Nil(t, info.EventLimitExpiryTimer)
 	require.Same(t, info, sm.ChargingInfo[10])
-	usages := buildMultiUnitUsageFromUsageReport(sm)
+	usages := buildMultiUnitUsage(sm, sm.UrrReports)
 	require.Len(t, usages, 1)
 	require.Equal(t, int32(300), usages[0].UsedUnitContainer[0].TotalVolume)
 	require.Nil(t, usages[0].RequestedUnit)
@@ -107,7 +107,7 @@ func TestStaticAnchorsKeepSeparateChargingUPFIdentity(t *testing.T) {
 			{UrrId: 2, UpfId: "mec-anchor", ReportTpye: models.Chf_ConvCharging_TriggerType_FINAL, TotalVolume: 200},
 		},
 	}
-	usages := buildMultiUnitUsageFromUsageReport(sm)
+	usages := buildMultiUnitUsage(sm, sm.UrrReports)
 	require.Len(t, usages, 2, "one rating group at two anchors must not lose its UPF identity")
 	volumes := make(map[string]int32)
 	for _, usage := range usages {
