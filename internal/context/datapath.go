@@ -838,6 +838,14 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(
 					dlOuterHeaderCreation.Teid = smContext.Tunnel.ANInformation.TEID
 					dlOuterHeaderCreation.Ipv4Address = smContext.Tunnel.ANInformation.IPAddress.To4()
 				}
+				// TS 23.501 5.8.3.2: while the UP connection is deactivated the
+				// UPF buffers the session's downlink packets and reports the
+				// first one, as the DEACTIVATED update set up for the existing
+				// DL FARs. A flow added in that state must not forward to the
+				// released AN tunnel; the activation turns it to FORW.
+				if smContext.UpCnxState == models.Smf_PDUSess_UpCnxState_DEACTIVATED {
+					DLFAR.ApplyAction = pfcptype.ApplyAction{Buff: true, Nocp: true}
+				}
 			}
 		}
 	}
