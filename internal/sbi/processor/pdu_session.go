@@ -13,6 +13,7 @@ import (
 
 	nasie "github.com/free5gc/nas/ie"
 	"github.com/free5gc/nas/message"
+	ngapie "github.com/free5gc/ngap/ie"
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/mediatype/multipart"
 	"github.com/free5gc/openapi/models"
@@ -397,6 +398,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	var sendPFCPModification bool
 	var createdIndirectForwarding bool
 	var removeIndirectForwardingAfterSuccess bool
+	// Set by an accepted PDU Session Resource Modify Indication: puts back the
+	// split state the indication found if the UPF refuses the N4 update.
+	var restoreSplitState func()
 	var pfcpResponseStatus smf_context.PFCPSessionResponseStatus
 	var response models.UpdateSmContextResponse200
 	response.JsonData = new(models.Smf_PDUSess_SmContextUpdatedData)
@@ -737,9 +741,18 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		smContext.CheckState(smf_context.Active)
 		smContext.SetState(smf_context.ModificationPending)
 
+		// The Modify Confirm Transfer is built before any rule is changed, so
+		// that an indication the SMF cannot confirm leaves the session as it is.
+		var n2CfmBuf []byte
 		if smContext.NrdcIndicator {
 			smContext.Log.Infof("Both tunnels are active - Tunnel TEID: %d, DCTunnel TEID: %d",
 				smContext.Tunnel.ANInformation.TEID, smContext.DCTunnel.ANInformation.TEID)
+
+			if n2CfmBuf, err = smf_context.BuildPDUSessionResourceModifyConfirmTransfer(
+				smContext, smContext.Tunnel, smContext.LocalULTeid); err != nil {
+				p.rejectPDUSessionResourceModifyIndication(c, smContext, err)
+				return
+			}
 
 			// avtivate the rules for specified QoS traffic on Tunnel
 			for _, dataPath := range tunnel.DataPathPool {
@@ -784,6 +797,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			// re-initialize DCTunnel
 			smContext.DCTunnel = smf_context.NewUPTunnel()
 			smContext.NrdcIndicator, sendPFCPModification = false, true
+			restoreSplitState = func() { smContext.NrdcIndicator, smContext.DCTunnel = true, dcTunnel }
 
 			smContext.Log.Infoln("Release DCTunnel")
 		} else {
@@ -794,10 +808,19 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				relatedBytes(body.BinaryDataN2SmInformation), smContext); err != nil {
 				smContext.Log.Errorf("Handle PDUSessionResourceModifyIndicationTransfer failed: %+v", err)
 				sendPFCPModification = false
+			} else if !smContext.NrdcIndicator {
+				// Without the Additional DL QoS Flow per TNL Information IE the
+				// indication does not split the session (1->1), which this
+				// handler does not support (TS 38.413 8.2.5.2 "if accepted").
+				err = errors.New("no Additional DL QoS Flow per TNL Information: the PDU session is not split")
+				sendPFCPModification = false
 			} else {
 				// apply the rules on DCTunnel
 				if err = smContext.ApplyDcPccRulesOnDcTunnel(); err != nil {
 					smContext.Log.Errorf("ApplyDcPccRulesOnDcTunnel failed: %+v", err)
+					sendPFCPModification = false
+				} else if n2CfmBuf, err = smf_context.BuildPDUSessionResourceModifyConfirmTransfer(
+					smContext, smContext.DCTunnel, smContext.LocalULTeidForSplitPDUSession); err != nil {
 					sendPFCPModification = false
 				} else {
 					// append the rules on DCTunnel
@@ -859,42 +882,27 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 						}
 					}
 					smContext.NrdcIndicator, sendPFCPModification = true, true
+					restoreSplitState = func() {
+						smContext.NrdcIndicator, smContext.DCTunnel = false, smf_context.NewUPTunnel()
+					}
 
 					smContext.Log.Infoln("Activate DCTunnel")
 				}
 			}
+			if !sendPFCPModification {
+				// No rule was changed and nothing was sent to the UPF: drop the
+				// split state the steps above may have set up.
+				smContext.NrdcIndicator = false
+				smContext.DCTunnel = smf_context.NewUPTunnel()
+				p.rejectPDUSessionResourceModifyIndication(c, smContext, err)
+				return
+			}
 		}
 
-		if sendPFCPModification {
-			smContext.SetState(smf_context.PFCPModification)
-			if smContext.NrdcIndicator {
-				var n2CfmBuf []byte
-				n2CfmBuf, err = smf_context.
-					BuildPDUSessionResourceModifyConfirmTransfer(
-						smContext, smContext.DCTunnel, smContext.LocalULTeidForSplitPDUSession)
-				if err != nil {
-					smContext.Log.Errorf("Build PDUSessionResourceModifyConfirmSuccess failed: %+v", err)
-				} else {
-					response.BinaryDataN2SmInformation = related("PDU_RES_MOD_CFM", n2CfmBuf)
-					response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "PDU_RES_MOD_CFM"}
-					response.JsonData.N2SmInfoType = models.Smf_PDUSess_N2SmInfoType_PDU_RES_MOD_CFM
-				}
-			} else {
-				var n2CfmBuf []byte
-				n2CfmBuf, err = smf_context.
-					BuildPDUSessionResourceModifyConfirmTransfer(
-						smContext, smContext.Tunnel, smContext.LocalULTeid)
-				if err != nil {
-					smContext.Log.Errorf("Build PDUSessionResourceModifyConfirmSuccess failed: %+v", err)
-				} else {
-					response.BinaryDataN2SmInformation = related("PDU_RES_MOD_CFM", n2CfmBuf)
-					response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "PDU_RES_MOD_CFM"}
-					response.JsonData.N2SmInfoType = models.Smf_PDUSess_N2SmInfoType_PDU_RES_MOD_CFM
-				}
-			}
-		} else {
-			smContext.SetState(smf_context.Active)
-		}
+		smContext.SetState(smf_context.PFCPModification)
+		response.BinaryDataN2SmInformation = related("PDU_RES_MOD_CFM", n2CfmBuf)
+		response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "PDU_RES_MOD_CFM"}
+		response.JsonData.N2SmInfoType = models.Smf_PDUSess_N2SmInfoType_PDU_RES_MOD_CFM
 	case models.Smf_PDUSess_N2SmInfoType_PDU_RES_REL_RSP:
 		// remove an tunnel info
 		smContext.Log.Infoln("Handle N2 PDU Resource Release Response")
@@ -1167,6 +1175,15 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 		case smf_context.SessionUpdateFailed:
 			smContext.Log.Traceln("In case SessionUpdateFailed")
+			if restoreSplitState != nil {
+				// The UPF keeps its existing rules (TS 29.244 6.3.3.3), so the
+				// session keeps the split state the indication found, and the
+				// NG-RAN gets the Unsuccessful Transfer (TS 29.502 5.2.2.3.7).
+				restoreSplitState()
+				p.rejectPDUSessionResourceModifyIndication(c, smContext,
+					errors.New("the UPF did not accept the PFCP Session Modification"))
+				break
+			}
 			if createdIndirectForwarding {
 				smContext.RemoveIndirectForwardingTunnel()
 			}
@@ -1230,6 +1247,35 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		// So, local release smCtx and notify AMF after sending PDUSessionResourceReleaseCommand
 		p.RemoveSMContextFromAllNF(smContext, true)
 	}
+}
+
+// rejectPDUSessionResourceModifyIndication answers a PDU Session Resource
+// Modify Indication that the SMF does not accept, without any N4 change: the
+// error carries a PDU Session Resource Modify Indication Unsuccessful Transfer
+// (TS 29.502 5.2.2.3.7 step 2b), which the AMF reports to the NG-RAN in the
+// PDU Session Resource Failed to Modify List (TS 38.413 8.2.5.2).
+func (p *Processor) rejectPDUSessionResourceModifyIndication(
+	c *gin.Context, smContext *smf_context.SMContext, reason error,
+) {
+	smContext.Log.Warnf("Reject PDU Session Resource Modify Indication: %v", reason)
+	smContext.SetState(smf_context.Active)
+	errResponse := models.UpdateSmContextResponse403{
+		JsonData: &models.Smf_PDUSess_SmContextUpdateError{
+			Error: &smf_errors.N2SmError,
+		},
+	}
+	c.Set(sbi.IN_PB_DETAILS_CTX_STR, errResponse.JsonData.Error.Cause)
+	buf, err := smf_context.BuildPDUSessionResourceModifyIndicationUnsuccessfulTransfer(
+		&ngapie.CauseMisc{Value: ngapie.CauseMiscPresentUnspecified})
+	if err != nil {
+		smContext.Log.Errorf("Build PDUSessionResourceModifyIndicationUnsuccessfulTransfer failed: %+v", err)
+		c.JSON(http.StatusForbidden, errResponse)
+		return
+	}
+	errResponse.BinaryDataN2SmInformation = related("PDU_RES_MOD_IND_FAIL", buf)
+	errResponse.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "PDU_RES_MOD_IND_FAIL"}
+	errResponse.JsonData.N2SmInfoType = models.Smf_PDUSess_N2SmInfoType_PDU_RES_MOD_IND_FAIL
+	c.Render(http.StatusForbidden, openapi.MultipartRelatedRender{Data: errResponse})
 }
 
 func (p *Processor) HandlePDUSessionSMContextRelease(
