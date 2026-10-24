@@ -88,6 +88,21 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		return
 	}
 
+	// TS 24.501 5.4.5.2.2 and 9.4: the PDU session ID of the UL NAS TRANSPORT
+	// and the PDU session identity in the 5GSM header identify the same PDU
+	// session. When they differ, reject before the duplicate check and before
+	// any SM context is created, so that neither an existing session of either
+	// identity is touched nor an SM context is created under an identity the
+	// AMF does not use for it.
+	if int32(establishmentRequest.PDUSessionID()) != createData.PduSessionId {
+		logger.PduSessLog.Warnf("PDU Session ID mismatch for SUPI[%s]: UL NAS TRANSPORT[%d], "+
+			"5GSM PDU session identity[%d]; reject SM Context Create",
+			createData.Supi, createData.PduSessionId, establishmentRequest.PDUSessionID())
+		p.makeEstRejectRes(c, establishmentRequest.PDUSessionID(), establishmentRequest.ProcedureTransactionID(),
+			nasie.Cause5GSM_InvalidPDUSessId, &smf_errors.N1SmError)
+		return
+	}
+
 	// Check duplicate SM Context
 	if dup_smCtx := smf_context.GetSMContextById(createData.Supi, createData.PduSessionId); dup_smCtx != nil {
 		p.HandlePDUSessionSMContextLocalRelease(dup_smCtx, createData)
@@ -1458,22 +1473,36 @@ func (p *Processor) makeEstRejectResAndReleaseSMContext(
 	nasErrorCause uint8,
 	sbiError *models.Smf_PDUSess_ExtProblemDetails,
 ) {
+	p.makeEstRejectRes(c, uint8(smContext.PDUSessionID), smContext.Pti, nasErrorCause, sbiError)
+	p.RemoveSMContextFromAllNF(smContext, false)
+}
+
+// makeEstRejectRes answers an SM Context Create request with a PDU SESSION
+// ESTABLISHMENT REJECT for the given PDU session identity and PTI.
+func (p *Processor) makeEstRejectRes(
+	c *gin.Context,
+	pduSessionID uint8,
+	pti uint8,
+	nasErrorCause uint8,
+	sbiError *models.Smf_PDUSess_ExtProblemDetails,
+) {
 	postSmContextsError := models.PostSmContextsResponse403{
 		JsonData: &models.Smf_PDUSess_SmContextCreateError{
 			Error:   sbiError,
 			N1SmMsg: &models.RefToBinaryData{ContentId: "n1SmMsg"},
 		},
 	}
-	if buf, err := smf_context.
-		BuildGSMPDUSessionEstablishmentReject(
-			smContext,
-			nasErrorCause); err != nil {
+	reject := &message.PDUSessEstRej{
+		PDUSessId: pduSessionID,
+		PTI:       pti,
+		Cause5GSM: &nasie.Cause5GSM{Value: nasErrorCause},
+	}
+	if buf, err := reject.MarshalBinary(); err != nil {
 		logger.PduSessLog.Errorf("Build GSM PDUSessionEstablishmentReject failed: %+v", err)
 	} else {
 		postSmContextsError.BinaryDataN1SmMessage = related("GSM_NAS", buf)
 	}
 	p.nasErrorResponse(c, int(sbiError.Status), postSmContextsError)
-	p.RemoveSMContextFromAllNF(smContext, false)
 }
 
 func (p *Processor) sendGSMPDUSessionReleaseCommand(smContext *smf_context.SMContext, nasPdu []byte) {
