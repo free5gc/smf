@@ -1502,19 +1502,27 @@ func (p *Processor) sendGSMPDUSessionReleaseCommand(smContext *smf_context.SMCon
 		}
 
 		smContext.T3592 = smf_context.NewTimer(t3592.ExpireTime, t3592.MaxRetryTimes, func(expireTimes int32) {
+			// The retry callback runs in its own goroutine. Every return path
+			// must release the SM-context lock: a failed retransmission used to
+			// return with SMLock held, which wedged the SM context (and every
+			// later N1/N2 message for it) until the SMF was restarted.
 			smContext.SMLock.Lock()
+			defer smContext.SMLock.Unlock()
+
 			rspData, errMsgTransfer := p.Consumer().
 				N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 			if errMsgTransfer != nil {
 				logger.ConsumerLog.Warnf("N1N2MessageTransfer for GSMPDUSessionReleaseCommand failed: %+v", errMsgTransfer)
 				return
 			}
+			if rspData == nil {
+				logger.ConsumerLog.Warnf("N1N2MessageTransfer for GSMPDUSessionReleaseCommand returned no data")
+				return
+			}
 
 			if rspData.Cause == models.Amf_Comm_N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 				smContext.Log.Warnf("%v", rspData.Cause)
 			}
-
-			smContext.SMLock.Unlock()
 		}, func() {
 			smContext.Log.Warn("T3592 Expires 3 times, abort notification procedure")
 			smContext.SMLock.Lock()
