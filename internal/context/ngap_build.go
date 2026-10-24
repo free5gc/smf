@@ -255,13 +255,19 @@ func BuildPDUSessionResourceModifyRequestTransfer(ctx *SMContext) ([]byte, error
 		}
 	}
 
+	// TS 38.413 9.3.4.3: the QoS Flow Add or Modify Request List is optional
+	// and holds 1..maxnoofQoSFlows items. Omit it when no QoS flow is added or
+	// modified instead of encoding an empty, undecodable list.
+	ieList := []ngapie.PDUSessionResourceModifyRequestTransferIEs{}
+	if len(qosFlowAddOrModifyRequestList.List) > 0 {
+		ieList = append(ieList, ngapie.PDUSessionResourceModifyRequestTransferIEs{
+			QosFlowAddOrModifyRequestList: qosFlowAddOrModifyRequestList,
+		})
+	}
+
 	resourceModifyRequestTransfer := ngapie.PDUSessionResourceModifyRequestTransfer{
 		ProtocolIEs: &ngapie.ProtocolIEContainerPDUSessionResourceModifyRequestTransferIEs{
-			List: []ngapie.PDUSessionResourceModifyRequestTransferIEs{
-				{
-					QosFlowAddOrModifyRequestList: qosFlowAddOrModifyRequestList,
-				},
-			},
+			List: ieList,
 		},
 	}
 
