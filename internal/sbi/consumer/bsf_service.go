@@ -36,7 +36,8 @@ func (s *nbsfService) getHTTPClient() *http.Client {
 			IdleConnTimeout:       90 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: time.Second,
-			TLSClientConfig:       &tls.Config{InsecureSkipVerify: !s.consumer.Config().GetTLSVerify()}, // #nosec G402 -- NF configuration
+			// #nosec G402 -- Verification is controlled by the NF configuration.
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: !s.consumer.Config().GetTLSVerify()},
 		}}
 	}
 	return s.httpClient

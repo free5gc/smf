@@ -14,12 +14,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/upf/EvtExpos"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/factory"
-	"github.com/stretchr/testify/require"
 )
 
 type nupfTestApp struct {
@@ -434,7 +435,9 @@ type tlsBSFTestApp struct {
 func (a *tlsBSFTestApp) Config() *factory.Config { return a.cfg }
 
 func TestSBIBsfTLSVerification(t *testing.T) {
-	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
 	server.Config.ErrorLog = log.New(io.Discard, "", 0)
 	server.StartTLS()
 	defer server.Close()
@@ -442,9 +445,15 @@ func TestSBIBsfTLSVerification(t *testing.T) {
 		cfg := &factory.Config{Configuration: &factory.Configuration{Sbi: &factory.Sbi{Tls: &factory.Tls{Verify: verify}}}}
 		service := &nbsfService{consumer: &Consumer{App: &tlsBSFTestApp{nupfTestApp: &nupfTestApp{}, cfg: cfg}}}
 		client := service.getHTTPClient()
-		resp, err := client.Get(server.URL)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := client.Do(req)
 		if resp != nil {
-			resp.Body.Close()
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				t.Errorf("close response body: %v", closeErr)
+			}
 		}
 		if verify {
 			var unknown x509.UnknownAuthorityError
