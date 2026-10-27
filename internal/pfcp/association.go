@@ -16,9 +16,15 @@ import (
 // The runtime adapter will look up configured UPFs, update association state,
 // and return any restart-recovery work as afterResponse.
 type AssociationStateManager interface {
-	SetupAssociation(peer pfcptype.NodeID, recoveryTime time.Time) (cause uint8, afterResponse func())
-	UpdateAssociation(peer pfcptype.NodeID, request *message.AssociationUpdateRequest) (cause uint8, afterResponse func())
-	ReleaseAssociation(peer pfcptype.NodeID) (cause uint8)
+	// remote is the UDP source of the request; implementations reject requests
+	// whose source does not belong to the claimed UPF.
+	SetupAssociation(
+		peer pfcptype.NodeID, recoveryTime time.Time, remote *net.UDPAddr,
+	) (cause uint8, afterResponse func())
+	UpdateAssociation(
+		peer pfcptype.NodeID, request *message.AssociationUpdateRequest, remote *net.UDPAddr,
+	) (cause uint8, afterResponse func())
+	ReleaseAssociation(peer pfcptype.NodeID, remote *net.UDPAddr) (cause uint8)
 }
 
 func (s *PfcpServer) SetAssociationStateManager(manager AssociationStateManager) {
@@ -29,6 +35,7 @@ func (s *PfcpServer) SetAssociationStateManager(manager AssociationStateManager)
 
 func (s *PfcpServer) handleAssociationSetupRequest(
 	request *message.AssociationSetupRequest,
+	remote *net.UDPAddr,
 ) (*message.AssociationSetupResponse, func()) {
 	responseIEs := []*ie.IE{
 		ie.NewCause(ie.CauseMandatoryIEMissing),
@@ -69,7 +76,7 @@ func (s *PfcpServer) handleAssociationSetupRequest(
 		return response, nil
 	}
 
-	cause, afterResponse := manager.SetupAssociation(peer, recoveryTime)
+	cause, afterResponse := manager.SetupAssociation(peer, recoveryTime, remote)
 	response.Cause = ie.NewCause(cause)
 	if cause != ie.CauseRequestAccepted {
 		return response, nil
@@ -79,6 +86,7 @@ func (s *PfcpServer) handleAssociationSetupRequest(
 
 func (s *PfcpServer) handleAssociationUpdateRequest(
 	request *message.AssociationUpdateRequest,
+	remote *net.UDPAddr,
 ) (*message.AssociationUpdateResponse, func()) {
 	responseIEs := []*ie.IE{
 		ie.NewCause(ie.CauseMandatoryIEMissing),
@@ -118,7 +126,7 @@ func (s *PfcpServer) handleAssociationUpdateRequest(
 		return response, nil
 	}
 
-	cause, afterResponse := manager.UpdateAssociation(peer, request)
+	cause, afterResponse := manager.UpdateAssociation(peer, request, remote)
 	response.Cause = ie.NewCause(cause)
 	if cause != ie.CauseRequestAccepted {
 		return response, nil
@@ -171,6 +179,7 @@ func validateAssociationUpdate(request *message.AssociationUpdateRequest) (uint8
 
 func (s *PfcpServer) handleAssociationReleaseRequest(
 	request *message.AssociationReleaseRequest,
+	remote *net.UDPAddr,
 ) *message.AssociationReleaseResponse {
 	response := message.NewAssociationReleaseResponse(
 		request.Sequence(),
@@ -196,7 +205,7 @@ func (s *PfcpServer) handleAssociationReleaseRequest(
 		response.Cause = ie.NewCause(ie.CauseNoEstablishedPFCPAssociation)
 		return response
 	}
-	response.Cause = ie.NewCause(manager.ReleaseAssociation(peer))
+	response.Cause = ie.NewCause(manager.ReleaseAssociation(peer, remote))
 	return response
 }
 
