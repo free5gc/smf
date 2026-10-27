@@ -375,21 +375,35 @@ func newCreateURRIE(urr *context.URR) (*ie.IE, error) {
 	if urr.MeasurementPeriod != 0 {
 		children = append(children, ie.NewMeasurementPeriod(urr.MeasurementPeriod))
 	}
-	if urr.VolumeThreshold != 0 {
-		children = append(children, ie.NewVolumeThreshold(
-			0x06, 0, urr.VolumeThreshold, urr.VolumeThreshold,
-		))
+	if threshold := newVolumeThresholdIE(urr); threshold != nil {
+		children = append(children, threshold)
 	}
-	if urr.VolumeQuota != 0 {
-		children = append(children, ie.NewVolumeQuota(
-			0x07, urr.VolumeQuota, urr.VolumeQuota, urr.VolumeQuota,
-		))
+	if quota := newVolumeQuotaIE(urr); quota != nil {
+		children = append(children, quota)
 	}
 	children = append(children, newMeasurementInformationIE(urr.MeasurementInformation))
 	if !urr.QuotaValidityTime.IsZero() {
 		children = append(children, ie.NewQuotaValidityTime(urr.QuotaValidityTime.Sub(pfcpTimeEpoch)))
 	}
 	return ie.NewCreateURR(children...), nil
+}
+
+// The trigger distinguishes an explicit zero threshold/quota from an omitted IE.
+func newVolumeThresholdIE(urr *context.URR) *ie.IE {
+	if urr.VolumeThreshold == 0 && !urr.ReportingTrigger.HasVOLTH() {
+		return nil
+	}
+	if urr.VolumeThresholdIsTotal {
+		return ie.NewVolumeThreshold(0x01, urr.VolumeThreshold, 0, 0)
+	}
+	return ie.NewVolumeThreshold(0x06, 0, urr.VolumeThreshold, urr.VolumeThreshold)
+}
+
+func newVolumeQuotaIE(urr *context.URR) *ie.IE {
+	if urr.VolumeQuota == 0 && !urr.ReportingTrigger.HasVOLQU() {
+		return nil
+	}
+	return ie.NewVolumeQuota(0x01, urr.VolumeQuota, 0, 0)
 }
 
 func newNodeIDIE(nodeID pfcptype.NodeID) (*ie.IE, error) {

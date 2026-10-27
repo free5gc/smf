@@ -74,6 +74,12 @@ func (p *Processor) updateGrantedQuotaForRules(
 		trigger := pfcptype.ReportingTrigger{}
 		smContext.SetUrrState(upfId, urr.URRID, smf_context.RULE_UPDATE)
 		chgInfo := smContext.ChargingInfo[urr.URRID]
+		online := chgInfo.ChargingMethod == models.Chf_ConvCharging_QuotaManagementIndicator_ONLINE_CHARGING
+		urr.VolumeThresholdIsTotal = online
+		if online {
+			// An omitted threshold or a final zero grant must disable the old threshold.
+			urr.VolumeThreshold = 0
+		}
 
 		for _, t := range ui.Triggers {
 			switch t.TriggerType {
@@ -176,10 +182,23 @@ func (p *Processor) updateGrantedQuotaForRules(
 						"should only be applied to PDU session level charging")
 				}
 			case models.Chf_ConvCharging_TriggerType_QUOTA_THRESHOLD:
-				if ui.VolumeQuotaThreshold != 0 {
-					trigger.SetVOLTH()
+				if ui.VolumeQuotaThreshold <= 0 {
+					continue
+				}
+				if online {
+					if ui.GrantedUnit == nil || ui.GrantedUnit.TotalVolume <= 0 {
+						continue
+					}
+					// TS 32.290 5.4.2 specifies remaining quota; PFCP expects consumed volume.
+					// Both values apply to the total grant, not to each direction separately.
+					quota := uint64(ui.GrantedUnit.TotalVolume)
+					remaining := uint64(ui.VolumeQuotaThreshold)
+					urr.VolumeThreshold = quota - min(quota, remaining)
+				} else {
+					// Offline charging has no granted quota and retains its usage threshold.
 					urr.VolumeThreshold = uint64(ui.VolumeQuotaThreshold)
 				}
+				trigger.SetVOLTH()
 			// The difference between the quota validity time and the volume limit is
 			// that the validity time is counted by the UPF, the volume limit is counted by the SMF
 			case models.Chf_ConvCharging_TriggerType_VALIDITY_TIME:

@@ -246,8 +246,8 @@ func TestBuildSessionEstablishmentRequestMapsRulesWithGoPFCP(t *testing.T) {
 	quota, err := findIE(t, urrChildren, ie.VolumeQuota).VolumeQuota()
 	require.NoError(t, err)
 	require.True(t, quota.HasTOVOL())
-	require.True(t, quota.HasULVOL())
-	require.True(t, quota.HasDLVOL())
+	require.False(t, quota.HasULVOL())
+	require.False(t, quota.HasDLVOL())
 	require.Equal(t, uint64(2_000), quota.TotalVolume)
 	measurementInformation, err := findIE(t, urrChildren, ie.MeasurementInformation).MeasurementInformation()
 	require.NoError(t, err)
@@ -422,6 +422,52 @@ func TestSharedAMBRQEROmitsQFI(t *testing.T) {
 					require.Equal(t, qers[index].QFI.QFI, qfi)
 				}
 			}
+		})
+	}
+}
+
+func TestBuildSessionEstablishmentTotalVolumeLimits(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		threshold, quota uint64
+	}{
+		{name: "combined volume", threshold: 200, quota: 1000},
+		{name: "explicit zero", threshold: 0, quota: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			initDirectBuilderTestContext(t)
+			const upfID = "total-volume-upf"
+			sm := context.NewSMContext("imsi-208930000000130", 10)
+			t.Cleanup(func() { context.RemoveSMContext(sm.Ref) })
+			sm.PFCPContext["10.4.0.1"] = &context.PFCPSessionContext{LocalSEID: 130}
+			urr := &context.URR{
+				URRID: 46, MeasureMethod: context.MesureMethodVol,
+				VolumeThreshold: tc.threshold, VolumeThresholdIsTotal: true, VolumeQuota: tc.quota,
+			}
+			urr.ReportingTrigger.SetVOLTH()
+			urr.ReportingTrigger.SetVOLQU()
+			sm.RegisterUrr(upfID, urr)
+			request, err := pfcp_message.BuildSessionEstablishmentRequest(
+				*testNodeID, "10.4.0.1", upfID, sm, nil, nil, nil, nil, []*context.URR{urr})
+			require.NoError(t, err)
+			wire, err := request.Marshal()
+			require.NoError(t, err)
+			decoded, err := goPfcpMessage.Parse(wire)
+			require.NoError(t, err)
+			parsed := decoded.(*goPfcpMessage.SessionEstablishmentRequest)
+			require.Len(t, parsed.CreateURR, 1)
+			threshold, err := parsed.CreateURR[0].VolumeThreshold()
+			require.NoError(t, err)
+			require.True(t, threshold.HasTOVOL())
+			require.False(t, threshold.HasULVOL())
+			require.False(t, threshold.HasDLVOL())
+			require.Equal(t, tc.threshold, threshold.TotalVolume)
+			quota, err := parsed.CreateURR[0].VolumeQuota()
+			require.NoError(t, err)
+			require.True(t, quota.HasTOVOL())
+			require.False(t, quota.HasULVOL())
+			require.False(t, quota.HasDLVOL())
+			require.Equal(t, tc.quota, quota.TotalVolume)
 		})
 	}
 }
