@@ -390,16 +390,17 @@ func (p *Processor) runChargingWork(
 	return response, nil
 }
 
-// RunChargingRecovery examines only retained work, never the full session pool.
-// Ordinary callers and recovery serialize through the original session's SMLock.
-func (p *Processor) RunChargingRecovery(ctx context.Context) {
+// RunChargingRetries examines only work retained in this process.
+// Pending requests are not persisted or restored after restart.
+// Ordinary callers and retries serialize through the original session's SMLock.
+func (p *Processor) RunChargingRetries(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
 		if ctx.Err() != nil {
 			return
 		}
-		p.recoverPendingCharging(ctx, time.Now())
+		p.retryPendingCharging(ctx, time.Now())
 		select {
 		case <-ctx.Done():
 			return
@@ -408,7 +409,7 @@ func (p *Processor) RunChargingRecovery(ctx context.Context) {
 	}
 }
 
-func (p *Processor) recoverPendingCharging(ctx context.Context, now time.Time) {
+func (p *Processor) retryPendingCharging(ctx context.Context, now time.Time) {
 	p.chargingWork.Range(func(_, value any) bool {
 		if ctx.Err() != nil {
 			return false
@@ -428,7 +429,7 @@ func (p *Processor) recoverPendingCharging(ctx context.Context, now time.Time) {
 		}
 		if smf_context.GetSMContextByRef(sm.Ref) != sm {
 			work.retryable = false
-			logger.ChargingLog.Errorf("Charging recovery retained for removed session %s", sm.Ref)
+			logger.ChargingLog.Errorf("Charging retry retained for removed session %s", sm.Ref)
 			return true
 		}
 		if !sm.BeginChargingRetry(work.kind) {
@@ -436,11 +437,11 @@ func (p *Processor) recoverPendingCharging(ctx context.Context, now time.Time) {
 		}
 		work.attempts++
 		if _, err := p.runChargingWork(ctx, work, nil); err != nil {
-			logger.ChargingLog.Warnf("Charging recovery for %s deferred: %v", sm.Ref, err)
+			logger.ChargingLog.Warnf("Charging retry for %s deferred: %v", sm.Ref, err)
 		}
 		return true
 	})
-	p.recoverChargingReleases(ctx, now)
+	p.retryChargingReleases(ctx, now)
 }
 
 func chargingRetryDelay(attempt int) time.Duration {

@@ -26,7 +26,7 @@ func (p *Processor) RemoveSMContextFromAllNF(smContext *smf_context.SMContext, s
 }
 
 // queueSMContextRelease requires SMLock and performs no external I/O. The
-// existing recovery worker settles charging before policy/context cleanup.
+// existing retry worker settles charging before policy/context cleanup.
 func (p *Processor) queueSMContextRelease(
 	smContext *smf_context.SMContext, sendNotification bool,
 ) *chargingReleaseContinuation {
@@ -139,7 +139,7 @@ func (p *Processor) deferSMContextRelease(work *chargingReleaseContinuation) {
 	work.attempts++
 }
 
-func (p *Processor) recoverChargingReleases(ctx context.Context, now time.Time) {
+func (p *Processor) retryChargingReleases(ctx context.Context, now time.Time) {
 	p.chargingReleases.Range(func(_, value any) bool {
 		if ctx.Err() != nil {
 			return false

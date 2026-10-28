@@ -169,7 +169,7 @@ func TestChargingReleaseRecoveryResumesAuthorizedCleanup(t *testing.T) {
 				p.HandlePDUSessionSMContextRelease(ctx, models.ReleaseSmContextRequestBody{}, sm.Ref)
 				ctx.Writer.WriteHeaderNow()
 				require.Equal(t, http.StatusNoContent, recorder.Code)
-				recoverChargingNow(p)
+				retryChargingNow(p)
 			case "local release":
 				prepareReleaseResponseTest(t, p, sm)
 				// Same callback URI avoids the separate old-registrant notification.
@@ -190,7 +190,7 @@ func TestChargingReleaseRecoveryResumesAuthorizedCleanup(t *testing.T) {
 			p.RemoveSMContextFromAllNF(sm, false)
 			sm.SMLock.Unlock()
 			require.Equal(t, int32(1), calls.Load(), "ordinary cleanup must not replace the failed invocation")
-			recoverChargingNow(p)
+			retryChargingNow(p)
 			require.Eventually(t, func() bool { return smf_context.GetSMContextByRef(sm.Ref) == nil },
 				time.Second, time.Millisecond)
 			require.Equal(t, <-bodies, <-bodies, "Release retry must retain its full original request")
@@ -200,7 +200,7 @@ func TestChargingReleaseRecoveryResumesAuthorizedCleanup(t *testing.T) {
 				wantNotifications = 1
 			}
 			require.Equal(t, wantNotifications, notifications.Load())
-			recoverChargingNow(p)
+			retryChargingNow(p)
 			require.Equal(t, int32(2), calls.Load(), "removed work must not run again")
 		})
 	}
@@ -252,7 +252,7 @@ func TestChargingReleaseWaitsForPendingUpdateThenSettlesRemainingUsage(t *testin
 	require.Zero(t, policyDeletes.Load())
 	require.Len(t, sm.UrrReports, 2)
 	sm.SMLock.Unlock()
-	recoverChargingNow(p)
+	retryChargingNow(p)
 	require.Eventually(t, func() bool { return smf_context.GetSMContextByRef(sm.Ref) == nil },
 		time.Second, time.Millisecond)
 	original, replay := <-updates, <-updates
@@ -318,14 +318,14 @@ func TestChargingCleanupRetriesOnlyIncompleteStages(t *testing.T) {
 	require.Equal(t, chargingReleaseOrderPolicyID, sm.SMPolicyID)
 	require.Same(t, sm, smf_context.GetSMContextByRef(sm.Ref))
 	// Polling and repeated callers must respect the cleanup backoff.
-	p.recoverPendingCharging(context.Background(), time.Now())
+	p.retryPendingCharging(context.Background(), time.Now())
 	require.Equal(t, int32(1), policyCalls.Load())
-	recoverChargingNow(p)
+	retryChargingNow(p)
 	require.Empty(t, sm.SMPolicyID, "acknowledged policy deletion must not repeat")
 	require.True(t, sm.SdmCounted, "failed SDM deletion must retain its bookkeeping slot")
 	require.Same(t, sm, smf_context.GetSMContextByRef(sm.Ref))
 	require.Zero(t, notifications.Load())
-	recoverChargingNow(p)
+	retryChargingNow(p)
 	require.Eventually(t, func() bool { return smf_context.GetSMContextByRef(sm.Ref) == nil },
 		time.Second, time.Millisecond)
 	require.Equal(t, int32(1), chfCalls.Load(), "cleanup retries must never repeat final settlement")
@@ -408,7 +408,7 @@ func TestChargingCleanupCancellationKeepsIncompletePolicy(t *testing.T) {
 	defer cancel()
 	done := make(chan struct{})
 	go func() {
-		p.recoverPendingCharging(ctx, time.Now().Add(time.Hour))
+		p.retryPendingCharging(ctx, time.Now().Add(time.Hour))
 		close(done)
 	}()
 	select {
@@ -442,7 +442,7 @@ func TestChargingReleaseErrorUnionNeverCompletesCleanup(t *testing.T) {
 			})
 			sm.SelectedCHFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
 			p.RemoveSMContextFromAllNF(sm, false)
-			recoverChargingNow(p)
+			retryChargingNow(p)
 			state, err := sm.ChargingReleaseResult()
 			require.Equal(t, smf_context.ChargingReleaseFailed, state)
 			require.Error(t, err)
@@ -569,7 +569,7 @@ func TestChargingReleaseDoesNotBlockAMFResponse(t *testing.T) {
 			require.Equal(t, smf_context.InActivePending, sm.State())
 			require.Same(t, sm, smf_context.GetSMContextByRef(sm.Ref))
 			require.Error(t, sm.BeginChargingUpdate(), "queued Release must prevent new charging updates")
-			recoverChargingNow(p)
+			retryChargingNow(p)
 			state, chargingErr := sm.ChargingReleaseResult()
 			require.Equal(t, smf_context.ChargingReleaseFailed, state)
 			require.Error(t, chargingErr)
@@ -577,7 +577,7 @@ func TestChargingReleaseDoesNotBlockAMFResponse(t *testing.T) {
 			require.Equal(t, chargingReleaseOrderPolicyID, sm.SMPolicyID)
 			require.Len(t, sm.UrrReports, 1)
 			require.Zero(t, deletes.Load())
-			recoverChargingNow(p)
+			retryChargingNow(p)
 			if ueRelease {
 				require.Same(t, sm, smf_context.GetSMContextByRef(sm.Ref), "wait for UE and N2 completion")
 				require.Zero(t, deletes.Load())

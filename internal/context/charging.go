@@ -108,7 +108,7 @@ func (smContext *SMContext) ChargingUpdateResult() (ChargingUpdateState, error) 
 }
 
 // BeginChargingRelease elects one caller to send the CHF termination request.
-// Only NotStarted can enter InProgress here. Background recovery uses
+// Only NotStarted can enter InProgress here. Background retries use
 // BeginChargingRetry to resend a frozen failed invocation.
 func (smContext *SMContext) BeginChargingRelease() bool {
 	smContext.chargingMu.Lock()
