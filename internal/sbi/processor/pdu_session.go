@@ -1167,23 +1167,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			c.JSON(http.StatusForbidden, updateSmContextError)
 
 		case smf_context.SessionReleaseSuccess:
-			if chargingErr := p.ReleaseChargingSession(smContext); chargingErr != nil {
-				smContext.SetState(smf_context.InActivePending)
-				problem := &models.Smf_PDUSess_ExtProblemDetails{
-					Status: http.StatusInternalServerError,
-					Cause:  "SYSTEM_FAILURE",
-					Detail: "Final charging settlement failed",
-				}
-				c.Set(sbi.IN_PB_DETAILS_CTX_STR, problem.Cause)
-				c.JSON(http.StatusInternalServerError, models.UpdateSmContextResponse400{
-					JsonData: &models.Smf_PDUSess_SmContextUpdateError{Error: problem},
-				})
-				smContext.PostRemoveDataPath()
-				if smContext.PDUSessionRelease_DUE_TO_DUP_PDU_ID {
-					p.RemoveSMContextFromAllNF(smContext, true)
-				}
-				return
-			}
+			// N4 release succeeded. Return N1/N2 to AMF without waiting for CHF;
+			// recovery settles charging while UE/AMF finish their release handshake.
+			p.rememberChargingRelease(smContext)
 
 			smContext.Log.Traceln("In case SessionReleaseSuccess")
 			smContext.SetState(smf_context.InActivePending)
@@ -1230,7 +1216,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		// Note:
 		// We don't want to launch timer to wait for N2SmInfoType_PDU_RES_REL_RSP.
 		// So, local release smCtx and notify AMF after sending PDUSessionResourceReleaseCommand
-		p.RemoveSMContextFromAllNF(smContext, true)
+		p.queueSMContextRelease(smContext, true)
 	}
 }
 
@@ -1289,18 +1275,13 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 
 	switch pfcpResponseStatus {
 	case smf_context.SessionReleaseSuccess:
-		if chargingErr := p.ReleaseChargingSession(smContext); chargingErr != nil {
-			smContext.SetState(smf_context.InActivePending)
-			problem := openapi.ProblemDetailsSystemFailure("Final charging settlement failed")
-			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problem.Cause)
-			c.JSON(http.StatusInternalServerError, problem)
-			p.RemoveSMContextFromAllNF(smContext, false)
-			return
-		}
-
+		// AMF can complete release once N4 is gone. Charging and NF cleanup
+		// continue in recovery and cannot turn this response into a failure.
+		p.queueSMContextRelease(smContext, false)
 		smContext.Log.Traceln("In case SessionReleaseSuccess")
-		smContext.SetState(smf_context.InActive)
+		smContext.SetState(smf_context.InActivePending)
 		c.Status(http.StatusNoContent)
+		return
 
 	case smf_context.SessionReleaseFailed:
 		// Update SmContext Request(N1 PDU Session Release Request)
