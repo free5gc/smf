@@ -1,7 +1,10 @@
 package consumer
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -68,8 +71,9 @@ func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMCon
 			// not sure if NFIPv4Address is RegisterIPv4 or BindingIPv4
 			NFIPv4Address: smfContext.RegisterIPv4,
 		},
-		InvocationTimeStamp: &date,
-		Triggers:            triggers,
+		InvocationTimeStamp:      &date,
+		InvocationSequenceNumber: smContext.NextChargingSequenceNumber(),
+		Triggers:                 triggers,
 		PDUSessionChargingInformation: &models.Chf_ConvCharging_PDUSessionChargingInformation{
 			ChargingId: smContext.ChargingID,
 			UserInformation: &models.Chf_ConvCharging_UserInformation{
@@ -103,6 +107,34 @@ func (s *nchfService) buildConvergedChargingRequest(smContext *smf_context.SMCon
 	return req
 }
 
+// prepareConvergedChargingRequest preserves unsettled update/release requests
+// instead of rebuilding them with different content or a new invocation ID.
+func (s *nchfService) prepareConvergedChargingRequest(
+	smContext *smf_context.SMContext,
+	requestType smf_context.RequestType,
+	multipleUnitUsage []models.Chf_ConvCharging_MultipleUnitUsage,
+) (*models.Chf_ConvCharging_ChargingDataRequest, string, error) {
+	if requestType == smf_context.CHARGING_INIT {
+		return s.buildConvergedChargingRequest(smContext, multipleUnitUsage), smContext.ChargingDataRef, nil
+	}
+
+	ref, request, err := smContext.PendingChargingRequest(requestType)
+	if err != nil {
+		return nil, ref, err
+	}
+	if request != nil {
+		// Mark the outgoing copy without changing the frozen request.
+		request.RetransmissionIndicator = true
+		return request, ref, nil
+	}
+	request = s.buildConvergedChargingRequest(smContext, multipleUnitUsage)
+	if err = smContext.StorePendingChargingRequest(requestType, smContext.ChargingDataRef, request); err != nil {
+		return nil, "", err
+	}
+	ref, request, err = smContext.PendingChargingRequest(requestType)
+	return request, ref, err
+}
+
 func (s *nchfService) SendConvergedChargingRequest(
 	smContext *smf_context.SMContext,
 	requestType smf_context.RequestType,
@@ -110,109 +142,125 @@ func (s *nchfService) SendConvergedChargingRequest(
 ) (
 	*models.Chf_ConvCharging_ChargingDataResponse, *models.ProblemDetails, error,
 ) {
+	return s.SendConvergedChargingRequestContext(context.Background(), smContext, requestType, multipleUnitUsage)
+}
+
+// The caller's cancellation bounds retry I/O; retransmission marks only the outgoing copy.
+func (s *nchfService) SendConvergedChargingRequestContext(
+	parent context.Context, smContext *smf_context.SMContext, requestType smf_context.RequestType,
+	multipleUnitUsage []models.Chf_ConvCharging_MultipleUnitUsage,
+) (*models.Chf_ConvCharging_ChargingDataResponse, *models.ProblemDetails, error) {
 	logger.ChargingLog.Info("Handle SendConvergedChargingRequest")
 
-	req := s.buildConvergedChargingRequest(smContext, multipleUnitUsage)
+	req, chargingDataRef, err := s.prepareConvergedChargingRequest(smContext, requestType, multipleUnitUsage)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	ctx, pd, err := smf_context.GetSelf().
+	tokenCtx, pd, err := smf_context.GetSelf().
 		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, models.Nrf_NFMgmt_NFType_CHF)
 	if err != nil {
 		return nil, pd, err
 	}
 
-	if smContext.SelectedCHFProfile.NfServices == nil {
-		errMsg := "no CHF found"
-		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf("%s", errMsg)
-	}
-
-	var client *ConvCharging.APIClient
-	// Create Converged Charging Client for this SM Context
+	var candidate string
 	for _, service := range smContext.SelectedCHFProfile.NfServices {
 		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING {
-			client = s.getConvergedChargingClient(service.ApiPrefix)
+			candidate = service.ApiPrefix
+			break
 		}
 	}
+	target, targetErr := smContext.ChargingTarget(requestType, candidate)
+	if targetErr != nil {
+		return nil, openapi.ProblemDetailsDataNotFound(targetErr.Error()), nil
+	}
+	client := s.getConvergedChargingClient(target)
 	if client == nil {
-		errMsg := "no CONVERGEDCHARGING-CHF found"
-		return nil, openapi.ProblemDetailsDataNotFound(errMsg), fmt.Errorf("%s", errMsg)
+		return nil, openapi.ProblemDetailsDataNotFound("no CHF destination"), nil
+	}
+	ctx := parent
+	if requestType != smf_context.CHARGING_INIT {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(parent, 5*time.Second)
+		defer cancel()
+	}
+	if token := tokenCtx.Value(openapi.ContextOAuth2); token != nil {
+		ctx = context.WithValue(ctx, openapi.ContextOAuth2, token)
 	}
 
-	// select the appropriate converged charging service based on trigger type
+	var (
+		response   *models.Chf_ConvCharging_ChargingDataResponse
+		location   string
+		requestErr error
+	)
+	// Keep each generated API request explicit, then handle HTTP errors once.
 	switch requestType {
 	case smf_context.CHARGING_INIT:
-		postChargingDataRequest := &ConvCharging.ChargingdataPostRequest{
-			RequestBody: req,
-		}
-		rspPost, localErr := client.DefaultApi.ChargingdataPost(ctx, postChargingDataRequest)
-
-		switch err := localErr.(type) {
-		case openapi.GenericOpenAPIError:
-			switch errModel := err.Model().(type) {
-			case ConvCharging.ChargingdataPostError:
-				return nil, errModel.ProblemDetails, nil
-			case error:
-				return nil, openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
-			default:
-				return nil, nil, openapi.ReportError("openapi error")
-			}
-		case error:
-			return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
-		case nil:
-			chargingDataRef := strings.Split(rspPost.Location, "/")
-			smContext.ChargingDataRef = chargingDataRef[len(chargingDataRef)-1]
-			return rspPost.Chf_ConvCharging_ChargingDataResponse, nil, nil
-		default:
-			return nil, nil, openapi.ReportError("server no response")
+		request := &ConvCharging.ChargingdataPostRequest{RequestBody: req}
+		rsp, localErr := client.DefaultApi.ChargingdataPost(ctx, request)
+		requestErr = localErr
+		if localErr == nil {
+			response, location = rsp.Chf_ConvCharging_ChargingDataResponse, rsp.Location
 		}
 	case smf_context.CHARGING_UPDATE:
-		updateChargingDataRequest := &ConvCharging.ChargingdataChargingDataRefUpdatePostRequest{
-			ChargingDataRef: &smContext.ChargingDataRef,
+		request := &ConvCharging.ChargingdataChargingDataRefUpdatePostRequest{
+			ChargingDataRef: &chargingDataRef,
 			RequestBody:     req,
 		}
-		rspUpdate, localErr := client.DefaultApi.ChargingdataChargingDataRefUpdatePost(ctx, updateChargingDataRequest)
-
-		switch err := localErr.(type) {
-		case openapi.GenericOpenAPIError:
-			switch errModel := err.Model().(type) {
-			case ConvCharging.ChargingdataChargingDataRefUpdatePostError:
-				return nil, errModel.ProblemDetails, nil
-			case error:
-				return nil, openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
-			default:
-				return nil, nil, openapi.ReportError("openapi error")
-			}
-		case error:
-			return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
-		case nil:
-			return rspUpdate.Chf_ConvCharging_ChargingDataResponse, nil, nil
-		default:
-			return nil, nil, openapi.ReportError("server no response")
+		rsp, localErr := client.DefaultApi.ChargingdataChargingDataRefUpdatePost(ctx, request)
+		requestErr = localErr
+		if localErr == nil && rsp != nil {
+			response = rsp.Chf_ConvCharging_ChargingDataResponse
 		}
 	case smf_context.CHARGING_RELEASE:
-		releaseChargingDataRequest := &ConvCharging.ChargingdataChargingDataRefReleasePostRequest{
-			ChargingDataRef: &smContext.ChargingDataRef,
+		request := &ConvCharging.ChargingdataChargingDataRefReleasePostRequest{
+			ChargingDataRef: &chargingDataRef,
 			RequestBody:     req,
 		}
-		_, localErr := client.DefaultApi.ChargingdataChargingDataRefReleasePost(ctx, releaseChargingDataRequest)
-
-		switch err := localErr.(type) {
-		case openapi.GenericOpenAPIError:
-			switch errModel := err.Model().(type) {
-			case ConvCharging.ChargingdataChargingDataRefReleasePostError:
-				return nil, errModel.ProblemDetails, nil
-			case error:
-				return nil, openapi.ProblemDetailsSystemFailure(errModel.Error()), nil
-			default:
-				return nil, nil, openapi.ReportError("openapi error")
-			}
-		case error:
-			return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
-		case nil:
-			return nil, nil, nil
-		default:
-			return nil, nil, openapi.ReportError("server no response")
-		}
+		_, requestErr = client.DefaultApi.ChargingdataChargingDataRefReleasePost(ctx, request)
 	default:
 		return nil, nil, openapi.ReportError("invalid request type")
 	}
+
+	if requestErr != nil {
+		if apiErr, ok := requestErr.(openapi.GenericOpenAPIError); ok {
+			return nil, chargingHTTPProblem(apiErr), nil
+		}
+		return nil, openapi.ProblemDetailsSystemFailure(requestErr.Error()), nil
+	}
+
+	switch requestType {
+	case smf_context.CHARGING_INIT:
+		parts := strings.Split(location, "/")
+		smContext.ChargingDataRef = parts[len(parts)-1]
+	case smf_context.CHARGING_UPDATE:
+		if response == nil {
+			return nil, nil, fmt.Errorf("charging update returned no response body")
+		}
+		if response.InvocationSequenceNumber != req.InvocationSequenceNumber {
+			return nil, nil, fmt.Errorf("%w: got %d want %d", smf_context.ErrChargingResponseSequence,
+				response.InvocationSequenceNumber, req.InvocationSequenceNumber)
+		}
+	}
+	return response, nil, nil
+}
+
+// Preserve the actual HTTP status even for union response models or statuses
+// without a generated ProblemDetails field. An error response is never success.
+func chargingHTTPProblem(apiError openapi.GenericOpenAPIError) *models.ProblemDetails {
+	var problem models.ProblemDetails
+	if err := json.Unmarshal(apiError.Body(), &problem); err != nil {
+		problem.Detail = apiError.Error()
+	}
+	problem.Status = int32(apiError.ErrorStatus)
+	if problem.Cause == "" {
+		problem.Cause = "CHARGING_FAILED"
+	}
+	if problem.Title == "" {
+		problem.Title = http.StatusText(apiError.ErrorStatus)
+	}
+	if problem.Detail == "" {
+		problem.Detail = apiError.Error()
+	}
+	return &problem
 }

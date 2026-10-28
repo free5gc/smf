@@ -20,6 +20,9 @@ type ProcessorSmf interface {
 type Processor struct {
 	ProcessorSmf
 
+	// Pending work is in memory in this stage; each entry is guarded by SMLock.
+	chargingWork     sync.Map // map[SMContext.Ref]*chargingWork
+	chargingReleases sync.Map // map[SMContext.Ref]*chargingReleaseContinuation
 	activePFCPMu     sync.RWMutex
 	activePFCPClient ActivePFCPClient
 }

@@ -304,15 +304,11 @@ func newUpdateURRIE(urr *context.URR) (*ie.IE, error) {
 	if urr.MeasurementPeriod != 0 {
 		children = append(children, ie.NewMeasurementPeriod(urr.MeasurementPeriod))
 	}
-	if urr.VolumeThreshold != 0 {
-		children = append(children, ie.NewVolumeThreshold(
-			0x06, 0, urr.VolumeThreshold, urr.VolumeThreshold,
-		))
+	if threshold := newVolumeThresholdIE(urr); threshold != nil {
+		children = append(children, threshold)
 	}
-	if urr.VolumeQuota != 0 {
-		children = append(children, ie.NewVolumeQuota(
-			0x07, urr.VolumeQuota, urr.VolumeQuota, urr.VolumeQuota,
-		))
+	if quota := newVolumeQuotaIE(urr); quota != nil {
+		children = append(children, quota)
 	}
 	children = append(children, newMeasurementInformationIE(urr.MeasurementInformation))
 	if !urr.QuotaValidityTime.IsZero() {
