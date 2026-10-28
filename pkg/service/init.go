@@ -209,7 +209,7 @@ func (a *SmfApp) Start() {
 	}
 
 	a.wg.Add(1)
-	go func() { defer a.wg.Done(); a.processor.RunChargingRecovery(a.ctx) }()
+	go func() { defer a.wg.Done(); a.processor.RunChargingRetries(a.ctx) }()
 
 	if err := a.sbiServer.Run(context.Background(), &a.wg); err != nil {
 		logger.MainLog.Errorf("SBI server startup failed: %+v", err)

@@ -188,7 +188,7 @@ func TestChargingQuotaRecoveryContinuesOnlyUnsentUPF(t *testing.T) {
 	}
 	sm.UrrReports = append(sm.UrrReports, smf_context.UsageReport{UrrId: 1, UpfId: upfs[0].UUID(), TotalVolume: 20})
 	p.SetActivePFCPClient(client)
-	recoverChargingNow(p)
+	retryChargingNow(p)
 	require.Equal(t, int32(1), chfCalls.Load(), "cached CHF reply must not trigger accounting again")
 	for _, upf := range upfs {
 		require.Equal(t, 1, counts[upf.NodeID.IP.String()])
@@ -223,7 +223,7 @@ func TestChargingQuotaUnknownOutcomeDoesNotResetQuota(t *testing.T) {
 	work := pendingChargingWork(t, p, sm)
 	require.NotEmpty(t, work.chfResponse)
 	for range 3 {
-		recoverChargingNow(p)
+		retryChargingNow(p)
 	}
 	require.Equal(t, 1, pfcpCalls, "the existing transaction owns retransmission; never reset credit in a new transaction")
 	require.Equal(t, int32(1), chfCalls.Load())
@@ -234,14 +234,14 @@ func TestChargingQuotaUnknownOutcomeDoesNotResetQuota(t *testing.T) {
 	// A retired original rule needs no new grant and must not keep live owners blocked.
 	sm.UrrTable[upfs[0].UUID()][1].RefCount = 0
 	sm.SetUrrState(upfs[0].UUID(), 1, smf_context.RULE_REMOVE)
-	recoverChargingNow(p)
+	retryChargingNow(p)
 	state, lastErr = sm.ChargingUpdateResult()
 	require.NoError(t, lastErr)
 	require.Equal(t, smf_context.ChargingUpdateIdle, state)
 	require.Equal(t, 1, pfcpCalls)
 }
 
-func TestChargingRecoveryNeverGrantsToReplacementRule(t *testing.T) {
+func TestChargingRetryNeverGrantsToReplacementRule(t *testing.T) {
 	p, sm, upfs := quotaChargingSession(t, 1)
 	var calls atomic.Int32
 	server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -257,14 +257,14 @@ func TestChargingRecoveryNeverGrantsToReplacementRule(t *testing.T) {
 	p.ReportUsageAndUpdateQuota(sm)
 	replacement := &smf_context.URR{URRID: 1, VolumeQuota: 777}
 	sm.UrrTable[upfs[0].UUID()][1].Rule = replacement
-	recoverChargingNow(p)
+	retryChargingNow(p)
 	require.Equal(t, uint64(777), replacement.VolumeQuota)
 	state, lastErr := sm.ChargingUpdateResult()
 	require.NoError(t, lastErr)
 	require.Equal(t, smf_context.ChargingUpdateIdle, state)
 }
 
-func TestChargingRecoveryRejectsChangedPFCPBindingBeforeMutatingQuota(t *testing.T) {
+func TestChargingRetryRejectsChangedPFCPBindingBeforeMutatingQuota(t *testing.T) {
 	for _, change := range []string{"session", "association"} {
 		t.Run(change, func(t *testing.T) {
 			p, sm, upfs := quotaChargingSession(t, 1)
@@ -285,7 +285,7 @@ func TestChargingRecoveryRejectsChangedPFCPBindingBeforeMutatingQuota(t *testing
 			} else {
 				upfs[0].EstablishAssociation(context.Background())
 			}
-			recoverChargingNow(p)
+			retryChargingNow(p)
 			rule := sm.UrrTable[upfs[0].UUID()][1].Rule
 			require.Zero(t, rule.VolumeQuota, "a response for the old binding cannot modify its replacement")
 			require.True(t, rule.QuotaValidityTime.IsZero())
@@ -348,7 +348,7 @@ func TestChargingTriggerOnlyRecoveryPreservesULCLEstablishment(t *testing.T) {
 		TriggerType:     models.Chf_ConvCharging_TriggerType_ADDITION_OF_UPF,
 		TriggerCategory: models.Chf_ConvCharging_TriggerCategory_IMMEDIATE_REPORT,
 	})
-	recoverChargingNow(p)
+	retryChargingNow(p)
 	require.Equal(t, int32(2), calls.Load())
 	require.Equal(t, uint64(42), rule.VolumeQuota)
 	require.Len(t, sm.UrrReports, 1)
@@ -468,7 +468,7 @@ func TestStaticAnchorsKeepSeparateChargingUPFIdentity(t *testing.T) {
 	require.Equal(t, map[string]int32{"old-anchor": 100, "mec-anchor": 200}, volumes)
 }
 
-// Request replay and background recovery.
+// Request replay and background retries.
 
 func TestChargingUpdateFailureBlocksLaterAccounting(t *testing.T) {
 	p, sm := chargingReleaseOrderSession(t)
@@ -633,7 +633,7 @@ func TestChargingUpdateInProgressBlocksOtherAccounting(t *testing.T) {
 	require.Error(t, sm.BeginChargingUpdate(), "updates must stop once release begins")
 }
 
-func TestChargingRecoveryRetriesExactRequestAndPreservesNewUsage(t *testing.T) {
+func TestChargingRetryRetriesExactRequestAndPreservesNewUsage(t *testing.T) {
 	p, sm := chargingReleaseOrderSession(t)
 	var calls atomic.Int32
 	bodies := make(chan []byte, 2)
@@ -653,7 +653,7 @@ func TestChargingRecoveryRetriesExactRequestAndPreservesNewUsage(t *testing.T) {
 	p.ReportUsageAndUpdateQuota(sm)
 	work := pendingChargingWork(t, p, sm)
 	require.True(t, work.retryAt.After(time.Now()))
-	// The persisted body/destination must survive changes to discovery and metadata.
+	// The in-memory body/destination must survive changes to discovery and metadata.
 	sm.SelectedCHFProfile = models.Nrf_NFDisc_NFProfile{}
 	sm.SNssai.Sd = "abcdef"
 	extra := smf_context.UsageReport{
@@ -661,9 +661,9 @@ func TestChargingRecoveryRetriesExactRequestAndPreservesNewUsage(t *testing.T) {
 		ReportTpye: models.Chf_ConvCharging_TriggerType_FINAL,
 	}
 	sm.UrrReports = append(sm.UrrReports, extra)
-	p.recoverPendingCharging(context.Background(), time.Now())
+	p.retryPendingCharging(context.Background(), time.Now())
 	require.Equal(t, int32(1), calls.Load(), "honor backoff")
-	recoverChargingNow(p)
+	retryChargingNow(p)
 	require.Equal(t, int32(2), calls.Load())
 	require.Equal(t, <-bodies, <-bodies, "sequence, timestamp, metadata and usage remain byte-identical")
 	require.Equal(t, []smf_context.UsageReport{extra}, sm.UrrReports)
@@ -675,7 +675,7 @@ func TestChargingRecoveryRetriesExactRequestAndPreservesNewUsage(t *testing.T) {
 	require.Equal(t, int32(2), sm.NextChargingSequenceNumber())
 }
 
-func TestChargingRecoveryBlocksPermanentErrorsAndWrongSequence(t *testing.T) {
+func TestChargingRetryBlocksPermanentErrorsAndWrongSequence(t *testing.T) {
 	for _, status := range []int{400, 409, 200} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			p, sm := chargingReleaseOrderSession(t)
@@ -694,7 +694,7 @@ func TestChargingRecoveryBlocksPermanentErrorsAndWrongSequence(t *testing.T) {
 			})
 			sm.SelectedCHFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
 			p.ReportUsageAndUpdateQuota(sm)
-			recoverChargingNow(p)
+			retryChargingNow(p)
 			require.Equal(t, int32(1), calls.Load())
 			require.Len(t, sm.UrrReports, 1)
 			work := pendingChargingWork(t, p, sm)
@@ -726,9 +726,9 @@ func TestChargingBackgroundWorkerSerializesAndStops(t *testing.T) {
 	sm.SMLock.Lock()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	go func() { defer close(done); p.RunChargingRecovery(ctx) }()
+	go func() { defer close(done); p.RunChargingRetries(ctx) }()
 	t.Cleanup(func() { cancel(); <-done })
-	p.recoverPendingCharging(ctx, time.Now().Add(time.Hour))
+	p.retryPendingCharging(ctx, time.Now().Add(time.Hour))
 	require.Equal(t, int32(1), calls.Load(), "locked session is skipped")
 	sm.SMLock.Unlock()
 	require.Eventually(t, func() bool {
@@ -762,7 +762,7 @@ func TestChargingWorkerCancellationStopsInFlightHTTP(t *testing.T) {
 	pendingChargingWork(t, p, sm).retryAt = time.Time{}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	go func() { defer close(done); p.RunChargingRecovery(ctx) }()
+	go func() { defer close(done); p.RunChargingRetries(ctx) }()
 	t.Cleanup(func() { cancel(); <-done })
 	select {
 	case <-started:
@@ -898,8 +898,8 @@ func pendingChargingWork(t *testing.T, p *Processor, sm *smf_context.SMContext) 
 	return value.(*chargingWork)
 }
 
-func recoverChargingNow(p *Processor) {
-	p.recoverPendingCharging(context.Background(), time.Now().Add(time.Hour))
+func retryChargingNow(p *Processor) {
+	p.retryPendingCharging(context.Background(), time.Now().Add(time.Hour))
 }
 
 type chargingPFCPClient struct {
