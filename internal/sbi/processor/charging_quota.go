@@ -235,6 +235,11 @@ func (p *Processor) deliverChargingQuota(
 	ctx context.Context, work *chargingWork, response *models.Chf_ConvCharging_ChargingDataResponse,
 ) error {
 	sm := work.sm
+	// A deleted PFCP session cannot consume or receive any more granted quota.
+	// Finish the acknowledged Update so the final CHF Release can proceed.
+	if sm.PFCPReleaseDone {
+		return nil
+	}
 	ref, _, err := sm.PendingChargingRequest(smf_context.CHARGING_UPDATE)
 	if err != nil {
 		return err

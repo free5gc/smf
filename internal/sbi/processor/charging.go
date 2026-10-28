@@ -13,6 +13,9 @@ import (
 	"github.com/free5gc/smf/internal/logger"
 )
 
+// Initial delivery is followed by at most three retries of the frozen request.
+const chargingMaxRetries = 3
+
 type chargingOwner struct {
 	rg  int32
 	upf string
@@ -82,7 +85,7 @@ func (p *Processor) UpdateChargingSession(
 }
 
 // sendChargingUpdate requires SMLock. Its pending work survives CHF and PFCP
-// failures and consumes only the original report batch after acknowledgement.
+// failures within the retry limit and consumes only the acknowledged report batch.
 func (p *Processor) sendChargingUpdate(
 	smContext *smf_context.SMContext, multipleUnitUsage []models.Chf_ConvCharging_MultipleUnitUsage, reportCount int,
 ) (*models.Chf_ConvCharging_ChargingDataResponse, error) {
@@ -119,6 +122,9 @@ func (p *Processor) startChargingRelease(ctx context.Context, smContext *smf_con
 		switch state {
 		case smf_context.ChargingReleaseSucceeded:
 			return nil
+		case smf_context.ChargingReleaseAbandoned:
+			p.dropChargingReports(smContext, lastErr)
+			return nil
 		case smf_context.ChargingReleaseFailed:
 			return lastErr
 		case smf_context.ChargingReleaseInProgress:
@@ -131,10 +137,18 @@ func (p *Processor) startChargingRelease(ctx context.Context, smContext *smf_con
 	usage := buildMultiUnitUsage(smContext, reports)
 	work := p.newChargingWork(smContext, smf_context.CHARGING_RELEASE, usage, len(reports))
 	_, err := p.runChargingWork(ctx, work, usage)
+	state, lastErr := smContext.ChargingReleaseResult()
+	if state == smf_context.ChargingReleaseAbandoned && lastErr != nil {
+		return nil // Local cleanup is permitted; settlement remains explicitly abandoned.
+	}
 	return err
 }
 
 func (p *Processor) ReportUsageAndUpdateQuota(smContext *smf_context.SMContext) {
+	if state, lastErr := smContext.ChargingReleaseResult(); state == smf_context.ChargingReleaseAbandoned {
+		p.dropChargingReports(smContext, lastErr)
+		return
+	}
 	reports := smContext.UrrReports
 	usage := buildMultiUnitUsage(smContext, reports)
 	if len(usage) == 0 {
@@ -321,6 +335,14 @@ func (p *Processor) runChargingWork(
 			p.chargingWork.CompareAndDelete(sm.Ref, work)
 			return
 		}
+		if !work.retryable {
+			p.dropChargingWork(work, fmt.Errorf("permanent charging failure: %w", err))
+			return
+		}
+		if work.attempts >= chargingMaxRetries {
+			p.dropChargingWork(work, fmt.Errorf("charging retry limit (%d) reached: %w", chargingMaxRetries, err))
+			return
+		}
 		if work.kind == smf_context.CHARGING_RELEASE {
 			sm.FinishChargingRelease(err)
 		} else if work.chfResponse != nil {
@@ -390,7 +412,44 @@ func (p *Processor) runChargingWork(
 	return response, nil
 }
 
-// RunChargingRetries examines only work retained in this process.
+// dropChargingWork requires SMLock. Discard the resource rather than reissue an
+// ambiguous debit under a fresh invocation; retain the failed outcome in the session.
+func (p *Processor) dropChargingWork(work *chargingWork, reason error) {
+	sm := work.sm
+	ref, request, snapshotErr := sm.PendingChargingRequest(work.kind)
+	body, encodeErr := json.Marshal(request)
+	reason = errors.Join(reason, snapshotErr, encodeErr)
+	logger.ChargingLog.Errorf(
+		"Drop charging work: supi=%s session=%s ref=%s type=%d retries=%d acknowledged=%t reason=%v request=%s reports=%+v",
+		sm.Supi, sm.Ref, ref, work.kind, work.attempts, work.chfResponse != nil, reason, body, work.reports)
+	p.dropChargingReports(sm, reason)
+	for _, info := range sm.ChargingInfo {
+		if info == nil {
+			continue
+		}
+		if info.VolumeLimitExpiryTimer != nil {
+			info.VolumeLimitExpiryTimer.Stop()
+			info.VolumeLimitExpiryTimer = nil
+		}
+		if info.EventLimitExpiryTimer != nil {
+			info.EventLimitExpiryTimer.Stop()
+			info.EventLimitExpiryTimer = nil
+		}
+	}
+	sm.AbandonCharging(reason)
+	p.chargingWork.CompareAndDelete(sm.Ref, work)
+}
+
+func (p *Processor) dropChargingReports(sm *smf_context.SMContext, reason error) {
+	if len(sm.UrrReports) == 0 {
+		return
+	}
+	logger.ChargingLog.Errorf("Drop charging reports: supi=%s session=%s ref=%s reason=%v reports=%+v",
+		sm.Supi, sm.Ref, sm.ChargingDataRef, reason, sm.UrrReports)
+	sm.UrrReports = nil
+}
+
+// RunChargingRetries examines only work retained in this process, with a bounded retry budget.
 // Pending requests are not persisted or restored after restart.
 // Ordinary callers and retries serialize through the original session's SMLock.
 func (p *Processor) RunChargingRetries(ctx context.Context) {
@@ -424,20 +483,26 @@ func (p *Processor) retryPendingCharging(ctx context.Context, now time.Time) {
 		if !exists || current != work {
 			return true
 		}
-		if !work.retryable || now.Before(work.retryAt) {
+		if smf_context.GetSMContextByRef(sm.Ref) != sm {
+			p.dropChargingWork(work, fmt.Errorf("session context was removed"))
 			return true
 		}
-		if smf_context.GetSMContextByRef(sm.Ref) != sm {
-			work.retryable = false
-			logger.ChargingLog.Errorf("Charging retry retained for removed session %s", sm.Ref)
+		if !work.retryable || work.attempts >= chargingMaxRetries {
+			p.dropChargingWork(work, fmt.Errorf("charging work cannot be retried"))
+			return true
+		}
+		if now.Before(work.retryAt) {
 			return true
 		}
 		if !sm.BeginChargingRetry(work.kind) {
+			p.dropChargingWork(work, fmt.Errorf("pending charging invocation is unavailable"))
 			return true
 		}
 		work.attempts++
 		if _, err := p.runChargingWork(ctx, work, nil); err != nil {
-			logger.ChargingLog.Warnf("Charging retry for %s deferred: %v", sm.Ref, err)
+			if _, pending := p.chargingWork.Load(sm.Ref); pending {
+				logger.ChargingLog.Warnf("Charging retry for %s deferred: %v", sm.Ref, err)
+			}
 		}
 		return true
 	})

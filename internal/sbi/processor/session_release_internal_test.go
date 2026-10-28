@@ -426,13 +426,18 @@ func TestChargingCleanupCancellationKeepsIncompletePolicy(t *testing.T) {
 	require.Equal(t, chargingReleaseOrderPolicyID, sm.SMPolicyID)
 }
 
-func TestChargingReleaseErrorUnionNeverCompletesCleanup(t *testing.T) {
+func TestChargingReleasePermanentErrorAllowsCleanup(t *testing.T) {
 	for _, status := range []int{400, 404, 409} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			p, sm := chargingReleaseOrderSession(t)
 			sm.SMPolicyID = chargingReleaseOrderPolicyID
-			var calls atomic.Int32
+			var calls, policyDeletes atomic.Int32
 			server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/delete") {
+					policyDeletes.Add(1)
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
 				calls.Add(1)
 				w.Header().Set("Content-Type", "application/problem+json")
 				w.WriteHeader(status)
@@ -441,15 +446,23 @@ func TestChargingReleaseErrorUnionNeverCompletesCleanup(t *testing.T) {
 				}))
 			})
 			sm.SelectedCHFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
+			sm.SelectedPCFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, server.URL)
+			sm.SMLock.Lock()
 			p.RemoveSMContextFromAllNF(sm, false)
+			sm.SMLock.Unlock()
+			require.Eventually(t, func() bool {
+				return smf_context.GetSMContextByRef(sm.Ref) == nil
+			}, time.Second, time.Millisecond)
 			retryChargingNow(p)
 			state, err := sm.ChargingReleaseResult()
-			require.Equal(t, smf_context.ChargingReleaseFailed, state)
+			require.Equal(t, smf_context.ChargingReleaseAbandoned, state)
 			require.Error(t, err)
 			require.Equal(t, int32(1), calls.Load())
-			require.Len(t, sm.UrrReports, 1)
-			require.Equal(t, chargingReleaseOrderPolicyID, sm.SMPolicyID)
-			require.Same(t, sm, smf_context.GetSMContextByRef(sm.Ref))
+			require.Empty(t, sm.UrrReports)
+			require.Empty(t, sm.SMPolicyID)
+			require.Equal(t, int32(1), policyDeletes.Load())
+			_, pending := p.chargingWork.Load(sm.Ref)
+			require.False(t, pending)
 		})
 	}
 }
