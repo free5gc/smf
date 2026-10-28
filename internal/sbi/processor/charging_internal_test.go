@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -203,42 +204,65 @@ func TestChargingQuotaRecoveryContinuesOnlyUnsentUPF(t *testing.T) {
 }
 
 func TestChargingQuotaUnknownOutcomeDoesNotResetQuota(t *testing.T) {
-	p, sm, upfs := quotaChargingSession(t, 1)
-	var chfCalls atomic.Int32
-	server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
-		chfCalls.Add(1)
-		var request models.Chf_ConvCharging_ChargingDataRequest
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
-		chargingSuccess(t, w, &request, quotaInfo(upfs[0].UUID()))
-	})
-	sm.SelectedCHFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
-	var pfcpCalls int
-	p.SetActivePFCPClient(&chargingPFCPClient{modify: func(*message.SessionModificationRequest, *net.UDPAddr, uint64) (
-		*message.SessionModificationResponse, error,
-	) {
-		pfcpCalls++
-		return nil, errors.New("accepted by UPF but acknowledgement lost")
-	}})
-	p.ReportUsageAndUpdateQuota(sm)
-	work := pendingChargingWork(t, p, sm)
-	require.NotEmpty(t, work.chfResponse)
-	for range 3 {
-		retryChargingNow(p)
+	for _, deleted := range []bool{false, true} {
+		name := "retired URR"
+		if deleted {
+			name = "deleted PFCP session"
+		}
+		t.Run(name, func(t *testing.T) {
+			p, sm, upfs := quotaChargingSession(t, 1)
+			var chfCalls, releaseCalls atomic.Int32
+			server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/release") {
+					releaseCalls.Add(1)
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
+				chfCalls.Add(1)
+				var request models.Chf_ConvCharging_ChargingDataRequest
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+				chargingSuccess(t, w, &request, quotaInfo(upfs[0].UUID()))
+			})
+			sm.SelectedCHFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
+			var pfcpCalls int
+			p.SetActivePFCPClient(&chargingPFCPClient{modify: func(*message.SessionModificationRequest, *net.UDPAddr, uint64) (
+				*message.SessionModificationResponse, error,
+			) {
+				pfcpCalls++
+				return nil, errors.New("accepted by UPF but acknowledgement lost")
+			}})
+			p.ReportUsageAndUpdateQuota(sm)
+			work := pendingChargingWork(t, p, sm)
+			require.NotEmpty(t, work.chfResponse)
+			for range 2 {
+				retryChargingNow(p)
+			}
+			require.Equal(t, 1, pfcpCalls,
+				"the existing transaction owns retransmission; never reset credit in a new transaction")
+			require.Equal(t, int32(1), chfCalls.Load())
+			state, lastErr := sm.ChargingUpdateResult()
+			require.Equal(t, smf_context.ChargingUpdateQuotaPending, state)
+			require.Error(t, lastErr)
+			require.False(t, sm.BeginChargingRelease(), "an unconfirmed quota must block final settlement")
+			if deleted {
+				// N4 deletion ends quota delivery even while the original URR remains referenced.
+				sm.PFCPReleaseDone = true
+			} else {
+				sm.UrrTable[upfs[0].UUID()][1].RefCount = 0
+				sm.SetUrrState(upfs[0].UUID(), 1, smf_context.RULE_REMOVE)
+			}
+			retryChargingNow(p)
+			state, lastErr = sm.ChargingUpdateResult()
+			require.NoError(t, lastErr)
+			require.Equal(t, smf_context.ChargingUpdateIdle, state)
+			require.Equal(t, 1, pfcpCalls)
+			require.NoError(t, p.ReleaseChargingSession(sm))
+			require.Equal(t, int32(1), releaseCalls.Load())
+			stateRelease, releaseErr := sm.ChargingReleaseResult()
+			require.Equal(t, smf_context.ChargingReleaseSucceeded, stateRelease)
+			require.NoError(t, releaseErr)
+		})
 	}
-	require.Equal(t, 1, pfcpCalls, "the existing transaction owns retransmission; never reset credit in a new transaction")
-	require.Equal(t, int32(1), chfCalls.Load())
-	state, lastErr := sm.ChargingUpdateResult()
-	require.Equal(t, smf_context.ChargingUpdateQuotaPending, state)
-	require.Error(t, lastErr)
-	require.False(t, sm.BeginChargingRelease(), "an unconfirmed quota must block final settlement")
-	// A retired original rule needs no new grant and must not keep live owners blocked.
-	sm.UrrTable[upfs[0].UUID()][1].RefCount = 0
-	sm.SetUrrState(upfs[0].UUID(), 1, smf_context.RULE_REMOVE)
-	retryChargingNow(p)
-	state, lastErr = sm.ChargingUpdateResult()
-	require.NoError(t, lastErr)
-	require.Equal(t, smf_context.ChargingUpdateIdle, state)
-	require.Equal(t, 1, pfcpCalls)
 }
 
 func TestChargingRetryNeverGrantsToReplacementRule(t *testing.T) {
@@ -675,8 +699,8 @@ func TestChargingRetryRetriesExactRequestAndPreservesNewUsage(t *testing.T) {
 	require.Equal(t, int32(2), sm.NextChargingSequenceNumber())
 }
 
-func TestChargingRetryBlocksPermanentErrorsAndWrongSequence(t *testing.T) {
-	for _, status := range []int{400, 409, 200} {
+func TestChargingRetryDropsPermanentErrorsAndWrongSequence(t *testing.T) {
+	for _, status := range []int{400, 403, 404, 409, 200} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			p, sm := chargingReleaseOrderSession(t)
 			var calls atomic.Int32
@@ -696,15 +720,104 @@ func TestChargingRetryBlocksPermanentErrorsAndWrongSequence(t *testing.T) {
 			p.ReportUsageAndUpdateQuota(sm)
 			retryChargingNow(p)
 			require.Equal(t, int32(1), calls.Load())
-			require.Len(t, sm.UrrReports, 1)
-			work := pendingChargingWork(t, p, sm)
-			require.False(t, work.retryable)
+			require.Empty(t, sm.UrrReports)
+			_, pending := p.chargingWork.Load(sm.Ref)
+			require.False(t, pending)
+			state, lastErr := sm.ChargingReleaseResult()
+			require.Equal(t, smf_context.ChargingReleaseAbandoned, state)
+			require.Error(t, lastErr)
+			_, request, err := sm.PendingChargingRequest(smf_context.CHARGING_UPDATE)
+			require.NoError(t, err)
+			require.Nil(t, request)
+			require.Error(t, sm.BeginChargingUpdate())
+			sm.UrrReports = append(sm.UrrReports, smf_context.UsageReport{TotalVolume: 20})
+			p.ReportUsageAndUpdateQuota(sm)
+			require.Empty(t, sm.UrrReports)
+			require.NoError(t, p.ReleaseChargingSession(sm))
+			require.Equal(t, int32(1), calls.Load(), "do not replace an ambiguous request with a new invocation")
 			if status == 200 {
-				_, err := sm.ChargingUpdateResult()
-				require.ErrorIs(t, err, smf_context.ErrChargingResponseSequence)
+				_, updateErr := sm.ChargingUpdateResult()
+				require.ErrorIs(t, updateErr, smf_context.ErrChargingResponseSequence)
 			}
 		})
 	}
+}
+
+func TestChargingRetryBudgetAllowsCleanup(t *testing.T) {
+	for _, update := range []bool{false, true} {
+		name := "Release"
+		if update {
+			name = "Update"
+		}
+		t.Run(name, func(t *testing.T) {
+			p, sm := chargingReleaseOrderSession(t)
+			sm.SMPolicyID = chargingReleaseOrderPolicyID
+			var calls, policyDeletes atomic.Int32
+			bodies := make(chan []byte, 2*(chargingMaxRetries+1))
+			server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/delete") {
+					policyDeletes.Add(1)
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
+				bodies <- body
+				calls.Add(1)
+				chargingReleaseOrderFailure(t, w)
+			})
+			sm.SelectedCHFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
+			sm.SelectedPCFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, server.URL)
+			sm.SMLock.Lock()
+			if update {
+				p.ReportUsageAndUpdateQuota(sm)
+			}
+			p.RemoveSMContextFromAllNF(sm, true)
+			sm.SMLock.Unlock()
+			require.Equal(t, int32(1), calls.Load())
+			for retry := 1; retry <= chargingMaxRetries; retry++ {
+				require.Same(t, sm, smf_context.GetSMContextByRef(sm.Ref))
+				require.Zero(t, policyDeletes.Load())
+				retryChargingNow(p)
+			}
+			require.Eventually(t, func() bool {
+				_, pending := p.chargingReleases.Load(sm.Ref)
+				return !pending && smf_context.GetSMContextByRef(sm.Ref) == nil
+			}, time.Second, time.Millisecond)
+			retryChargingNow(p)
+			require.Equal(t, int32(1+chargingMaxRetries), calls.Load())
+			original := <-bodies
+			for range chargingMaxRetries {
+				require.Equal(t, original, <-bodies, "every retry preserves the exact request identity and usage")
+			}
+			require.Equal(t, int32(1), policyDeletes.Load())
+			state, lastErr := sm.ChargingReleaseResult()
+			require.Equal(t, smf_context.ChargingReleaseAbandoned, state)
+			require.Error(t, lastErr)
+			require.Empty(t, sm.UrrReports)
+			_, pending := p.chargingWork.Load(sm.Ref)
+			require.False(t, pending)
+		})
+	}
+}
+
+func TestChargingRetryDropsRemovedContextBeforeBackoff(t *testing.T) {
+	p, sm := chargingReleaseOrderSession(t)
+	var calls atomic.Int32
+	server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		chargingReleaseOrderFailure(t, w)
+	})
+	sm.SelectedCHFProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
+	p.ReportUsageAndUpdateQuota(sm)
+	smf_context.RemoveSMContext(sm.Ref)
+	p.retryPendingCharging(context.Background(), time.Now())
+	_, pending := p.chargingWork.Load(sm.Ref)
+	require.False(t, pending)
+	require.Equal(t, int32(1), calls.Load())
+	_, request, err := sm.PendingChargingRequest(smf_context.CHARGING_UPDATE)
+	require.NoError(t, err)
+	require.Nil(t, request)
 }
 
 func TestChargingBackgroundWorkerSerializesAndStops(t *testing.T) {

@@ -35,6 +35,8 @@ const (
 	ChargingReleaseInProgress
 	ChargingReleaseSucceeded
 	ChargingReleaseFailed
+	// Local cleanup may continue, but CHF settlement was not confirmed.
+	ChargingReleaseAbandoned
 )
 
 // ChargingUpdateState serializes recurring updates. Success returns to Idle;
@@ -136,6 +138,20 @@ func (smContext *SMContext) FinishChargingRelease(err error) {
 		smContext.chargingReleaseState = ChargingReleaseSucceeded
 		smContext.chargingReleaseRequest = nil
 	}
+}
+
+// AbandonCharging stops this resource after a permanent failure or exhausted retries.
+// Never replace an uncertain invocation with a new sequence or report it as success.
+func (smContext *SMContext) AbandonCharging(err error) {
+	smContext.chargingMu.Lock()
+	defer smContext.chargingMu.Unlock()
+	smContext.chargingReleaseRequested = true
+	smContext.chargingReleaseState = ChargingReleaseAbandoned
+	smContext.chargingReleaseLastErr = err
+	smContext.chargingUpdateState = ChargingUpdateFailed
+	smContext.chargingUpdateLastErr = err
+	smContext.chargingUpdateRequest = nil
+	smContext.chargingReleaseRequest = nil
 }
 
 // ChargingReleaseResult returns state and failure details in one locked snapshot.

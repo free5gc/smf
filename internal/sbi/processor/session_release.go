@@ -26,7 +26,7 @@ func (p *Processor) RemoveSMContextFromAllNF(smContext *smf_context.SMContext, s
 }
 
 // queueSMContextRelease requires SMLock and performs no external I/O. The
-// existing retry worker settles charging before policy/context cleanup.
+// existing retry worker settles or abandons charging before policy/context cleanup.
 func (p *Processor) queueSMContextRelease(
 	smContext *smf_context.SMContext, sendNotification bool,
 ) *chargingReleaseContinuation {
@@ -48,7 +48,7 @@ func (p *Processor) completeSMContextRelease(ctx context.Context, work *charging
 		p.Consumer().NotifyBSFBindingRelease(smContext)
 	}
 
-	// Delete policy-owned charging data only after CHF reports a successful release.
+	// Delete policy-owned charging data after settlement succeeds or is explicitly abandoned.
 	if smContext.SMPolicyID != "" {
 		if err := p.Consumer().SendSMPolicyAssociationTerminationContext(ctx, smContext); err != nil {
 			smContext.Log.Errorf("SM Policy Termination failed: %s", err)
@@ -161,8 +161,8 @@ func (p *Processor) retryChargingReleases(ctx context.Context, now time.Time) {
 		if work.removalScheduled || now.Before(work.retryAt) {
 			return true
 		}
-		// The existing invocation owns its retries, including permanent or
-		// unconfirmed outcomes. Never replace it with a new final request.
+		// The existing invocation owns its bounded retries. Cleanup resumes
+		// after it succeeds or is explicitly abandoned and removed.
 		if _, pending := p.chargingWork.Load(sm.Ref); pending {
 			return true
 		}
