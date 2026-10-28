@@ -304,9 +304,18 @@ func BuildPDUSessionResourceModifyConfirmTransfer(
 			}
 		}
 	}
+	// TS 38.413 9.3.4.7: the QoS Flow Modify Confirm List is mandatory and
+	// holds 1..maxnoofQoSFlows items; an empty list cannot be encoded.
+	if len(qosList.List) == 0 {
+		return nil, fmt.Errorf("no QoS flow to confirm on this tunnel")
+	}
 
 	// UL NG-U UP TNL Information
-	ANUPF := tunnel.DataPathPool.GetDefaultPath().FirstDPNode
+	defaultPath := tunnel.DataPathPool.GetDefaultPath()
+	if defaultPath == nil {
+		return nil, fmt.Errorf("no default data path for the UL NG-U UP TNL Information")
+	}
+	ANUPF := defaultPath.FirstDPNode
 	teidOct := make([]byte, 4)
 	binary.BigEndian.PutUint32(teidOct, localULTeid)
 
@@ -392,6 +401,16 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 	} else {
 		return buf, nil
 	}
+}
+
+// TS 38.413 9.3.4.22
+func BuildPDUSessionResourceModifyIndicationUnsuccessfulTransfer(cause ngapie.CauseAlt) ([]byte, error) {
+	transfer := ngapie.PDUSessionResourceModifyIndicationUnsuccessfulTransfer{
+		Cause: &ngapie.Cause{
+			Choice: cause,
+		},
+	}
+	return ngapie.MarshalBinary(&transfer)
 }
 
 func BuildPathSwitchRequestUnsuccessfulTransfer(cause ngapie.CauseAlt) (buf []byte, err error) {
