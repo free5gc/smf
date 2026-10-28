@@ -193,7 +193,7 @@ func TestChargingReleaseRecoveryResumesAuthorizedCleanup(t *testing.T) {
 			retryChargingNow(p)
 			require.Eventually(t, func() bool { return smf_context.GetSMContextByRef(sm.Ref) == nil },
 				time.Second, time.Millisecond)
-			require.Equal(t, <-bodies, <-bodies, "Release retry must retain its full original request")
+			requireChargingRetransmission(t, <-bodies, <-bodies)
 			require.Equal(t, int32(1), deletes.Load())
 			wantNotifications := int32(0)
 			if path == chargingCommonCleanup {
@@ -256,7 +256,7 @@ func TestChargingReleaseWaitsForPendingUpdateThenSettlesRemainingUsage(t *testin
 	require.Eventually(t, func() bool { return smf_context.GetSMContextByRef(sm.Ref) == nil },
 		time.Second, time.Millisecond)
 	original, replay := <-updates, <-updates
-	require.Equal(t, original, replay)
+	requireChargingRetransmission(t, original, replay)
 	final := <-releases
 	require.Equal(t, original.InvocationSequenceNumber+1, final.InvocationSequenceNumber)
 	require.Len(t, final.MultipleUnitUsage, 1)
@@ -621,7 +621,7 @@ func TestChargingReleaseDoesNotBlockAMFResponse(t *testing.T) {
 			}
 			require.Eventually(t, func() bool { return smf_context.GetSMContextByRef(sm.Ref) == nil },
 				time.Second, time.Millisecond)
-			require.Equal(t, <-requests, <-requests, "background retry must preserve its original invocation and usage")
+			requireChargingRetransmission(t, <-requests, <-requests)
 			require.Equal(t, int32(1), deletes.Load())
 			require.Empty(t, sm.UrrReports)
 			require.Equal(t, int32(1), n4Calls.Load(), "background accounting must not repeat N4 deletion")

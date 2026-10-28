@@ -193,7 +193,9 @@ func (p *Processor) updateGrantedQuotaForRules(
 					// Both values apply to the total grant, not to each direction separately.
 					quota := uint64(ui.GrantedUnit.TotalVolume)
 					remaining := uint64(ui.VolumeQuotaThreshold)
-					urr.VolumeThreshold = quota - min(quota, remaining)
+					// gtp5g treats zero as disabled. Use its smallest active threshold
+					// so the next traffic packet reports an already reached threshold.
+					urr.VolumeThreshold = max(uint64(1), quota-min(quota, remaining))
 				} else {
 					// Offline charging has no granted quota and retains its usage threshold.
 					urr.VolumeThreshold = uint64(ui.VolumeQuotaThreshold)
