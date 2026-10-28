@@ -119,8 +119,13 @@ func (s *nchfService) prepareConvergedChargingRequest(
 	}
 
 	ref, request, err := smContext.PendingChargingRequest(requestType)
-	if err != nil || request != nil {
-		return request, ref, err
+	if err != nil {
+		return nil, ref, err
+	}
+	if request != nil {
+		// Mark the outgoing copy without changing the frozen request.
+		request.RetransmissionIndicator = true
+		return request, ref, nil
 	}
 	request = s.buildConvergedChargingRequest(smContext, multipleUnitUsage)
 	if err = smContext.StorePendingChargingRequest(requestType, smContext.ChargingDataRef, request); err != nil {
@@ -140,7 +145,7 @@ func (s *nchfService) SendConvergedChargingRequest(
 	return s.SendConvergedChargingRequestContext(context.Background(), smContext, requestType, multipleUnitUsage)
 }
 
-// The caller's cancellation bounds recovery I/O; the request snapshot is unchanged.
+// The caller's cancellation bounds retry I/O; retransmission marks only the outgoing copy.
 func (s *nchfService) SendConvergedChargingRequestContext(
 	parent context.Context, smContext *smf_context.SMContext, requestType smf_context.RequestType,
 	multipleUnitUsage []models.Chf_ConvCharging_MultipleUnitUsage,
@@ -217,15 +222,11 @@ func (s *nchfService) SendConvergedChargingRequestContext(
 		return nil, nil, openapi.ReportError("invalid request type")
 	}
 
-	switch err := requestErr.(type) {
-	case openapi.GenericOpenAPIError:
-		return nil, chargingHTTPProblem(err), nil
-	case error:
-		return nil, openapi.ProblemDetailsSystemFailure(err.Error()), nil
-	case nil:
-		// Validate and apply the successful response below.
-	default:
-		return nil, nil, openapi.ReportError("server no response")
+	if requestErr != nil {
+		if apiErr, ok := requestErr.(openapi.GenericOpenAPIError); ok {
+			return nil, chargingHTTPProblem(apiErr), nil
+		}
+		return nil, openapi.ProblemDetailsSystemFailure(requestErr.Error()), nil
 	}
 
 	switch requestType {

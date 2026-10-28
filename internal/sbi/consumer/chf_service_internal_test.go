@@ -36,6 +36,7 @@ func TestChargingRequestPreparationReusesOriginalRequest(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, "original-ref", ref)
 			require.Equal(t, int32(1), request.InvocationSequenceNumber)
+			require.False(t, request.RetransmissionIndicator)
 			original, err := json.Marshal(request)
 			require.NoError(t, err)
 
@@ -50,9 +51,19 @@ func TestChargingRequestPreparationReusesOriginalRequest(t *testing.T) {
 			request, ref, err = c.prepareConvergedChargingRequest(sm, tc.requestType, usage)
 			require.NoError(t, err)
 			require.Equal(t, "original-ref", ref)
+			require.True(t, request.RetransmissionIndicator)
+			// Only the outgoing retransmission marker may differ from the frozen identity.
+			request.RetransmissionIndicator = false
 			replayed, err := json.Marshal(request)
 			require.NoError(t, err)
 			require.JSONEq(t, string(original), string(replayed), "the full pending request must remain fixed")
+			_, frozen, err := sm.PendingChargingRequest(tc.requestType)
+			require.NoError(t, err)
+			require.NotNil(t, frozen)
+			require.False(t, frozen.RetransmissionIndicator, "retries must not mutate the stored snapshot")
+			request, _, err = c.prepareConvergedChargingRequest(sm, tc.requestType, nil)
+			require.NoError(t, err)
+			require.True(t, request.RetransmissionIndicator, "every subsequent retry is marked")
 			require.Equal(t, int32(2), sm.NextChargingSequenceNumber(), "reusing a request must not allocate another sequence")
 		})
 	}

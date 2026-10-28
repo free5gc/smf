@@ -57,12 +57,20 @@ func TestChargingQuotaThresholdUsesRemainingTotalVolume(t *testing.T) {
 		{
 			name:      "threshold equals grant",
 			grant:     &models.Chf_ConvCharging_GrantedUnit{TotalVolume: 1000},
-			remaining: 1000, report: true,
+			remaining: 1000, consumed: 1, report: true,
 		},
 		{
 			name:      "threshold exceeds grant",
 			grant:     &models.Chf_ConvCharging_GrantedUnit{TotalVolume: 76},
-			remaining: 800, report: true,
+			remaining: 800, consumed: 1, report: true,
+		},
+		{
+			name: "one byte before threshold", grant: &models.Chf_ConvCharging_GrantedUnit{TotalVolume: 1000},
+			remaining: 999, consumed: 1, report: true,
+		},
+		{
+			name: "one byte grant", grant: &models.Chf_ConvCharging_GrantedUnit{TotalVolume: 1},
+			remaining: 800, consumed: 1, report: true,
 		},
 		{name: "threshold omitted", grant: &models.Chf_ConvCharging_GrantedUnit{TotalVolume: 1000}},
 		{name: "zero grant", grant: &models.Chf_ConvCharging_GrantedUnit{}, remaining: 800},
@@ -122,7 +130,7 @@ func TestChargingQuotaThresholdUsesRemainingTotalVolume(t *testing.T) {
 				require.Nil(t, thresholdIE)
 				return
 			}
-			require.NotNil(t, thresholdIE, "an immediate zero threshold must not be omitted")
+			require.NotNil(t, thresholdIE, "an active volume threshold must be sent to the UPF")
 			threshold, err := thresholdIE.VolumeThreshold()
 			require.NoError(t, err)
 			require.True(t, threshold.HasTOVOL(), "the CHF grant is for combined UL+DL volume")
@@ -689,7 +697,10 @@ func TestChargingRetryRetriesExactRequestAndPreservesNewUsage(t *testing.T) {
 	require.Equal(t, int32(1), calls.Load(), "honor backoff")
 	retryChargingNow(p)
 	require.Equal(t, int32(2), calls.Load())
-	require.Equal(t, <-bodies, <-bodies, "sequence, timestamp, metadata and usage remain byte-identical")
+	var original, replay models.Chf_ConvCharging_ChargingDataRequest
+	require.NoError(t, json.Unmarshal(<-bodies, &original))
+	require.NoError(t, json.Unmarshal(<-bodies, &replay))
+	requireChargingRetransmission(t, original, replay)
 	require.Equal(t, []smf_context.UsageReport{extra}, sm.UrrReports)
 	state, lastErr := sm.ChargingUpdateResult()
 	require.Equal(t, smf_context.ChargingUpdateIdle, state)
@@ -786,9 +797,12 @@ func TestChargingRetryBudgetAllowsCleanup(t *testing.T) {
 			}, time.Second, time.Millisecond)
 			retryChargingNow(p)
 			require.Equal(t, int32(1+chargingMaxRetries), calls.Load())
-			original := <-bodies
+			var original models.Chf_ConvCharging_ChargingDataRequest
+			require.NoError(t, json.Unmarshal(<-bodies, &original))
 			for range chargingMaxRetries {
-				require.Equal(t, original, <-bodies, "every retry preserves the exact request identity and usage")
+				var replay models.Chf_ConvCharging_ChargingDataRequest
+				require.NoError(t, json.Unmarshal(<-bodies, &replay))
+				requireChargingRetransmission(t, original, replay)
 			}
 			require.Equal(t, int32(1), policyDeletes.Load())
 			state, lastErr := sm.ChargingReleaseResult()
@@ -1002,6 +1016,14 @@ func chargingSuccess(t *testing.T, w http.ResponseWriter, request *models.Chf_Co
 	require.NoError(t, json.NewEncoder(w).Encode(models.Chf_ConvCharging_ChargingDataResponse{
 		InvocationSequenceNumber: request.InvocationSequenceNumber, MultipleUnitInformation: infos,
 	}))
+}
+
+func requireChargingRetransmission(t *testing.T, original, replay models.Chf_ConvCharging_ChargingDataRequest) {
+	t.Helper()
+	require.False(t, original.RetransmissionIndicator, "the initial request must not be marked as a retransmission")
+	require.True(t, replay.RetransmissionIndicator, "each retry must be marked as a retransmission")
+	replay.RetransmissionIndicator = false
+	require.Equal(t, original, replay, "sequence, timestamp, metadata and usage must retain the original identity")
 }
 
 func pendingChargingWork(t *testing.T, p *Processor, sm *smf_context.SMContext) *chargingWork {
