@@ -936,12 +936,18 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		// Wait till the state becomes Active again
 		// TODO: implement sleep wait in concurrent architecture
 
-		smContext.SetState(smf_context.ModificationPending)
-
 		if err = smf_context.HandlePathSwitchRequestTransfer(
 			relatedBytes(body.BinaryDataN2SmInformation), smContext); err != nil {
 			smContext.Log.Errorf("Handle PathSwitchRequestTransfer: %+v", err)
+
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, smf_errors.N2SmError.Cause)
+			c.JSON(http.StatusForbidden, models.Smf_PDUSess_SmContextUpdateError{
+				Error: &smf_errors.N2SmError,
+			})
+			return
 		}
+
+		smContext.SetState(smf_context.ModificationPending)
 
 		if n2Buf, err = smf_context.BuildPathSwitchRequestAcknowledgeTransfer(smContext); err != nil {
 			smContext.Log.Errorf("Build Path Switch Transfer Error(%+v)", err)
