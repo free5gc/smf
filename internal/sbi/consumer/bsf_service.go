@@ -56,15 +56,10 @@ func (s *nbsfService) BSFSelection() (string, error) {
 		return "", fmt.Errorf("no BSF instances found")
 	}
 
-	// Resolve the API root from all available BSF NF instances.
-	for _, bsfProfile := range res.Nrf_NFDisc_SearchResult.NfInstances {
-		uri := util.SearchNFServiceUri(&bsfProfile,
-			models.Nrf_NFMgmt_ServiceName_NBSF_MANAGEMENT, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
-		if uri != "" {
-			return uri, nil
-		}
+	if _, uri := util.SelectNFService(res.Nrf_NFDisc_SearchResult.NfInstances,
+		models.Nrf_NFMgmt_ServiceName_NBSF_MANAGEMENT); uri != "" {
+		return uri, nil
 	}
-
 	return "", fmt.Errorf("BSF management service not found")
 }
 

@@ -231,7 +231,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 
 	// Store a complete API root for subsequent AMF N1/N2 requests.
 	smContext.CommunicationClientApiPrefix = util.SearchNFServiceUri(
-		&smContext.AMFProfile, models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
+		&smContext.AMFProfile, models.Nrf_NFMgmt_ServiceName_NAMF_COMM)
 	if smContext.CommunicationClientApiPrefix == "" {
 		smContext.Log.Warnln("No usable AMF Communication API root from NRF discovery")
 	}

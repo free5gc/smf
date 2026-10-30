@@ -128,8 +128,7 @@ func (s *nchfService) SendConvergedChargingRequest(
 
 	var client *ConvCharging.APIClient
 	// Create Converged Charging Client for this SM Context
-	chfURI := util.SearchNFServiceUri(&smContext.SelectedCHFProfile,
-		models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
+	chfURI := util.SearchNFServiceUri(&smContext.SelectedCHFProfile, models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING)
 	client = s.getConvergedChargingClient(chfURI)
 	if client == nil {
 		errMsg := "no CONVERGEDCHARGING-CHF found"

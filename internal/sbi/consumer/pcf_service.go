@@ -57,8 +57,7 @@ func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMCon
 	var client *SMPolCtrl.APIClient
 
 	// Create SMPolicyControl Client for this SM Context
-	pcfURI := util.SearchNFServiceUri(&smContext.SelectedPCFProfile,
-		models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
+	pcfURI := util.SearchNFServiceUri(&smContext.SelectedPCFProfile, models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL)
 	client = s.getSMPolicyControlClient(pcfURI)
 
 	if client == nil {
@@ -214,8 +213,7 @@ func (s *npcfService) SendSMPolicyAssociationUpdateByUERequestModification(
 	var client *SMPolCtrl.APIClient
 
 	// Create SMPolicyControl Client for this SM Context
-	pcfURI := util.SearchNFServiceUri(&smContext.SelectedPCFProfile,
-		models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
+	pcfURI := util.SearchNFServiceUri(&smContext.SelectedPCFProfile, models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL)
 	client = s.getSMPolicyControlClient(pcfURI)
 
 	if client == nil {
@@ -312,8 +310,7 @@ func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.
 	var client *SMPolCtrl.APIClient
 
 	// Create SMPolicyControl Client for this SM Context
-	pcfURI := util.SearchNFServiceUri(&smContext.SelectedPCFProfile,
-		models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
+	pcfURI := util.SearchNFServiceUri(&smContext.SelectedPCFProfile, models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL)
 	client = s.getSMPolicyControlClient(pcfURI)
 
 	if client == nil {

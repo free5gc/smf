@@ -17,6 +17,7 @@ import (
 	"github.com/free5gc/smf/internal/util"
 	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 	"github.com/free5gc/util/nfheartbeat"
+	"github.com/free5gc/util/serviceuri"
 )
 
 const registerRetryInterval = 2 * time.Second
@@ -216,14 +217,17 @@ func (s *nnrfService) buildNfProfile(smfContext *smf_context.SMFContext) (
 
 	// set nfProfile
 	profile = models.Nrf_NFMgmt_NFProfile{
-		NfInstanceId:  smfContext.NfInstanceID,
-		NfType:        models.Nrf_NFMgmt_NFType_SMF,
-		NfStatus:      models.Nrf_NFMgmt_NFStatus_REGISTERED,
-		Ipv4Addresses: []string{smfContext.RegisterIPv4},
-		NfServices:    *smfProfile.NFServices,
-		SmfInfo:       smfProfile.SMFInfo,
-		SNssais:       sNssais,
+		NfInstanceId: smfContext.NfInstanceID,
+		NfType:       models.Nrf_NFMgmt_NFType_SMF,
+		NfStatus:     models.Nrf_NFMgmt_NFStatus_REGISTERED,
+		NfServices:   *smfProfile.NFServices,
+		SmfInfo:      smfProfile.SMFInfo,
+		SNssais:      sNssais,
 	}
+	addr := serviceuri.NewAddressing(smfContext.RegisterIPv4)
+	profile.Fqdn = addr.FQDN
+	profile.Ipv4Addresses = addr.IPv4Addresses
+	profile.Ipv6Addresses = addr.IPv6Addresses
 	// plmnList is optional in the config, only set it when it is configured
 	if smfProfile.PLMNList != nil {
 		profile.PlmnList = *smfProfile.PLMNList
@@ -371,10 +375,11 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 			logger.ConsumerLog.Warnln("UDM discovery returned empty NfInstances")
 			return nil, openapi.ReportError("UDM discovery returned empty NfInstances")
 		}
-		smfContext.UDMProfile = result.NfInstances[0]
-
-		udmURI := util.SearchNFServiceUri(&smfContext.UDMProfile,
-			models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
+		udm, udmURI := util.SelectNFService(result.NfInstances, models.Nrf_NFMgmt_ServiceName_NUDM_SDM)
+		if udm == nil {
+			return nil, fmt.Errorf("no usable UDM SDM service in NRF discovery result")
+		}
+		smfContext.UDMProfile = *udm
 		client := s.consumer.nudmService.getSubscribeDataManagementClient(udmURI)
 		if client == nil {
 			logger.ConsumerLog.Traceln("Get Subscribe Data Management Client Failed")
@@ -480,10 +485,12 @@ func (s *nnrfService) CHFSelection(smContext *smf_context.SMContext) error {
 		return err
 	}
 
-	// Select CHF from available CHF
-	if res != nil && len(res.Nrf_NFDisc_SearchResult.NfInstances) > 0 {
-		smContext.SelectedCHFProfile = res.Nrf_NFDisc_SearchResult.NfInstances[0]
-		return nil
+	if res != nil {
+		if chf, _ := util.SelectNFService(res.Nrf_NFDisc_SearchResult.NfInstances,
+			models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING); chf != nil {
+			smContext.SelectedCHFProfile = *chf
+			return nil
+		}
 	}
 	return fmt.Errorf("no CHF found in CHFSelection")
 }
@@ -513,11 +520,15 @@ func (s *nnrfService) PCFSelection(smContext *smf_context.SMContext) error {
 		return err
 	}
 
-	// Select PCF from available PCF
-	if res == nil || len(res.Nrf_NFDisc_SearchResult.NfInstances) == 0 {
+	if res == nil {
 		return fmt.Errorf("no PCF found in PCFSelection")
 	}
-	smContext.SelectedPCFProfile = res.Nrf_NFDisc_SearchResult.NfInstances[0]
+	pcf, _ := util.SelectNFService(res.Nrf_NFDisc_SearchResult.NfInstances,
+		models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL)
+	if pcf == nil {
+		return fmt.Errorf("no PCF found in PCFSelection")
+	}
+	smContext.SelectedPCFProfile = *pcf
 
 	return nil
 }
