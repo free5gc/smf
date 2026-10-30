@@ -489,9 +489,24 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 			pfcpResponseStatus = p.releaseSession(smContext)
 		case *message.PDUSessRelComplete:
-			smContext.CheckState(smf_context.InActivePending)
-			// Wait till the state becomes Active again
-			// TODO: implement sleep wait in concurrent architecture
+			// A Release Complete answers a PDU SESSION RELEASE COMMAND, i.e. a
+			// release that already deleted the N4 session (InActivePending, or
+			// InActive when the Release Command went out but the N2 side is
+			// still pending). Outside a release no PTI is in use for it:
+			// answer 5GSM STATUS #47 "PTI mismatch" and keep the established
+			// session, its N4 session included (TS 24.501 7.3.1 a).
+			if state := smContext.State(); state != smf_context.InActivePending && state != smf_context.InActive {
+				smContext.Log.Warnf("Ignore PDU Session Release Complete with PTI[%d] in state [%s]: no release in progress",
+					m.PTI, state)
+				if buf, err = smf_context.BuildGSM5GSMStatus(smContext, m.PTI, nasie.Cause5GSM_PTIMismatch); err != nil {
+					smContext.Log.Errorf("Build GSM 5GSMStatus failed: %+v", err)
+				} else {
+					response.BinaryDataN1SmMessage = &multipart.RelatedContent{ContentID: "GSM_NAS", Content: buf}
+					response.JsonData.N1SmMsg = &models.RefToBinaryData{ContentId: "GSM_NAS"}
+				}
+				c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
+				return
+			}
 
 			smContext.SetState(smf_context.InActive)
 			response.JsonData.UpCnxState = models.Smf_PDUSess_UpCnxState_DEACTIVATED
