@@ -58,7 +58,9 @@ func NewApp(
 	ctx context.Context, cfg *factory.Config, tlsKeyLogPath string,
 	pfcpStart func(*SmfApp) error, pfcpTerminate func(),
 ) (*SmfApp, error) {
-	if err := openapi.ConfigureHTTP2Clients(cfg.GetReadIdleTimeout(), cfg.GetPingTimeout()); err != nil {
+	if err := openapi.ConfigureHTTP2Clients(
+		cfg.GetReadIdleTimeout(), cfg.GetPingTimeout(), cfg.GetTLSVerify(),
+	); err != nil {
 		return nil, err
 	}
 	smf_context.Init(cfg)
