@@ -566,6 +566,43 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		}
 	}
 
+	// Once a PDU session release has deleted the N4 session (InActivePending)
+	// or been completed by the UE (InActive), the user plane of the session
+	// must not be activated or modified again (TS 23.502 4.3.4.2, TS 24.501
+	// 6.3.3.5 d). A late request must neither run a PFCP modification against
+	// the deleted N4 session nor bring the SM context back to Active, which
+	// would keep it from being removed. Only the N2 PDU Session Resource
+	// Release Response (and the N1 messages above) still apply.
+	if state := smContext.State(); state == smf_context.InActivePending || state == smf_context.InActive {
+		if smContextUpdateData.UpCnxState == models.Smf_PDUSess_UpCnxState_DEACTIVATED {
+			smContext.Log.Infof("PDU session is released (state %s), skip deactivation of the user plane", state)
+			response.JsonData.UpCnxState = models.Smf_PDUSess_UpCnxState_DEACTIVATED
+			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
+			return
+		}
+		if smContextUpdateData.UpCnxState != "" || smContextUpdateData.HoState != "" ||
+			(smContextUpdateData.N2SmInfoType != "" &&
+				smContextUpdateData.N2SmInfoType != models.Smf_PDUSess_N2SmInfoType_PDU_RES_REL_RSP) {
+			// Answer as for a released SM context (TS 29.502 5.2.2.3.2.2 step 2b).
+			smContext.Log.Warnf("PDU session is released (state %s), reject update (upCnxState[%s] "+
+				"n2SmInfoType[%s] hoState[%s])", state, smContextUpdateData.UpCnxState,
+				smContextUpdateData.N2SmInfoType, smContextUpdateData.HoState)
+			updateSmContextError := models.UpdateSmContextResponse400{
+				JsonData: &models.Smf_PDUSess_SmContextUpdateError{
+					UpCnxState: models.Smf_PDUSess_UpCnxState_DEACTIVATED,
+					Error: &models.Smf_PDUSess_ExtProblemDetails{
+						Title:  "PDU session is released",
+						Status: http.StatusNotFound,
+						Cause:  CONTEXT_NOT_FOUND,
+					},
+				},
+			}
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, updateSmContextError.JsonData.Error.Cause)
+			c.JSON(http.StatusNotFound, updateSmContextError)
+			return
+		}
+	}
+
 	tunnel := smContext.Tunnel
 	dcTunnel := smContext.DCTunnel
 	pdrList := []*smf_context.PDR{}
@@ -599,14 +636,6 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		// Wait till the state becomes Active again
 		// TODO: implement sleep wait in concurrent architecture
 
-		// If the PDU session has been released, skip sending PFCP Session Modification Request
-		if smContext.CheckState(smf_context.InActivePending) {
-			logger.CtxLog.Infof("Skip sending PFCP Session Modification Request of PDUSessionID:%d of SUPI:%s",
-				smContext.PDUSessionID, smContext.Supi)
-			response.JsonData.UpCnxState = models.Smf_PDUSess_UpCnxState_DEACTIVATED
-			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
-			return
-		}
 		smContext.SetState(smf_context.ModificationPending)
 		response.JsonData.UpCnxState = models.Smf_PDUSess_UpCnxState_DEACTIVATED
 		smContext.UpCnxState = body.JsonData.UpCnxState
