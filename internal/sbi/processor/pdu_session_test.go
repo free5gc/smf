@@ -850,7 +850,7 @@ func TestHandlePDUSessionSMContextCreate_TokenCtxFailureReleasesSMContext(t *tes
 	require.Equal(t, PDUSession_errors.NetworkFailure.Cause, actual.JsonData.Error.Cause)
 	require.NotNil(t, actual.BinaryDataN1SmMessage)
 	require.Equal(t,
-		buildPDUSessionEstablishmentReject(pduSID, 0, nasie.Cause5GSM_NwFailure),
+		buildPDUSessionEstablishmentReject(pduSID, 1, nasie.Cause5GSM_NwFailure),
 		actual.BinaryDataN1SmMessage.Content,
 	)
 
