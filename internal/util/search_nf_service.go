@@ -14,20 +14,20 @@ var serviceURIOptions = serviceuri.Options{AllowLegacyAbsoluteAPIPrefix: true}
 func SelectNFService(
 	instances []models.Nrf_NFDisc_NFProfile, name models.Nrf_NFMgmt_ServiceName,
 ) (*models.Nrf_NFDisc_NFProfile, string) {
-	profile, result, err := serviceuri.ResolveFromSearchResult(instances, name, serviceURIOptions)
+	profile, uri, err := serviceuri.ResolveFromSearchResult(instances, name, serviceURIOptions)
 	if err != nil {
 		logger.UtilLog.Warnf("NF service %s API root resolution failed: %v", name, err)
 		return nil, ""
 	}
-	return profile, result.APIRoot
+	return profile, uri
 }
 
 // SearchNFServiceUri returns the API root of service name in nfProfile, or "".
 func SearchNFServiceUri(nfProfile *models.Nrf_NFDisc_NFProfile, name models.Nrf_NFMgmt_ServiceName) string {
-	result, err := serviceuri.ResolveNFServiceURI(nfProfile, name, serviceURIOptions)
+	uri, err := serviceuri.ResolveNFServiceURI(nfProfile, name, serviceURIOptions)
 	if err != nil {
 		logger.UtilLog.Warnf("NF service %s API root resolution failed: %v", name, err)
 		return ""
 	}
-	return result.APIRoot
+	return uri
 }
