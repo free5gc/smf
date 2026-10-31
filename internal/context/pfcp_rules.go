@@ -1,6 +1,7 @@
 package context
 
 import (
+	"strings"
 	"time"
 
 	"github.com/free5gc/smf/internal/logger"
@@ -20,6 +21,9 @@ type RuleState uint8
 // Packet Detection Rule. Table 7.5.2.2-1
 type PDR struct {
 	PDRID uint16
+	// Disabled PDRs reserve a tunnel endpoint but have no applicable direction.
+	// They must never be installed as a filterless, catch-all PDR.
+	Disabled bool
 
 	Precedence         uint32
 	PDI                PDI
@@ -53,10 +57,11 @@ type URR struct {
 }
 
 type UrrEntry struct {
-	Rule     *URR      // rule content (RG, Threshold...)
-	State    RuleState // deployment state (INITIAL, CREATE...)
-	RefCount int       // number of PDRs referencing this URR
-	PDRIDs   []uint16  // IDs of PDRs currently referencing this URR
+	Rule               *URR      // rule content (RG, Threshold...)
+	State              RuleState // deployment state (INITIAL, CREATE...)
+	RefCount           int       // number of PDRs referencing this URR
+	PDRIDs             []uint16  // IDs of PDRs currently referencing this URR
+	stateBeforeRemoval RuleState
 }
 
 type UrrOpt func(urr *URR)
@@ -171,6 +176,10 @@ func (c *SMContext) PDRAppendURRs(upfId string, pdr *PDR, urrs []*URR) {
 			logger.PduSessLog.Warnf("[PDRAppendURRs]UPF=%s URR[%d] not in UrrTable", upfId, urr.URRID)
 			continue
 		}
+		if entry.State == RULE_REMOVE {
+			// A replacement path reused this URR before the removal was sent.
+			entry.State = entry.stateBeforeRemoval
+		}
 		entry.RefCount++
 		entry.PDRIDs = append(entry.PDRIDs, pdr.PDRID)
 		logger.PduSessLog.Tracef("[PDRAppendURRs] UPF=%s URR[%d] refCount=%d PDRs=%v",
@@ -202,6 +211,7 @@ func (c *SMContext) PDRReleaseURRs(upfId string, pdr *PDR) {
 			}
 		}
 		if entry.RefCount <= 0 {
+			entry.stateBeforeRemoval = entry.State
 			entry.State = RULE_REMOVE
 			logger.PduSessLog.Tracef("[PDRReleaseURRs] UPF=%s URR[%d] refCount=0 → RULE_REMOVE", upfId, urr.URRID)
 		} else {
@@ -218,6 +228,18 @@ func (c *SMContext) DeleteFromUrrTable(upfId string, urrID uint32) {
 	defer c.UrrTableMutex.Unlock()
 	if entries, ok := c.UrrTable[upfId]; ok {
 		delete(entries, urrID)
+	}
+	// Keep ChargingInfo for the final usage report, but stop querying a URR
+	// that has already been removed from the UPF.
+	if info := c.ChargingInfo[urrID]; info != nil && info.UpfId == upfId {
+		if info.VolumeLimitExpiryTimer != nil {
+			info.VolumeLimitExpiryTimer.Stop()
+			info.VolumeLimitExpiryTimer = nil
+		}
+		if info.EventLimitExpiryTimer != nil {
+			info.EventLimitExpiryTimer.Stop()
+			info.EventLimitExpiryTimer = nil
+		}
 	}
 }
 
@@ -265,11 +287,75 @@ type BAR struct {
 type QER struct {
 	QERID uint32
 
-	QFI pfcptype.QFI
+	// QFI is absent for QERs that only enforce a shared rate, such as Session-AMBR.
+	QFI *pfcptype.QFI
 
 	GateStatus *pfcptype.GateStatus
 	MBR        *pfcptype.MBR
 	GBR        *pfcptype.GBR
 
 	State RuleState
+}
+
+// appendQER avoids duplicate references when activation already attached the
+// default-flow QER before applying an explicit default-flow PCC rule.
+func appendQER(pdr *PDR, qer *QER) {
+	for _, current := range pdr.QER {
+		if current != nil && current.QERID == qer.QERID {
+			return
+		}
+	}
+	pdr.QER = append(pdr.QER, qer)
+}
+
+// A QER may be shared by both directions and several PCC datapaths. Its ID
+// remains allocated until the last PDR leaves the UPF's local pool.
+func (c *SMContext) releaseQER(upf *UPF, qer *QER) error {
+	inUse := false
+	upf.pdrPool.Range(func(_, value interface{}) bool {
+		for _, current := range value.(*PDR).QER {
+			if current != nil && current.QERID == qer.QERID {
+				inUse = true
+				return false
+			}
+		}
+		return true
+	})
+	if inUse || upf.GetQERById(qer.QERID) == nil {
+		return nil
+	}
+	if err := upf.RemoveQER(qer); err != nil {
+		return err
+	}
+	for key, id := range c.QerUpfMap {
+		if id == qer.QERID && strings.HasPrefix(key, upf.UUID()+":") {
+			delete(c.QerUpfMap, key)
+		}
+	}
+	if c.AMBRQerMap[upf.GetUUID()] == qer.QERID {
+		delete(c.AMBRQerMap, upf.GetUUID())
+	}
+	return nil
+}
+
+// Compare normalized rule values without IDs or transient installation states.
+func sameQERProfile(a, b *QER) bool {
+	return sameOptionalValue(a.QFI, b.QFI) && sameOptionalValue(a.GateStatus, b.GateStatus) &&
+		sameOptionalValue(a.MBR, b.MBR) && sameOptionalValue(a.GBR, b.GBR)
+}
+
+func sameOptionalValue[T comparable](a, b *T) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
+// Each UPF owns its mutable rule fields; the compiled plan remains immutable.
+func cloneOptionalValue[T comparable](value *T) *T {
+	if value == nil {
+		return nil
+	}
+	copyValue := *value
+	return &copyValue
 }

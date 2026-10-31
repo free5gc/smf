@@ -263,6 +263,7 @@ func (s *nudmService) Subscribe(ctx context.Context, smCtx *smf_context.SMContex
 		logger.PduSessLog.Infoln("SDM Subscription Successful UE:", smCtx.Supi, "SubscriptionId:",
 			res.Udm_SDM_SdmSubscription.SubscriptionId)
 		s.consumer.Context().Ues.IncrementPduSessionCount(smCtx.Supi)
+		smCtx.SdmCounted = true
 		return nil, nil
 	default:
 		return nil, openapi.ReportError("server no response")

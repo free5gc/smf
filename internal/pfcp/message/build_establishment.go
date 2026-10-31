@@ -80,6 +80,10 @@ func BuildSessionEstablishmentRequest(
 		if pdr == nil {
 			return nil, fmt.Errorf("build Create PDR at index %d: nil PDR", index)
 		}
+		if pdr.Disabled {
+			continue
+		}
+
 		if pdr.State == context.RULE_INITIAL {
 			createPDR, buildErr := newCreatePDRIE(pdr)
 			if buildErr != nil {
@@ -260,10 +264,18 @@ func newPDIIE(pdi *context.PDI) (*ie.IE, error) {
 
 func newCreateFARIE(far *context.FAR) (*ie.IE, error) {
 	children := []*ie.IE{ie.NewFARID(far.FARID)}
-	if far.ForwardingParameters == nil {
+	switch {
+	case far.ApplyAction.Buff:
+		// Downlink buffering while the UP connection is deactivated (BUFF,
+		// NOCP). Forwarding Parameters "may be present otherwise" (TS 29.244
+		// Table 7.5.2.3-1); they are kept for the activation.
+		children = append(children, newApplyActionIE(far.ApplyAction))
+	case far.ForwardingParameters == nil:
 		children = append(children, ie.NewApplyAction(0x01)) // DROP
-	} else {
+	default:
 		children = append(children, ie.NewApplyAction(0x02)) // FORW
+	}
+	if far.ForwardingParameters != nil {
 		forwardingParameters, err := newForwardingParametersIE(far.ForwardingParameters)
 		if err != nil {
 			return nil, err
@@ -325,7 +337,7 @@ func newCreateBARIE(bar *context.BAR) *ie.IE {
 }
 
 func newCreateQERIE(qer *context.QER) (*ie.IE, error) {
-	if qer.QFI.QFI > 63 {
+	if qer.QFI != nil && qer.QFI.QFI > 63 {
 		return nil, fmt.Errorf("QFI %d exceeds 6 bits", qer.QFI.QFI)
 	}
 	children := []*ie.IE{ie.NewQERID(qer.QERID)}
@@ -347,7 +359,9 @@ func newCreateQERIE(qer *context.QER) (*ie.IE, error) {
 		}
 		children = append(children, ie.NewGBR(gbr.ULGBR, gbr.DLGBR))
 	}
-	children = append(children, ie.NewQFI(qer.QFI.QFI))
+	if qer.QFI != nil {
+		children = append(children, ie.NewQFI(qer.QFI.QFI))
+	}
 	return ie.NewCreateQER(children...), nil
 }
 

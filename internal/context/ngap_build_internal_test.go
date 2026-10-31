@@ -124,7 +124,7 @@ func TestGoldenBuildPDUSessionResourceModifyConfirmTransfer(t *testing.T) {
 		// Precedence must not be 255 (default flow is skipped by the builder)
 		node.DownLinkTunnel.PDR = &PDR{
 			Precedence: 100,
-			QER:        []*QER{{QFI: pfcptype.QFI{QFI: 2}}},
+			QER:        []*QER{{}, {QFI: &pfcptype.QFI{QFI: 2}}},
 		}
 		return tunnel
 	}

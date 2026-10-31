@@ -153,6 +153,17 @@ func BuildGSMPDUSessionEstablishmentReject(smContext *SMContext, cause uint8) ([
 	return reject.MarshalBinary()
 }
 
+// BuildGSM5GSMStatus makes a plain 5GSM STATUS message (TS 24.501 8.3.16)
+// reporting cause for the 5GSM message received with the given PTI.
+func BuildGSM5GSMStatus(smContext *SMContext, pti uint8, cause uint8) ([]byte, error) {
+	status := &message.Status5GSM{
+		PDUSessId: uint8(smContext.PDUSessionID),
+		PTI:       pti,
+		Cause5GSM: &nasie.Cause5GSM{Value: cause},
+	}
+	return status.MarshalBinary()
+}
+
 // BuildGSMPDUSessionReleaseCommand makes a plain NAS message.
 //
 // If isTriggeredByUE is true, the PTI field of the constructed NAS message is
