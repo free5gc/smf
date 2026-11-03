@@ -3,6 +3,7 @@ package context
 import (
 	"fmt"
 	"math"
+	"net"
 
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
@@ -114,4 +115,129 @@ func CheckUEHasPreConfig(supi string) (exist bool) {
 	}
 	_, exist = smfContext.UEPreConfigPathPool[groupName]
 	return
+}
+
+func GetULCLGroupNameFromSUPI(supi string) string {
+	ulclGroups := smfContext.ULCLGroups
+	for name, group := range ulclGroups {
+		for _, member := range group {
+			if member == supi {
+				return name
+			}
+		}
+	}
+	return ""
+}
+
+func (c *SMContext) findPSAandAllocUeIP(param *UPFSelectionParams) error {
+	c.Log.Traceln("findPSAandAllocUeIP")
+	if param == nil {
+		return fmt.Errorf("UPFSelectionParams is nil")
+	}
+
+	upi := GetUserPlaneInformation()
+	if GetSelf().ULCLSupport && CheckUEHasPreConfig(c.Supi) {
+		groupName := GetULCLGroupNameFromSUPI(c.Supi)
+		preConfigPathPool := GetUEDefaultPathPool(groupName)
+		if preConfigPathPool != nil {
+			selectedUPFName := ""
+			selectedUPFName, c.PDUAddress, c.UseStaticIP = preConfigPathPool.SelectUPFAndAllocUEIPForULCL(
+				upi, param)
+			c.SelectedUPF = upi.UPFs[selectedUPFName]
+		}
+	} else {
+		c.SelectedUPF, c.PDUAddress, c.UseStaticIP = upi.SelectUPFAndAllocUEIP(param)
+		c.Log.Infof("Allocated PDUAdress[%s]", c.PDUAddress.String())
+	}
+	if c.PDUAddress == nil {
+		return fmt.Errorf("fail to allocate PDU address, Selection Parameter: %s",
+			param.String())
+	}
+	return nil
+}
+
+func (c *SMContext) AllocUeIP() error {
+	c.SelectionParam = &UPFSelectionParams{
+		Dnn: c.Dnn,
+		SNssai: &SNssai{
+			Sst: c.SNssai.Sst,
+			Sd:  c.SNssai.Sd,
+		},
+	}
+
+	if len(c.DnnConfiguration.StaticIpAddress) > 0 {
+		staticIPConfig := c.DnnConfiguration.StaticIpAddress[0]
+		if staticIPConfig.Ipv4Addr != "" {
+			c.SelectionParam.PDUAddress = net.ParseIP(staticIPConfig.Ipv4Addr).To4()
+		}
+	}
+
+	if err := c.findPSAandAllocUeIP(c.SelectionParam); err != nil {
+		return err
+	}
+	return nil
+}
+
+// This function create ULCL data paths.
+func (c *SMContext) SelectULCLDataPaths() error {
+	if c.SelectionParam == nil || c.SelectedUPF == nil {
+		return fmt.Errorf("SelectULCLDataPath err: SelectionParam or SelectedUPF is nil")
+	}
+
+	if GetSelf().ULCLSupport && CheckUEHasPreConfig(c.Supi) {
+		c.Log.Infof("Has pre-config ULCL paths")
+		uePreConfigPaths := GetUEPreConfigPaths(c.Supi, c.SelectedUPF.Name)
+		for _, dp := range uePreConfigPaths.DataPathPool {
+			if !dp.IsDefaultPath {
+				c.Tunnel.AddDataPath(dp)
+			}
+		}
+	}
+	return nil
+}
+
+// This function create a data path to be default data path.
+func (c *SMContext) SelectDefaultDataPath() error {
+	if c.SelectionParam == nil || c.SelectedUPF == nil {
+		return fmt.Errorf("SelectDefaultDataPath err: SelectionParam or SelectedUPF is nil")
+	}
+
+	defaultPath := c.Tunnel.DataPathPool.GetDefaultPath()
+	if defaultPath != nil {
+		// A default path already exists.
+		// Use this one.
+		c.Log.Infof("Has default path")
+		defaultPath = c.Tunnel.DataPathPool.GetDefaultPath()
+	} else if GetSelf().ULCLSupport && CheckUEHasPreConfig(c.Supi) {
+		// Fallback on pre-config default path
+		c.Log.Infof("Has pre-config default path")
+		uePreConfigPaths := GetUEPreConfigPaths(c.Supi, c.SelectedUPF.Name)
+		defaultPath = uePreConfigPaths.DataPathPool.GetDefaultPath()
+		c.Tunnel.AddDataPath(defaultPath)
+	} else {
+		// UE has no pre-config path and default path
+		// Use default route
+		c.Log.Infof("Has no pre-config route. Has no default path")
+		defaultUPPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNNAndUPF(
+			c.SelectionParam, c.SelectedUPF)
+		defaultPath = GenerateDataPath(defaultUPPath)
+		if defaultPath != nil {
+			defaultPath.IsDefaultPath = true
+			c.Tunnel.AddDataPath(defaultPath)
+		}
+	}
+
+	if defaultPath == nil {
+		return fmt.Errorf("data path not found, Selection Parameter: %s",
+			c.SelectionParam.String())
+	}
+
+	if !defaultPath.Activated {
+		binding := PathQoSBinding{QFI: c.SelectedSessionRule().DefQosQFI}
+		if err := defaultPath.ActivateTunnelAndPDR(c, DefaultPrecedence, binding); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
