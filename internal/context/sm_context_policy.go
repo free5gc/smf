@@ -628,3 +628,112 @@ func checkUpPathChangeEvt(c *SMContext,
 
 	return nil
 }
+
+func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
+	tcData *TrafficControlData, qosData *models.Pcf_SMPolCtrl_QosData,
+	chgData *models.Pcf_SMPolCtrl_ChargingData, pduChgDatas []*models.Pcf_SMPolCtrl_ChargingData,
+) error {
+	var targetRoute models.RouteToLocation
+	if tcData != nil && len(tcData.RouteToLocs) > 0 {
+		targetRoute = tcData.RouteToLocs[0]
+	}
+	param := &UPFSelectionParams{
+		Dnn: c.Dnn,
+		SNssai: &SNssai{
+			Sst: c.SNssai.Sst,
+			Sd:  c.SNssai.Sd,
+		},
+		Dnai: targetRoute.Dnai,
+	}
+	createdUpPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(param)
+	createdDataPath := GenerateDataPath(createdUpPath)
+	if createdDataPath == nil {
+		return fmt.Errorf("fail to create data path for pcc rule[%s]", pccRule.PccRuleId)
+	}
+	c.Log.Tracef("CreatePccRuleDataPath: pcc rule: %+v", pccRule)
+
+	// Try to use a default pcc rule as default data path
+	if c.Tunnel.DataPathPool.GetDefaultPath() == nil &&
+		pccRule.Precedence == 255 {
+		createdDataPath.IsDefaultPath = true
+	}
+
+	qfi := pccRule.QFI
+	if pccRule.RefQosDataID() == "" {
+		qfi = c.SelectedSessionRule().DefQosQFI
+	}
+	binding := PathQoSBinding{QFI: qfi, QosData: qosData}
+	if err := createdDataPath.ActivateTunnelAndPDR(c, uint32(pccRule.Precedence), binding); err != nil {
+		return err
+	}
+	pccRule.SetQFI(qfi)
+	c.Tunnel.AddDataPath(createdDataPath)
+	pccRule.Datapath = createdDataPath
+	pccRule.AddDataPathForwardingParameters(c, &targetRoute)
+
+	if chgLevel, err := pccRule.IdentifyChargingLevel(); err != nil {
+		c.Log.Warnf("fail to identify charging level[%+v] for pcc rule[%s]", err, pccRule.PccRuleId)
+	} else {
+		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData, pduChgDatas)
+	}
+
+	if pccRule.RefQosDataID() != "" {
+		c.AddQosFlow(pccRule.QFI, qosData)
+	}
+	return nil
+}
+
+func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
+	tcData *TrafficControlData, qosData *models.Pcf_SMPolCtrl_QosData,
+	chgData *models.Pcf_SMPolCtrl_ChargingData, pduChgDatas []*models.Pcf_SMPolCtrl_ChargingData,
+) error {
+	var targetRoute models.RouteToLocation
+	if tcData != nil && len(tcData.RouteToLocs) > 0 {
+		targetRoute = tcData.RouteToLocs[0]
+	}
+	param := &UPFSelectionParams{
+		Dnn: c.Dnn,
+		SNssai: &SNssai{
+			Sst: c.SNssai.Sst,
+			Sd:  c.SNssai.Sd,
+		},
+		Dnai: targetRoute.Dnai,
+	}
+	createdUpPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(param)
+	createdDataPath := GenerateDataPath(createdUpPath)
+	if createdDataPath == nil {
+		return fmt.Errorf("fail to create data path on DCTunnel for pcc rule[%s]", pccRule.PccRuleId)
+	}
+	c.Log.Infof("CreatePccRuleDataPathOnDctunnel: pcc rule: %+v", pccRule)
+
+	// Try to use a default pcc rule as default data path
+	if c.DCTunnel.DataPathPool.GetDefaultPath() == nil &&
+		pccRule.Precedence == 255 {
+		createdDataPath.IsDefaultPath = true
+	}
+
+	qfi := pccRule.QFI
+	if pccRule.RefQosDataID() == "" {
+		qfi = c.SelectedSessionRule().DefQosQFI
+	}
+	binding := PathQoSBinding{QFI: qfi, QosData: qosData}
+	if err := createdDataPath.ActivateDcTunnelAndPDR(c, uint32(pccRule.Precedence), binding); err != nil {
+		return err
+	}
+	pccRule.SetQFI(qfi)
+	c.DCTunnel.AddDataPath(createdDataPath)
+	pccRule.Datapath = createdDataPath
+	pccRule.AddDataPathForwardingParametersOnDcTunnel(c, &targetRoute)
+
+	if chgLevel, err := pccRule.IdentifyChargingLevel(); err != nil {
+		c.Log.Warnf("fail to identify charging level[%+v] for pcc rule[%s]", err, pccRule.PccRuleId)
+	} else {
+		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData, pduChgDatas)
+	}
+
+	if pccRule.RefQosDataID() != "" {
+		c.AddQosFlow(pccRule.QFI, qosData)
+	}
+
+	return nil
+}
