@@ -1,6 +1,7 @@
 package message
 
 import (
+	"encoding/hex"
 	"fmt"
 	"net"
 	"sort"
@@ -33,6 +34,11 @@ func BuildSessionEstablishmentRequest(
 ) (*goPfcpMessage.SessionEstablishmentRequest, error) {
 	if smContext == nil {
 		return nil, fmt.Errorf("build PFCP Session Establishment Request: nil SM context")
+	}
+
+	snssai, err := newSessionSNSSAIIE(smContext)
+	if err != nil {
+		return nil, fmt.Errorf("build PFCP Session Establishment S-NSSAI: %w", err)
 	}
 
 	nodeIP := upN4Addr
@@ -165,6 +171,10 @@ func BuildSessionEstablishmentRequest(
 	topLevelIEs := make([]*ie.IE, 0,
 		2+len(createPDRs)+len(createFARs)+len(createURRs)+len(createQERs)+len(createBARs)+1)
 	topLevelIEs = append(topLevelIEs, nodeIDIE, cpFSEID)
+	if snssai != nil {
+		topLevelIEs = append(topLevelIEs, snssai)
+	}
+
 	topLevelIEs = append(topLevelIEs, createPDRs...)
 	topLevelIEs = append(topLevelIEs, createFARs...)
 	topLevelIEs = append(topLevelIEs, createURRs...)
@@ -173,6 +183,31 @@ func BuildSessionEstablishmentRequest(
 	topLevelIEs = append(topLevelIEs, ie.NewPDNType(ie.PDNTypeIPv4))
 
 	return goPfcpMessage.NewSessionEstablishmentRequest(1, 0, 0, 0, 0, topLevelIEs...), nil
+}
+
+// newSessionSNSSAIIE supplies the optional session identity from TS 29.244
+// Table 7.5.2.1-1. It does not configure the UPF's slice resource allocation.
+func newSessionSNSSAIIE(smContext *context.SMContext) (*ie.IE, error) {
+	if smContext.Smf_PDUSess_SmContextCreateData == nil || smContext.SNssai == nil {
+		return nil, nil
+	}
+	snssai := smContext.SNssai
+	if snssai.Sst < 0 || snssai.Sst > 255 {
+		return nil, fmt.Errorf("SST %d exceeds 8 bits", snssai.Sst)
+	}
+	// TS 23.003 defines 0xffffff as the absent Slice Differentiator value.
+	sd := uint32(0xffffff)
+	if snssai.Sd != "" {
+		if len(snssai.Sd) != 6 {
+			return nil, fmt.Errorf("SD must contain six hexadecimal digits")
+		}
+		octets, err := hex.DecodeString(snssai.Sd)
+		if err != nil {
+			return nil, fmt.Errorf("invalid SD: %w", err)
+		}
+		sd = uint32(octets[0])<<16 | uint32(octets[1])<<8 | uint32(octets[2])
+	}
+	return ie.NewSNSSAI(uint8(snssai.Sst), sd), nil
 }
 
 func newCreatePDRIE(pdr *context.PDR) (*ie.IE, error) {

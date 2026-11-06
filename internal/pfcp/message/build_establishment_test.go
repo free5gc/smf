@@ -9,6 +9,7 @@ import (
 	"github.com/wmnsk/go-pfcp/ie"
 	goPfcpMessage "github.com/wmnsk/go-pfcp/message"
 
+	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/context"
 	pfcp_message "github.com/free5gc/smf/internal/pfcp/message"
 	"github.com/free5gc/smf/internal/pfcp/pfcptype"
@@ -422,6 +423,72 @@ func TestSharedAMBRQEROmitsQFI(t *testing.T) {
 					require.Equal(t, qers[index].QFI.QFI, qfi)
 				}
 			}
+		})
+	}
+}
+
+func TestBuildSessionEstablishmentRequestSNSSAI(t *testing.T) {
+	initDirectBuilderTestContext(t)
+	for _, tc := range []struct {
+		name    string
+		snssai  *models.Snssai
+		payload []byte
+		failure string
+	}{
+		{name: "SST and SD", snssai: &models.Snssai{Sst: 1, Sd: "010203"}, payload: []byte{1, 1, 2, 3}},
+		{name: "SST only", snssai: &models.Snssai{Sst: 1}, payload: []byte{1, 255, 255, 255}},
+		{name: "uppercase SD", snssai: &models.Snssai{Sst: 255, Sd: "ABCDEF"}, payload: []byte{255, 171, 205, 239}},
+		{name: "explicit absent SD", snssai: &models.Snssai{Sst: 1, Sd: "ffffff"}, payload: []byte{1, 255, 255, 255}},
+		{name: "missing identity"},
+		{name: "negative SST", snssai: &models.Snssai{Sst: -1}, failure: "SST"},
+		{name: "oversized SST", snssai: &models.Snssai{Sst: 256}, failure: "SST"},
+		{name: "short SD", snssai: &models.Snssai{Sst: 1, Sd: "12345"}, failure: "six hexadecimal"},
+		{name: "long SD", snssai: &models.Snssai{Sst: 1, Sd: "1234567"}, failure: "six hexadecimal"},
+		{name: "invalid SD", snssai: &models.Snssai{Sst: 1, Sd: "ghijkl"}, failure: "invalid SD"},
+		{name: "signed SD", snssai: &models.Snssai{Sst: 1, Sd: "+00001"}, failure: "invalid SD"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			smContext := context.NewSMContext("imsi-208930000000106", 10)
+			smContext.PFCPContext["10.4.0.1"] = &context.PFCPSessionContext{LocalSEID: 106}
+			smContext.Smf_PDUSess_SmContextCreateData = &models.Smf_PDUSess_SmContextCreateData{SNssai: tc.snssai}
+			qer := &context.QER{QERID: 7, State: context.RULE_INITIAL}
+			request, err := pfcp_message.BuildSessionEstablishmentRequest(
+				*testNodeID, "10.4.0.1", "snssai-upf", smContext, nil, nil, nil, []*context.QER{qer}, nil,
+			)
+			if tc.failure != "" {
+				require.ErrorContains(t, err, tc.failure)
+				require.Nil(t, request)
+				require.Equal(t, context.RULE_INITIAL, qer.State, "invalid slice must be rejected before rule state changes")
+				return
+			}
+			require.NoError(t, err)
+			wire, err := request.Marshal()
+			require.NoError(t, err)
+			decoded, err := goPfcpMessage.Parse(wire)
+			require.NoError(t, err)
+			parsed, ok := decoded.(*goPfcpMessage.SessionEstablishmentRequest)
+			require.True(t, ok)
+			if tc.payload == nil {
+				require.Nil(t, parsed.SNSSAI)
+				return
+			}
+			require.NotNil(t, parsed.SNSSAI)
+			require.Equal(t, tc.payload, parsed.SNSSAI.Payload)
+			require.Equal(t, []byte{1, 1, 0, 4}, wire[len(wire)-8:len(wire)-4], "standard type 257 and four-octet payload")
+			// Removing the optional identity must recover the original request,
+			// including its existing QER and session addressing.
+			parsed.SNSSAI = nil
+			withoutSlice, err := parsed.Marshal()
+			require.NoError(t, err)
+			smContext.SNssai = nil
+			qer.State = context.RULE_INITIAL
+			original, err := pfcp_message.BuildSessionEstablishmentRequest(
+				*testNodeID, "10.4.0.1", "snssai-upf", smContext, nil, nil, nil, []*context.QER{qer}, nil,
+			)
+			require.NoError(t, err)
+			originalWire, err := original.Marshal()
+			require.NoError(t, err)
+			require.Equal(t, originalWire, withoutSlice)
 		})
 	}
 }
