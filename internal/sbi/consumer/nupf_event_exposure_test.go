@@ -3,7 +3,11 @@ package consumer
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -421,4 +425,43 @@ func assertNupfFailure(t *testing.T, err error, statusCode int, timedOut bool) {
 	require.Equal(t, statusCode, classified.StatusCode)
 	require.Equal(t, timedOut, classified.TimedOut)
 	require.Equal(t, nupfEventExposureFailure, err.Error())
+}
+
+type tlsBSFTestApp struct {
+	*nupfTestApp
+	cfg *factory.Config
+}
+
+func (a *tlsBSFTestApp) Config() *factory.Config { return a.cfg }
+
+func TestSBIBsfTLSVerification(t *testing.T) {
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	server.Config.ErrorLog = log.New(io.Discard, "", 0)
+	server.StartTLS()
+	defer server.Close()
+	for _, verify := range []bool{false, true} {
+		cfg := &factory.Config{Configuration: &factory.Configuration{Sbi: &factory.Sbi{Tls: &factory.Tls{Verify: verify}}}}
+		service := &nbsfService{consumer: &Consumer{App: &tlsBSFTestApp{nupfTestApp: &nupfTestApp{}, cfg: cfg}}}
+		client := service.getHTTPClient()
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := client.Do(req)
+		if resp != nil {
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				t.Errorf("close response body: %v", closeErr)
+			}
+		}
+		if verify {
+			var unknown x509.UnknownAuthorityError
+			if !errors.As(err, &unknown) {
+				t.Fatalf("expected certificate rejection, got %v", err)
+			}
+		} else if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
