@@ -52,8 +52,9 @@ type URR struct {
 	MeasurementPeriod      time.Duration
 	QuotaValidityTime      time.Time
 	MeasurementInformation pfcptype.MeasurementInformation
-	VolumeThreshold        uint64
-	VolumeQuota            uint64
+	VolumeThreshold        uint64 // Consumed volume that triggers a report.
+	VolumeThresholdIsTotal bool   // Otherwise the threshold applies separately to UL and DL.
+	VolumeQuota            uint64 // Granted total volume across UL and DL.
 }
 
 type UrrEntry struct {

@@ -213,8 +213,15 @@ type SMContext struct {
 	ChargingID    int32
 	RequestedUnit int32
 
-	chargingReleaseMu   sync.Mutex
-	chargingReleaseDone bool
+	chargingMu                       sync.Mutex
+	chargingReleaseRequested         bool
+	chargingReleaseState             ChargingReleaseState
+	chargingReleaseLastErr           error
+	chargingReleaseRequest           *pendingChargingRequest
+	chargingUpdateState              ChargingUpdateState
+	chargingUpdateLastErr            error
+	chargingUpdateRequest            *pendingChargingRequest
+	chargingInvocationSequenceNumber int32
 	// key = urrid
 	// All urr can map to a rating group
 	// However, a rating group may map to more than one urr

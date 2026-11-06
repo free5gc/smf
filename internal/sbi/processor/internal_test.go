@@ -1285,7 +1285,7 @@ func TestBuildMultiUnitUsageIncludesFinalUsageReports(t *testing.T) {
 		},
 	}
 
-	usages := buildMultiUnitUsageFromUsageReport(smContext)
+	usages := buildMultiUnitUsage(smContext, smContext.UrrReports)
 	if len(usages) != 1 {
 		t.Fatalf("MultipleUnitUsage count = %d, want 1", len(usages))
 	}
@@ -1304,8 +1304,8 @@ func TestBuildMultiUnitUsageIncludesFinalUsageReports(t *testing.T) {
 		used.Triggers[0].TriggerType != models.Chf_ConvCharging_TriggerType_FINAL {
 		t.Errorf("charging triggers = %+v, want FINAL", used.Triggers)
 	}
-	if len(smContext.UrrReports) != 0 {
-		t.Errorf("cached Usage Reports count after conversion = %d, want 0", len(smContext.UrrReports))
+	if len(smContext.UrrReports) != 1 {
+		t.Errorf("cached Usage Reports count after conversion = %d, want 1 until acknowledged", len(smContext.UrrReports))
 	}
 }
 
