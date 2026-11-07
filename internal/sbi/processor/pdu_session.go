@@ -21,6 +21,7 @@ import (
 	"github.com/free5gc/openapi/udm/SDM"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	business_metrics "github.com/free5gc/smf/internal/metrics/business"
 	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 	smf_errors "github.com/free5gc/smf/pkg/errors"
 	"github.com/free5gc/smf/pkg/factory"
@@ -65,6 +66,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 				Error: &smf_errors.N1SmError,
 			},
 		}
+		business_metrics.IncrPduSessionEstablishmentFailure(postSmContextsError.JsonData.Error.Cause)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, postSmContextsError.JsonData.Error.Cause)
 		c.JSON(http.StatusForbidden, postSmContextsError)
 		return
@@ -84,6 +86,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 				},
 			},
 		}
+		business_metrics.IncrPduSessionEstablishmentFailure(postSmContextsError.JsonData.Error.Cause)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, postSmContextsError.JsonData.Error.Cause)
 		c.JSON(http.StatusBadRequest, postSmContextsError)
 		return
@@ -169,6 +172,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_NFType_UDM)
 	if oauthErr != nil {
 		smContext.Log.Errorf("Get Token Context Error[%v]", oauthErr)
+		business_metrics.IncrPduSessionEstablishmentFailure(business_metrics.ESTABLISHMENT_UDM_TOKEN_FAILURE)
 		return
 	}
 
@@ -502,7 +506,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 			smContext.SetState(smf_context.PFCPModification)
 
-			pfcpResponseStatus = p.releaseSession(smContext)
+			pfcpResponseStatus = p.releaseSession(smContext, business_metrics.RELEASE_TRIGGER_UE_REQUESTED)
 		case *message.PDUSessRelComplete:
 			// A Release Complete answers a PDU SESSION RELEASE COMMAND, i.e. a
 			// release that already deleted the N4 session (InActivePending, or
@@ -1207,7 +1211,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				}
 			}
 
-			pfcpResponseStatus = p.releaseSession(smContext)
+			pfcpResponseStatus = p.releaseSession(smContext, business_metrics.RELEASE_TRIGGER_DUPLICATE_SESSION_ID)
 		default:
 			smContext.Log.Infof("Not needs to send pfcp release")
 		}
@@ -1396,7 +1400,7 @@ func (p *Processor) HandlePDUSessionSMContextRelease(
 		smContext.Log.Infof("PFCP session already released (State: %s), skip PFCP releaseSession", smContext.State().String())
 		pfcpResponseStatus = smf_context.SessionReleaseSuccess
 	} else {
-		pfcpResponseStatus = p.releaseSession(smContext)
+		pfcpResponseStatus = p.releaseSession(smContext, business_metrics.RELEASE_TRIGGER_AMF_REQUESTED)
 	}
 
 	switch pfcpResponseStatus {
@@ -1510,7 +1514,7 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 		smContext.Log.Infof("PFCP session already released (State: %s), skip PFCP releaseSession", smContext.State().String())
 		pfcpResponseStatus = smf_context.SessionReleaseSuccess
 	} else {
-		pfcpResponseStatus = p.releaseSession(smContext)
+		pfcpResponseStatus = p.releaseSession(smContext, business_metrics.RELEASE_TRIGGER_DUPLICATE_SM_CONTEXT)
 	}
 
 	switch pfcpResponseStatus {
@@ -1534,7 +1538,22 @@ func (p *Processor) HandlePDUSessionSMContextLocalRelease(
 	p.RemoveSMContextFromAllNF(smContext, false)
 }
 
-func (p *Processor) releaseSession(smContext *smf_context.SMContext) smf_context.PFCPSessionResponseStatus {
+// releaseSession deletes the PFCP sessions of the PDU session on its UPFs and counts the outcome.
+// trigger is one of the business_metrics.RELEASE_TRIGGER_* values.
+func (p *Processor) releaseSession(
+	smContext *smf_context.SMContext,
+	trigger string,
+) smf_context.PFCPSessionResponseStatus {
+	status := p.releasePfcpSessions(smContext)
+	if status == smf_context.SessionReleaseSuccess {
+		business_metrics.IncrPduSessionReleaseSuccess(trigger)
+	} else {
+		business_metrics.IncrPduSessionReleaseFailure(trigger, business_metrics.RELEASE_PFCP_DELETION_FAILURE)
+	}
+	return status
+}
+
+func (p *Processor) releasePfcpSessions(smContext *smf_context.SMContext) smf_context.PFCPSessionResponseStatus {
 	smContext.PFCPReleaseDone = false
 	smContext.SetState(smf_context.PFCPModification)
 
@@ -1563,6 +1582,8 @@ func (p *Processor) makeEstRejectResAndReleaseSMContext(
 	nasErrorCause uint8,
 	sbiError *models.Smf_PDUSess_ExtProblemDetails,
 ) {
+	business_metrics.IncrPduSessionEstablishmentFailure(sbiError.Cause)
+
 	p.makeEstRejectRes(c, uint8(smContext.PDUSessionID), smContext.Pti, nasErrorCause, sbiError)
 	p.RemoveSMContextFromAllNF(smContext, false)
 }
