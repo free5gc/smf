@@ -8,7 +8,7 @@ require (
 	github.com/free5gc/nas v1.3.0
 	github.com/free5gc/ngap v1.2.0
 	github.com/free5gc/openapi v1.3.1-0.20261014070323-89accd9890ce
-	github.com/free5gc/util v1.4.1-0.20261014070359-d865b0ce854b
+	github.com/free5gc/util v1.4.1-0.20261105063436-ea3001890fa5
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/uuid v1.6.0
 	github.com/h2non/gock v1.2.0
