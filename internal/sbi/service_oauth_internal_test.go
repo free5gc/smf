@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -23,7 +22,7 @@ import (
 	"github.com/free5gc/smf/pkg/factory"
 )
 
-func TestCallbackOAuthAuthorization(t *testing.T) {
+func TestServiceOAuthAuthorization(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 	nrfID, smfID := uuid.NewString(), uuid.NewString()
@@ -51,45 +50,54 @@ func TestCallbackOAuthAuthorization(t *testing.T) {
 		want     int
 	}{
 		{
-			"instance token", smfID, nrfID, "nsmf-callback", time.Now().Add(time.Minute).Unix(), "Bearer", false,
+			"instance token", smfID, nrfID, "nsmf-pdusession", time.Now().Add(time.Minute).Unix(), "Bearer", false,
 			http.StatusNotImplemented,
 		},
 		{
-			"type token", "SMF", nrfID, "nsmf-callback", time.Now().Add(time.Minute).Unix(), "Bearer", false,
+			"type token", "SMF", nrfID, "nsmf-pdusession", time.Now().Add(time.Minute).Unix(), "Bearer", false,
 			http.StatusNotImplemented,
 		},
 		{
-			"wrong instance", uuid.NewString(), nrfID, "nsmf-callback", time.Now().Add(time.Minute).Unix(), "Bearer", false,
+			"wrong instance", uuid.NewString(), nrfID, "nsmf-pdusession", time.Now().Add(time.Minute).Unix(), "Bearer", false,
 			http.StatusUnauthorized,
 		},
 		{
-			"wrong issuer", smfID, uuid.NewString(), "nsmf-callback", time.Now().Add(time.Minute).Unix(), "Bearer", false,
+			"wrong issuer", smfID, uuid.NewString(), "nsmf-pdusession", time.Now().Add(time.Minute).Unix(), "Bearer", false,
 			http.StatusUnauthorized,
 		},
 		{
-			"expired", smfID, nrfID, "nsmf-callback", time.Now().Add(-time.Minute).Unix(), "Bearer", false,
+			"expired", smfID, nrfID, "nsmf-pdusession", time.Now().Add(-time.Minute).Unix(), "Bearer", false,
 			http.StatusUnauthorized,
 		},
-		{"missing expiry", smfID, nrfID, "nsmf-callback", 0, "Bearer", false, http.StatusUnauthorized},
+		{"missing expiry", smfID, nrfID, "nsmf-pdusession", 0, "Bearer", false, http.StatusUnauthorized},
 		{
 			"wrong scope", smfID, nrfID, "npcf-smpolicycontrol", time.Now().Add(time.Minute).Unix(), "Bearer", false,
 			http.StatusUnauthorized,
 		},
 		{
-			"wrong scheme", smfID, nrfID, "nsmf-callback", time.Now().Add(time.Minute).Unix(), "Basic", false,
+			"wrong scheme", smfID, nrfID, "nsmf-pdusession", time.Now().Add(time.Minute).Unix(), "Basic", false,
 			http.StatusUnauthorized,
 		},
-		{"missing token", smfID, nrfID, "nsmf-callback", 0, "", false, http.StatusUnauthorized},
+		{"missing token", smfID, nrfID, "nsmf-pdusession", 0, "", false, http.StatusUnauthorized},
 		{"OAuth disabled", smfID, nrfID, "", 0, "", true, http.StatusNotImplemented},
 	}
+	self := smf_context.GetSelf()
+	previousID, previousURI, previousOAuth := self.NfInstanceID, self.NrfUri, self.OAuth2Required
+	previousCert, previousNRFID, previousConfig := self.NrfCertPem, self.NrfNfInstanceID, factory.SmfConfig
+	t.Cleanup(func() {
+		self.NfInstanceID, self.NrfUri, self.OAuth2Required = previousID, previousURI, previousOAuth
+		self.NrfCertPem, self.NrfNfInstanceID, factory.SmfConfig = previousCert, previousNRFID, previousConfig
+	})
+	self.NfInstanceID, self.NrfUri, self.NrfCertPem = smfID, "http://127.0.0.1", certPath
+	factory.SmfConfig = &factory.Config{Configuration: &factory.Configuration{
+		ServiceNameList: []string{"nsmf-pdusession"},
+	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			self := &smf_context.SMFContext{NfInstanceID: smfID, NrfUri: "http://127.0.0.1", NrfCertPem: certPath}
 			require.NoError(t, self.SetOAuth2Required(!tt.disabled))
-			router := gin.New()
-			mountCallbackRoutes(router, &Server{}, self)
+			router := newRouter(&Server{})
 			request := httptest.NewRequestWithContext(t.Context(),
-				http.MethodPost, factory.SmfCallbackUriPrefix+"/sm-policies/ref/terminate", nil)
+				http.MethodPost, factory.SmfPdusessionResUriPrefix+"/pdu-sessions/ref/retrieve", nil)
 			if tt.scheme != "" {
 				claims := jwt.MapClaims{"iss": tt.issuer, "aud": tt.audience, "scope": tt.scope}
 				if tt.expiry != 0 {
@@ -101,8 +109,8 @@ func TestCallbackOAuthAuthorization(t *testing.T) {
 			}
 			response := httptest.NewRecorder()
 			router.ServeHTTP(response, request)
-			// The existing terminate handler returns 501. Reaching it proves the
-			// callback middleware accepts this scope without a second PCF check.
+			// The existing retrieve handler returns 501. Reaching it proves the
+			// real service route still validates tokens while Notify is exempt.
 			require.Equal(t, tt.want, response.Code, response.Body.String())
 		})
 	}

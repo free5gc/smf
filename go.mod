@@ -7,7 +7,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/free5gc/nas v1.3.0
 	github.com/free5gc/ngap v1.2.0
-	github.com/free5gc/openapi v1.3.1-0.20261014070323-89accd9890ce
+	github.com/free5gc/openapi v1.3.1-0.20261104070955-7fad8e868cb2
 	github.com/free5gc/util v1.4.1-0.20261014070359-d865b0ce854b
 	github.com/gin-gonic/gin v1.10.0
 	github.com/golang-jwt/jwt/v5 v5.2.2
@@ -23,8 +23,6 @@ require (
 	go.uber.org/mock v0.4.0
 	gopkg.in/yaml.v2 v2.4.0
 )
-
-replace github.com/free5gc/openapi => github.com/ki225/openapi v0.0.0-20261023075527-6c3ba053ced3
 
 require (
 	github.com/aead/cmac v0.0.0-20160719120800-7af84192f0b1 // indirect
