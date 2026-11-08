@@ -238,5 +238,18 @@ func (p *Processor) HandlePDUSessionModificationRequest(
 		rsp.AuthoQosFlowDescs = &authQoSFlowDesc
 	}
 
+	// TS 23.502 4.3.3.2 step 2a: update the UPF(s) with the N4 rules of the new,
+	// modified or removed QoS flows before the PDU Session Modification Command
+	// is sent, in the same sequence as HandleSMPolicyUpdateNotify uses for a
+	// PCF-initiated change. ActivateUPFSession sends every pending PDR
+	// (additional packet filter PDRs included), FAR, QER and URR to the UPF
+	// that owns it. As on that path, a UPF refusal does not turn into a Reject:
+	// the PCF decision is already applied to the SM context and cannot be
+	// rolled back here, so a Reject would leave the UE and the SMF out of step.
+	smCtx.SendUpPathChgNotification("EARLY", SendUpPathChgEventExposureNotification)
+	p.ActivateUPFSession(smCtx, nil)
+	smCtx.SendUpPathChgNotification("LATE", SendUpPathChgEventExposureNotification)
+	smCtx.PostRemoveDataPath()
+
 	return rsp, nil
 }

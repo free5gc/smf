@@ -290,7 +290,7 @@ func TestAssociationLifecycleWithoutHeartbeatWaitsCleansAndReconnects(t *testing
 	default:
 	}
 
-	if cause := p.ReleaseAssociation(nodeID); cause != ie.CauseRequestAccepted {
+	if cause := p.ReleaseAssociation(nodeID, pfcpSourceOf(nodeID)); cause != ie.CauseRequestAccepted {
 		t.Fatalf("ReleaseAssociation() cause = %d", cause)
 	}
 	select {
@@ -365,11 +365,11 @@ func TestPassiveAssociationSetupRestartWakesHeartbeatDisabledLifecycleOnce(t *te
 	}
 	waitForAssociationEstablished(t, upf)
 
-	cause, firstCallback := p.SetupAssociation(nodeID, newRecoveryTime)
+	cause, firstCallback := p.SetupAssociation(nodeID, newRecoveryTime, pfcpSourceOf(nodeID))
 	if cause != ie.CauseRequestAccepted || firstCallback == nil {
 		t.Fatalf("first passive Setup cause=%d callback=%t", cause, firstCallback != nil)
 	}
-	_, duplicateCallback := p.SetupAssociation(nodeID, newRecoveryTime)
+	_, duplicateCallback := p.SetupAssociation(nodeID, newRecoveryTime, pfcpSourceOf(nodeID))
 	if duplicateCallback == nil {
 		t.Fatal("duplicate passive Setup did not return a callback")
 	}
@@ -425,7 +425,7 @@ func TestPassiveAssociationSetupRecoveryTimeSemantics(t *testing.T) {
 				upf.SetRecoveryTimeStamp(test.baseline)
 			}
 
-			cause, afterResponse := (&Processor{}).SetupAssociation(nodeID, test.incoming)
+			cause, afterResponse := (&Processor{}).SetupAssociation(nodeID, test.incoming, pfcpSourceOf(nodeID))
 			if cause != ie.CauseRequestAccepted || afterResponse == nil {
 				t.Fatalf("SetupAssociation() cause=%d callback=%t", cause, afterResponse != nil)
 			}
@@ -461,7 +461,7 @@ func TestDelayedPassiveSetupCallbackDoesNotCancelReplacementAssociation(t *testi
 	upf.EstablishAssociation(context.Background())
 	upf.SetRecoveryTimeStamp(oldRecoveryTime)
 
-	_, delayedCallback := (&Processor{}).SetupAssociation(nodeID, newRecoveryTime)
+	_, delayedCallback := (&Processor{}).SetupAssociation(nodeID, newRecoveryTime, pfcpSourceOf(nodeID))
 	upf.CancelAssociation()
 	upf.EstablishAssociation(context.Background())
 	upf.SetRecoveryTimeStamp(newRecoveryTime)
@@ -780,7 +780,7 @@ func TestProcessorPassiveAssociationStateUsesConfiguredUPF(t *testing.T) {
 	p := &Processor{}
 
 	recoveryTime := time.Now().Add(-time.Minute).Truncate(time.Second)
-	cause, afterResponse := p.SetupAssociation(peer, recoveryTime)
+	cause, afterResponse := p.SetupAssociation(peer, recoveryTime, pfcpSourceOf(peer))
 	if cause != ie.CauseRequestAccepted {
 		t.Fatalf("SetupAssociation() cause = %d, want Request Accepted", cause)
 	}
@@ -796,7 +796,7 @@ func TestProcessorPassiveAssociationStateUsesConfiguredUPF(t *testing.T) {
 	}
 
 	upf.EstablishAssociation(context.Background())
-	if cause = p.ReleaseAssociation(peer); cause != ie.CauseRequestAccepted {
+	if cause = p.ReleaseAssociation(peer, pfcpSourceOf(peer)); cause != ie.CauseRequestAccepted {
 		t.Fatalf("ReleaseAssociation() cause = %d, want Request Accepted", cause)
 	}
 	if err := upf.IsAssociated(); err == nil {
@@ -820,7 +820,7 @@ func TestProcessorPassiveAssociationUpdateStoresFeatures(t *testing.T) {
 	featureIE := ie.NewUPFunctionFeatures(0x21, 0x43)
 
 	cause, afterResponse := p.UpdateAssociation(nodeID,
-		message.NewAssociationUpdateRequest(1, featureIE))
+		message.NewAssociationUpdateRequest(1, featureIE), pfcpSourceOf(nodeID))
 	if cause != ie.CauseRequestAccepted {
 		t.Fatalf("UpdateAssociation() cause = %d, want Request Accepted", cause)
 	}
@@ -858,7 +858,7 @@ func TestProcessorPassiveAssociationUpdateRejectsInvalidRequestWithoutChangingFe
 		ie.NewUPFunctionFeatures(0x21, 0x43),
 		ie.NewPFCPAssociationReleaseRequest(1, 0),
 		invalidPeriod,
-	))
+	), pfcpSourceOf(nodeID))
 	if cause != ie.CauseInvalidLength || afterResponse != nil {
 		t.Fatalf("UpdateAssociation() cause=%d callback=%t, want invalid length without callback",
 			cause, afterResponse != nil)
@@ -881,7 +881,7 @@ func TestProcessorPassiveAssociationUpdateURSSDoesNotRelease(t *testing.T) {
 
 	cause, afterResponse := p.UpdateAssociation(nodeID, message.NewAssociationUpdateRequest(
 		1, ie.NewUPFunctionFeatures(0x11, 0x22), ie.NewPFCPAssociationReleaseRequest(0, 1),
-	))
+	), pfcpSourceOf(nodeID))
 	if cause != ie.CauseRequestAccepted || afterResponse == nil {
 		t.Fatalf("UpdateAssociation() cause=%d callback=%t, want deferred feature commit",
 			cause, afterResponse != nil)
@@ -898,7 +898,7 @@ func TestProcessorPassiveAssociationUpdateURSSDoesNotRelease(t *testing.T) {
 	}
 	cause, afterResponse = p.UpdateAssociation(nodeID, message.NewAssociationUpdateRequest(
 		2, ie.NewPFCPAssociationReleaseRequest(0, 1),
-	))
+	), pfcpSourceOf(nodeID))
 	if cause != ie.CauseRequestAccepted || afterResponse != nil {
 		t.Fatalf("URSS-only update cause=%d callback=%t, want accepted without callback",
 			cause, afterResponse != nil)
@@ -940,7 +940,7 @@ func TestProcessorPassiveAssociationUpdateReleasesAfterResponse(t *testing.T) {
 
 	cause, afterResponse := p.UpdateAssociation(nodeID, message.NewAssociationUpdateRequest(
 		1, ie.NewUPFunctionFeatures(0x21, 0x43), ie.NewPFCPAssociationReleaseRequest(1, 0),
-	))
+	), pfcpSourceOf(nodeID))
 	if cause != ie.CauseRequestAccepted || afterResponse == nil {
 		t.Fatalf("UpdateAssociation() cause = %d, afterResponse present = %t; want accepted release work",
 			cause, afterResponse != nil)
@@ -1067,7 +1067,7 @@ func TestAssociationUpdateDeletesAffectedSessionsBeforeRelease(t *testing.T) {
 
 	cause, afterResponse := p.UpdateAssociation(targetNodeID, message.NewAssociationUpdateRequest(
 		1, ie.NewPFCPAssociationReleaseRequest(1, 0),
-	))
+	), pfcpSourceOf(targetNodeID))
 	if cause != ie.CauseRequestAccepted || afterResponse == nil {
 		t.Fatalf("UpdateAssociation() cause = %d, afterResponse present = %t",
 			cause, afterResponse != nil)
@@ -1138,7 +1138,7 @@ func TestAssociationReleaseDeadlineCancelsDeletionBeforeRelease(t *testing.T) {
 		1,
 		ie.NewPFCPAssociationReleaseRequest(1, 0),
 		ie.NewGracefulReleasePeriod(period),
-	))
+	), pfcpSourceOf(nodeID))
 	start := time.Now()
 	afterResponse()
 	if !releaseCalled {
@@ -1194,7 +1194,7 @@ func TestAssociationReleaseDeadlineIncludesInFlightSessionWork(t *testing.T) {
 		1,
 		ie.NewPFCPAssociationReleaseRequest(1, 0),
 		ie.NewGracefulReleasePeriod(period),
-	))
+	), pfcpSourceOf(nodeID))
 	afterDone := make(chan struct{})
 	go func() {
 		afterResponse()
@@ -1238,7 +1238,7 @@ func TestProcessorPassiveAssociationUpdateRequiresEstablishedAssociation(t *test
 	t.Cleanup(func() { smf_context.RemoveUPFNodeByNodeID(nodeID) })
 	p := &Processor{}
 
-	cause, afterResponse := p.UpdateAssociation(nodeID, message.NewAssociationUpdateRequest(1))
+	cause, afterResponse := p.UpdateAssociation(nodeID, message.NewAssociationUpdateRequest(1), pfcpSourceOf(nodeID))
 	if cause != ie.CauseNoEstablishedPFCPAssociation || afterResponse != nil {
 		t.Fatalf("UpdateAssociation() cause = %d, afterResponse present = %t; want No Established Association",
 			cause, afterResponse != nil)
@@ -1251,11 +1251,11 @@ func TestProcessorPassiveAssociationRejectsUnknownUPF(t *testing.T) {
 		NodeIdType: pfcptype.NodeIdTypeIpv4Address,
 		IP:         net.ParseIP("192.0.2.82").To4(),
 	}
-	cause, _ := p.SetupAssociation(peer, time.Now())
+	cause, _ := p.SetupAssociation(peer, time.Now(), pfcpSourceOf(peer))
 	if cause != ie.CauseRequestRejected {
 		t.Fatalf("SetupAssociation() cause = %d, want Request Rejected", cause)
 	}
-	if cause = p.ReleaseAssociation(peer); cause != ie.CauseNoEstablishedPFCPAssociation {
+	if cause = p.ReleaseAssociation(peer, pfcpSourceOf(peer)); cause != ie.CauseNoEstablishedPFCPAssociation {
 		t.Fatalf("ReleaseAssociation() cause = %d, want No Established Association", cause)
 	}
 }
@@ -1501,4 +1501,8 @@ func TestRollbackEstablishedPfcpSessionsKeepsSEIDWhenDeletionRejected(t *testing
 	if session.RemoteSEID != remoteSEID {
 		t.Errorf("rejected deletion changed RemoteSEID = %d, want %d", session.RemoteSEID, remoteSEID)
 	}
+}
+
+func pfcpSourceOf(nodeID pfcptype.NodeID) *net.UDPAddr {
+	return &net.UDPAddr{IP: nodeID.IP, Port: 8805}
 }

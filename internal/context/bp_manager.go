@@ -62,7 +62,7 @@ func (bpMGR *BPManager) SelectPSA2(smContext *SMContext) {
 			for lastNode.Next() != nil {
 				lastNode = lastNode.Next()
 			}
-			ifaceN3 := lastNode.UPF.GetInterface(models.Nrf_NFMgmt_UPInterfaceType_N3, smContext.Dnn)
+			ifaceN3 := dataPath.FirstDPNode.UPF.GetInterface(models.Nrf_NFMgmt_UPInterfaceType_N3, smContext.Dnn)
 			ifaceN9 := lastNode.UPF.GetInterface(models.Nrf_NFMgmt_UPInterfaceType_N9, smContext.Dnn)
 			if ifaceN3 == nil || ifaceN9 == nil {
 				smContext.Log.Tracef("Skipping path via UPF [%v] (DNN mismatch)", lastNode.UPF.NodeID)

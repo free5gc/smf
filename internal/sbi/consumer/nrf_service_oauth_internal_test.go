@@ -23,6 +23,7 @@ import (
 	"github.com/free5gc/openapi/nrf/NFDisc"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/pkg/app"
+	"github.com/free5gc/util/nfheartbeat"
 )
 
 func TestBuildNFProfileAuthorizationPolicy(t *testing.T) {
@@ -77,21 +78,9 @@ func TestNRFLifecycleOAuth(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			nrfID, smfID := uuid.NewString(), uuid.NewString()
-			key, err := rsa.GenerateKey(rand.Reader, 2048)
-			require.NoError(t, err)
-			identity, err := url.Parse("urn:uuid:" + nrfID)
-			require.NoError(t, err)
-			cert := &x509.Certificate{
-				SerialNumber: big.NewInt(1), URIs: []*url.URL{identity},
-				NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
-			}
-			der, err := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
-			require.NoError(t, err)
-			certPath := filepath.Join(t.TempDir(), "nrf.pem")
-			require.NoError(t, os.WriteFile(certPath,
-				pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600))
+			certPath := newNRFOAuthCertificate(t, nrfID)
 			tokenRequests := make(chan url.Values, 2)
-			authorizedCalls := make(chan string, 2)
+			authorizedCalls := make(chan string, 3)
 			registeredProfiles := make(chan models.Nrf_NFMgmt_NFProfile, 1)
 			nrf := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
@@ -105,6 +94,7 @@ func TestNRFLifecycleOAuth(t *testing.T) {
 					}
 					registeredProfiles <- profile
 					profile.CustomInfo = map[string]interface{}{"oauth2": enabled}
+					profile.HeartBeatTimer = 15
 					w.Header().Set("Location", "https://"+r.Host+r.URL.Path)
 					w.WriteHeader(http.StatusCreated)
 					if encodeErr := json.NewEncoder(w).Encode(profile); encodeErr != nil {
@@ -127,6 +117,11 @@ func TestNRFLifecycleOAuth(t *testing.T) {
 					if _, writeErr := w.Write([]byte(`{"nfInstances":[]}`)); writeErr != nil {
 						t.Errorf("write discovery response: %v", writeErr)
 					}
+				case http.MethodPatch:
+					authorizedCalls <- r.Header.Get("Authorization")
+					if encodeErr := json.NewEncoder(w).Encode(models.Nrf_NFMgmt_NFProfile{HeartBeatTimer: 30}); encodeErr != nil {
+						t.Errorf("encode heartbeat response: %v", encodeErr)
+					}
 				case http.MethodDelete:
 					authorizedCalls <- r.Header.Get("Authorization")
 					w.WriteHeader(http.StatusNoContent)
@@ -147,8 +142,9 @@ func TestNRFLifecycleOAuth(t *testing.T) {
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			require.NoError(t, c.RegisterNFInstance(ctx))
+			require.NoError(t, c.RegisterNFInstance(ctx, true))
 			require.Equal(t, enabled, self.OAuth2Required)
+			require.Equal(t, int32(15), c.heartbeatTimer)
 			if enabled {
 				require.Equal(t, nrfID, self.NrfNfInstanceID)
 			}
@@ -160,8 +156,12 @@ func TestNRFLifecycleOAuth(t *testing.T) {
 			_, err = c.SendSearchNFInstances(nrf.URL, target, requester,
 				&NFDisc.SearchNFInstancesRequest{TargetNfType: &target, RequesterNfType: &requester})
 			require.NoError(t, err)
+			nf, pd, err := c.SendUpdateNFInstance(ctx, nfheartbeat.PatchItems())
+			require.NoError(t, err)
+			require.Nil(t, pd)
+			require.Equal(t, int32(30), nf.HeartBeatTimer)
 			require.NoError(t, c.SendDeregisterNFInstance())
-			for range 2 {
+			for range 3 {
 				header := <-authorizedCalls
 				if enabled {
 					require.Equal(t, "Bearer lifecycle-token", header)
@@ -184,4 +184,22 @@ func TestNRFLifecycleOAuth(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newNRFOAuthCertificate(t *testing.T, nrfID string) string {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	identity, err := url.Parse("urn:uuid:" + nrfID)
+	require.NoError(t, err)
+	cert := &x509.Certificate{
+		SerialNumber: big.NewInt(1), URIs: []*url.URL{identity},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
+	require.NoError(t, err)
+	certPath := filepath.Join(t.TempDir(), "nrf.pem")
+	require.NoError(t, os.WriteFile(certPath,
+		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600))
+	return certPath
 }
