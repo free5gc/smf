@@ -321,7 +321,7 @@ func BuildPDUSessionResourceModifyConfirmTransfer(
 	if err != nil {
 		return nil, err
 	}
-	ul, err := upfEndOfTunnel(tunnel, localULTeid)
+	ul, err := upfEndOfTunnel(ctx, tunnel, UplinkChooseID, localULTeid)
 	if err != nil {
 		return nil, err
 	}
@@ -343,11 +343,11 @@ func BuildPDUSessionResourceModifyConfirmTransferOfASplit(ctx *SMContext) ([]byt
 	if err != nil {
 		return nil, err
 	}
-	ul, err := upfEndOfTunnel(ctx.Tunnel, ctx.LocalULTeid)
+	ul, err := upfEndOfTunnel(ctx, ctx.Tunnel, UplinkChooseID, ctx.LocalULTeid)
 	if err != nil {
 		return nil, err
 	}
-	splitUL, err := upfEndOfTunnel(ctx.DCTunnel, ctx.LocalULTeidForSplitPDUSession)
+	splitUL, err := upfEndOfTunnel(ctx, ctx.DCTunnel, SplitUplinkChooseID, ctx.LocalULTeidForSplitPDUSession)
 	if err != nil {
 		return nil, err
 	}
@@ -368,6 +368,13 @@ func BuildPDUSessionResourceModifyConfirmTransferOfASplit(ctx *SMContext) ([]byt
 		return nil, fmt.Errorf("encode confirmTransfer failed: %s", err)
 	}
 	return buf, nil
+}
+
+// CheckModifyConfirm returns why the Modify Confirm Transfer of tunnel cannot
+// be built, before its UPF answered: it has no QoS flow to confirm.
+func CheckModifyConfirm(tunnel *UPTunnel) error {
+	_, err := qosFlowModifyConfirmList(tunnel)
+	return err
 }
 
 // qosFlowModifyConfirmList is the QoS Flow Modify Confirm List of the
@@ -405,11 +412,17 @@ func qosFlowModifyConfirmList(tunnel *UPTunnel) (*ngapie.QosFlowModifyConfirmLis
 }
 
 // upfEndOfTunnel is the UPF's end of tunnel, at its AN UPF, with the TEID
-// localULTeid.
-func upfEndOfTunnel(tunnel *UPTunnel, localULTeid uint32) (*ngapie.UPTransportLayerInformation, error) {
+// localULTeid; or, at a UPF that allocates the F-TEIDs, the F-TEID that it
+// chose for the PDRs that asked with chooseID.
+func upfEndOfTunnel(
+	ctx *SMContext, tunnel *UPTunnel, chooseID uint8, localULTeid uint32,
+) (*ngapie.UPTransportLayerInformation, error) {
 	ANUPF := tunnel.ANNode()
 	if ANUPF == nil {
 		return nil, fmt.Errorf("no data path for the UL NG-U UP TNL Information")
+	}
+	if ANUPF.UPF.AllocatesFTEID() {
+		return chosenUPFEnd(ctx, ANUPF.UPF, chooseID)
 	}
 	teidOct := make([]byte, 4)
 	binary.BigEndian.PutUint32(teidOct, localULTeid)
@@ -449,17 +462,13 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 		if dcANUPF == nil {
 			return nil, errors.New("no data path of the split tunnel")
 		}
-		dcUpNode, dcUlTeidOct, dcDlTeidOct := dcANUPF.UPF, make([]byte, 4), make([]byte, 4)
-		binary.BigEndian.PutUint32(dcUlTeidOct, dcANUPF.UpLinkTunnel.TEID)
+		dcDlTeidOct := make([]byte, 4)
 		binary.BigEndian.PutUint32(dcDlTeidOct, ctx.DCTunnel.ANInformation.TEID)
 
 		ieExtensions := new(ngapie.ProtocolExtensionContainerPathSwitchRequestAcknowledgeTransferExtIEs)
 		pathSwitchRequestAcknowledgeTransfer.IEExtensions = ieExtensions
 
-		if len(dcUpNode.N3Interfaces) == 0 {
-			return nil, errors.New("no N3 interface found for DC UPF")
-		}
-		if n3IP, err := dcUpNode.N3Interfaces[0].IP(ctx.SelectedPDUSessionType); err != nil {
+		if dcULTNL, err := uplinkTNL(ctx, dcANUPF.UPF, SplitUplinkChooseID, dcANUPF.UpLinkTunnel.TEID); err != nil {
 			return nil, err
 		} else {
 			ieExtensions.List = append(ieExtensions.List, ngapie.PathSwitchRequestAcknowledgeTransferExtIEs{
@@ -472,7 +481,7 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 				AdditionalNGUUPTNLInformation: &ngapie.UPTransportLayerInformationPairList{
 					List: []ngapie.UPTransportLayerInformationPairItem{
 						{
-							ULNGUUPTNLInformation: newGTPTunnelUPTransport(n3IP, dcUlTeidOct),
+							ULNGUUPTNLInformation: dcULTNL,
 							DLNGUUPTNLInformation: newGTPTunnelUPTransport(
 								ctx.DCTunnel.ANInformation.IPAddress, dcDlTeidOct),
 						},

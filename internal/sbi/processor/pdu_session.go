@@ -414,6 +414,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	var createdIndirectForwarding bool
 	var removeIndirectForwardingAfterSuccess bool
 	var handoverCommandAfterPFCP bool
+	// Set at a UPF that chooses the split tunnel's F-TEID, which the Modify
+	// Confirm Transfer of the split carries: it is built after its answer.
+	var splitConfirmAfterPFCP bool
 	// Set by an accepted PDU Session Resource Modify Indication: puts back the
 	// split state the indication found if the UPF refuses the N4 update.
 	var restoreSplitState func()
@@ -878,9 +881,12 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				// apply the rules on DCTunnel
 				if err = smContext.ApplyDcPccRulesOnDcTunnel(); err != nil {
 					smContext.Log.Errorf("ApplyDcPccRulesOnDcTunnel failed: %+v", err)
-					sendPFCPModification = false
-				} else if n2CfmBuf, err = smf_context.BuildPDUSessionResourceModifyConfirmTransferOfASplit(
-					smContext); err != nil {
+				} else if splitConfirmAfterPFCP = splitFTEIDChosenByUPF(smContext.DCTunnel); splitConfirmAfterPFCP {
+					err = smf_context.CheckModifyConfirm(smContext.DCTunnel)
+				} else {
+					n2CfmBuf, err = smf_context.BuildPDUSessionResourceModifyConfirmTransferOfASplit(smContext)
+				}
+				if err != nil {
 					sendPFCPModification = false
 				} else {
 					// append the rules on DCTunnel
@@ -1234,6 +1240,21 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				smContext.RemoveIndirectForwardingTunnel()
 			}
 			smContext.SetState(smf_context.Active)
+			if splitConfirmAfterPFCP {
+				if n2Buf, err = smf_context.BuildPDUSessionResourceModifyConfirmTransferOfASplit(smContext); err != nil {
+					restoreSplitState()
+					p.rejectPDUSessionResourceModifyIndication(c, smContext, err)
+					break
+				}
+				response.BinaryDataN2SmInformation = related("PDU_RES_MOD_CFM", n2Buf)
+			}
+			if restoreSplitState != nil && !smContext.NrdcIndicator {
+				// The split ended: its PDRs are removed, and with them the
+				// F-TEIDs that the UPF chose for them.
+				for _, sessionContext := range smContext.PFCPContext {
+					sessionContext.ForgetSplitFTEIDs()
+				}
+			}
 			if handoverCommandAfterPFCP {
 				if n2Buf, err = smf_context.BuildHandoverCommandTransfer(smContext); err != nil {
 					smContext.Log.Errorf("Build HandoverCommandTransfer failed: %v", err)
@@ -1326,6 +1347,13 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		// So, local release smCtx and notify AMF after sending PDUSessionResourceReleaseCommand
 		p.RemoveSMContextFromAllNF(smContext, true)
 	}
+}
+
+// splitFTEIDChosenByUPF reports whether the AN UPF of the split tunnel chooses
+// its F-TEIDs (TS 29.244 5.5.1).
+func splitFTEIDChosenByUPF(dcTunnel *smf_context.UPTunnel) bool {
+	anNode := dcTunnel.ANNode()
+	return anNode != nil && anNode.UPF.AllocatesFTEID()
 }
 
 // rejectPDUSessionResourceModifyIndication answers a PDU Session Resource

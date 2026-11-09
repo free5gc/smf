@@ -974,12 +974,9 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(
 				return err
 			} else {
 				ULPDR.PDI = PDI{
-					SourceInterface: pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceAccess},
-					LocalFTeid: &pfcptype.FTEID{
-						V4:          true,
-						Ipv4Address: upIP,
-						Teid:        curULTunnel.TEID,
-					},
+					SourceInterface:   pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceAccess},
+					LocalFTeid:        newLocalFTEID(ULDestUPF, SplitUplinkChooseID, upIP, curULTunnel.TEID),
+					TrafficEndpointID: trafficEndpointFor(ULDestUPF, SplitUplinkChooseID),
 					NetworkInstance: &pfcptype.NetworkInstance{
 						NetworkInstance: smContext.Dnn,
 						FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
@@ -1067,12 +1064,9 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(
 					return err
 				} else {
 					DLPDR.PDI = PDI{
-						SourceInterface: pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceCore},
-						LocalFTeid: &pfcptype.FTEID{
-							V4:          true,
-							Ipv4Address: upIP,
-							Teid:        curDLTunnel.TEID,
-						},
+						SourceInterface:   pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceCore},
+						LocalFTeid:        newLocalFTEID(DLDestUPF, SplitDownlinkChooseID, upIP, curDLTunnel.TEID),
+						TrafficEndpointID: trafficEndpointFor(DLDestUPF, SplitDownlinkChooseID),
 
 						// TODO: Should Uncomment this after FR5GC-1029 is solved
 						// UEIPAddress: &pfcptype.UEIPAddress{
