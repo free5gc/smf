@@ -105,7 +105,7 @@ func BuildSessionEstablishmentRequest(
 			return nil, fmt.Errorf("build Create FAR at index %d: nil FAR", index)
 		}
 		if far.State == context.RULE_INITIAL {
-			createFAR, buildErr := newCreateFARIE(far)
+			createFAR, buildErr := newCreateFARIE(smContext.FARToSend(far))
 			if buildErr != nil {
 				return nil, fmt.Errorf("build Create FAR %d: %w", far.FARID, buildErr)
 			}

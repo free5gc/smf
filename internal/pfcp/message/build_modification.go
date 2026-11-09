@@ -90,9 +90,9 @@ func BuildSessionModificationRequest(
 		var err error
 		switch far.State {
 		case context.RULE_INITIAL:
-			ruleIE, err = newCreateFARIE(far)
+			ruleIE, err = newCreateFARIE(smContext.FARToSend(far))
 		case context.RULE_UPDATE:
-			ruleIE, err = newUpdateFARIE(far)
+			ruleIE, err = newUpdateFARIE(smContext.FARToSend(far))
 		case context.RULE_REMOVE:
 			ruleIE = ie.NewRemoveFAR(ie.NewFARID(far.FARID))
 		}

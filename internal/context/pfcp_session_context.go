@@ -34,9 +34,12 @@ type PFCPSessionContext struct {
 	chosenFTEIDs map[uint8]*pfcptype.FTEID
 }
 
-// UplinkChooseID is the CHOOSE ID by which the PDRs of the session's tunnel at
-// a UPF that allocates the F-TEIDs ask for one F-TEID (TS 29.244 5.5.3).
-const UplinkChooseID uint8 = 1
+// The CHOOSE IDs by which the PDRs of the session's tunnel at a UPF that
+// allocates the F-TEIDs ask for one F-TEID in each direction (TS 29.244 5.5.3).
+const (
+	UplinkChooseID   uint8 = 1
+	DownlinkChooseID uint8 = 2
+)
 
 // ForgetRemoteSession clears what belonged to the PFCP session at the UPF: its
 // SEID and the F-TEIDs that the UPF chose.
@@ -76,6 +79,26 @@ func newLocalFTEID(upf *UPF, chooseID uint8, ip net.IP, teid uint32) *pfcptype.F
 		return &pfcptype.FTEID{Ch: true, Chid: true, V4: true, ChooseId: chooseID}
 	}
 	return &pfcptype.FTEID{V4: true, Ipv4Address: ip, Teid: teid}
+}
+
+// FARToSend is the FAR as a request carries it: one whose peer UPF allocates
+// the F-TEIDs forwards to the F-TEID that the peer chose, or, until the peer
+// has chosen it, buffers.
+func (smContext *SMContext) FARToSend(far *FAR) *FAR {
+	if far.PeerUPF == nil || far.ForwardingParameters == nil || far.ForwardingParameters.OuterHeaderCreation == nil {
+		return far
+	}
+	chosen := smContext.ChosenFTEID(far.PeerUPF, far.PeerChooseID)
+	far.PeerPending = chosen == nil
+	if chosen == nil {
+		buffering := *far
+		buffering.ApplyAction = pfcptype.ApplyAction{Buff: true}
+		buffering.ForwardingParameters = nil
+		return &buffering
+	}
+	outerHeaderCreation := far.ForwardingParameters.OuterHeaderCreation
+	outerHeaderCreation.Teid, outerHeaderCreation.Ipv4Address = chosen.Teid, chosen.Ipv4Address
+	return far
 }
 
 // ChosenFTEID is the F-TEID that upf chose for the session's PDRs that asked

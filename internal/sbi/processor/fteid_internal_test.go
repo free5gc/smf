@@ -39,6 +39,8 @@ type upfRequest struct {
 	upf          string
 	establishing bool
 	createPDR    []*ie.IE
+	createFAR    []*ie.IE
+	updateFAR    []*ie.IE
 }
 
 func upfTEID(addr string, id uint8) uint32 {
@@ -86,7 +88,7 @@ func (c *choosingUPF) SendSessionEstablishmentRequest(
 	_ context.Context, request *message.SessionEstablishmentRequest, addr *net.UDPAddr, localSEID uint64,
 ) (*message.SessionEstablishmentResponse, error) {
 	ies := append(c.created(addr.IP.String(), upfRequest{
-		upf: addr.IP.String(), establishing: true, createPDR: request.CreatePDR,
+		upf: addr.IP.String(), establishing: true, createPDR: request.CreatePDR, createFAR: request.CreateFAR,
 	}), ie.NewCause(ie.CauseRequestAccepted), ie.NewFSEID(localSEID+1000, addr.IP.To4(), nil))
 	return message.NewSessionEstablishmentResponse(0, 0, localSEID, request.Sequence(), 0, ies...), nil
 }
@@ -95,7 +97,7 @@ func (c *choosingUPF) SendSessionModificationRequest(
 	_ context.Context, request *message.SessionModificationRequest, addr *net.UDPAddr, localSEID uint64,
 ) (*message.SessionModificationResponse, error) {
 	ies := append(c.created(addr.IP.String(), upfRequest{
-		upf: addr.IP.String(), createPDR: request.CreatePDR,
+		upf: addr.IP.String(), createPDR: request.CreatePDR, createFAR: request.CreateFAR, updateFAR: request.UpdateFAR,
 	}), ie.NewCause(ie.CauseRequestAccepted))
 	return message.NewSessionModificationResponse(0, 0, localSEID, request.Sequence(), 0, ies...), nil
 }
@@ -115,32 +117,53 @@ func localFTEID(createPDR *ie.IE) (*ie.FTEIDFields, error) {
 }
 
 // newFTEIDTestEnv builds a session of the default rule and a QoS flow of QFI
-// 2 on the path gNB - UPF, of a UPF that advertises features, with a
-// choosingUPF for its PFCP requests. It is not activated yet.
-func newFTEIDTestEnv(t *testing.T, features []byte) (*modIndTestEnv, *choosingUPF) {
+// 2 on the path gNB - UPF, or gNB - I-UPF - PSA with chain, of UPFs that
+// advertise features, with a choosingUPF for its PFCP requests. It is not
+// activated yet.
+func newFTEIDTestEnv(t *testing.T, features []byte, chain bool) (*modIndTestEnv, *choosingUPF) {
 	t.Helper()
-	upf := &factory.UPNode{
-		Type: "UPF", NodeID: fteidTestUPF, Addr: fteidTestUPF,
-		SNssaiInfos: []*factory.SnssaiUpfInfoItem{{
+	upNode := func(addr string, kinds ...models.Nrf_NFMgmt_UPInterfaceType) *factory.UPNode {
+		node := &factory.UPNode{Type: "UPF", NodeID: addr, Addr: addr}
+		for _, kind := range kinds {
+			node.InterfaceUpfInfoList = append(node.InterfaceUpfInfoList, &factory.InterfaceUpfInfoItem{
+				InterfaceType: kind, Endpoints: []string{addr}, NetworkInstances: []string{modIndTestDNN},
+			})
+		}
+		return node
+	}
+	anchor := func(node *factory.UPNode) *factory.UPNode {
+		node.SNssaiInfos = []*factory.SnssaiUpfInfoItem{{
 			SNssai: &models.Snssai{Sst: 1, Sd: "010203"},
 			DnnUpfInfoList: []*factory.DnnUpfInfoItem{{
 				Dnn: modIndTestDNN, Pools: []*factory.UEIPPool{{Cidr: "10.63.0.0/16"}},
 			}},
-		}},
-		InterfaceUpfInfoList: []*factory.InterfaceUpfInfoItem{{
-			InterfaceType: models.Nrf_NFMgmt_UPInterfaceType_N3, Endpoints: []string{fteidTestUPF},
-			NetworkInstances: []string{modIndTestDNN},
-		}},
+		}}
+		return node
+	}
+	upInfo := factory.UserPlaneInformation{
+		UPNodes: map[string]*factory.UPNode{
+			"FteidGNB": {Type: "AN"}, "FteidUPF": anchor(upNode(fteidTestUPF, models.Nrf_NFMgmt_UPInterfaceType_N3)),
+		},
+		Links: []*factory.UPLink{{A: "FteidGNB", B: "FteidUPF"}},
+	}
+	if chain {
+		iupf := upNode(fteidTestUPF, models.Nrf_NFMgmt_UPInterfaceType_N3, models.Nrf_NFMgmt_UPInterfaceType_N9)
+		// The I-UPF serves the DNN only at a DNAI that no rule names: it is no
+		// anchor, and every path of the session goes on to the PSA.
+		iupf.SNssaiInfos = []*factory.SnssaiUpfInfoItem{{
+			SNssai:         &models.Snssai{Sst: 1, Sd: "010203"},
+			DnnUpfInfoList: []*factory.DnnUpfInfoItem{{Dnn: modIndTestDNN, DnaiList: []string{"transit"}}},
+		}}
+		upInfo.UPNodes["FteidUPF"] = iupf
+		upInfo.UPNodes["FteidPSA"] = anchor(upNode(fteidTestPSA, models.Nrf_NFMgmt_UPInterfaceType_N9))
+		upInfo.Links = append(upInfo.Links, &factory.UPLink{A: "FteidUPF", B: "FteidPSA"})
 	}
 	config := &factory.Config{
 		Info: &factory.Info{Version: "1.0.0", Description: "F-TEIDs allocated by the UPF"},
 		Configuration: &factory.Configuration{
-			Sbi:  &factory.Sbi{},
-			PFCP: &factory.PFCP{ExternalAddr: modIndTestCPNodeID, NodeID: modIndTestCPNodeID},
-			UserPlaneInformation: factory.UserPlaneInformation{
-				UPNodes: map[string]*factory.UPNode{"FteidGNB": {Type: "AN"}, "FteidUPF": upf},
-				Links:   []*factory.UPLink{{A: "FteidGNB", B: "FteidUPF"}},
-			},
+			Sbi:                  &factory.Sbi{},
+			PFCP:                 &factory.PFCP{ExternalAddr: modIndTestCPNodeID, NodeID: modIndTestCPNodeID},
+			UserPlaneInformation: upInfo,
 		},
 	}
 	require.NoError(t, smf_context.InitSmfContext(config))
@@ -237,7 +260,7 @@ func requireGTPTunnel(t *testing.T, tnl *ngapie.UPTransportLayerInformation, tei
 // the UPF to choose the F-TEID, by one CHOOSE ID, and the N2 transfers carry
 // the F-TEID that it chose (TS 29.244 5.5.1, 5.5.3).
 func TestSessionTakesTheFTEIDThatTheUPFChose(t *testing.T) {
-	e, upf := newFTEIDTestEnv(t, []byte{0x10, 0x00})
+	e, upf := newFTEIDTestEnv(t, []byte{0x10, 0x00}, false)
 	require.True(t, e.activate(t))
 	require.Len(t, upf.requests, 1)
 	asked := 0
@@ -306,7 +329,7 @@ func TestSessionTakesTheFTEIDThatTheUPFChose(t *testing.T) {
 // An establishment whose response lacks the F-TEID that a PDR asked for fails:
 // the session would have no N3 tunnel.
 func TestEstablishmentFailsWithoutTheFTEIDThatTheUPFWasAskedToChoose(t *testing.T) {
-	e, upf := newFTEIDTestEnv(t, []byte{0x10, 0x00})
+	e, upf := newFTEIDTestEnv(t, []byte{0x10, 0x00}, false)
 	upf.chooseNothing = true
 	require.False(t, e.activate(t))
 }
@@ -314,7 +337,7 @@ func TestEstablishmentFailsWithoutTheFTEIDThatTheUPFWasAskedToChoose(t *testing.
 // Only the PDRs that a request creates wait for an F-TEID: those of a rule
 // removed before the establishment are not in its request.
 func TestEstablishmentWithARuleRemovedBefore(t *testing.T) {
-	e, upf := newFTEIDTestEnv(t, []byte{0x10, 0x00})
+	e, upf := newFTEIDTestEnv(t, []byte{0x10, 0x00}, false)
 	require.NoError(t, e.sm.ApplyPccRules(&models.Pcf_SMPolCtrl_SmPolicyDecision{
 		PccRules: map[string]*models.Pcf_SMPolCtrl_PccRule{"FteidPccRule-2": nil},
 	}))
@@ -341,5 +364,73 @@ func TestAssociationSetupRecordsTheUPFunctionFeatures(t *testing.T) {
 		})
 		require.NoError(t, processor.setupPfcpAssociation(context.Background(), upf, "[198.51.100.10]"))
 		require.Equal(t, features, upf.UPFunctionFeatures())
+	}
+}
+
+// outerHeaderCreation is the Outer Header Creation of a Create FAR or an
+// Update FAR, or nil.
+func outerHeaderCreation(t *testing.T, far *ie.IE) *ie.OuterHeaderCreationFields {
+	t.Helper()
+	children, err := far.CreateFAR()
+	if far.Type == ie.UpdateFAR {
+		children, err = far.UpdateFAR()
+	}
+	require.NoError(t, err)
+	for _, child := range children {
+		if child.Type == ie.ForwardingParameters || child.Type == ie.UpdateForwardingParameters {
+			if ohc, ohcErr := child.OuterHeaderCreation(); ohcErr == nil {
+				return ohc
+			}
+		}
+	}
+	return nil
+}
+
+// On the path gNB - I-UPF - PSA of UPFs that allocate the F-TEIDs, each UPF
+// needs the F-TEID that the other one chooses: the PSA is established first,
+// its downlink buffering; then the I-UPF, its uplink to the PSA's F-TEID; then
+// the PSA's downlink is updated to the I-UPF's F-TEID.
+func TestN9TunnelsAreEstablishedInSequence(t *testing.T) {
+	e, upf := newFTEIDTestEnv(t, []byte{0x10, 0x00}, true)
+	require.True(t, e.activate(t))
+	require.Len(t, upf.requests, 3)
+	first, second, third := upf.requests[0], upf.requests[1], upf.requests[2]
+
+	require.Equal(t, fteidTestPSA, first.upf)
+	require.True(t, first.establishing)
+	buffering := 0
+	for _, far := range first.createFAR {
+		if far.HasBUFF() {
+			require.Nil(t, outerHeaderCreation(t, far))
+			buffering++
+		}
+	}
+	require.Equal(t, 2, buffering, "the downlink of both QoS flows waits for the I-UPF's F-TEID")
+
+	require.Equal(t, fteidTestUPF, second.upf)
+	require.True(t, second.establishing)
+	toPSA := 0
+	for _, far := range second.createFAR {
+		if ohc := outerHeaderCreation(t, far); ohc != nil && ohc.IPv4Address.String() == fteidTestPSA {
+			require.Equal(t, upfTEID(fteidTestPSA, smf_context.UplinkChooseID), ohc.TEID)
+			toPSA++
+		}
+	}
+	require.Equal(t, 2, toPSA)
+	for _, createPDR := range second.createPDR {
+		fteid, err := localFTEID(createPDR)
+		require.NoError(t, err, "every PDR of the I-UPF has a tunnel, N3 or N9")
+		require.True(t, fteid.HasCh())
+	}
+
+	require.Equal(t, fteidTestPSA, third.upf)
+	require.False(t, third.establishing)
+	require.Len(t, third.updateFAR, 2)
+	for _, far := range third.updateFAR {
+		require.True(t, far.HasFORW())
+		ohc := outerHeaderCreation(t, far)
+		require.NotNil(t, ohc)
+		require.Equal(t, upfTEID(fteidTestUPF, smf_context.DownlinkChooseID), ohc.TEID)
+		require.Equal(t, fteidTestUPF, ohc.IPv4Address.String())
 	}
 }

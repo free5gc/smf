@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 
 	"github.com/wmnsk/go-pfcp/ie"
@@ -87,16 +88,15 @@ func (p *Processor) ActivateUPFSession(
 		}
 	}
 
-	resChan := make(chan SendPfcpResult)
 	establishmentTargets := make(map[string]*PFCPState)
-	pendingTargets := 0
+	targets := make(map[string]*PFCPState)
 
 	for ip, pfcp := range pfcpPool {
 		sessionContext := smContext.PFCPContext[ip]
 		if sessionContext != nil && sessionContext.RemoteSEID != 0 && !pfcp.hasPendingChanges(smContext) {
 			continue
 		}
-		pendingTargets++
+		targets[ip] = pfcp
 		urrIds := []uint32{}
 		for _, urr := range pfcp.urrList {
 			urrIds = append(urrIds, urr.URRID)
@@ -105,14 +105,16 @@ func (p *Processor) ActivateUPFSession(
 			"%d URRs (aggregated IDs: %v)", ip, len(pfcp.pdrList), len(pfcp.farList), len(pfcp.urrList), urrIds)
 		if sessionContext == nil || sessionContext.RemoteSEID == 0 {
 			establishmentTargets[ip] = pfcp
+		}
+	}
+
+	success := p.sendInRounds(smContext, targets, func(ip string, pfcp *PFCPState, resChan chan SendPfcpResult) {
+		if establishmentTargets[ip] != nil {
 			go p.establishPfcpSession(smContext, pfcp, resChan)
 		} else {
 			go p.modifyExistingPfcpSession(smContext, pfcp, resChan, "")
 		}
-	}
-
-	success := waitAllPfcpRsp(smContext, pendingTargets, resChan, nil)
-	close(resChan)
+	})
 
 	// Initial PDU Session Establishment is atomic across every required UPF.
 	// Roll back only sessions created by this activation; never delete a
@@ -125,6 +127,80 @@ func (p *Processor) ActivateUPFSession(
 	if notifyUeHander != nil {
 		notifyUeHander(smContext, success)
 	}
+}
+
+// sendInRounds sends the request of each UPF of states with send, in rounds of
+// parallel requests. A UPF whose uplink forwards to the tunnel of another UPF
+// of states that allocates the F-TEIDs waits for that UPF's answer, which has
+// the F-TEID (TS 29.244 5.5.3): the anchor goes first, then each UPF toward
+// the AN. The FARs sent buffering until their peer chose its F-TEID, the
+// downlink of each UPF toward the one before it, are updated last.
+func (p *Processor) sendInRounds(
+	smContext *smf_context.SMContext,
+	states map[string]*PFCPState,
+	send func(ip string, state *PFCPState, resChan chan SendPfcpResult),
+) bool {
+	pending := maps.Clone(states)
+	for round := readyPfcpTargets(smContext, pending); len(round) != 0; round = readyPfcpTargets(smContext, pending) {
+		resChan := make(chan SendPfcpResult)
+		for ip, state := range round {
+			delete(pending, ip)
+			send(ip, state, resChan)
+		}
+		success := waitAllPfcpRsp(smContext, len(round), resChan, nil)
+		close(resChan)
+		if !success {
+			return false
+		}
+	}
+	return len(pending) == 0 && p.sendPeerPendingFARs(smContext, states)
+}
+
+// readyPfcpTargets are the UPFs of pending whose uplink forwards to no tunnel
+// of another UPF of pending that has yet to choose its F-TEID.
+func readyPfcpTargets(
+	smContext *smf_context.SMContext, pending map[string]*PFCPState,
+) map[string]*PFCPState {
+	ready := make(map[string]*PFCPState, len(pending))
+	for ip, state := range pending {
+		waits := false
+		for _, far := range state.farList {
+			if far.PeerUPF != nil && far.ForwardingParameters != nil &&
+				far.ForwardingParameters.DestinationInterface.InterfaceValue == pfcptype.DestinationInterfaceCore &&
+				smContext.ChosenFTEID(far.PeerUPF, far.PeerChooseID) == nil &&
+				pending[far.PeerUPF.NodeID.ResolveNodeIdToIp().String()] != nil {
+				waits = true
+				break
+			}
+		}
+		if !waits {
+			ready[ip] = state
+		}
+	}
+	return ready
+}
+
+// sendPeerPendingFARs updates each FAR that was sent buffering, now that the
+// UPF that it forwards to chose its F-TEID.
+func (p *Processor) sendPeerPendingFARs(smContext *smf_context.SMContext, states map[string]*PFCPState) bool {
+	resChan := make(chan SendPfcpResult)
+	sent := 0
+	for _, state := range states {
+		var farList []*smf_context.FAR
+		for _, far := range state.farList {
+			if far.PeerPending && smContext.ChosenFTEID(far.PeerUPF, far.PeerChooseID) != nil {
+				far.State = smf_context.RULE_UPDATE
+				farList = append(farList, far)
+			}
+		}
+		if len(farList) != 0 {
+			sent++
+			go p.modifyExistingPfcpSession(smContext, &PFCPState{upf: state.upf, farList: farList}, resChan, "")
+		}
+	}
+	success := waitAllPfcpRsp(smContext, sent, resChan, nil)
+	close(resChan)
+	return success
 }
 
 func (p *Processor) QueryReport(smContext *smf_context.SMContext, upf *smf_context.UPF,
