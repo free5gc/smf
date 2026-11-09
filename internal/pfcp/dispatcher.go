@@ -157,5 +157,13 @@ func (s *PfcpServer) dispatchReceived(received RcvPfcpMsg) {
 
 	// Synchronous execution is intentional: spawning here would turn blocked
 	// handlers into an unbounded goroutine backlog.
+	if received.ParseError != nil {
+		if response := s.parseErrorResponse(received.Msg, received.ParseError); response != nil {
+			if err := s.SendPfcpResponse(response, &received.RemoteAddr); err != nil {
+				s.log.Debugf("send PFCP parse error response: %v", err)
+			}
+		}
+		return
+	}
 	dispatch(received.Msg, &received.RemoteAddr)
 }
