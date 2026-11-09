@@ -799,6 +799,9 @@ func (p *Processor) sendPDUSessionEstablishmentAccept(
 	}
 }
 
+// updateAnUpfPfcpSession sends the rules to the AN UPF, and those of
+// otherUPFs, the UPFs after it on the path of a split tunnel, to each of
+// them, in rounds (sendInRounds).
 func (p *Processor) updateAnUpfPfcpSession(
 	smContext *smf_context.SMContext,
 	pdrList []*smf_context.PDR,
@@ -806,13 +809,25 @@ func (p *Processor) updateAnUpfPfcpSession(
 	barList []*smf_context.BAR,
 	qerList []*smf_context.QER,
 	urrList []*smf_context.URR,
+	otherUPFs map[string]*PFCPState,
 ) smf_context.PFCPSessionResponseStatus {
 	defaultPath := smContext.Tunnel.DataPathPool.GetDefaultPath()
 	anUPF := defaultPath.FirstDPNode
-	response, err := p.sendSessionModificationRequest(smContext, &PFCPState{
+	anState := &PFCPState{
 		upf: anUPF.UPF, pdrList: pdrList, farList: farList,
 		barList: barList, qerList: qerList, urrList: urrList,
-	})
+	}
+	if len(otherUPFs) != 0 {
+		states := maps.Clone(otherUPFs)
+		states[anUPF.GetNodeIP()] = anState
+		if !p.sendInRounds(smContext, states, func(_ string, state *PFCPState, resChan chan SendPfcpResult) {
+			go p.modifyExistingPfcpSession(smContext, state, resChan, "")
+		}) {
+			return smf_context.SessionUpdateFailed
+		}
+		return p.addULCLAfterModification(smContext)
+	}
+	response, err := p.sendSessionModificationRequest(smContext, anState)
 	if err != nil {
 		logger.PduSessLog.Warnf("Sending PFCP Session Modification Request to AN UPF error: %+v", err)
 		return smf_context.SessionUpdateFailed
@@ -827,11 +842,16 @@ func (p *Processor) updateAnUpfPfcpSession(
 	}
 
 	logger.PduSessLog.Info("Received PFCP Session Modification Accepted Response from AN UPF")
+	return p.addULCLAfterModification(smContext)
+}
 
+// addULCLAfterModification adds the PSA and the ULCL of a session that has an
+// uplink classifier to set up, once its AN UPF accepted a modification.
+func (p *Processor) addULCLAfterModification(smContext *smf_context.SMContext) smf_context.PFCPSessionResponseStatus {
 	if smf_context.GetSelf().ULCLSupport && smContext.BPManager != nil {
 		if smContext.BPManager.BPStatus == smf_context.UnInitialized {
 			logger.PfcpLog.Infoln("Add PSAAndULCL")
-			if err = p.AddPDUSessionAnchorAndULCL(smContext); err != nil {
+			if err := p.AddPDUSessionAnchorAndULCL(smContext); err != nil {
 				logger.PfcpLog.Error(err)
 				return smf_context.SessionUpdateFailed
 			}
@@ -840,6 +860,56 @@ func (p *Processor) updateAnUpfPfcpSession(
 	}
 
 	return smf_context.SessionUpdateSuccess
+}
+
+// splitPathRules are the rules of a split of the session, or of its end, at
+// the UPFs after the AN UPF: on a path with an I-UPF, the split tunnel goes on
+// to the anchor, and each of these UPFs carries the moved QoS flows on the
+// split tunnel's rules instead of the session tunnel's, as the AN UPF does.
+func splitPathRules(tunnel, dcTunnel *smf_context.UPTunnel, split bool) map[string]*PFCPState {
+	rules := make(map[string]*PFCPState)
+	dcState, tunnelState := smf_context.RULE_INITIAL, smf_context.RULE_REMOVE
+	if !split {
+		dcState, tunnelState = smf_context.RULE_REMOVE, smf_context.RULE_INITIAL
+	}
+	for _, dataPath := range dcTunnel.DataPathPool {
+		if dataPath.Activated && dataPath.FirstDPNode.DownLinkTunnel.PDR.Precedence != 255 {
+			addPathRules(rules, dataPath, dcState, true)
+		}
+	}
+	for _, dataPath := range tunnel.DataPathPool {
+		if dataPath.Activated && dataPath.FirstDPNode.DownLinkTunnel.PDR.Precedence != 255 {
+			addPathRules(rules, dataPath, tunnelState, false)
+		}
+	}
+	return rules
+}
+
+// addPathRules adds to rules, by UPF, the rules of the UPFs of dataPath after
+// its AN UPF, set to state: their downlink PDR and FAR, their uplink ones too
+// with uplink, and the QERs and URRs of those.
+func addPathRules(
+	rules map[string]*PFCPState, dataPath *smf_context.DataPath, state smf_context.RuleState, uplink bool,
+) {
+	for node := dataPath.FirstDPNode.Next(); node != nil; node = node.Next() {
+		target := rules[node.GetNodeIP()]
+		if target == nil {
+			target = &PFCPState{upf: node.UPF}
+			rules[node.GetNodeIP()] = target
+		}
+		pdrs := []*smf_context.PDR{node.DownLinkTunnel.PDR}
+		if uplink {
+			pdrs = append(pdrs, node.UpLinkTunnel.PDR)
+		}
+		for _, pdr := range pdrs {
+			pdr.State = state
+			pdr.FAR.State = state
+			target.pdrList = append(target.pdrList, pdr)
+			target.farList = append(target.farList, pdr.FAR)
+			target.qerList = append(target.qerList, pdr.QER...)
+			target.urrList = append(target.urrList, pdr.URR...)
+		}
+	}
 }
 
 func (p *Processor) ReleaseTunnel(smContext *smf_context.SMContext) []SendPfcpResult {

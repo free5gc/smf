@@ -745,3 +745,74 @@ func TestSplitWithoutQosFlowToMoveAtAnFTUPUPFIsRejected(t *testing.T) {
 	e.requireModifyIndicationUnsuccessful(t, e.sendModifyIndication(t, modIndSplitTransfer()))
 	require.Empty(t, upf.requests)
 }
+
+// A split of a session on the path gNB - I-UPF - PSA, and its end. The split
+// tunnel has a data path of its own to the anchor: its rules go to both UPFs,
+// and the I-UPF's uplink forwards the moved QoS flow to the split tunnel at
+// the PSA, which has it. Where the UPFs choose the F-TEIDs, the PSA goes
+// first, then the I-UPF, then the PSA's downlink, as in an activation.
+func TestSplitAcrossN9(t *testing.T) {
+	for _, features := range [][]byte{nil, {0x10, 0x00}} {
+		t.Run(fmt.Sprintf("features %x", features), func(t *testing.T) {
+			testSplitAcrossN9(t, features)
+		})
+	}
+}
+
+func testSplitAcrossN9(t *testing.T, features []byte) {
+	e, upf := newFTEIDTestEnv(t, features, true)
+	require.True(t, e.activate(t))
+	e.sm.SetState(smf_context.Active)
+	upf.requests = nil
+
+	rec := e.sendModifyIndication(t, modIndSplitTransfer())
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	byUPF := make(map[string][]upfRequest)
+	for _, request := range upf.requests {
+		byUPF[request.upf] = append(byUPF[request.upf], request)
+	}
+	require.Len(t, byUPF[fteidTestPSA], 1+len(features)/2, "the PSA, and with FTUP its downlink FAR after")
+	require.Len(t, byUPF[fteidTestUPF], 1)
+
+	// The PSA's split tunnel, and the I-UPF's uplink to it.
+	require.Len(t, byUPF[fteidTestPSA][0].createPDR, 2)
+	var psaTEID uint32
+	for _, createPDR := range byUPF[fteidTestPSA][0].createPDR {
+		if fteid, err := localFTEID(createPDR); err == nil {
+			psaTEID = fteid.TEID
+			if features != nil {
+				require.True(t, fteid.HasCh())
+				require.Equal(t, smf_context.SplitUplinkChooseID, fteid.ChooseID)
+				psaTEID = upfTEID(fteidTestPSA, smf_context.SplitUplinkChooseID)
+			}
+		}
+	}
+	require.NotZero(t, psaTEID)
+	toPSA := false
+	for _, far := range byUPF[fteidTestUPF][0].createFAR {
+		if ohc := outerHeaderCreation(t, far); ohc != nil && ohc.IPv4Address.String() == fteidTestPSA {
+			require.Equal(t, psaTEID, ohc.TEID)
+			toPSA = true
+		}
+	}
+	require.True(t, toPSA)
+	if features != nil {
+		require.Equal(t, fteidTestPSA, upf.requests[0].upf)
+		require.Equal(t, fteidTestUPF, upf.requests[1].upf)
+		require.Len(t, upf.requests[2].updateFAR, 1)
+		ohc := outerHeaderCreation(t, upf.requests[2].updateFAR[0])
+		require.Equal(t, upfTEID(fteidTestUPF, smf_context.SplitDownlinkChooseID), ohc.TEID)
+	}
+
+	// The end of the split removes the split tunnel's rules at both UPFs.
+	upf.requests = nil
+	rec = e.sendModifyIndication(t, &ngapie.PDUSessionResourceModifyIndicationTransfer{
+		DLQosFlowPerTNLInformation: modIndQosFlowPerTNL("10.100.0.5", 0x42, 2),
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	upfs := make(map[string]bool)
+	for _, request := range upf.requests {
+		upfs[request.upf] = true
+	}
+	require.Equal(t, map[string]bool{fteidTestUPF: true, fteidTestPSA: true}, upfs)
+}
