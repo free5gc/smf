@@ -611,6 +611,21 @@ func (t *UPTunnel) RemoveDataPath(pathID int64) {
 	t.PathIDGenerator.FreeID(pathID)
 }
 
+// ANNode is the AN UPF's node of the tunnel: that of its default path, or else
+// of another activated path, as for the split tunnel of a session that has no
+// PCC rule of precedence 255. Every path of a tunnel starts at its AN UPF.
+func (t *UPTunnel) ANNode() *DataPathNode {
+	if defaultPath := t.DataPathPool.GetDefaultPath(); defaultPath != nil {
+		return defaultPath.FirstDPNode
+	}
+	for _, dataPath := range t.DataPathPool {
+		if dataPath.Activated && dataPath.FirstDPNode != nil {
+			return dataPath.FirstDPNode
+		}
+	}
+	return nil
+}
+
 // *** add unit test ***//
 // NewUPF returns a new UPF context in SMF
 func NewUPF(nodeID *pfcptype.NodeID, ifaces []*factory.InterfaceUpfInfoItem) (upf *UPF) {
