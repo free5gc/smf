@@ -21,8 +21,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
-github.com/free5gc/nas v1.3.0 h1:r42lNApvMtAwaHwpb50ZpOXZabGaQvFRy/q3JxS0o/g=
-github.com/free5gc/nas v1.3.0/go.mod h1:T/krdGjxSut+MQJAFFBS4lsWZa/NPEz7wO0G/D3qHeE=
+github.com/free5gc/nas v1.3.1 h1:UMPymaxkr0KT+a3FTXC8gg6jcUbi6BvHjHOjuEL9NSI=
+github.com/free5gc/nas v1.3.1/go.mod h1:T/krdGjxSut+MQJAFFBS4lsWZa/NPEz7wO0G/D3qHeE=
 github.com/free5gc/ngap v1.2.0 h1:tZPokNiF/J97dmq0DVATcE1lZi7stCo7LZaosSB8otQ=
 github.com/free5gc/ngap v1.2.0/go.mod h1:1lfw7JP0fs8bdv0B685KDC2/shOciL9gf1f3KwKnGvk=
 github.com/free5gc/openapi v1.3.1-0.20261014070323-89accd9890ce h1:XNRcx+HWt59BwpCLiCv58totgzh/IFk0DY8daPm2K5c=
