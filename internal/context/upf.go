@@ -123,6 +123,14 @@ func (upf *UPF) UPFunctionFeatures() []byte {
 	return append([]byte(nil), upf.upFunctionFeatures...)
 }
 
+// AllocatesFTEID reports whether the UPF set FTUP (octet 5, bit 5): it
+// allocates the F-TEIDs, which the SMF asks it to choose (TS 29.244 5.5.1).
+func (upf *UPF) AllocatesFTEID() bool {
+	upf.upFunctionFeaturesMu.RLock()
+	defer upf.upFunctionFeaturesMu.RUnlock()
+	return len(upf.upFunctionFeatures) > 0 && upf.upFunctionFeatures[0]&0x10 != 0
+}
+
 // SetRecoveryTimeStamp replaces the UPF recovery-time baseline used by active
 // heartbeat restart detection.
 func (upf *UPF) SetRecoveryTimeStamp(recoveryTime time.Time) {
@@ -430,7 +438,7 @@ func (upf *UPF) InvalidatePFCPSessions() int {
 		for _, pfcpSession := range smContext.PFCPContext {
 			if pfcpSession != nil && pfcpSession.RemoteSEID != 0 &&
 				pfcpSession.NodeID.EqualsTo(&upf.NodeID) {
-				pfcpSession.RemoteSEID = 0
+				pfcpSession.ForgetRemoteSession()
 				invalidated++
 			}
 		}

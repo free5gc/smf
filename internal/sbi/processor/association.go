@@ -172,6 +172,13 @@ func (p *Processor) setupPfcpAssociation(
 		return fmt.Errorf("decode PFCP Association Setup Recovery Time Stamp from UPF%s: %w", upfStr, err)
 	}
 	upf.SetRecoveryTimeStamp(recoveryTime)
+	var features []byte
+	if response.UPFunctionFeatures != nil {
+		if features, err = response.UPFunctionFeatures.UPFunctionFeatures(); err != nil {
+			return fmt.Errorf("decode PFCP Association Setup UP Function Features from UPF%s: %w", upfStr, err)
+		}
+	}
+	upf.SetUPFunctionFeatures(features)
 
 	logger.MainLog.Infof("Received PFCP Association Setup Accepted Response from UPF%s", upfStr)
 	logger.MainLog.Infof("UPF(%s) setup association", upf.NodeID.ResolveNodeIdToIp().String())

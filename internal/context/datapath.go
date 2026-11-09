@@ -674,13 +674,13 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(
 				logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
 				return err
 			} else {
+				localFTeid := &pfcptype.FTEID{V4: true, Ipv4Address: upIP, Teid: curULTunnel.TEID}
+				if curDataPathNode.IsANUPF() {
+					localFTeid = newLocalFTEID(ULDestUPF, UplinkChooseID, upIP, curULTunnel.TEID)
+				}
 				ULPDR.PDI = PDI{
 					SourceInterface: pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceAccess},
-					LocalFTeid: &pfcptype.FTEID{
-						V4:          true,
-						Ipv4Address: upIP,
-						Teid:        curULTunnel.TEID,
-					},
+					LocalFTeid:      localFTeid,
 					NetworkInstance: &pfcptype.NetworkInstance{
 						NetworkInstance: smContext.Dnn,
 						FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,

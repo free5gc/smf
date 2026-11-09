@@ -365,11 +365,11 @@ func TestPassiveAssociationSetupRestartWakesHeartbeatDisabledLifecycleOnce(t *te
 	}
 	waitForAssociationEstablished(t, upf)
 
-	cause, firstCallback := p.SetupAssociation(nodeID, newRecoveryTime, pfcpSourceOf(nodeID))
+	cause, firstCallback := p.SetupAssociation(nodeID, newRecoveryTime, nil, pfcpSourceOf(nodeID))
 	if cause != ie.CauseRequestAccepted || firstCallback == nil {
 		t.Fatalf("first passive Setup cause=%d callback=%t", cause, firstCallback != nil)
 	}
-	_, duplicateCallback := p.SetupAssociation(nodeID, newRecoveryTime, pfcpSourceOf(nodeID))
+	_, duplicateCallback := p.SetupAssociation(nodeID, newRecoveryTime, nil, pfcpSourceOf(nodeID))
 	if duplicateCallback == nil {
 		t.Fatal("duplicate passive Setup did not return a callback")
 	}
@@ -425,7 +425,7 @@ func TestPassiveAssociationSetupRecoveryTimeSemantics(t *testing.T) {
 				upf.SetRecoveryTimeStamp(test.baseline)
 			}
 
-			cause, afterResponse := (&Processor{}).SetupAssociation(nodeID, test.incoming, pfcpSourceOf(nodeID))
+			cause, afterResponse := (&Processor{}).SetupAssociation(nodeID, test.incoming, nil, pfcpSourceOf(nodeID))
 			if cause != ie.CauseRequestAccepted || afterResponse == nil {
 				t.Fatalf("SetupAssociation() cause=%d callback=%t", cause, afterResponse != nil)
 			}
@@ -461,7 +461,7 @@ func TestDelayedPassiveSetupCallbackDoesNotCancelReplacementAssociation(t *testi
 	upf.EstablishAssociation(context.Background())
 	upf.SetRecoveryTimeStamp(oldRecoveryTime)
 
-	_, delayedCallback := (&Processor{}).SetupAssociation(nodeID, newRecoveryTime, pfcpSourceOf(nodeID))
+	_, delayedCallback := (&Processor{}).SetupAssociation(nodeID, newRecoveryTime, nil, pfcpSourceOf(nodeID))
 	upf.CancelAssociation()
 	upf.EstablishAssociation(context.Background())
 	upf.SetRecoveryTimeStamp(newRecoveryTime)
@@ -780,19 +780,22 @@ func TestProcessorPassiveAssociationStateUsesConfiguredUPF(t *testing.T) {
 	p := &Processor{}
 
 	recoveryTime := time.Now().Add(-time.Minute).Truncate(time.Second)
-	cause, afterResponse := p.SetupAssociation(peer, recoveryTime, pfcpSourceOf(peer))
+	cause, afterResponse := p.SetupAssociation(peer, recoveryTime, []byte{0x10, 0x00}, pfcpSourceOf(peer))
 	if cause != ie.CauseRequestAccepted {
 		t.Fatalf("SetupAssociation() cause = %d, want Request Accepted", cause)
 	}
 	if afterResponse == nil {
 		t.Fatal("SetupAssociation() did not defer recovery-time commit")
 	}
-	if !upf.RecoveryTimeStamp().IsZero() {
-		t.Fatal("SetupAssociation() committed recovery time before response")
+	if !upf.RecoveryTimeStamp().IsZero() || upf.AllocatesFTEID() {
+		t.Fatal("SetupAssociation() committed recovery time or UP Function Features before response")
 	}
 	afterResponse()
 	if got := upf.RecoveryTimeStamp(); !got.Equal(recoveryTime) {
 		t.Fatalf("RecoveryTimeStamp() = %v, want %v", got, recoveryTime)
+	}
+	if !upf.AllocatesFTEID() {
+		t.Fatalf("UPFunctionFeatures() = %x, want the FTUP of the setup", upf.UPFunctionFeatures())
 	}
 
 	upf.EstablishAssociation(context.Background())
@@ -1251,7 +1254,7 @@ func TestProcessorPassiveAssociationRejectsUnknownUPF(t *testing.T) {
 		NodeIdType: pfcptype.NodeIdTypeIpv4Address,
 		IP:         net.ParseIP("192.0.2.82").To4(),
 	}
-	cause, _ := p.SetupAssociation(peer, time.Now(), pfcpSourceOf(peer))
+	cause, _ := p.SetupAssociation(peer, time.Now(), nil, pfcpSourceOf(peer))
 	if cause != ie.CauseRequestRejected {
 		t.Fatalf("SetupAssociation() cause = %d, want Request Rejected", cause)
 	}
@@ -1320,7 +1323,7 @@ func TestApplyCreatedPDRsUpdatesUPFAllocatedFTEID(t *testing.T) {
 		ie.NewFTEID(0x01, 0x10203040, net.ParseIP("192.0.2.20").To4(), nil, 0),
 	)
 
-	if err := applyCreatedPDRs([]*ie.IE{createdPDR}, sessionContext, nil); err != nil {
+	if err := applyCreatedPDRs([]*ie.IE{createdPDR}, nil, sessionContext, nil); err != nil {
 		t.Fatalf("applyCreatedPDRs() error: %v", err)
 	}
 	got := pdr.PDI.LocalFTeid
@@ -1342,7 +1345,7 @@ func TestApplyCreatedPDRsAllowsNoAllocatedFTEID(t *testing.T) {
 		PDRs: map[uint16]*smf_context.PDR{7: pdr},
 	}
 	if err := applyCreatedPDRs(
-		[]*ie.IE{ie.NewCreatedPDR(ie.NewPDRID(7))}, sessionContext, nil,
+		[]*ie.IE{ie.NewCreatedPDR(ie.NewPDRID(7))}, nil, sessionContext, nil,
 	); err != nil {
 		t.Fatalf("applyCreatedPDRs() error: %v", err)
 	}
@@ -1358,7 +1361,7 @@ func TestApplyCreatedPDRsRejectsUnknownPDR(t *testing.T) {
 			ie.NewPDRID(99),
 			ie.NewFTEID(0x01, 1, net.ParseIP("192.0.2.20").To4(), nil, 0),
 		),
-	}, sessionContext, nil)
+	}, nil, sessionContext, nil)
 	if err == nil || !strings.Contains(err.Error(), "unknown PDR ID 99") {
 		t.Fatalf("applyCreatedPDRs() error = %v, want unknown PDR error", err)
 	}

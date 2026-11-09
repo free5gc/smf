@@ -237,7 +237,7 @@ func (p *Processor) establishPfcpSession(
 	// session. If a Created PDR is malformed, later cleanup still knows which
 	// remote session must be deleted.
 	sessionContext.RemoteSEID = upfFSEID.SEID
-	if err = applyCreatedPDRs(response.CreatedPDR, sessionContext, state.pdrList); err != nil {
+	if err = applyCreatedPDRs(response.CreatedPDR, request.CreatePDR, sessionContext, state.pdrList); err != nil {
 		fail(err)
 		return
 	}
@@ -248,6 +248,7 @@ func (p *Processor) establishPfcpSession(
 
 func applyCreatedPDRs(
 	createdPDRs []*ie.IE,
+	createPDRs []*ie.IE,
 	sessionContext *smf_context.PFCPSessionContext,
 	requestedPDRs []*smf_context.PDR,
 ) error {
@@ -299,6 +300,7 @@ func applyCreatedPDRs(
 		if pdr == nil {
 			return fmt.Errorf("created PDR refers to unknown PDR ID %d", pdrID)
 		}
+		asked := pdr.PDI.LocalFTeid
 		pdr.PDI.LocalFTeid = &pfcptype.FTEID{
 			Chid:        fteid.HasChID(),
 			Ch:          fteid.HasCh(),
@@ -308,6 +310,24 @@ func applyCreatedPDRs(
 			Ipv4Address: append(net.IP(nil), fteid.IPv4Address...),
 			Ipv6Address: append(net.IP(nil), fteid.IPv6Address...),
 			ChooseId:    fteid.ChooseID,
+		}
+		// The F-TEID of the PDRs that ask with this CHOOSE ID, which a later
+		// PDR of the same tunnel names.
+		if asked != nil && asked.Ch && asked.Chid {
+			chosen := *pdr.PDI.LocalFTeid
+			chosen.Chid, chosen.ChooseId = false, 0
+			sessionContext.SetChosenFTEID(asked.ChooseId, &chosen)
+		}
+	}
+	// TS 29.244 5.5.3: the UP function returns the F-TEID of each PDR that
+	// asked it to choose one; a tunnel without it cannot be used.
+	for _, createPDR := range createPDRs {
+		pdrID, err := createPDR.PDRID()
+		if err != nil {
+			return fmt.Errorf("decode Create PDR ID: %w", err)
+		}
+		if pdr := pdrByID[pdrID]; pdr != nil && pdr.PDI.LocalFTeid != nil && pdr.PDI.LocalFTeid.Ch {
+			return fmt.Errorf("the UPF returned no F-TEID for PDR %d, which asked it to choose one", pdrID)
 		}
 	}
 	return nil
@@ -370,7 +390,7 @@ func (p *Processor) rollbackEstablishedPfcpSessions(
 		// Do not clear a newer session if another lifecycle operation replaced
 		// the SEID while this deletion was in flight.
 		if result.target.sessionContext.RemoteSEID == result.target.remoteSEID {
-			result.target.sessionContext.RemoteSEID = 0
+			result.target.sessionContext.ForgetRemoteSession()
 		}
 	}
 	return errors.Join(errList...)
@@ -830,7 +850,7 @@ func (p *Processor) deletePfcpSession(
 	// The UPF has already deleted the PFCP session. Clear its remote SEID before
 	// notifying the caller, and consume final reports first so subsequent SM
 	// context cleanup cannot race report accounting or send a duplicate delete.
-	sessionContext.RemoteSEID = 0
+	sessionContext.ForgetRemoteSession()
 	if len(response.UsageReport) != 0 {
 		if err = smContext.HandleReports(response.UsageReport, upf.NodeID, ""); err != nil {
 			logger.PduSessLog.Errorf("decode PFCP Session Deletion Usage Report: %v", err)

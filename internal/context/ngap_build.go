@@ -59,6 +59,37 @@ func ipv4AddressToNgap(ipv4Addr string) *ngapie.TransportLayerAddress {
 	}
 }
 
+// uplinkTNL is the UPF end of a tunnel of the session at upf: teid at the
+// UPF's first N3 address, or, at a UPF that allocates the F-TEIDs (TS 29.244
+// 5.5.1), the F-TEID that it chose for the PDRs that asked with chooseID.
+func uplinkTNL(ctx *SMContext, upf *UPF, chooseID uint8, teid uint32) (*ngapie.UPTransportLayerInformation, error) {
+	if upf.AllocatesFTEID() {
+		return chosenUPFEnd(ctx, upf, chooseID)
+	}
+	if len(upf.N3Interfaces) == 0 {
+		return nil, errors.New("no N3 interface found for UPF")
+	}
+	n3IP, err := upf.N3Interfaces[0].IP(ctx.SelectedPDUSessionType)
+	if err != nil {
+		return nil, err
+	}
+	teidOct := make([]byte, 4)
+	binary.BigEndian.PutUint32(teidOct, teid)
+	return newGTPTunnelUPTransport(n3IP, teidOct), nil
+}
+
+// chosenUPFEnd is the F-TEID that upf chose for the PDRs of the session that
+// asked with chooseID (TS 29.244 5.5.3).
+func chosenUPFEnd(ctx *SMContext, upf *UPF, chooseID uint8) (*ngapie.UPTransportLayerInformation, error) {
+	chosen := ctx.ChosenFTEID(upf, chooseID)
+	if chosen == nil {
+		return nil, errors.New("the UPF has not chosen the F-TEID of the tunnel")
+	}
+	teidOct := make([]byte, 4)
+	binary.BigEndian.PutUint32(teidOct, chosen.Teid)
+	return newGTPTunnelUPTransport(chosen.Ipv4Address.To4(), teidOct), nil
+}
+
 func newGTPTunnelUPTransport(transportAddr []byte, teid []byte) *ngapie.UPTransportLayerInformation {
 	return &ngapie.UPTransportLayerInformation{
 		Choice: &ngapie.GTPTunnel{
@@ -125,9 +156,7 @@ func buildSecurityIndication(ctx *SMContext) *ngapie.SecurityIndication {
 func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error) {
 	ANUPF := ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
 	UpNode := ANUPF.UPF
-	teidOct := make([]byte, 4)
 	teidOctForSplitPDUSession := make([]byte, 4)
-	binary.BigEndian.PutUint32(teidOct, ctx.LocalULTeid)
 	binary.BigEndian.PutUint32(teidOctForSplitPDUSession, ctx.LocalULTeidForSplitPDUSession)
 
 	ieList := []ngapie.PDUSessionResourceSetupRequestTransferIEs{}
@@ -154,13 +183,16 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-	ieList = append(ieList,
-		// UL NG-U UP TNL Information
-		ngapie.PDUSessionResourceSetupRequestTransferIEs{
-			ULNGUUPTNLInformation: newGTPTunnelUPTransport(n3IP, teidOct),
-		},
-		// Additional UL NG-U UP TNL Information
-		ngapie.PDUSessionResourceSetupRequestTransferIEs{
+	ulTNL, err := uplinkTNL(ctx, UpNode, UplinkChooseID, ctx.LocalULTeid)
+	if err != nil {
+		return nil, err
+	}
+	// UL NG-U UP TNL Information
+	ieList = append(ieList, ngapie.PDUSessionResourceSetupRequestTransferIEs{ULNGUUPTNLInformation: ulTNL})
+	// Additional UL NG-U UP TNL Information, the SMF's TEID for a split of the
+	// session, which a UPF that allocates the F-TEIDs does not know.
+	if !UpNode.AllocatesFTEID() {
+		ieList = append(ieList, ngapie.PDUSessionResourceSetupRequestTransferIEs{
 			AdditionalULNGUUPTNLInformation: &ngapie.UPTransportLayerInformationList{
 				List: []ngapie.UPTransportLayerInformationItem{
 					{
@@ -168,7 +200,9 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 					},
 				},
 			},
-		},
+		})
+	}
+	ieList = append(ieList,
 		// PDU Session Type
 		ngapie.PDUSessionResourceSetupRequestTransferIEs{
 			PDUSessionType: &ngapie.PDUSessionType{
@@ -393,19 +427,14 @@ func upfEndOfTunnel(tunnel *UPTunnel, localULTeid uint32) (*ngapie.UPTransportLa
 func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 	ANUPF := ctx.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
 	UpNode := ANUPF.UPF
-	teidOct := make([]byte, 4)
-	binary.BigEndian.PutUint32(teidOct, ANUPF.UpLinkTunnel.TEID)
 
 	pathSwitchRequestAcknowledgeTransfer := ngapie.PathSwitchRequestAcknowledgeTransfer{}
 
 	// UL NG-U UP TNL Information(optional) TS 38.413 9.3.2.2
-	if len(UpNode.N3Interfaces) == 0 {
-		return nil, errors.New("no N3 interface found for UPF")
-	}
-	if n3IP, err := UpNode.N3Interfaces[0].IP(ctx.SelectedPDUSessionType); err != nil {
+	if ulTNL, err := uplinkTNL(ctx, UpNode, UplinkChooseID, ANUPF.UpLinkTunnel.TEID); err != nil {
 		return nil, err
 	} else {
-		pathSwitchRequestAcknowledgeTransfer.ULNGUUPTNLInformation = newGTPTunnelUPTransport(n3IP, teidOct)
+		pathSwitchRequestAcknowledgeTransfer.ULNGUUPTNLInformation = ulTNL
 	}
 
 	// Received UP security policy mismatch from SMF locally stored TS 33.501 6.6.1

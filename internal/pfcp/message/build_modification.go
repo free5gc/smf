@@ -66,6 +66,7 @@ func BuildSessionModificationRequest(
 		var err error
 		switch pdr.State {
 		case context.RULE_INITIAL:
+			sessionContext.NameChosenFTEID(pdr)
 			ruleIE, err = newCreatePDRIE(pdr)
 		case context.RULE_UPDATE:
 			ruleIE, err = newUpdatePDRIE(pdr)
