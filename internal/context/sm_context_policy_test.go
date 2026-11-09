@@ -2,6 +2,7 @@ package context_test
 
 import (
 	"context"
+	"maps"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -711,5 +712,65 @@ func TestApplyPccRules(t *testing.T) {
 				require.Equal(t, tc.expectedTcDatas, smctx.TrafficControlDatas)
 			}
 		})
+	}
+}
+
+// UPF1 and UPF2 of config/multiUPF/smfcfg.ulcl.yaml, linked as in uerouting.yaml: UPF1
+// serves the DNN with no DNAI and no pool, UPF2 with the pool. The PCF's default PCC
+// rule names no DNAI; its path, the session's default path, ends at the anchor UPF2.
+func TestDefaultPccRulePathEndsAtTheSessionAnchor(t *testing.T) {
+	initConfig()
+	upf1 := *userPlaneConfig.UPNodes["UPF1"]
+	upf1.SNssaiInfos = []*factory.SnssaiUpfInfoItem{{
+		SNssai:         upf1.SNssaiInfos[0].SNssai,
+		DnnUpfInfoList: []*factory.DnnUpfInfoItem{{Dnn: "internet"}},
+	}}
+	config := userPlaneConfig
+	config.UPNodes = maps.Clone(userPlaneConfig.UPNodes)
+	config.UPNodes["UPF1"] = &upf1
+
+	// A path is computed once per SMF start and then kept.
+	for start := int32(1); start <= 16; start++ {
+		userPlaneInformation, err := smf_context.NewUserPlaneInformation(&config)
+		require.NoError(t, err)
+		smf_context.GetSelf().UserPlaneInformation = userPlaneInformation
+		for _, n := range userPlaneInformation.UPFs {
+			n.UPF.EstablishAssociation(context.Background())
+		}
+
+		smctx := smf_context.NewSMContext("imsi-208930000000003", start)
+		smctx.Smf_PDUSess_SmContextCreateData = &models.Smf_PDUSess_SmContextCreateData{
+			Dnn:    "internet",
+			SNssai: &models.Snssai{Sst: 1, Sd: "010203"},
+		}
+		smctx.SelectedPDUSessionType = 1
+		smctx.SessionRules["SessRuleId-1"] = &smf_context.SessionRule{
+			DefQosQFI: 1,
+			Pcf_SMPolCtrl_SessionRule: &models.Pcf_SMPolCtrl_SessionRule{
+				AuthSessAmbr: &models.Ambr{Uplink: "1000 Kbps", Downlink: "1000 Kbps"},
+			},
+		}
+		smctx.SelectedSessionRuleID = "SessRuleId-1"
+		require.NoError(t, smctx.AllocUeIP())
+		require.NoError(t, smctx.ApplyPccRules(&models.Pcf_SMPolCtrl_SmPolicyDecision{
+			PccRules: map[string]*models.Pcf_SMPolCtrl_PccRule{
+				"PccRuleId-1": {
+					FlowInfos: []models.Pcf_SMPolCtrl_FlowInformation{{
+						FlowDescription: "permit out ip from any to assigned",
+						FlowDirection:   models.Pcf_SMPolCtrl_FlowDirectionRm_BIDIRECTIONAL,
+					}},
+					PccRuleId:  "PccRuleId-1",
+					Precedence: 255,
+				},
+			},
+		}))
+
+		defaultPath := smctx.Tunnel.DataPathPool.GetDefaultPath()
+		require.NotNil(t, defaultPath)
+		var upfs []string
+		for node := defaultPath.FirstDPNode; node != nil; node = node.Next() {
+			upfs = append(upfs, userPlaneInformation.GetUPFNameByIp(node.UPF.NodeID.ResolveNodeIdToIp().String()))
+		}
+		require.Equal(t, []string{"UPF1", "UPF2"}, upfs, "start %d", start)
 	}
 }
