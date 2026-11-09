@@ -1026,6 +1026,7 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(
 						Ipv4Address:                    upIP,
 						Teid:                           nextULTunnel.TEID,
 					}
+					ULFAR.forwardToChosenFTEID(nextULTunnel.DestEndPoint.UPF, SplitUplinkChooseID)
 				}
 			}
 		}
@@ -1108,6 +1109,7 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(
 							Teid:                           nextDLTunnel.TEID,
 						},
 					}
+					DLFAR.forwardToChosenFTEID(nextDLDest.UPF, SplitDownlinkChooseID)
 				}
 			} else {
 				ANUPF := dataPath.FirstDPNode
