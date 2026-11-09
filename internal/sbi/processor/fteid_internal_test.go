@@ -4,15 +4,20 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/wmnsk/go-pfcp/ie"
 	"github.com/wmnsk/go-pfcp/message"
 
 	ngapie "github.com/free5gc/ngap/ie"
+	"github.com/free5gc/openapi"
+	"github.com/free5gc/openapi/mediatype/multipart"
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/pfcp/pfcptype"
@@ -586,4 +591,157 @@ func TestEstablishmentFailsWithoutTheFTEIDOfATrafficEndpoint(t *testing.T) {
 	e, upf := newFTEIDTestEnv(t, []byte{0x10, 0x02}, false)
 	upf.chooseNothing = true
 	require.False(t, e.activate(t))
+}
+
+// sendHandoverRequestAcknowledge sends the target's acknowledge of an N2
+// handover that needs indirect forwarding: the NG-RAN's DL tunnel, and its
+// DL forwarding tunnel for QFI 1.
+func (e *modIndTestEnv) sendHandoverRequestAcknowledge(t *testing.T) *httptest.ResponseRecorder {
+	t.Helper()
+	e.sm.DLForwardingType = smf_context.IndirectForwarding // no direct path, in the Handover Required
+	buf, err := ngapie.MarshalBinary(&ngapie.HandoverRequestAcknowledgeTransfer{
+		DLNGUUPTNLInformation:        modIndGTPTunnel("10.100.0.7", 0x51),
+		DLForwardingUPTNLInformation: modIndGTPTunnel("10.100.0.7", 0x52),
+		QosFlowSetupResponseList: &ngapie.QosFlowListWithDataForwarding{List: []ngapie.QosFlowItemWithDataForwarding{{
+			QosFlowIdentifier: &ngapie.QosFlowIdentifier{Value: 1},
+			DataForwardingAccepted: &ngapie.DataForwardingAccepted{
+				Value: ngapie.DataForwardingAcceptedPresentDataForwardingAccepted,
+			},
+		}}},
+	})
+	require.NoError(t, err)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", nil)
+	e.p.HandlePDUSessionSMContextUpdate(c, models.UpdateSmContextRequestBody{
+		JsonData: &models.Smf_PDUSess_SmContextUpdateData{
+			HoState:      models.Smf_PDUSess_HoState_PREPARED,
+			N2SmInfoType: models.Smf_PDUSess_N2SmInfoType_HANDOVER_REQ_ACK,
+			N2SmInfo:     &models.RefToBinaryData{ContentId: "HoAck"},
+		},
+		BinaryDataN2SmInformation: &multipart.RelatedContent{ContentID: "HoAck", Content: buf},
+	}, e.sm.Ref)
+	return rec
+}
+
+// The indirect forwarding tunnel of an N2 handover, at a UPF that allocates
+// the F-TEIDs: the SMF asks the UPF to allocate its F-TEID, one of its own
+// (no CHOOSE ID), and the Handover Command carries the F-TEID that the UPF
+// chose (TS 23.502 4.9.1.3.2 steps 11d-11f).
+func TestIndirectForwardingTunnelOfAnFTUPUPF(t *testing.T) {
+	e, upf := newFTEIDTestEnv(t, []byte{0x10, 0x00}, false)
+	require.True(t, e.activate(t))
+	// Twice: the second forwarding tunnel asks for an F-TEID of its own too.
+	for range 2 {
+		e.sm.SetState(smf_context.Active)
+		upf.requests = nil
+		rec := e.sendHandoverRequestAcknowledge(t)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		require.Len(t, upf.requests, 1)
+		require.Len(t, upf.requests[0].createPDR, 1)
+		fteid, err := localFTEID(upf.requests[0].createPDR[0])
+		require.NoError(t, err)
+		require.True(t, fteid.HasCh())
+		require.False(t, fteid.HasChID())
+
+		var rsp models.UpdateSmContextResponse200
+		require.NoError(t, openapi.Deserialize(&rsp, rec.Body.Bytes(), rec.Header().Get("Content-Type")))
+		require.Equal(t, models.Smf_PDUSess_N2SmInfoType_HANDOVER_CMD, rsp.JsonData.N2SmInfoType)
+		var command ngapie.HandoverCommandTransfer
+		require.NoError(t, ngapie.UnmarshalBinary(rsp.BinaryDataN2SmInformation.Content, &command))
+		requireGTPTunnel(t, command.DLForwardingUPTNLInformation, upfTEID(fteidTestUPF, 0), fteidTestUPF)
+	}
+	// The forwarding tunnel's F-TEID is not the session's uplink.
+	node := e.sm.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
+	require.Equal(t, upfTEID(fteidTestUPF, smf_context.UplinkChooseID),
+		e.sm.ChosenFTEID(node.UPF, smf_context.UplinkChooseID).Teid)
+}
+
+// A split of a session at a UPF that allocates the F-TEIDs, and its end. The
+// split tunnel's PDRs ask the UPF to choose its F-TEID, by a CHOOSE ID of
+// their own or a Traffic Endpoint, and the confirm of the split, built after
+// the UPF's answer, carries it (TS 23.502 4.14.1 steps 3-5) in the Additional
+// NG-U UP TNL Information, with the session's own in the UL NG-U UP TNL
+// Information (TS 38.413 9.3.4.7). The confirm of the end carries the
+// session's.
+func TestSplitAtAnFTUPUPF(t *testing.T) {
+	for _, features := range [][]byte{{0x10, 0x00}, {0x10, 0x02}} {
+		t.Run(fmt.Sprintf("features %x", features), func(t *testing.T) {
+			testSplitAtAnFTUPUPF(t, features)
+		})
+	}
+}
+
+func testSplitAtAnFTUPUPF(t *testing.T, features []byte) {
+	e, upf := newFTEIDTestEnv(t, features, false)
+	require.True(t, e.activate(t))
+	e.sm.SetState(smf_context.Active)
+	upf.requests = nil
+	session := upfTEID(fteidTestUPF, smf_context.UplinkChooseID)
+	split := upfTEID(fteidTestUPF, smf_context.SplitUplinkChooseID)
+	readConfirm := func(rec *httptest.ResponseRecorder) *ngapie.PDUSessionResourceModifyConfirmTransfer {
+		t.Helper()
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		var rsp models.UpdateSmContextResponse200
+		require.NoError(t, openapi.Deserialize(&rsp, rec.Body.Bytes(), rec.Header().Get("Content-Type")))
+		require.Equal(t, models.Smf_PDUSess_N2SmInfoType_PDU_RES_MOD_CFM, rsp.JsonData.N2SmInfoType)
+		var confirm ngapie.PDUSessionResourceModifyConfirmTransfer
+		require.NoError(t, ngapie.UnmarshalBinary(rsp.BinaryDataN2SmInformation.Content, &confirm))
+		return &confirm
+	}
+
+	confirm := readConfirm(e.sendModifyIndication(t, modIndSplitTransfer()))
+	requireGTPTunnel(t, confirm.ULNGUUPTNLInformation, session, fteidTestUPF)
+	require.NotNil(t, confirm.AdditionalNGUUPTNLInformation)
+	require.Len(t, confirm.AdditionalNGUUPTNLInformation.List, 1)
+	pair := confirm.AdditionalNGUUPTNLInformation.List[0]
+	requireGTPTunnel(t, pair.ULNGUUPTNLInformation, split, fteidTestUPF)
+	require.Equal(t, modIndGTPTunnel("10.100.0.9", 0x77), pair.DLNGUUPTNLInformation)
+
+	require.Len(t, upf.requests, 1)
+	asked := 0
+	if features[1] != 0 {
+		asked = len(upf.requests[0].endpoints)
+	}
+	for _, createPDR := range upf.requests[0].createPDR {
+		if fteid, err := localFTEID(createPDR); err == nil && fteid.HasCh() {
+			require.Equal(t, smf_context.SplitUplinkChooseID, fteid.ChooseID)
+			asked++
+		}
+	}
+	require.Equal(t, 1, asked, "the split tunnel's uplink asks the UPF to choose its F-TEID")
+
+	// A path switch of the split session gives the split tunnel's F-TEID too.
+	e.sm.UpSecurityFromPathSwitchRequestSameAsLocalStored = true
+	buf, err := smf_context.BuildPathSwitchRequestAcknowledgeTransfer(e.sm)
+	require.NoError(t, err)
+	var ack ngapie.PathSwitchRequestAcknowledgeTransfer
+	require.NoError(t, ngapie.UnmarshalBinary(buf, &ack))
+	require.NotNil(t, ack.IEExtensions)
+	requireGTPTunnel(t, ack.IEExtensions.List[0].AdditionalNGUUPTNLInformation.List[0].ULNGUUPTNLInformation,
+		split, fteidTestUPF)
+
+	confirm = readConfirm(e.sendModifyIndication(t, &ngapie.PDUSessionResourceModifyIndicationTransfer{
+		DLQosFlowPerTNLInformation: modIndQosFlowPerTNL("10.100.0.5", 0x42, 2),
+	}))
+	requireGTPTunnel(t, confirm.ULNGUUPTNLInformation, session, fteidTestUPF)
+	require.False(t, e.sm.NrdcIndicator)
+	// The UPF freed the split tunnel's F-TEID with its PDRs; a Traffic Endpoint keeps it.
+	kept := e.sm.ChosenFTEID(e.sm.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode.UPF, smf_context.SplitUplinkChooseID)
+	require.Equal(t, features[1] != 0, kept != nil)
+}
+
+// A split that the SMF cannot confirm, here of a session with no QoS flow to
+// move, is refused before any PFCP request, also at a UPF that chooses the
+// F-TEIDs, where the confirm is built after the UPF's answer.
+func TestSplitWithoutQosFlowToMoveAtAnFTUPUPFIsRejected(t *testing.T) {
+	e, upf := newFTEIDTestEnv(t, []byte{0x10, 0x00}, false)
+	require.NoError(t, e.sm.ApplyPccRules(&models.Pcf_SMPolCtrl_SmPolicyDecision{
+		PccRules: map[string]*models.Pcf_SMPolCtrl_PccRule{"FteidPccRule-2": nil},
+	}))
+	require.True(t, e.activate(t))
+	e.sm.SetState(smf_context.Active)
+	upf.requests = nil
+	e.requireModifyIndicationUnsuccessful(t, e.sendModifyIndication(t, modIndSplitTransfer()))
+	require.Empty(t, upf.requests)
 }

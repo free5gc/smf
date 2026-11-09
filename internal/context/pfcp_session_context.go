@@ -37,13 +37,16 @@ type PFCPSessionContext struct {
 	trafficEndpoints map[uint8]bool
 }
 
-// The CHOOSE IDs by which the PDRs of the session's tunnel at a UPF that
-// allocates the F-TEIDs ask for one F-TEID in each direction (TS 29.244 5.5.3).
-// At a UPF that supports PDI optimization, they are the IDs of the Traffic
-// Endpoints that the PDRs refer to instead.
+// The CHOOSE IDs by which the PDRs of the session's tunnel, and of its split
+// tunnel over dual connectivity, at a UPF that allocates the F-TEIDs ask for
+// one F-TEID in each direction (TS 29.244 5.5.3). At a UPF that supports PDI
+// optimization, they are the IDs of the Traffic Endpoints that the PDRs refer
+// to instead.
 const (
-	UplinkChooseID   uint8 = 1
-	DownlinkChooseID uint8 = 2
+	UplinkChooseID        uint8 = 1
+	DownlinkChooseID      uint8 = 2
+	SplitUplinkChooseID   uint8 = 3
+	SplitDownlinkChooseID uint8 = 4
 )
 
 // ForgetRemoteSession clears what belonged to the PFCP session at the UPF: its
@@ -52,6 +55,17 @@ func (pfcpSessionContext *PFCPSessionContext) ForgetRemoteSession() {
 	pfcpSessionContext.RemoteSEID = 0
 	pfcpSessionContext.chosenFTEIDs = nil
 	pfcpSessionContext.trafficEndpoints = nil
+}
+
+// ForgetSplitFTEIDs forgets the F-TEIDs that the UPF chose for the split
+// tunnel once its PDRs are removed, which frees them (TS 29.244 5.5.3); but
+// those of Traffic Endpoints, which stay until they are removed (5.2.1A.2).
+func (pfcpSessionContext *PFCPSessionContext) ForgetSplitFTEIDs() {
+	for _, id := range []uint8{SplitUplinkChooseID, SplitDownlinkChooseID} {
+		if !pfcpSessionContext.trafficEndpoints[id] {
+			delete(pfcpSessionContext.chosenFTEIDs, id)
+		}
+	}
 }
 
 // HasTrafficEndpoint reports whether the UPF created the Traffic Endpoint id.
