@@ -30,22 +30,55 @@ type PFCPSessionContext struct {
 	LocalSEID  uint64
 	RemoteSEID uint64
 	// The F-TEIDs that a UPF which allocates them chose, by the CHOOSE ID of
-	// the PDRs that asked for them (TS 29.244 5.5.3).
+	// the PDRs that asked for them (TS 29.244 5.5.3), or by the ID of the
+	// Traffic Endpoint that has it.
 	chosenFTEIDs map[uint8]*pfcptype.FTEID
+	// The Traffic Endpoints that the UPF created.
+	trafficEndpoints map[uint8]bool
 }
 
 // The CHOOSE IDs by which the PDRs of the session's tunnel at a UPF that
 // allocates the F-TEIDs ask for one F-TEID in each direction (TS 29.244 5.5.3).
+// At a UPF that supports PDI optimization, they are the IDs of the Traffic
+// Endpoints that the PDRs refer to instead.
 const (
 	UplinkChooseID   uint8 = 1
 	DownlinkChooseID uint8 = 2
 )
 
 // ForgetRemoteSession clears what belonged to the PFCP session at the UPF: its
-// SEID and the F-TEIDs that the UPF chose.
+// SEID, the F-TEIDs that the UPF chose and its Traffic Endpoints.
 func (pfcpSessionContext *PFCPSessionContext) ForgetRemoteSession() {
 	pfcpSessionContext.RemoteSEID = 0
 	pfcpSessionContext.chosenFTEIDs = nil
+	pfcpSessionContext.trafficEndpoints = nil
+}
+
+// HasTrafficEndpoint reports whether the UPF created the Traffic Endpoint id.
+func (pfcpSessionContext *PFCPSessionContext) HasTrafficEndpoint(id uint8) bool {
+	return pfcpSessionContext.trafficEndpoints[id]
+}
+
+// TrafficEndpointCreated records the Traffic Endpoint id that the UPF created,
+// with the F-TEID that it chose for it.
+func (pfcpSessionContext *PFCPSessionContext) TrafficEndpointCreated(id uint8, fteid *pfcptype.FTEID) {
+	if pfcpSessionContext.trafficEndpoints == nil {
+		pfcpSessionContext.trafficEndpoints = make(map[uint8]bool)
+	}
+	pfcpSessionContext.trafficEndpoints[id] = true
+	pfcpSessionContext.SetChosenFTEID(id, fteid)
+}
+
+// trafficEndpointFor is the Traffic Endpoint that the PDRs of the session's
+// tunnel at upf that ask with chooseID refer to, or 0 when upf does not use
+// them: one that allocates the F-TEIDs and supports PDI optimization, where a
+// PDR that a later request adds refers to the Traffic Endpoint instead of
+// naming an F-TEID (TS 29.244 5.5.1, 5.5.3).
+func trafficEndpointFor(upf *UPF, chooseID uint8) uint8 {
+	if upf.AllocatesFTEID() && upf.supportsTrafficEndpoints() {
+		return chooseID
+	}
+	return 0
 }
 
 // SetChosenFTEID records the F-TEID that the UPF chose for the PDRs that asked

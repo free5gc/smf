@@ -73,6 +73,10 @@ func BuildSessionEstablishmentRequest(
 		return nil, fmt.Errorf("build PFCP Session Establishment CP F-SEID")
 	}
 
+	createTrafficEndpoints, err := newCreateTrafficEndpointIEs(sessionContext, pdrList)
+	if err != nil {
+		return nil, fmt.Errorf("build Create Traffic Endpoint: %w", err)
+	}
 	createPDRs := make([]*ie.IE, 0, len(pdrList))
 	createFARs := make([]*ie.IE, 0, len(farList))
 	createBARs := make([]*ie.IE, 0, len(barList))
@@ -176,6 +180,7 @@ func BuildSessionEstablishmentRequest(
 	}
 
 	topLevelIEs = append(topLevelIEs, createPDRs...)
+	topLevelIEs = append(topLevelIEs, createTrafficEndpoints...)
 	topLevelIEs = append(topLevelIEs, createFARs...)
 	topLevelIEs = append(topLevelIEs, createURRs...)
 	topLevelIEs = append(topLevelIEs, createQERs...)
@@ -240,14 +245,43 @@ func newCreatePDRIE(pdr *context.PDR) (*ie.IE, error) {
 	return ie.NewCreatePDR(children...), nil
 }
 
-func newPDIIE(pdi *context.PDI) (*ie.IE, error) {
-	if pdi.SourceInterface.InterfaceValue > 0x0f {
-		return nil, fmt.Errorf("source interface %d exceeds 4 bits", pdi.SourceInterface.InterfaceValue)
+// newCreateTrafficEndpointIEs are the Create Traffic Endpoint IEs of a
+// request: those that the PDRs that it creates refer to and that the UPF has
+// not created yet, with the Local F-TEID that the UPF is asked to choose, the
+// Network Instance and the UE IP address of the PDRs (TS 29.244 7.5.2.7).
+func newCreateTrafficEndpointIEs(
+	sessionContext *context.PFCPSessionContext, pdrList []*context.PDR,
+) ([]*ie.IE, error) {
+	var endpoints []*ie.IE
+	added := make(map[uint8]bool)
+	for _, pdr := range pdrList {
+		if pdr == nil || pdr.Disabled || pdr.State != context.RULE_INITIAL {
+			continue
+		}
+		id := pdr.PDI.TrafficEndpointID
+		if id == 0 || added[id] || sessionContext.HasTrafficEndpoint(id) {
+			continue
+		}
+		added[id] = true
+		children, err := pdiEndpointIEs(&pdr.PDI)
+		if err != nil {
+			return nil, err
+		}
+		endpoints = append(endpoints, ie.NewCreateTrafficEndpoint(append([]*ie.IE{ie.NewTrafficEndpointID(id)},
+			children...)...))
 	}
-	children := []*ie.IE{ie.NewSourceInterface(pdi.SourceInterface.InterfaceValue)}
+	return endpoints, nil
+}
 
+// pdiEndpointIEs are the Local F-TEID, the Network Instance and the UE IP
+// address of a PDI, which a Traffic Endpoint has instead when the PDI refers
+// to one (TS 29.244 Table 7.5.2.2-2).
+func pdiEndpointIEs(pdi *context.PDI) ([]*ie.IE, error) {
+	var children []*ie.IE
 	if fteid := pdi.LocalFTeid; fteid != nil {
-		flags := boolMask(fteid.Chid, 0x08) |
+		// A Traffic Endpoint has one F-TEID: it asks with no CHOOSE ID.
+		chid := fteid.Chid && pdi.TrafficEndpointID == 0
+		flags := boolMask(chid, 0x08) |
 			boolMask(fteid.Ch, 0x04) |
 			boolMask(fteid.V6, 0x02) |
 			boolMask(fteid.V4, 0x01)
@@ -266,6 +300,24 @@ func newPDIIE(pdi *context.PDI) (*ie.IE, error) {
 			return nil, err
 		}
 		children = append(children, ueIPIE)
+	}
+	return children, nil
+}
+
+func newPDIIE(pdi *context.PDI) (*ie.IE, error) {
+	if pdi.SourceInterface.InterfaceValue > 0x0f {
+		return nil, fmt.Errorf("source interface %d exceeds 4 bits", pdi.SourceInterface.InterfaceValue)
+	}
+	children := []*ie.IE{ie.NewSourceInterface(pdi.SourceInterface.InterfaceValue)}
+
+	if pdi.TrafficEndpointID != 0 {
+		children = append(children, ie.NewTrafficEndpointID(pdi.TrafficEndpointID))
+	} else {
+		endpointIEs, err := pdiEndpointIEs(pdi)
+		if err != nil {
+			return nil, err
+		}
+		children = append(children, endpointIEs...)
 	}
 	if sdf := pdi.SDFFilter; sdf != nil {
 		fd, ttc, spi, flowLabel := "", "", "", ""

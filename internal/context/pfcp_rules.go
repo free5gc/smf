@@ -251,6 +251,10 @@ type PDI struct {
 	UEIPAddress     *pfcptype.UEIPAddress
 	SDFFilter       *pfcptype.SDFFilter
 	ApplicationID   string
+	// TrafficEndpointID, when not 0, is the Traffic Endpoint that has the
+	// PDR's Local F-TEID, Network Instance and UE IP address (TS 29.244
+	// 5.2.1A.2).
+	TrafficEndpointID uint8
 }
 
 // Forwarding Action Rule. 7.5.2.3-1

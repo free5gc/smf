@@ -685,8 +685,9 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(
 				return err
 			} else {
 				ULPDR.PDI = PDI{
-					SourceInterface: pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceAccess},
-					LocalFTeid:      newLocalFTEID(ULDestUPF, UplinkChooseID, upIP, curULTunnel.TEID),
+					SourceInterface:   pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceAccess},
+					LocalFTeid:        newLocalFTEID(ULDestUPF, UplinkChooseID, upIP, curULTunnel.TEID),
+					TrafficEndpointID: trafficEndpointFor(ULDestUPF, UplinkChooseID),
 					NetworkInstance: &pfcptype.NetworkInstance{
 						NetworkInstance: smContext.Dnn,
 						FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
@@ -775,8 +776,9 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(
 					return err
 				} else {
 					DLPDR.PDI = PDI{
-						SourceInterface: pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceCore},
-						LocalFTeid:      newLocalFTEID(DLDestUPF, DownlinkChooseID, upIP, curDLTunnel.TEID),
+						SourceInterface:   pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceCore},
+						LocalFTeid:        newLocalFTEID(DLDestUPF, DownlinkChooseID, upIP, curDLTunnel.TEID),
+						TrafficEndpointID: trafficEndpointFor(DLDestUPF, DownlinkChooseID),
 						NetworkInstance: &pfcptype.NetworkInstance{
 							NetworkInstance: smContext.Dnn,
 							FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,

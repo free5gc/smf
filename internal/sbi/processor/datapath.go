@@ -317,6 +317,12 @@ func (p *Processor) establishPfcpSession(
 		fail(err)
 		return
 	}
+	if err = applyCreatedTrafficEndpoints(
+		response.CreatedTrafficEndpoint, request.CreateTrafficEndpoint, sessionContext,
+	); err != nil {
+		fail(err)
+		return
+	}
 
 	logger.PduSessLog.Infoln("Received PFCP Session Establishment Accepted Response")
 	resCh <- SendPfcpResult{Status: smf_context.SessionEstablishSuccess}
@@ -396,15 +402,52 @@ func applyCreatedPDRs(
 		}
 	}
 	// TS 29.244 5.5.3: the UP function returns the F-TEID of each PDR that
-	// asked it to choose one; a tunnel without it cannot be used.
+	// asked it to choose one; a tunnel without it cannot be used. A PDR that
+	// refers to a Traffic Endpoint has the Traffic Endpoint's.
 	for _, createPDR := range createPDRs {
 		pdrID, err := createPDR.PDRID()
 		if err != nil {
 			return fmt.Errorf("decode Create PDR ID: %w", err)
 		}
-		if pdr := pdrByID[pdrID]; pdr != nil && pdr.PDI.LocalFTeid != nil && pdr.PDI.LocalFTeid.Ch {
+		if pdr := pdrByID[pdrID]; pdr != nil && pdr.PDI.TrafficEndpointID == 0 &&
+			pdr.PDI.LocalFTeid != nil && pdr.PDI.LocalFTeid.Ch {
 			return fmt.Errorf("the UPF returned no F-TEID for PDR %d, which asked it to choose one", pdrID)
 		}
+	}
+	return nil
+}
+
+// applyCreatedTrafficEndpoints records each Traffic Endpoint that a request
+// created, with the F-TEID that the UPF chose for it, from the Created
+// Traffic Endpoints of the response (TS 29.244 5.2.1A.2, 7.5.3.5).
+func applyCreatedTrafficEndpoints(
+	created []*ie.IE, requested []*ie.IE, sessionContext *smf_context.PFCPSessionContext,
+) error {
+	chosen := make(map[uint8]*pfcptype.FTEID, len(created))
+	for _, endpoint := range created {
+		id, err := endpoint.TrafficEndpointID()
+		if err != nil {
+			return fmt.Errorf("decode Created Traffic Endpoint ID: %w", err)
+		}
+		fteid, err := endpoint.LocalFTEID()
+		if err != nil {
+			continue
+		}
+		chosen[id] = &pfcptype.FTEID{
+			V4: fteid.HasIPv4(), V6: fteid.HasIPv6(), Teid: fteid.TEID,
+			Ipv4Address: append(net.IP(nil), fteid.IPv4Address...),
+			Ipv6Address: append(net.IP(nil), fteid.IPv6Address...),
+		}
+	}
+	for _, endpoint := range requested {
+		id, err := endpoint.TrafficEndpointID()
+		if err != nil {
+			return fmt.Errorf("decode Create Traffic Endpoint ID: %w", err)
+		}
+		if chosen[id] == nil {
+			return fmt.Errorf("the UPF returned no F-TEID for Traffic Endpoint %d, which asked it to choose one", id)
+		}
+		sessionContext.TrafficEndpointCreated(id, chosen[id])
 	}
 	return nil
 }
@@ -547,6 +590,15 @@ func (p *Processor) sendSessionModificationRequest(
 	}
 	if response == nil {
 		return nil, fmt.Errorf("PFCP Session Modification client returned a nil response")
+	}
+	if response.Cause != nil {
+		if cause, causeErr := response.Cause.Cause(); causeErr == nil && cause == ie.CauseRequestAccepted {
+			if err = applyCreatedTrafficEndpoints(
+				response.CreatedUpdatedTrafficEndpoint, request.CreateTrafficEndpoint, sessionContext,
+			); err != nil {
+				return nil, err
+			}
+		}
 	}
 	return response, nil
 }

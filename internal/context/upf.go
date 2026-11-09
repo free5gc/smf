@@ -131,6 +131,14 @@ func (upf *UPF) AllocatesFTEID() bool {
 	return len(upf.upFunctionFeatures) > 0 && upf.upFunctionFeatures[0]&0x10 != 0
 }
 
+// supportsTrafficEndpoints reports whether the UPF set PDIU (octet 6, bit 2):
+// PDRs may share a Traffic Endpoint (TS 29.244 5.2.1A.2).
+func (upf *UPF) supportsTrafficEndpoints() bool {
+	upf.upFunctionFeaturesMu.RLock()
+	defer upf.upFunctionFeaturesMu.RUnlock()
+	return len(upf.upFunctionFeatures) > 1 && upf.upFunctionFeatures[1]&0x02 != 0
+}
+
 // SetRecoveryTimeStamp replaces the UPF recovery-time baseline used by active
 // heartbeat restart detection.
 func (upf *UPF) SetRecoveryTimeStamp(recoveryTime time.Time) {
