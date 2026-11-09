@@ -593,6 +593,9 @@ func (p *Processor) sendSessionModificationRequest(
 	}
 	if response.Cause != nil {
 		if cause, causeErr := response.Cause.Cause(); causeErr == nil && cause == ie.CauseRequestAccepted {
+			if err = applyCreatedPDRs(response.CreatedPDR, request.CreatePDR, sessionContext, state.pdrList); err != nil {
+				return nil, err
+			}
 			if err = applyCreatedTrafficEndpoints(
 				response.CreatedUpdatedTrafficEndpoint, request.CreateTrafficEndpoint, sessionContext,
 			); err != nil {

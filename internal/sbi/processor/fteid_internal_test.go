@@ -4,15 +4,20 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/wmnsk/go-pfcp/ie"
 	"github.com/wmnsk/go-pfcp/message"
 
 	ngapie "github.com/free5gc/ngap/ie"
+	"github.com/free5gc/openapi"
+	"github.com/free5gc/openapi/mediatype/multipart"
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/pfcp/pfcptype"
@@ -586,4 +591,68 @@ func TestEstablishmentFailsWithoutTheFTEIDOfATrafficEndpoint(t *testing.T) {
 	e, upf := newFTEIDTestEnv(t, []byte{0x10, 0x02}, false)
 	upf.chooseNothing = true
 	require.False(t, e.activate(t))
+}
+
+// sendHandoverRequestAcknowledge sends the target's acknowledge of an N2
+// handover that needs indirect forwarding: the NG-RAN's DL tunnel, and its
+// DL forwarding tunnel for QFI 1.
+func (e *modIndTestEnv) sendHandoverRequestAcknowledge(t *testing.T) *httptest.ResponseRecorder {
+	t.Helper()
+	e.sm.DLForwardingType = smf_context.IndirectForwarding // no direct path, in the Handover Required
+	buf, err := ngapie.MarshalBinary(&ngapie.HandoverRequestAcknowledgeTransfer{
+		DLNGUUPTNLInformation:        modIndGTPTunnel("10.100.0.7", 0x51),
+		DLForwardingUPTNLInformation: modIndGTPTunnel("10.100.0.7", 0x52),
+		QosFlowSetupResponseList: &ngapie.QosFlowListWithDataForwarding{List: []ngapie.QosFlowItemWithDataForwarding{{
+			QosFlowIdentifier: &ngapie.QosFlowIdentifier{Value: 1},
+			DataForwardingAccepted: &ngapie.DataForwardingAccepted{
+				Value: ngapie.DataForwardingAcceptedPresentDataForwardingAccepted,
+			},
+		}}},
+	})
+	require.NoError(t, err)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", nil)
+	e.p.HandlePDUSessionSMContextUpdate(c, models.UpdateSmContextRequestBody{
+		JsonData: &models.Smf_PDUSess_SmContextUpdateData{
+			HoState:      models.Smf_PDUSess_HoState_PREPARED,
+			N2SmInfoType: models.Smf_PDUSess_N2SmInfoType_HANDOVER_REQ_ACK,
+			N2SmInfo:     &models.RefToBinaryData{ContentId: "HoAck"},
+		},
+		BinaryDataN2SmInformation: &multipart.RelatedContent{ContentID: "HoAck", Content: buf},
+	}, e.sm.Ref)
+	return rec
+}
+
+// The indirect forwarding tunnel of an N2 handover, at a UPF that allocates
+// the F-TEIDs: the SMF asks the UPF to allocate its F-TEID, one of its own
+// (no CHOOSE ID), and the Handover Command carries the F-TEID that the UPF
+// chose (TS 23.502 4.9.1.3.2 steps 11d-11f).
+func TestIndirectForwardingTunnelOfAnFTUPUPF(t *testing.T) {
+	e, upf := newFTEIDTestEnv(t, []byte{0x10, 0x00}, false)
+	require.True(t, e.activate(t))
+	// Twice: the second forwarding tunnel asks for an F-TEID of its own too.
+	for range 2 {
+		e.sm.SetState(smf_context.Active)
+		upf.requests = nil
+		rec := e.sendHandoverRequestAcknowledge(t)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		require.Len(t, upf.requests, 1)
+		require.Len(t, upf.requests[0].createPDR, 1)
+		fteid, err := localFTEID(upf.requests[0].createPDR[0])
+		require.NoError(t, err)
+		require.True(t, fteid.HasCh())
+		require.False(t, fteid.HasChID())
+
+		var rsp models.UpdateSmContextResponse200
+		require.NoError(t, openapi.Deserialize(&rsp, rec.Body.Bytes(), rec.Header().Get("Content-Type")))
+		require.Equal(t, models.Smf_PDUSess_N2SmInfoType_HANDOVER_CMD, rsp.JsonData.N2SmInfoType)
+		var command ngapie.HandoverCommandTransfer
+		require.NoError(t, ngapie.UnmarshalBinary(rsp.BinaryDataN2SmInformation.Content, &command))
+		requireGTPTunnel(t, command.DLForwardingUPTNLInformation, upfTEID(fteidTestUPF, 0), fteidTestUPF)
+	}
+	// The forwarding tunnel's F-TEID is not the session's uplink.
+	node := e.sm.Tunnel.DataPathPool.GetDefaultPath().FirstDPNode
+	require.Equal(t, upfTEID(fteidTestUPF, smf_context.UplinkChooseID),
+		e.sm.ChosenFTEID(node.UPF, smf_context.UplinkChooseID).Teid)
 }

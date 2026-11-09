@@ -538,7 +538,16 @@ func BuildHandoverCommandTransfer(ctx *SMContext) ([]byte, error) {
 		teidOct := make([]byte, 4)
 		binary.BigEndian.PutUint32(teidOct, ctx.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel.TEID)
 
-		if n3IP, err := UpNode.N3Interfaces[0].IP(ctx.SelectedPDUSessionType); err != nil {
+		// The F-TEID that a UPF which allocates them chose for the forwarding
+		// tunnel, in its answer (TS 23.502 4.9.1.3.2 step 11f).
+		if UpNode.AllocatesFTEID() {
+			fteid := ctx.IndirectForwardingTunnel.FirstDPNode.UpLinkTunnel.PDR.PDI.LocalFTeid
+			if fteid.Ch {
+				return nil, errors.New("the UPF has not chosen the F-TEID of the indirect forwarding tunnel")
+			}
+			binary.BigEndian.PutUint32(teidOct, fteid.Teid)
+			handoverCommandTransfer.DLForwardingUPTNLInformation = newGTPTunnelUPTransport(fteid.Ipv4Address.To4(), teidOct)
+		} else if n3IP, err := UpNode.N3Interfaces[0].IP(ctx.SelectedPDUSessionType); err != nil {
 			return nil, err
 		} else {
 			handoverCommandTransfer.DLForwardingUPTNLInformation = newGTPTunnelUPTransport(n3IP, teidOct)

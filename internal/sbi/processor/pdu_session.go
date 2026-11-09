@@ -413,6 +413,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	var sendPFCPModification bool
 	var createdIndirectForwarding bool
 	var removeIndirectForwardingAfterSuccess bool
+	var handoverCommandAfterPFCP bool
 	// Set by an accepted PDU Session Resource Modify Indication: puts back the
 	// split state the indication found if the UPF refuses the N4 update.
 	var restoreSplitState func()
@@ -1126,29 +1127,31 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			createdIndirectForwarding = true
 			sendPFCPModification = true
 			smContext.SetState(smf_context.PFCPModification)
+			// A UPF that allocates the F-TEIDs chooses the forwarding tunnel's
+			// in its answer: the Handover Command that carries it is built then.
+			handoverCommandAfterPFCP = IndirectForwardingPDR.PDI.LocalFTeid.Ch
 		}
 
-		if n2Buf, err = smf_context.BuildHandoverCommandTransfer(smContext); err != nil {
-			smContext.Log.Errorf("Build HandoverCommandTransfer failed: %v", err)
-			if createdIndirectForwarding {
-				smContext.RemoveIndirectForwardingTunnel()
+		if !handoverCommandAfterPFCP {
+			if n2Buf, err = smf_context.BuildHandoverCommandTransfer(smContext); err != nil {
+				smContext.Log.Errorf("Build HandoverCommandTransfer failed: %v", err)
+				if createdIndirectForwarding {
+					smContext.RemoveIndirectForwardingTunnel()
+				}
+				smContext.SetState(smf_context.Active)
+				problemDetail := models.Smf_PDUSess_ExtProblemDetails{
+					Status: http.StatusInternalServerError,
+					Cause:  "SYSTEM_FAILURE",
+				}
+				c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+				c.JSON(http.StatusInternalServerError, models.UpdateSmContextResponse400{
+					JsonData: &models.Smf_PDUSess_SmContextUpdateError{Error: &problemDetail},
+				})
+				return
 			}
-			smContext.SetState(smf_context.Active)
-			problemDetail := models.Smf_PDUSess_ExtProblemDetails{
-				Status: http.StatusInternalServerError,
-				Cause:  "SYSTEM_FAILURE",
-			}
-			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
-			c.JSON(http.StatusInternalServerError, models.UpdateSmContextResponse400{
-				JsonData: &models.Smf_PDUSess_SmContextUpdateError{Error: &problemDetail},
-			})
-			return
-		} else {
 			response.BinaryDataN2SmInformation = related("HANDOVER_CMD", n2Buf)
 			response.JsonData.N2SmInfoType = models.Smf_PDUSess_N2SmInfoType_HANDOVER_CMD
-			response.JsonData.N2SmInfo = &models.RefToBinaryData{
-				ContentId: "HANDOVER_CMD",
-			}
+			response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "HANDOVER_CMD"}
 		}
 		response.JsonData.HoState = models.Smf_PDUSess_HoState_PREPARING
 	case models.Smf_PDUSess_HoState_COMPLETED:
@@ -1231,6 +1234,23 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				smContext.RemoveIndirectForwardingTunnel()
 			}
 			smContext.SetState(smf_context.Active)
+			if handoverCommandAfterPFCP {
+				if n2Buf, err = smf_context.BuildHandoverCommandTransfer(smContext); err != nil {
+					smContext.Log.Errorf("Build HandoverCommandTransfer failed: %v", err)
+					problemDetail := models.Smf_PDUSess_ExtProblemDetails{
+						Status: http.StatusInternalServerError,
+						Cause:  "SYSTEM_FAILURE",
+					}
+					c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+					c.JSON(http.StatusInternalServerError, models.UpdateSmContextResponse400{
+						JsonData: &models.Smf_PDUSess_SmContextUpdateError{Error: &problemDetail},
+					})
+					break
+				}
+				response.BinaryDataN2SmInformation = related("HANDOVER_CMD", n2Buf)
+				response.JsonData.N2SmInfoType = models.Smf_PDUSess_N2SmInfoType_HANDOVER_CMD
+				response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "HANDOVER_CMD"}
+			}
 			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 		case smf_context.SessionUpdateFailed:
 			smContext.Log.Traceln("In case SessionUpdateFailed")

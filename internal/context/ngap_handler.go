@@ -377,16 +377,21 @@ func configureIndirectForwardingTunnel(ctx *SMContext, forwardingGTP *ngapie.GTP
 	}
 	defer finishWork()
 
+	// A UPF that allocates the F-TEIDs chooses the forwarding tunnel's (TS
+	// 23.502 4.9.1.3.2 step 11d): the SMF allocates no TEID for it then.
+	upfChooses := ANUPF.AllocatesFTEID()
 	committed := false
-	teid, err := GenerateTEID()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if !committed {
-			ReleaseTEID(teid)
+	var teid uint32
+	if !upfChooses {
+		if teid, err = GenerateTEID(); err != nil {
+			return err
 		}
-	}()
+		defer func() {
+			if !committed {
+				ReleaseTEID(teid)
+			}
+		}()
+	}
 
 	indirectForwardingPDR, err := ANUPF.addPDR()
 	if err != nil {
@@ -398,11 +403,16 @@ func configureIndirectForwardingTunnel(ctx *SMContext, forwardingGTP *ngapie.GTP
 		}
 	}()
 
-	originFTEID := originTunnel.PDR.PDI.LocalFTeid
-	indirectForwardingPDR.PDI.LocalFTeid = &pfcptype.FTEID{
-		V4:          originFTEID.V4,
-		Teid:        teid,
-		Ipv4Address: originFTEID.Ipv4Address,
+	if upfChooses {
+		// An F-TEID of its own: no CHOOSE ID (TS 29.244 5.5.3).
+		indirectForwardingPDR.PDI.LocalFTeid = &pfcptype.FTEID{Ch: true, V4: true}
+	} else {
+		originFTEID := originTunnel.PDR.PDI.LocalFTeid
+		indirectForwardingPDR.PDI.LocalFTeid = &pfcptype.FTEID{
+			V4:          originFTEID.V4,
+			Teid:        teid,
+			Ipv4Address: originFTEID.Ipv4Address,
+		}
 	}
 	indirectForwardingPDR.OuterHeaderRemoval = &pfcptype.OuterHeaderRemoval{
 		OuterHeaderRemovalDescription: pfcptype.OuterHeaderRemovalGtpUUdpIpv4,
