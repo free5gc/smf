@@ -283,11 +283,63 @@ func BuildPDUSessionResourceModifyConfirmTransfer(
 	tunnel *UPTunnel,
 	localULTeid uint32,
 ) ([]byte, error) {
-	confirmTransfer := ngapie.PDUSessionResourceModifyConfirmTransfer{}
+	qosList, err := qosFlowModifyConfirmList(tunnel)
+	if err != nil {
+		return nil, err
+	}
+	ul, err := upfEndOfTunnel(tunnel, localULTeid)
+	if err != nil {
+		return nil, err
+	}
+	confirmTransfer := ngapie.PDUSessionResourceModifyConfirmTransfer{
+		QosFlowModifyConfirmList: qosList,
+		ULNGUUPTNLInformation:    ul,
+	}
+	buf, err := ngapie.MarshalBinary(&confirmTransfer)
+	if err != nil {
+		return nil, fmt.Errorf("encode confirmTransfer failed: %s", err)
+	}
+	return buf, nil
+}
 
-	// QoS Flow Modify Confirm List
+// TS 38.413 8.2.5.2, 9.3.4.7: a split keeps the session's own tunnel in UL NG-U UP TNL
+// Information, and its tunnel to the secondary node is the Additional NG-U UP TNL Information.
+func BuildPDUSessionResourceModifyConfirmTransferOfASplit(ctx *SMContext) ([]byte, error) {
+	qosList, err := qosFlowModifyConfirmList(ctx.DCTunnel)
+	if err != nil {
+		return nil, err
+	}
+	ul, err := upfEndOfTunnel(ctx.Tunnel, ctx.LocalULTeid)
+	if err != nil {
+		return nil, err
+	}
+	splitUL, err := upfEndOfTunnel(ctx.DCTunnel, ctx.LocalULTeidForSplitPDUSession)
+	if err != nil {
+		return nil, err
+	}
+	splitDLTeid := make([]byte, 4)
+	binary.BigEndian.PutUint32(splitDLTeid, ctx.DCTunnel.ANInformation.TEID)
+	confirmTransfer := ngapie.PDUSessionResourceModifyConfirmTransfer{
+		QosFlowModifyConfirmList: qosList,
+		ULNGUUPTNLInformation:    ul,
+		AdditionalNGUUPTNLInformation: &ngapie.UPTransportLayerInformationPairList{
+			List: []ngapie.UPTransportLayerInformationPairItem{{
+				ULNGUUPTNLInformation: splitUL,
+				DLNGUUPTNLInformation: newGTPTunnelUPTransport(ctx.DCTunnel.ANInformation.IPAddress, splitDLTeid),
+			}},
+		},
+	}
+	buf, err := ngapie.MarshalBinary(&confirmTransfer)
+	if err != nil {
+		return nil, fmt.Errorf("encode confirmTransfer failed: %s", err)
+	}
+	return buf, nil
+}
+
+// qosFlowModifyConfirmList is the QoS Flow Modify Confirm List of the
+// non-default QoS flows of tunnel.
+func qosFlowModifyConfirmList(tunnel *UPTunnel) (*ngapie.QosFlowModifyConfirmList, error) {
 	qosList := new(ngapie.QosFlowModifyConfirmList)
-	confirmTransfer.QosFlowModifyConfirmList = qosList
 	for _, dataPath := range tunnel.DataPathPool {
 		if dataPath.Activated {
 			ANUPF := dataPath.FirstDPNode
@@ -315,8 +367,12 @@ func BuildPDUSessionResourceModifyConfirmTransfer(
 	if len(qosList.List) == 0 {
 		return nil, fmt.Errorf("no QoS flow to confirm on this tunnel")
 	}
+	return qosList, nil
+}
 
-	// UL NG-U UP TNL Information
+// upfEndOfTunnel is the UPF's end of tunnel, at the UPF of its default data
+// path, with the TEID localULTeid.
+func upfEndOfTunnel(tunnel *UPTunnel, localULTeid uint32) (*ngapie.UPTransportLayerInformation, error) {
 	defaultPath := tunnel.DataPathPool.GetDefaultPath()
 	if defaultPath == nil {
 		return nil, fmt.Errorf("no default data path for the UL NG-U UP TNL Information")
@@ -324,21 +380,14 @@ func BuildPDUSessionResourceModifyConfirmTransfer(
 	ANUPF := defaultPath.FirstDPNode
 	teidOct := make([]byte, 4)
 	binary.BigEndian.PutUint32(teidOct, localULTeid)
-
-	confirmTransfer.ULNGUUPTNLInformation = &ngapie.UPTransportLayerInformation{
+	return &ngapie.UPTransportLayerInformation{
 		Choice: &ngapie.GTPTunnel{
 			TransportLayerAddress: ipv4AddressToNgap(ANUPF.UPF.NodeID.ResolveNodeIdToIp().String()),
 			GTPTEID: &ngapie.GTPTEID{
 				Value: teidOct,
 			},
 		},
-	}
-
-	if buf, err := ngapie.MarshalBinary(&confirmTransfer); err != nil {
-		return nil, fmt.Errorf("encode confirmTransfer failed: %s", err)
-	} else {
-		return buf, nil
-	}
+	}, nil
 }
 
 // TS 38.413 9.3.4.9

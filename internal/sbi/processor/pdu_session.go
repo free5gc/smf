@@ -878,8 +878,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				if err = smContext.ApplyDcPccRulesOnDcTunnel(); err != nil {
 					smContext.Log.Errorf("ApplyDcPccRulesOnDcTunnel failed: %+v", err)
 					sendPFCPModification = false
-				} else if n2CfmBuf, err = smf_context.BuildPDUSessionResourceModifyConfirmTransfer(
-					smContext, smContext.DCTunnel, smContext.LocalULTeidForSplitPDUSession); err != nil {
+				} else if n2CfmBuf, err = smf_context.BuildPDUSessionResourceModifyConfirmTransferOfASplit(
+					smContext); err != nil {
 					sendPFCPModification = false
 				} else {
 					// append the rules on DCTunnel
