@@ -241,9 +241,9 @@ func buildMultiUnitUsageFromUsageReport(
 				QuotaManagementIndicator: chgInfo.ChargingMethod,
 				Triggers:                 triggers,
 				TriggerTimestamp:         &triggerTime,
-				DownlinkVolume:           int32(ur.DownlinkVolume),
-				UplinkVolume:             int32(ur.UplinkVolume),
-				TotalVolume:              int32(ur.TotalVolume),
+				DownlinkVolume:           ur.DownlinkVolume,
+				UplinkVolume:             ur.UplinkVolume,
+				TotalVolume:              ur.TotalVolume,
 			}
 			upfID := ur.UpfId
 			if upfID == "" {
