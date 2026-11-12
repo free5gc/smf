@@ -75,3 +75,40 @@ func TestIsAllowedPDUSessionTypeCause(t *testing.T) {
 		})
 	}
 }
+
+// TS 24.501 Table 9.11.4.11.1: the unused PDU session type values 000 and 110 are interpreted as "IPv4v6".
+func TestIsAllowedPDUSessionTypeUnusedValue(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		allowed   models.PduSessionType
+		requested uint8
+		selected  uint8
+		cause     uint8 // the 5GSM cause of the PDU SESSION ESTABLISHMENT ACCEPT
+	}{
+		{"000 where IPv4v6", models.PduSessionType_IPV4_V6, 0, nasie.PDUSessType_IPv4v6, 0},
+		{"110 where IPv4v6", models.PduSessionType_IPV4_V6, 6, nasie.PDUSessType_IPv4v6, 0},
+		{
+			"110 where IPv4 only", models.PduSessionType_IPV4, 6,
+			nasie.PDUSessType_IPv4, nasie.Cause5GSM_PDUSessTypeIpv4OnlyAllowed,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			supported := GetSelf().SupportedPDUSessionType
+			GetSelf().SupportedPDUSessionType = "IPv4"
+			t.Cleanup(func() { GetSelf().SupportedPDUSessionType = supported })
+
+			smContext := &SMContext{
+				Smf_PDUSess_SmContextCreateData: &models.Smf_PDUSess_SmContextCreateData{Dnn: "internet"},
+			}
+			smContext.DnnConfiguration.PduSessionTypes = &models.Udm_SDM_PduSessionTypes{
+				AllowedSessionTypes: []models.PduSessionType{tc.allowed},
+			}
+
+			cause, err := smContext.IsAllowedPDUSessionType(tc.requested)
+			require.NoError(t, err)
+			require.Zero(t, cause)
+			require.Equal(t, tc.selected, smContext.SelectedPDUSessionType)
+			require.Equal(t, tc.cause, smContext.EstAcceptCause5gSMValue)
+		})
+	}
+}

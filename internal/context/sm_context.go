@@ -551,8 +551,14 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 		}
 	}
 
+	requested := PDUSessionTypeToModels(requestedPDUSessionType)
+	// TS 24.501 Table 9.11.4.11.1: the unused values 000 and 110 are interpreted as "IPv4v6"
+	if requestedPDUSessionType == 0 || requestedPDUSessionType == 6 {
+		requested = models.PduSessionType_IPV4_V6
+	}
+
 	smContext.EstAcceptCause5gSMValue = 0
-	switch PDUSessionTypeToModels(requestedPDUSessionType) {
+	switch requested {
 	case models.PduSessionType_IPV4:
 		if allowIPv4 {
 			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_IPV4)
