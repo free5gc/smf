@@ -114,7 +114,9 @@ func (s *nnrfService) RegisterNFInstance(ctx context.Context, applyOAuth2 bool) 
 	for ctx.Err() == nil {
 		res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, registerNFInstanceRequest)
 		if err == nil && res != nil {
-			s.processRegisterResponse(smfContext, res.Nrf_NFMgmt_NFProfile, applyOAuth2)
+			if err = s.processRegisterResponse(smfContext, res.Nrf_NFMgmt_NFProfile, applyOAuth2); err != nil {
+				return err
+			}
 			logger.InitLog.Infof("SMF registered to NRF as %s", smfContext.NfInstanceID)
 			return nil
 		}
@@ -133,7 +135,7 @@ func (s *nnrfService) processRegisterResponse(
 	smfContext *smf_context.SMFContext,
 	nf *models.Nrf_NFMgmt_NFProfile,
 	applyOAuth2 bool,
-) {
+) error {
 	if nf == nil {
 		nf = &models.Nrf_NFMgmt_NFProfile{}
 	}
@@ -147,13 +149,13 @@ func (s *nnrfService) processRegisterResponse(
 		}
 	}
 	if applyOAuth2 {
-		smfContext.OAuth2Required = oauth2
-		if oauth2 && smfContext.NrfCertPem == "" {
-			logger.CfgLog.Error("OAuth2 enable but no nrfCertPem provided in config.")
+		if err := smfContext.SetOAuth2Required(oauth2); err != nil {
+			return err
 		}
 	} else if oauth2 != smfContext.OAuth2Required {
 		logger.ConsumerLog.Warnf("NRF OAuth2 setting changed to %v, restart SMF to apply it", oauth2)
 	}
+	return nil
 }
 
 // SendUpdateNFInstance sends an NFUpdate PATCH to the NRF, honoring ctx. The
@@ -163,10 +165,7 @@ func (s *nnrfService) SendUpdateNFInstance(ctx context.Context, patchItems []mod
 	nf models.Nrf_NFMgmt_NFProfile, problemDetails *models.ProblemDetails, err error,
 ) {
 	smfContext := s.consumer.Context()
-	tokCtx, pd, err := smfContext.GetTokenCtx(
-		models.Nrf_NFMgmt_ServiceName_NNRF_NFM,
-		models.Nrf_NFMgmt_NFType_NRF,
-	)
+	tokCtx, pd, err := smfContext.GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_NFM)
 	if err != nil {
 		return nf, pd, err
 	}
@@ -209,6 +208,19 @@ func (s *nnrfService) buildNfProfile(smfContext *smf_context.SMFContext) (
 	profile models.Nrf_NFMgmt_NFProfile, err error,
 ) {
 	smfProfile := smfContext.NfProfile
+	if smfProfile.NFServices == nil {
+		return profile, fmt.Errorf("SMF NFServices is nil")
+	}
+
+	services := make([]models.Nrf_NFMgmt_NFService, 0, len(*smfProfile.NFServices))
+	for _, nfService := range *smfProfile.NFServices {
+		allowed, known := smf_context.AllowedNfTypesForService(nfService.ServiceName)
+		if !known {
+			return profile, fmt.Errorf("no AllowedNfTypes policy for service %q", nfService.ServiceName)
+		}
+		nfService.AllowedNfTypes = allowed
+		services = append(services, nfService)
+	}
 
 	sNssais := []models.ExtSnssai{}
 	for _, snssaiSmfInfo := range smfProfile.SMFInfo.SNssaiSmfInfoList {
@@ -220,7 +232,7 @@ func (s *nnrfService) buildNfProfile(smfContext *smf_context.SMFContext) (
 		NfInstanceId: smfContext.NfInstanceID,
 		NfType:       models.Nrf_NFMgmt_NFType_SMF,
 		NfStatus:     models.Nrf_NFMgmt_NFStatus_REGISTERED,
-		NfServices:   *smfProfile.NFServices,
+		NfServices:   services,
 		SmfInfo:      smfProfile.SMFInfo,
 		SNssais:      sNssais,
 	}
@@ -242,7 +254,7 @@ func (s *nnrfService) SendDeregisterNFInstance() (err error) {
 	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
 	smfContext := s.consumer.Context()
-	ctx, pd, err := smfContext.GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_NFM, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, pd, err := smfContext.GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_NFM)
 	if err != nil {
 		logger.ConsumerLog.Errorf("Get token context failed, problem details: %+v", pd)
 		return err
@@ -271,7 +283,7 @@ func (s *nnrfService) SendSearchNFInstances(
 		return nil, openapi.ReportError("nrf not found")
 	}
 
-	ctx, _, err := smfContext.GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, _, err := smfContext.GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +362,7 @@ func (s *nnrfService) NFDiscoveryAMF(smContext *smf_context.SMContext, ctx conte
 
 func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 	smfContext := s.consumer.Context()
-	ctx, pd, err := smfContext.GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, pd, err := smfContext.GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return pd, err
 	}
@@ -393,7 +405,7 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 }
 
 func (s *nnrfService) SendNFDiscoveryPCF() (*models.ProblemDetails, error) {
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, pd, err := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return pd, err
 	}
@@ -423,7 +435,7 @@ func (s *nnrfService) SendNFDiscoveryPCF() (*models.ProblemDetails, error) {
 }
 
 func (s *nnrfService) SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.ProblemDetails, error) {
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, pd, err := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return pd, err
 	}
@@ -472,7 +484,7 @@ func (s *nnrfService) CHFSelection(smContext *smf_context.SMContext) error {
 		// Supi:            &smContext.Supi,
 	}
 
-	ctx, _, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, _, err := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return err
 	}
@@ -497,7 +509,7 @@ func (s *nnrfService) CHFSelection(smContext *smf_context.SMContext) error {
 
 // PCFSelection will select PCF for this SM Context
 func (s *nnrfService) PCFSelection(smContext *smf_context.SMContext) error {
-	ctx, _, errToken := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, "NRF")
+	ctx, _, errToken := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if errToken != nil {
 		return errToken
 	}

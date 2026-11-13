@@ -2,11 +2,14 @@ package consumer
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/nrf/NFDisc"
@@ -26,7 +29,17 @@ func (s *nbsfService) getHTTPClient() *http.Client {
 	s.httpClientMu.RLock()
 	defer s.httpClientMu.RUnlock()
 	if s.httpClient == nil {
-		s.httpClient = &http.Client{}
+		s.httpClient = &http.Client{Transport: &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: time.Second,
+			// #nosec G402 -- Verification is controlled by the NF configuration.
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: !s.consumer.Config().GetTLSVerify()},
+		}}
 	}
 	return s.httpClient
 }
@@ -34,7 +47,7 @@ func (s *nbsfService) getHTTPClient() *http.Client {
 // BSFSelection discovers and selects BSF for PCF binding operations
 func (s *nbsfService) BSFSelection() (string, error) {
 	// Discover BSF via NRF
-	ctx, _, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, _, err := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return "", fmt.Errorf("failed to get token context: %w", err)
 	}
@@ -157,8 +170,7 @@ func (s *nbsfService) PCFSelectionWithBSF(smContext *smf_context.SMContext) erro
 		logger.ConsumerLog.Infof("Using existing PCF from BSF binding: %s", pcfBinding.PcfId)
 
 		// Discover the specific PCF instance from NRF
-		ctx, _, tokenErr := s.consumer.Context().GetTokenCtx(
-			models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+		ctx, _, tokenErr := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 		if tokenErr != nil {
 			logger.ConsumerLog.Warnf("Failed to get token context for PCF discovery: %v", tokenErr)
 			return s.consumer.nnrfService.PCFSelection(smContext)

@@ -18,18 +18,24 @@ func (s *Server) getCallbackRoutes() []Route {
 			Method:  http.MethodPost,
 			Pattern: "/sm-policies/:smContextRef/update",
 			APIFunc: s.HTTPSmPolicyUpdateNotification,
+			// TS 29.512 4.2.3.2: Npcf_SMPolicyControl_UpdateNotify.
+			IsNotification: true,
 		},
 		{
 			Name:    "SmPolicyControlTerminationRequestNotification",
 			Method:  http.MethodPost,
 			Pattern: "/sm-policies/:smContextRef/terminate",
 			APIFunc: s.SmPolicyControlTerminationRequestNotification,
+			// TS 29.512 4.2.3.3: termination is part of UpdateNotify.
+			IsNotification: true,
 		},
 		{
 			Name:    "ChargingNotification",
 			Method:  http.MethodPost,
 			Pattern: "/:notifyUri",
 			APIFunc: s.HTTPChargingNotification,
+			// TS 32.290 6.2.2/6.2.5: Notify for an implicit charging subscription.
+			IsNotification: true,
 		},
 	}
 }
