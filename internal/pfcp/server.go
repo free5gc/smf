@@ -3,7 +3,6 @@ package pfcp
 import (
 	"context"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -55,10 +54,11 @@ type PfcpServer struct {
 	port int
 	conn pfcpConn
 
-	rcvCh  chan RcvPfcpMsg
-	txCh   chan TransmitMessage
-	dispCh chan RcvPfcpMsg
-	stopCh chan struct{}
+	parseCh chan rawPfcpPacket
+	rcvCh   chan RcvPfcpMsg
+	txCh    chan TransmitMessage
+	dispCh  chan RcvPfcpMsg
+	stopCh  chan struct{}
 
 	stopOnce sync.Once
 	txTrans  sync.Map // map[TransactionID]*TxTransaction
@@ -94,6 +94,7 @@ func NewPfcpServer(smf smfIface, addr string) *PfcpServer {
 		smfIface:        smf,
 		addr:            addr,
 		port:            PfcpPort,
+		parseCh:         make(chan rawPfcpPacket, pfcpParseQueueLen),
 		rcvCh:           make(chan RcvPfcpMsg, rcvChLen),
 		txCh:            make(chan TransmitMessage, txDispChLen),
 		dispCh:          make(chan RcvPfcpMsg, txDispChLen),
@@ -156,9 +157,12 @@ func (s *PfcpServer) Run(wg *sync.WaitGroup) (err error) {
 	}
 
 	s.log.Infof("Listen on %v", s.conn.LocalAddr())
-	wg.Add(2 + s.dispatchWorkers)
+	wg.Add(2 + pfcpParseWorkers + s.dispatchWorkers)
 	go s.main(wg)
 	go s.receiver(wg)
+	for worker := 0; worker < pfcpParseWorkers; worker++ {
+		go s.parser(wg)
+	}
 	for worker := 0; worker < s.dispatchWorkers; worker++ {
 		go s.dispatcher(wg)
 	}
@@ -212,12 +216,17 @@ func (s *PfcpServer) main(wg *sync.WaitGroup) {
 			if rcvMsg.Msg == nil {
 				continue
 			}
-			s.transactionHandler(rcvMsg.Msg, &rcvMsg.RemoteAddr)
+			s.receiveMessage(rcvMsg)
 		}
 	}
 }
 
 func (s *PfcpServer) transactionHandler(msg message.Message, addr *net.UDPAddr) {
+	s.receiveMessage(RcvPfcpMsg{Msg: msg, RemoteAddr: *addr})
+}
+
+func (s *PfcpServer) receiveMessage(received RcvPfcpMsg) {
+	msg, addr := received.Msg, &received.RemoteAddr
 	transactionID := TransactionID(addr, msg.Sequence())
 	if msg.IsRequest() {
 		rx, found := s.loadRxTransaction(transactionID)
@@ -234,7 +243,7 @@ func (s *PfcpServer) transactionHandler(msg message.Message, addr *net.UDPAddr) 
 		}
 
 		select {
-		case s.dispCh <- RcvPfcpMsg{RemoteAddr: *addr, Msg: msg, Rx: rx}:
+		case s.dispCh <- RcvPfcpMsg{RemoteAddr: *addr, Msg: msg, Rx: rx, ParseError: received.ParseError}:
 		default:
 			// Do not retain a response transaction for work that was not
 			// admitted. A retransmission can then be admitted after pressure
@@ -251,7 +260,7 @@ func (s *PfcpServer) transactionHandler(msg message.Message, addr *net.UDPAddr) 
 		s.log.Debugf("no PFCP request transaction %q found for response", transactionID)
 		return
 	}
-	tx.complete(RcvPfcpMsg{RemoteAddr: *addr, Msg: msg})
+	tx.complete(received)
 }
 
 func (s *PfcpServer) receiver(wg *sync.WaitGroup) {
@@ -286,24 +295,18 @@ func (s *PfcpServer) receiver(wg *sync.WaitGroup) {
 		}
 		retryDelay = 0
 
+		if isServerStopped(s.stopCh) {
+			return
+		}
 		packet := make([]byte, n)
 		copy(packet, buffer[:n])
-		if err = validatePfcpPacketLength(packet); err != nil {
-			s.log.Warnf("invalid PFCP packet from %v: %v", addr, err)
-			continue
+		select {
+		case s.parseCh <- rawPfcpPacket{packet: packet, addr: *addr}:
+		default:
+			// Keep draining the socket even when all parsers are busy. Retained
+			// wire buffers are bounded by the queue and fixed worker count.
+			s.log.Debugf("PFCP parse queue full; dropping packet from %v", addr)
 		}
-		s.log.Tracef("received PFCP message (len=%d):\n%s", n, hex.Dump(packet))
-
-		msg, parseErr := message.Parse(packet)
-		if parseErr != nil {
-			s.log.Warnf("parse PFCP message from %v: %v", addr, parseErr)
-			continue
-		}
-		if _, unknown := msg.(*message.Generic); unknown {
-			s.log.Warnf("received unknown PFCP message type %d from %v", msg.MessageType(), addr)
-			continue
-		}
-		sendToRcvCh(s.stopCh, s.rcvCh, RcvPfcpMsg{RemoteAddr: *addr, Msg: msg}, s.log)
 	}
 }
 
@@ -400,6 +403,9 @@ func (s *PfcpServer) sendRequest(
 	case <-ctx.Done():
 		return nil, fmt.Errorf("send PFCP request to %v: %w", addr, ctx.Err())
 	case received, ok := <-responseChannel:
+		if received.ParseError != nil {
+			return nil, fmt.Errorf("PFCP response from %v: %w", addr, received.ParseError)
+		}
 		if !ok || received.Msg == nil {
 			if isServerStopped(s.stopCh) {
 				return nil, fmt.Errorf("send PFCP request to %v: PFCP server is stopped", addr)
