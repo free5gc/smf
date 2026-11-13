@@ -6,8 +6,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	nasie "github.com/free5gc/nas/ie"
+	"github.com/free5gc/nas/message"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/context"
+	"github.com/free5gc/smf/internal/sbi/processor"
 	"github.com/free5gc/util/idgenerator"
 )
 
@@ -162,6 +164,31 @@ func TestBuildNASPacketFilterFromPacketFilterInfo(t *testing.T) {
 				require.Equal(t, tc.packetFilter[i].Dir, pf.Dir)
 				require.Equal(t, tc.packetFilter[i].Contents, pf.Contents)
 			}
+		})
+	}
+}
+
+func TestHandlePDUSessionEstablishmentRequestAlwaysOnRequested(t *testing.T) {
+	testCases := []struct {
+		name     string
+		req      *nasie.AlwaysonPDUSessReq
+		included bool
+	}{
+		{name: "Absent", req: nil, included: false},
+		{name: "Requested", req: &nasie.AlwaysonPDUSessReq{APSR: true}, included: true},
+		{name: "IncludedNotRequested", req: &nasie.AlwaysonPDUSessReq{APSR: false}, included: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			smCtx := &context.SMContext{}
+			req := &message.PDUSessEstReq{
+				PDUSessId:          5,
+				PTI:                1,
+				AlwaysonPDUSessReq: tc.req,
+			}
+			require.NoError(t, processor.HandlePDUSessionEstablishmentRequest(smCtx, req))
+			require.Equal(t, tc.included, smCtx.AlwaysOnPDUSessionRequested)
 		})
 	}
 }

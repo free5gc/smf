@@ -25,6 +25,13 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 		accept.Cause5GSM = &nasie.Cause5GSM{Value: v}
 	}
 
+	// TS 24.501 6.4.1.3 b): the SMF does not establish always-on PDU sessions,
+	// so an included Always-on PDU session requested IE, whatever its value,
+	// is answered with "Always-on PDU session not allowed".
+	if smContext.AlwaysOnPDUSessionRequested {
+		accept.AlwaysonPDUSessInd = &nasie.AlwaysonPDUSessInd{APSI: false}
+	}
+
 	sessAMBR := new(nasie.SessAMBR)
 	if err := sessAMBR.Set(sessRule.AuthSessAmbr.Uplink, sessRule.AuthSessAmbr.Downlink); err != nil {
 		return nil, err

@@ -222,8 +222,9 @@ type SMContext struct {
 	//		one is for PSA 1, the other is for PSA 2.
 	ChargingInfo map[uint32]*ChargingInfo
 	// NAS
-	Pti                     uint8
-	EstAcceptCause5gSMValue uint8
+	Pti                         uint8
+	EstAcceptCause5gSMValue     uint8
+	AlwaysOnPDUSessionRequested bool
 
 	// PCO Related
 	ProtocolConfigurationOptions *ProtocolConfigurationOptions
