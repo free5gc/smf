@@ -50,6 +50,11 @@ func BuildSessionModificationRequest(
 
 	ies := []*ie.IE{ie.NewFSEID(sessionContext.LocalSEID, cpIPv4, cpIPv6)}
 	retiredQERs := unreferencedRetiringQERs(sessionContext.PDRs, pdrList)
+	createTrafficEndpoints, buildErr := newCreateTrafficEndpointIEs(sessionContext, pdrList)
+	if buildErr != nil {
+		return nil, fmt.Errorf("build Create Traffic Endpoint: %w", buildErr)
+	}
+	ies = append(ies, createTrafficEndpoints...)
 
 	// TODO(go-pfcp migration): This builder still commits RULE_CREATE before a
 	// validated accepted response. Replace it with a prepared change set and
@@ -66,6 +71,7 @@ func BuildSessionModificationRequest(
 		var err error
 		switch pdr.State {
 		case context.RULE_INITIAL:
+			sessionContext.NameChosenFTEID(pdr)
 			ruleIE, err = newCreatePDRIE(pdr)
 		case context.RULE_UPDATE:
 			ruleIE, err = newUpdatePDRIE(pdr)
@@ -89,9 +95,9 @@ func BuildSessionModificationRequest(
 		var err error
 		switch far.State {
 		case context.RULE_INITIAL:
-			ruleIE, err = newCreateFARIE(far)
+			ruleIE, err = newCreateFARIE(smContext.FARToSend(far))
 		case context.RULE_UPDATE:
-			ruleIE, err = newUpdateFARIE(far)
+			ruleIE, err = newUpdateFARIE(smContext.FARToSend(far))
 		case context.RULE_REMOVE:
 			ruleIE = ie.NewRemoveFAR(ie.NewFARID(far.FARID))
 		}

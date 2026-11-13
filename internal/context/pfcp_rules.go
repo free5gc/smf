@@ -251,6 +251,10 @@ type PDI struct {
 	UEIPAddress     *pfcptype.UEIPAddress
 	SDFFilter       *pfcptype.SDFFilter
 	ApplicationID   string
+	// TrafficEndpointID, when not 0, is the Traffic Endpoint that has the
+	// PDR's Local F-TEID, Network Instance and UE IP address (TS 29.244
+	// 5.2.1A.2).
+	TrafficEndpointID uint8
 }
 
 // Forwarding Action Rule. 7.5.2.3-1
@@ -262,6 +266,14 @@ type FAR struct {
 
 	BAR   *BAR
 	State RuleState
+
+	// PeerUPF, when the Outer Header Creation is a tunnel of a UPF that
+	// allocates the F-TEIDs: the F-TEID is the one that PeerUPF chose for its
+	// PDRs that asked with PeerChooseID (TS 29.244 5.5.3). PeerPending is set
+	// while the FAR was sent buffering, before PeerUPF had chosen it.
+	PeerUPF      *UPF
+	PeerChooseID uint8
+	PeerPending  bool
 }
 
 // Forwarding Parameters. 7.5.2.3-2

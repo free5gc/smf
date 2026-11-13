@@ -19,7 +19,7 @@ type AssociationStateManager interface {
 	// remote is the UDP source of the request; implementations reject requests
 	// whose source does not belong to the claimed UPF.
 	SetupAssociation(
-		peer pfcptype.NodeID, recoveryTime time.Time, remote *net.UDPAddr,
+		peer pfcptype.NodeID, recoveryTime time.Time, features []byte, remote *net.UDPAddr,
 	) (cause uint8, afterResponse func())
 	UpdateAssociation(
 		peer pfcptype.NodeID, request *message.AssociationUpdateRequest, remote *net.UDPAddr,
@@ -63,6 +63,14 @@ func (s *PfcpServer) handleAssociationSetupRequest(
 		response.Cause = ie.NewCause(ie.CauseMandatoryIEIncorrect)
 		return response, nil
 	}
+	var features []byte
+	if request.UPFunctionFeatures != nil {
+		if features, err = upFunctionFeatures(request.UPFunctionFeatures); err != nil {
+			s.log.Warnf("decode PFCP Association Setup Request UP Function Features: %v", err)
+			response.Cause = ie.NewCause(ie.CauseInvalidLength)
+			return response, nil
+		}
+	}
 
 	s.associationMu.RLock()
 	manager := s.associationState
@@ -76,7 +84,7 @@ func (s *PfcpServer) handleAssociationSetupRequest(
 		return response, nil
 	}
 
-	cause, afterResponse := manager.SetupAssociation(peer, recoveryTime, remote)
+	cause, afterResponse := manager.SetupAssociation(peer, recoveryTime, features, remote)
 	response.Cause = ie.NewCause(cause)
 	if cause != ie.CauseRequestAccepted {
 		return response, nil
@@ -139,11 +147,7 @@ func validateAssociationUpdate(request *message.AssociationUpdateRequest) (uint8
 		return ie.CauseRequestRejected, fmt.Errorf("nil PFCP Association Update Request")
 	}
 	if request.UPFunctionFeatures != nil {
-		features, err := request.UPFunctionFeatures.UPFunctionFeatures()
-		if err != nil || len(features) < 2 {
-			if err == nil {
-				err = fmt.Errorf("UP Function Features payload is too short: %d", len(features))
-			}
+		if _, err := upFunctionFeatures(request.UPFunctionFeatures); err != nil {
 			return ie.CauseInvalidLength, err
 		}
 	}
@@ -175,6 +179,16 @@ func validateAssociationUpdate(request *message.AssociationUpdateRequest) (uint8
 		}
 	}
 	return ie.CauseRequestAccepted, nil
+}
+
+// upFunctionFeatures returns the features of a UP Function Features IE, which
+// has at least octets 5 and 6 (TS 29.244 8.2.25).
+func upFunctionFeatures(featuresIE *ie.IE) ([]byte, error) {
+	features, err := featuresIE.UPFunctionFeatures()
+	if err == nil && len(features) < 2 {
+		err = fmt.Errorf("UP Function Features payload is too short: %d", len(features))
+	}
+	return features, err
 }
 
 func (s *PfcpServer) handleAssociationReleaseRequest(

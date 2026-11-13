@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 
 	"github.com/wmnsk/go-pfcp/ie"
@@ -87,16 +88,15 @@ func (p *Processor) ActivateUPFSession(
 		}
 	}
 
-	resChan := make(chan SendPfcpResult)
 	establishmentTargets := make(map[string]*PFCPState)
-	pendingTargets := 0
+	targets := make(map[string]*PFCPState)
 
 	for ip, pfcp := range pfcpPool {
 		sessionContext := smContext.PFCPContext[ip]
 		if sessionContext != nil && sessionContext.RemoteSEID != 0 && !pfcp.hasPendingChanges(smContext) {
 			continue
 		}
-		pendingTargets++
+		targets[ip] = pfcp
 		urrIds := []uint32{}
 		for _, urr := range pfcp.urrList {
 			urrIds = append(urrIds, urr.URRID)
@@ -105,14 +105,16 @@ func (p *Processor) ActivateUPFSession(
 			"%d URRs (aggregated IDs: %v)", ip, len(pfcp.pdrList), len(pfcp.farList), len(pfcp.urrList), urrIds)
 		if sessionContext == nil || sessionContext.RemoteSEID == 0 {
 			establishmentTargets[ip] = pfcp
+		}
+	}
+
+	success := p.sendInRounds(smContext, targets, func(ip string, pfcp *PFCPState, resChan chan SendPfcpResult) {
+		if establishmentTargets[ip] != nil {
 			go p.establishPfcpSession(smContext, pfcp, resChan)
 		} else {
 			go p.modifyExistingPfcpSession(smContext, pfcp, resChan, "")
 		}
-	}
-
-	success := waitAllPfcpRsp(smContext, pendingTargets, resChan, nil)
-	close(resChan)
+	})
 
 	// Initial PDU Session Establishment is atomic across every required UPF.
 	// Roll back only sessions created by this activation; never delete a
@@ -125,6 +127,80 @@ func (p *Processor) ActivateUPFSession(
 	if notifyUeHander != nil {
 		notifyUeHander(smContext, success)
 	}
+}
+
+// sendInRounds sends the request of each UPF of states with send, in rounds of
+// parallel requests. A UPF whose uplink forwards to the tunnel of another UPF
+// of states that allocates the F-TEIDs waits for that UPF's answer, which has
+// the F-TEID (TS 29.244 5.5.3): the anchor goes first, then each UPF toward
+// the AN. The FARs sent buffering until their peer chose its F-TEID, the
+// downlink of each UPF toward the one before it, are updated last.
+func (p *Processor) sendInRounds(
+	smContext *smf_context.SMContext,
+	states map[string]*PFCPState,
+	send func(ip string, state *PFCPState, resChan chan SendPfcpResult),
+) bool {
+	pending := maps.Clone(states)
+	for round := readyPfcpTargets(smContext, pending); len(round) != 0; round = readyPfcpTargets(smContext, pending) {
+		resChan := make(chan SendPfcpResult)
+		for ip, state := range round {
+			delete(pending, ip)
+			send(ip, state, resChan)
+		}
+		success := waitAllPfcpRsp(smContext, len(round), resChan, nil)
+		close(resChan)
+		if !success {
+			return false
+		}
+	}
+	return len(pending) == 0 && p.sendPeerPendingFARs(smContext, states)
+}
+
+// readyPfcpTargets are the UPFs of pending whose uplink forwards to no tunnel
+// of another UPF of pending that has yet to choose its F-TEID.
+func readyPfcpTargets(
+	smContext *smf_context.SMContext, pending map[string]*PFCPState,
+) map[string]*PFCPState {
+	ready := make(map[string]*PFCPState, len(pending))
+	for ip, state := range pending {
+		waits := false
+		for _, far := range state.farList {
+			if far.PeerUPF != nil && far.ForwardingParameters != nil &&
+				far.ForwardingParameters.DestinationInterface.InterfaceValue == pfcptype.DestinationInterfaceCore &&
+				smContext.ChosenFTEID(far.PeerUPF, far.PeerChooseID) == nil &&
+				pending[far.PeerUPF.NodeID.ResolveNodeIdToIp().String()] != nil {
+				waits = true
+				break
+			}
+		}
+		if !waits {
+			ready[ip] = state
+		}
+	}
+	return ready
+}
+
+// sendPeerPendingFARs updates each FAR that was sent buffering, now that the
+// UPF that it forwards to chose its F-TEID.
+func (p *Processor) sendPeerPendingFARs(smContext *smf_context.SMContext, states map[string]*PFCPState) bool {
+	resChan := make(chan SendPfcpResult)
+	sent := 0
+	for _, state := range states {
+		var farList []*smf_context.FAR
+		for _, far := range state.farList {
+			if far.PeerPending && smContext.ChosenFTEID(far.PeerUPF, far.PeerChooseID) != nil {
+				far.State = smf_context.RULE_UPDATE
+				farList = append(farList, far)
+			}
+		}
+		if len(farList) != 0 {
+			sent++
+			go p.modifyExistingPfcpSession(smContext, &PFCPState{upf: state.upf, farList: farList}, resChan, "")
+		}
+	}
+	success := waitAllPfcpRsp(smContext, sent, resChan, nil)
+	close(resChan)
+	return success
 }
 
 func (p *Processor) QueryReport(smContext *smf_context.SMContext, upf *smf_context.UPF,
@@ -237,7 +313,13 @@ func (p *Processor) establishPfcpSession(
 	// session. If a Created PDR is malformed, later cleanup still knows which
 	// remote session must be deleted.
 	sessionContext.RemoteSEID = upfFSEID.SEID
-	if err = applyCreatedPDRs(response.CreatedPDR, sessionContext, state.pdrList); err != nil {
+	if err = applyCreatedPDRs(response.CreatedPDR, request.CreatePDR, sessionContext, state.pdrList); err != nil {
+		fail(err)
+		return
+	}
+	if err = applyCreatedTrafficEndpoints(
+		response.CreatedTrafficEndpoint, request.CreateTrafficEndpoint, sessionContext,
+	); err != nil {
 		fail(err)
 		return
 	}
@@ -248,6 +330,7 @@ func (p *Processor) establishPfcpSession(
 
 func applyCreatedPDRs(
 	createdPDRs []*ie.IE,
+	createPDRs []*ie.IE,
 	sessionContext *smf_context.PFCPSessionContext,
 	requestedPDRs []*smf_context.PDR,
 ) error {
@@ -299,6 +382,7 @@ func applyCreatedPDRs(
 		if pdr == nil {
 			return fmt.Errorf("created PDR refers to unknown PDR ID %d", pdrID)
 		}
+		asked := pdr.PDI.LocalFTeid
 		pdr.PDI.LocalFTeid = &pfcptype.FTEID{
 			Chid:        fteid.HasChID(),
 			Ch:          fteid.HasCh(),
@@ -309,6 +393,61 @@ func applyCreatedPDRs(
 			Ipv6Address: append(net.IP(nil), fteid.IPv6Address...),
 			ChooseId:    fteid.ChooseID,
 		}
+		// The F-TEID of the PDRs that ask with this CHOOSE ID, which a later
+		// PDR of the same tunnel names.
+		if asked != nil && asked.Ch && asked.Chid {
+			chosen := *pdr.PDI.LocalFTeid
+			chosen.Chid, chosen.ChooseId = false, 0
+			sessionContext.SetChosenFTEID(asked.ChooseId, &chosen)
+		}
+	}
+	// TS 29.244 5.5.3: the UP function returns the F-TEID of each PDR that
+	// asked it to choose one; a tunnel without it cannot be used. A PDR that
+	// refers to a Traffic Endpoint has the Traffic Endpoint's.
+	for _, createPDR := range createPDRs {
+		pdrID, err := createPDR.PDRID()
+		if err != nil {
+			return fmt.Errorf("decode Create PDR ID: %w", err)
+		}
+		if pdr := pdrByID[pdrID]; pdr != nil && pdr.PDI.TrafficEndpointID == 0 &&
+			pdr.PDI.LocalFTeid != nil && pdr.PDI.LocalFTeid.Ch {
+			return fmt.Errorf("the UPF returned no F-TEID for PDR %d, which asked it to choose one", pdrID)
+		}
+	}
+	return nil
+}
+
+// applyCreatedTrafficEndpoints records each Traffic Endpoint that a request
+// created, with the F-TEID that the UPF chose for it, from the Created
+// Traffic Endpoints of the response (TS 29.244 5.2.1A.2, 7.5.3.5).
+func applyCreatedTrafficEndpoints(
+	created []*ie.IE, requested []*ie.IE, sessionContext *smf_context.PFCPSessionContext,
+) error {
+	chosen := make(map[uint8]*pfcptype.FTEID, len(created))
+	for _, endpoint := range created {
+		id, err := endpoint.TrafficEndpointID()
+		if err != nil {
+			return fmt.Errorf("decode Created Traffic Endpoint ID: %w", err)
+		}
+		fteid, err := endpoint.LocalFTEID()
+		if err != nil {
+			continue
+		}
+		chosen[id] = &pfcptype.FTEID{
+			V4: fteid.HasIPv4(), V6: fteid.HasIPv6(), Teid: fteid.TEID,
+			Ipv4Address: append(net.IP(nil), fteid.IPv4Address...),
+			Ipv6Address: append(net.IP(nil), fteid.IPv6Address...),
+		}
+	}
+	for _, endpoint := range requested {
+		id, err := endpoint.TrafficEndpointID()
+		if err != nil {
+			return fmt.Errorf("decode Create Traffic Endpoint ID: %w", err)
+		}
+		if chosen[id] == nil {
+			return fmt.Errorf("the UPF returned no F-TEID for Traffic Endpoint %d, which asked it to choose one", id)
+		}
+		sessionContext.TrafficEndpointCreated(id, chosen[id])
 	}
 	return nil
 }
@@ -370,7 +509,7 @@ func (p *Processor) rollbackEstablishedPfcpSessions(
 		// Do not clear a newer session if another lifecycle operation replaced
 		// the SEID while this deletion was in flight.
 		if result.target.sessionContext.RemoteSEID == result.target.remoteSEID {
-			result.target.sessionContext.RemoteSEID = 0
+			result.target.sessionContext.ForgetRemoteSession()
 		}
 	}
 	return errors.Join(errList...)
@@ -451,6 +590,18 @@ func (p *Processor) sendSessionModificationRequest(
 	}
 	if response == nil {
 		return nil, fmt.Errorf("PFCP Session Modification client returned a nil response")
+	}
+	if response.Cause != nil {
+		if cause, causeErr := response.Cause.Cause(); causeErr == nil && cause == ie.CauseRequestAccepted {
+			if err = applyCreatedPDRs(response.CreatedPDR, request.CreatePDR, sessionContext, state.pdrList); err != nil {
+				return nil, err
+			}
+			if err = applyCreatedTrafficEndpoints(
+				response.CreatedUpdatedTrafficEndpoint, request.CreateTrafficEndpoint, sessionContext,
+			); err != nil {
+				return nil, err
+			}
+		}
 	}
 	return response, nil
 }
@@ -831,7 +982,7 @@ func (p *Processor) deletePfcpSession(
 	// The UPF has already deleted the PFCP session. Clear its remote SEID before
 	// notifying the caller, and consume final reports first so subsequent SM
 	// context cleanup cannot race report accounting or send a duplicate delete.
-	sessionContext.RemoteSEID = 0
+	sessionContext.ForgetRemoteSession()
 	if len(response.UsageReport) != 0 {
 		if err = smContext.HandleReports(response.UsageReport, upf.NodeID, ""); err != nil {
 			logger.PduSessLog.Errorf("decode PFCP Session Deletion Usage Report: %v", err)
