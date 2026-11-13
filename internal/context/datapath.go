@@ -564,6 +564,16 @@ func (datapath *DataPath) addUrrToPath(smContext *SMContext) {
 	}
 }
 
+// forwardToChosenFTEID makes far, whose Outer Header Creation is a tunnel of
+// peer, forward to the F-TEID that peer chooses for chooseID when it
+// allocates the F-TEIDs.
+func (far *FAR) forwardToChosenFTEID(peer *UPF, chooseID uint8) {
+	far.PeerUPF, far.PeerChooseID = nil, 0
+	if peer.AllocatesFTEID() {
+		far.PeerUPF, far.PeerChooseID = peer, chooseID
+	}
+}
+
 func (dataPath *DataPath) ActivateTunnelAndPDR(
 	smContext *SMContext, precedence uint32, bindings ...PathQoSBinding,
 ) error {
@@ -675,12 +685,9 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(
 				return err
 			} else {
 				ULPDR.PDI = PDI{
-					SourceInterface: pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceAccess},
-					LocalFTeid: &pfcptype.FTEID{
-						V4:          true,
-						Ipv4Address: upIP,
-						Teid:        curULTunnel.TEID,
-					},
+					SourceInterface:   pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceAccess},
+					LocalFTeid:        newLocalFTEID(ULDestUPF, UplinkChooseID, upIP, curULTunnel.TEID),
+					TrafficEndpointID: trafficEndpointFor(ULDestUPF, UplinkChooseID),
 					NetworkInstance: &pfcptype.NetworkInstance{
 						NetworkInstance: smContext.Dnn,
 						FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
@@ -730,6 +737,7 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(
 						Ipv4Address:                    upIP,
 						Teid:                           nextULTunnel.TEID,
 					}
+					ULFAR.forwardToChosenFTEID(nextULTunnel.DestEndPoint.UPF, UplinkChooseID)
 				}
 			}
 		}
@@ -768,12 +776,9 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(
 					return err
 				} else {
 					DLPDR.PDI = PDI{
-						SourceInterface: pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceCore},
-						LocalFTeid: &pfcptype.FTEID{
-							V4:          true,
-							Ipv4Address: upIP,
-							Teid:        curDLTunnel.TEID,
-						},
+						SourceInterface:   pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceCore},
+						LocalFTeid:        newLocalFTEID(DLDestUPF, DownlinkChooseID, upIP, curDLTunnel.TEID),
+						TrafficEndpointID: trafficEndpointFor(DLDestUPF, DownlinkChooseID),
 						NetworkInstance: &pfcptype.NetworkInstance{
 							NetworkInstance: smContext.Dnn,
 							FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
@@ -818,6 +823,7 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(
 							Teid:                           nextDLTunnel.TEID,
 						},
 					}
+					DLFAR.forwardToChosenFTEID(nextDLDest.UPF, DownlinkChooseID)
 				}
 			} else {
 				ANUPF := dataPath.FirstDPNode
@@ -968,12 +974,9 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(
 				return err
 			} else {
 				ULPDR.PDI = PDI{
-					SourceInterface: pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceAccess},
-					LocalFTeid: &pfcptype.FTEID{
-						V4:          true,
-						Ipv4Address: upIP,
-						Teid:        curULTunnel.TEID,
-					},
+					SourceInterface:   pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceAccess},
+					LocalFTeid:        newLocalFTEID(ULDestUPF, SplitUplinkChooseID, upIP, curULTunnel.TEID),
+					TrafficEndpointID: trafficEndpointFor(ULDestUPF, SplitUplinkChooseID),
 					NetworkInstance: &pfcptype.NetworkInstance{
 						NetworkInstance: smContext.Dnn,
 						FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
@@ -1023,6 +1026,7 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(
 						Ipv4Address:                    upIP,
 						Teid:                           nextULTunnel.TEID,
 					}
+					ULFAR.forwardToChosenFTEID(nextULTunnel.DestEndPoint.UPF, SplitUplinkChooseID)
 				}
 			}
 		}
@@ -1061,12 +1065,9 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(
 					return err
 				} else {
 					DLPDR.PDI = PDI{
-						SourceInterface: pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceCore},
-						LocalFTeid: &pfcptype.FTEID{
-							V4:          true,
-							Ipv4Address: upIP,
-							Teid:        curDLTunnel.TEID,
-						},
+						SourceInterface:   pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceCore},
+						LocalFTeid:        newLocalFTEID(DLDestUPF, SplitDownlinkChooseID, upIP, curDLTunnel.TEID),
+						TrafficEndpointID: trafficEndpointFor(DLDestUPF, SplitDownlinkChooseID),
 
 						// TODO: Should Uncomment this after FR5GC-1029 is solved
 						// UEIPAddress: &pfcptype.UEIPAddress{
@@ -1108,6 +1109,7 @@ func (dataPath *DataPath) ActivateDcTunnelAndPDR(
 							Teid:                           nextDLTunnel.TEID,
 						},
 					}
+					DLFAR.forwardToChosenFTEID(nextDLDest.UPF, SplitDownlinkChooseID)
 				}
 			} else {
 				ANUPF := dataPath.FirstDPNode

@@ -123,6 +123,22 @@ func (upf *UPF) UPFunctionFeatures() []byte {
 	return append([]byte(nil), upf.upFunctionFeatures...)
 }
 
+// AllocatesFTEID reports whether the UPF set FTUP (octet 5, bit 5): it
+// allocates the F-TEIDs, which the SMF asks it to choose (TS 29.244 5.5.1).
+func (upf *UPF) AllocatesFTEID() bool {
+	upf.upFunctionFeaturesMu.RLock()
+	defer upf.upFunctionFeaturesMu.RUnlock()
+	return len(upf.upFunctionFeatures) > 0 && upf.upFunctionFeatures[0]&0x10 != 0
+}
+
+// supportsTrafficEndpoints reports whether the UPF set PDIU (octet 6, bit 2):
+// PDRs may share a Traffic Endpoint (TS 29.244 5.2.1A.2).
+func (upf *UPF) supportsTrafficEndpoints() bool {
+	upf.upFunctionFeaturesMu.RLock()
+	defer upf.upFunctionFeaturesMu.RUnlock()
+	return len(upf.upFunctionFeatures) > 1 && upf.upFunctionFeatures[1]&0x02 != 0
+}
+
 // SetRecoveryTimeStamp replaces the UPF recovery-time baseline used by active
 // heartbeat restart detection.
 func (upf *UPF) SetRecoveryTimeStamp(recoveryTime time.Time) {
@@ -430,7 +446,7 @@ func (upf *UPF) InvalidatePFCPSessions() int {
 		for _, pfcpSession := range smContext.PFCPContext {
 			if pfcpSession != nil && pfcpSession.RemoteSEID != 0 &&
 				pfcpSession.NodeID.EqualsTo(&upf.NodeID) {
-				pfcpSession.RemoteSEID = 0
+				pfcpSession.ForgetRemoteSession()
 				invalidated++
 			}
 		}
@@ -609,6 +625,21 @@ func (t *UPTunnel) AddDataPath(dataPath *DataPath) {
 func (t *UPTunnel) RemoveDataPath(pathID int64) {
 	delete(t.DataPathPool, pathID)
 	t.PathIDGenerator.FreeID(pathID)
+}
+
+// ANNode is the AN UPF's node of the tunnel: that of its default path, or else
+// of another activated path, as for the split tunnel of a session that has no
+// PCC rule of precedence 255. Every path of a tunnel starts at its AN UPF.
+func (t *UPTunnel) ANNode() *DataPathNode {
+	if defaultPath := t.DataPathPool.GetDefaultPath(); defaultPath != nil {
+		return defaultPath.FirstDPNode
+	}
+	for _, dataPath := range t.DataPathPool {
+		if dataPath.Activated && dataPath.FirstDPNode != nil {
+			return dataPath.FirstDPNode
+		}
+	}
+	return nil
 }
 
 // *** add unit test ***//

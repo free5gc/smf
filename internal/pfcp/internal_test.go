@@ -35,6 +35,7 @@ type fakeAssociationState struct {
 	update       *message.AssociationUpdateRequest
 	updateCalled bool
 	recoveryTime time.Time
+	features     []byte
 	remote       *net.UDPAddr
 	after        func()
 }
@@ -42,12 +43,14 @@ type fakeAssociationState struct {
 func (f *fakeAssociationState) SetupAssociation(
 	peer pfcptype.NodeID,
 	recoveryTime time.Time,
+	features []byte,
 	remote *net.UDPAddr,
 ) (uint8, func()) {
 	f.mu.Lock()
 	f.remote = remote
 	f.setupPeer = peer
 	f.recoveryTime = recoveryTime
+	f.features = features
 	f.mu.Unlock()
 	return f.setupCause, f.after
 }
@@ -116,10 +119,14 @@ func TestHandleAssociationSetupRequestUsesStateManager(t *testing.T) {
 		9,
 		ie.NewNodeIDHeuristic("192.0.2.10"),
 		ie.NewRecoveryTimeStamp(recoveryTime),
+		ie.NewUPFunctionFeatures(0x10, 0x02),
 	)
 
 	response, afterResponse := s.handleAssociationSetupRequest(request, testPeerAddr)
 	assertCause(t, response.Cause, ie.CauseRequestAccepted)
+	if got := state.features; len(got) != 2 || got[0] != 0x10 || got[1] != 0x02 {
+		t.Fatalf("UP Function Features = %x, want 1002", got)
+	}
 	if afterResponse == nil {
 		t.Fatal("accepted setup did not return afterResponse")
 	}
@@ -136,6 +143,25 @@ func TestHandleAssociationSetupRequestUsesStateManager(t *testing.T) {
 	if !afterCalled {
 		t.Fatal("afterResponse did not run")
 	}
+}
+
+func TestHandleAssociationSetupRequestRejectsShortUPFunctionFeatures(t *testing.T) {
+	state := &fakeAssociationState{setupCause: ie.CauseRequestAccepted}
+	s := NewPfcpServer(nil, "127.0.0.1")
+	s.SetAssociationStateManager(state)
+	response, afterResponse := s.handleAssociationSetupRequest(
+		message.NewAssociationSetupRequest(
+			10,
+			ie.NewNodeIDHeuristic("192.0.2.10"),
+			ie.NewRecoveryTimeStamp(time.Now()),
+			ie.New(ie.UPFunctionFeatures, []byte{0x10}),
+		),
+		testPeerAddr,
+	)
+	if afterResponse != nil {
+		t.Fatal("afterResponse is non-nil for an invalid request")
+	}
+	assertCause(t, response.Cause, ie.CauseInvalidLength)
 }
 
 func TestAssociationSetupDispatchRunsAfterResponse(t *testing.T) {
