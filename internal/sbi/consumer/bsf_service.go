@@ -46,7 +46,7 @@ func (s *nbsfService) getHTTPClient() *http.Client {
 // BSFSelection discovers and selects BSF for PCF binding operations
 func (s *nbsfService) BSFSelection() (string, error) {
 	// Discover BSF via NRF
-	ctx, _, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, _, err := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return "", fmt.Errorf("failed to get token context: %w", err)
 	}
@@ -174,8 +174,7 @@ func (s *nbsfService) PCFSelectionWithBSF(smContext *smf_context.SMContext) erro
 		logger.ConsumerLog.Infof("Using existing PCF from BSF binding: %s", pcfBinding.PcfId)
 
 		// Discover the specific PCF instance from NRF
-		ctx, _, tokenErr := s.consumer.Context().GetTokenCtx(
-			models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+		ctx, _, tokenErr := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 		if tokenErr != nil {
 			logger.ConsumerLog.Warnf("Failed to get token context for PCF discovery: %v", tokenErr)
 			return s.consumer.nnrfService.PCFSelection(smContext)
