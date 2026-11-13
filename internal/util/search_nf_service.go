@@ -1,50 +1,33 @@
 package util
 
 import (
-	"fmt"
-
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/util/serviceuri"
 )
 
-func SearchNFServiceUri(nfProfile *models.Nrf_NFDisc_NFProfile, serviceName models.Nrf_NFMgmt_ServiceName,
-	nfServiceStatus models.Nrf_NFMgmt_NFServiceStatus,
-) (nfUri string) {
-	if nfProfile.NfServices != nil {
-		for _, service := range nfProfile.NfServices {
-			if service.ServiceName == serviceName && service.NfServiceStatus == nfServiceStatus {
-				if nfProfile.Fqdn != "" {
-					nfUri = nfProfile.Fqdn
-				} else if service.Fqdn != "" {
-					nfUri = service.Fqdn
-				} else if service.ApiPrefix != "" {
-					nfUri = service.ApiPrefix
-				} else if service.IpEndPoints != nil {
-					point := service.IpEndPoints[0]
-					if point.Ipv4Address != "" {
-						nfUri = getSbiUri(service.Scheme, point.Ipv4Address, point.Port)
-					} else if len(nfProfile.Ipv4Addresses) != 0 {
-						nfUri = getSbiUri(service.Scheme, nfProfile.Ipv4Addresses[0], point.Port)
-					}
-				}
-			}
-			if nfUri != "" {
-				break
-			}
-		}
+// NFs that still register a full URL as apiPrefix remain reachable.
+var serviceURIOptions = serviceuri.Options{AllowLegacyAbsoluteAPIPrefix: true}
+
+// SelectNFService selects an NF instance from an NRF discovery result and
+// returns it with the API root of service name, or (nil, "") if none is usable.
+func SelectNFService(
+	instances []models.Nrf_NFDisc_NFProfile, name models.Nrf_NFMgmt_ServiceName,
+) (*models.Nrf_NFDisc_NFProfile, string) {
+	profile, uri, err := serviceuri.ResolveFromSearchResult(instances, name, serviceURIOptions)
+	if err != nil {
+		logger.UtilLog.Warnf("NF service %s API root resolution failed: %v", name, err)
+		return nil, ""
 	}
-	return
+	return profile, uri
 }
 
-func getSbiUri(scheme models.UriScheme, ipv4Address string, port int32) (uri string) {
-	if port != 0 {
-		uri = fmt.Sprintf("%s://%s:%d", scheme, ipv4Address, port)
-	} else {
-		switch scheme {
-		case models.UriScheme_HTTP:
-			uri = fmt.Sprintf("%s://%s:80", scheme, ipv4Address)
-		case models.UriScheme_HTTPS:
-			uri = fmt.Sprintf("%s://%s:443", scheme, ipv4Address)
-		}
+// SearchNFServiceUri returns the API root of service name in nfProfile, or "".
+func SearchNFServiceUri(nfProfile *models.Nrf_NFDisc_NFProfile, name models.Nrf_NFMgmt_ServiceName) string {
+	uri, err := serviceuri.ResolveNFServiceURI(nfProfile, name, serviceURIOptions)
+	if err != nil {
+		logger.UtilLog.Warnf("NF service %s API root resolution failed: %v", name, err)
+		return ""
 	}
-	return
+	return uri
 }

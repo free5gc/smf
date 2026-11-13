@@ -15,6 +15,7 @@ import (
 	"github.com/free5gc/openapi/nrf/NFDisc"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/util"
 )
 
 type nbsfService struct {
@@ -68,15 +69,10 @@ func (s *nbsfService) BSFSelection() (string, error) {
 		return "", fmt.Errorf("no BSF instances found")
 	}
 
-	// Select first BSF instance and find management service URI
-	bsfProfile := res.Nrf_NFDisc_SearchResult.NfInstances[0]
-	for _, service := range bsfProfile.NfServices {
-		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NBSF_MANAGEMENT &&
-			service.NfServiceStatus == models.Nrf_NFMgmt_NFServiceStatus_REGISTERED {
-			return service.ApiPrefix, nil
-		}
+	if _, uri := util.SelectNFService(res.Nrf_NFDisc_SearchResult.NfInstances,
+		models.Nrf_NFMgmt_ServiceName_NBSF_MANAGEMENT); uri != "" {
+		return uri, nil
 	}
-
 	return "", fmt.Errorf("BSF management service not found")
 }
 

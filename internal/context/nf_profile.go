@@ -1,11 +1,11 @@
 package context
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/pkg/factory"
+	"github.com/free5gc/util/serviceuri"
 )
 
 type NFProfile struct {
@@ -29,6 +29,7 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 	}
 
 	// set NFServices
+	addr := serviceuri.NewAddressing(GetSelf().RegisterIPv4)
 	c.NfProfile.NFServices = new([]models.Nrf_NFMgmt_NFService)
 	for _, serviceName := range nfProfileconfig.Configuration.ServiceNameList {
 		*c.NfProfile.NFServices = append(*c.NfProfile.NFServices, models.Nrf_NFMgmt_NFService{
@@ -37,13 +38,8 @@ func (c *SMFContext) SetupNFProfile(nfProfileconfig *factory.Config) {
 			Versions:          *c.NfProfile.NFServiceVersion,
 			Scheme:            GetSelf().URIScheme,
 			NfServiceStatus:   models.Nrf_NFMgmt_NFServiceStatus_REGISTERED,
-			ApiPrefix:         fmt.Sprintf("%s://%s:%d", GetSelf().URIScheme, GetSelf().RegisterIPv4, GetSelf().SBIPort),
-			IpEndPoints: []models.Nrf_NFMgmt_IpEndPoint{
-				{
-					Ipv4Address: GetSelf().RegisterIPv4,
-					Port:        int32(GetSelf().SBIPort),
-				},
-			},
+			Fqdn:              addr.FQDN,
+			IpEndPoints:       addr.IpEndPoints(int32(GetSelf().SBIPort)),
 		})
 	}
 
