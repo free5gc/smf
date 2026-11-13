@@ -70,6 +70,21 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		return
 	}
 
+	// TS 24.501 7.3.1 c), d): the PTI of a UE-requested procedure is an assigned value (TS 24.007 11.2.3.1a)
+	switch pti := establishmentRequest.ProcedureTransactionID(); pti {
+	case reservedPTI:
+		// The message is ignored: no SM context, and no N1 SM message for the UE
+		logger.PduSessLog.Warnf("Ignore PDU Session Establishment Request with the reserved PTI[%d]", pti)
+		p.nasErrorResponse(c, http.StatusForbidden, models.PostSmContextsResponse403{
+			JsonData: &models.Smf_PDUSess_SmContextCreateError{Error: &smf_errors.N1SmError},
+		})
+		return
+	case unassignedPTI:
+		logger.PduSessLog.Warnf("PDU Session Establishment Request with the unassigned PTI; answer 5GSM STATUS")
+		p.makeGSMStatusRes(c, establishmentRequest.PDUSessionID(), pti, nasie.Cause5GSM_InvalidPTIValue)
+		return
+	}
+
 	createData := request.JsonData
 	// ServingNetwork is mandatory for SM Context Create Request, if it is missing, reject the request with 400 Bad Request
 	if createData.ServingNetwork == nil {
@@ -436,6 +451,16 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			} // Depends on the reason why N4 fail
 			c.Set(sbi.IN_PB_DETAILS_CTX_STR, updateSmContextError.JsonData.Error.Cause)
 			c.JSON(http.StatusForbidden, updateSmContextError)
+			return
+		}
+
+		// TS 24.501 7.3.1 d): a 5GSM message with the reserved PTI is ignored; c): a PDU SESSION MODIFICATION
+		// REQUEST or RELEASE REQUEST with the unassigned PTI is answered with a 5GSM STATUS, cause #81
+		_, isModificationRequest := gsmMessage.(*message.PDUSessModReq)
+		_, isReleaseRequest := gsmMessage.(*message.PDUSessRelReq)
+		if pti := gsmMessage.ProcedureTransactionID(); pti == reservedPTI ||
+			(pti == unassignedPTI && (isModificationRequest || isReleaseRequest)) {
+			p.refuseUnknownPTI(c, smContext, pti)
 			return
 		}
 
@@ -1594,6 +1619,57 @@ func (p *Processor) makeEstRejectRes(
 		postSmContextsError.BinaryDataN1SmMessage = related("GSM_NAS", buf)
 	}
 	p.nasErrorResponse(c, int(sbiError.Status), postSmContextsError)
+}
+
+// TS 24.007 11.2.3.1a: the procedure transaction identity values that are not assigned values
+const (
+	unassignedPTI uint8 = 0
+	reservedPTI   uint8 = 255
+)
+
+// makeGSMStatusRes answers an SM Context Create request with a 5GSM STATUS for the given PDU session identity and
+// PTI.
+func (p *Processor) makeGSMStatusRes(c *gin.Context, pduSessionID uint8, pti uint8, cause uint8) {
+	postSmContextsError := models.PostSmContextsResponse403{
+		JsonData: &models.Smf_PDUSess_SmContextCreateError{
+			Error:   &smf_errors.N1SmError,
+			N1SmMsg: &models.RefToBinaryData{ContentId: "GSM_NAS"},
+		},
+	}
+	status := &message.Status5GSM{PDUSessId: pduSessionID, PTI: pti, Cause5GSM: &nasie.Cause5GSM{Value: cause}}
+	if buf, err := status.MarshalBinary(); err != nil {
+		logger.PduSessLog.Errorf("Build GSM 5GSMStatus failed: %+v", err)
+	} else {
+		postSmContextsError.BinaryDataN1SmMessage = related("GSM_NAS", buf)
+	}
+	p.nasErrorResponse(c, http.StatusForbidden, postSmContextsError)
+}
+
+// refuseUnknownPTI answers an SM Context Update request whose 5GSM message has a PTI that is not an assigned value:
+// the message is ignored for the reserved PTI, and answered with a 5GSM STATUS, cause #81 "invalid PTI value", for
+// the unassigned one (TS 24.501 7.3.1 c), d)). The PDU session is left as it is.
+func (p *Processor) refuseUnknownPTI(c *gin.Context, smContext *smf_context.SMContext, pti uint8) {
+	errResponse := models.UpdateSmContextResponse403{
+		JsonData: &models.Smf_PDUSess_SmContextUpdateError{
+			Error: &smf_errors.N1SmError,
+		},
+	}
+	c.Set(sbi.IN_PB_DETAILS_CTX_STR, errResponse.JsonData.Error.Cause)
+	if pti == reservedPTI {
+		smContext.Log.Warnf("Ignore a 5GSM message with the reserved PTI[%d]", pti)
+		c.JSON(http.StatusForbidden, errResponse)
+		return
+	}
+	smContext.Log.Warnf("5GSM request with the unassigned PTI; answer 5GSM STATUS")
+	buf, err := smf_context.BuildGSM5GSMStatus(smContext, pti, nasie.Cause5GSM_InvalidPTIValue)
+	if err != nil {
+		smContext.Log.Errorf("Build GSM 5GSMStatus failed: %+v", err)
+		c.JSON(http.StatusForbidden, errResponse)
+		return
+	}
+	errResponse.BinaryDataN1SmMessage = &multipart.RelatedContent{ContentID: "GSM_NAS", Content: buf}
+	errResponse.JsonData.N1SmMsg = &models.RefToBinaryData{ContentId: "GSM_NAS"}
+	c.Render(http.StatusForbidden, openapi.MultipartRelatedRender{Data: errResponse})
 }
 
 func (p *Processor) sendGSMPDUSessionReleaseCommand(smContext *smf_context.SMContext, nasPdu []byte) {
