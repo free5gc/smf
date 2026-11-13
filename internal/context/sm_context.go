@@ -488,10 +488,13 @@ func (smContext *SMContext) State() SMContextState {
 	return SMContextState(atomic.LoadUint32((*uint32)(&smContext.state)))
 }
 
-func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint8) error {
+// IsAllowedPDUSessionType selects the PDU session type for the requested one. If the DNN does not allow it, it returns
+// the 5GSM cause of the PDU SESSION ESTABLISHMENT REJECT (TS 24.501 6.4.1.4.1) with the error.
+func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint8) (uint8, error) {
 	dnnPDUSessionType := smContext.DnnConfiguration.PduSessionTypes
 	if dnnPDUSessionType == nil {
-		return fmt.Errorf("this SMContext[%s] has no subscription pdu session type info", smContext.Ref)
+		return nasie.Cause5GSM_UnknownPDUSessType,
+			fmt.Errorf("this SMContext[%s] has no subscription pdu session type info", smContext.Ref)
 	}
 
 	allowIPv4 := false
@@ -516,7 +519,7 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 	switch supportedPDUSessionType {
 	case "IPv4":
 		if !allowIPv4 {
-			return fmt.Errorf(
+			return nasie.Cause5GSM_UnknownPDUSessType, fmt.Errorf(
 				"no SupportedPDUSessionType[%q] in DNN[%s] configuration",
 				supportedPDUSessionType,
 				smContext.Dnn,
@@ -524,7 +527,7 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 		}
 	case "IPv6":
 		if !allowIPv6 {
-			return fmt.Errorf(
+			return nasie.Cause5GSM_UnknownPDUSessType, fmt.Errorf(
 				"no SupportedPDUSessionType[%q] in DNN[%s] configuration",
 				supportedPDUSessionType,
 				smContext.Dnn,
@@ -532,7 +535,7 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 		}
 	case "IPv4v6":
 		if !allowIPv4 && !allowIPv6 {
-			return fmt.Errorf(
+			return nasie.Cause5GSM_UnknownPDUSessType, fmt.Errorf(
 				"no SupportedPDUSessionType[%q] in DNN[%s] configuration",
 				supportedPDUSessionType,
 				smContext.Dnn,
@@ -540,7 +543,7 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 		}
 	case "Ethernet":
 		if !allowEthernet {
-			return fmt.Errorf(
+			return nasie.Cause5GSM_UnknownPDUSessType, fmt.Errorf(
 				"no SupportedPDUSessionType[%q] in DNN[%s] configuration",
 				supportedPDUSessionType,
 				smContext.Dnn,
@@ -548,19 +551,33 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 		}
 	}
 
+	requested := PDUSessionTypeToModels(requestedPDUSessionType)
+	// TS 24.501 Table 9.11.4.11.1: the unused values 000 and 110 are interpreted as "IPv4v6"
+	if requestedPDUSessionType == 0 || requestedPDUSessionType == 6 {
+		requested = models.PduSessionType_IPV4_V6
+	}
+
 	smContext.EstAcceptCause5gSMValue = 0
-	switch PDUSessionTypeToModels(requestedPDUSessionType) {
+	switch requested {
 	case models.PduSessionType_IPV4:
 		if allowIPv4 {
 			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_IPV4)
 		} else {
-			return fmt.Errorf("PduSessionType_IPV4 is not allowed in DNN[%s] configuration", smContext.Dnn)
+			cause := nasie.Cause5GSM_UnknownPDUSessType
+			if allowIPv6 {
+				cause = nasie.Cause5GSM_PDUSessTypeIpv6OnlyAllowed
+			}
+			return cause, fmt.Errorf("PduSessionType_IPV4 is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	case models.PduSessionType_IPV6:
 		if allowIPv6 {
 			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_IPV6)
 		} else {
-			return fmt.Errorf("PduSessionType_IPV6 is not allowed in DNN[%s] configuration", smContext.Dnn)
+			cause := nasie.Cause5GSM_UnknownPDUSessType
+			if allowIPv4 {
+				cause = nasie.Cause5GSM_PDUSessTypeIpv4OnlyAllowed
+			}
+			return cause, fmt.Errorf("PduSessionType_IPV6 is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	case models.PduSessionType_IPV4_V6:
 		if allowIPv4 && allowIPv6 {
@@ -572,18 +589,21 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_IPV6)
 			smContext.EstAcceptCause5gSMValue = nasie.Cause5GSM_PDUSessTypeIpv6OnlyAllowed
 		} else {
-			return fmt.Errorf("PduSessionType_IPV4_V6 is not allowed in DNN[%s] configuration", smContext.Dnn)
+			return nasie.Cause5GSM_UnknownPDUSessType,
+				fmt.Errorf("PduSessionType_IPV4_V6 is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	case models.PduSessionType_ETHERNET:
 		if allowEthernet {
 			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_ETHERNET)
 		} else {
-			return fmt.Errorf("PduSessionType_ETHERNET is not allowed in DNN[%s] configuration", smContext.Dnn)
+			return nasie.Cause5GSM_UnknownPDUSessType,
+				fmt.Errorf("PduSessionType_ETHERNET is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	default:
-		return fmt.Errorf("requested PDU Sesstion type[%d] is not supported", requestedPDUSessionType)
+		return nasie.Cause5GSM_UnknownPDUSessType,
+			fmt.Errorf("requested PDU Sesstion type[%d] is not supported", requestedPDUSessionType)
 	}
-	return nil
+	return 0, nil
 }
 
 func (smContext *SMContext) StopT3591() {
