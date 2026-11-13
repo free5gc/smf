@@ -384,6 +384,9 @@ func (c *SMFContext) AuthorizationCheck(token string, serviceName models.Nrf_NFM
 	if !c.OAuth2Required {
 		return nil
 	}
+
+	logger.UtilLog.Debugf("SMFContext::AuthorizationCheck: tokenPresent[%t] serviceName[%s]",
+		token != "", serviceName)
 	return oauth.VerifyOAuth(token, string(serviceName), oauth.AudiencePolicy{
 		NFInstanceID: c.NfInstanceID, NFType: models.Nrf_NFMgmt_NFType_SMF,
 	}, c.NrfNfInstanceID, c.NrfCertPem)
