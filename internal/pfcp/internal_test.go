@@ -1449,12 +1449,15 @@ type fakeSessionReportHandler struct {
 	cause      uint8
 	remoteSEID uint64
 	request    *message.SessionReportRequest
+	remote     *net.UDPAddr
 }
 
 func (f *fakeSessionReportHandler) HandleSessionReportRequest(
 	request *message.SessionReportRequest,
+	remote *net.UDPAddr,
 ) (uint8, uint64) {
 	f.request = request
+	f.remote = remote
 	return f.cause, f.remoteSEID
 }
 
@@ -1470,9 +1473,14 @@ func TestHandleSessionReportRequestUsesProcedureHandler(t *testing.T) {
 		ie.NewReportType(0, 0, 1, 0),
 	)
 
-	response := server.handleSessionReportRequest(request)
+	remote := &net.UDPAddr{IP: net.ParseIP("192.0.2.1"), Port: 8805}
+
+	response := server.handleSessionReportRequest(request, remote)
 	if handler.request != request {
 		t.Fatal("Session Report procedure did not receive the original concrete request")
+	}
+	if handler.remote != remote {
+		t.Fatal("Session Report procedure did not receive the request's source address")
 	}
 	assertCause(t, response.Cause, ie.CauseRequestAccepted)
 	if got, want := response.SEID(), handler.remoteSEID; got != want {
@@ -1487,7 +1495,7 @@ func TestHandleSessionReportRequestWithoutHandler(t *testing.T) {
 	server := NewPfcpServer(nil, "127.0.0.1")
 	request := message.NewSessionReportRequest(0, 0, 99, 7, 0, ie.NewReportType(0, 0, 1, 0))
 
-	response := server.handleSessionReportRequest(request)
+	response := server.handleSessionReportRequest(request, nil)
 	assertCause(t, response.Cause, ie.CauseServiceNotSupported)
 	if response.SEID() != 0 {
 		t.Fatalf("response SEID = %d, want zero when no SMF procedure handled the request", response.SEID())

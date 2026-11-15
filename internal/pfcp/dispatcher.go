@@ -50,7 +50,7 @@ func (s *PfcpServer) Dispatch(msg message.Message, addr *net.UDPAddr) {
 			request.Sequence(), s.localNodeIDIE(), ie.NewCause(ie.CauseServiceNotSupported), nil,
 		)
 	case *message.SessionReportRequest:
-		response = s.handleSessionReportRequest(request)
+		response = s.handleSessionReportRequest(request, addr)
 	default:
 		s.log.Warnf("unsupported PFCP request %T from %v", msg, addr)
 		return

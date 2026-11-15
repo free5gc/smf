@@ -704,6 +704,18 @@ func (upf *UPF) MatchesPFCPSource(source net.IP) bool {
 	return false
 }
 
+// IsUnassociatedPFCPSource reports whether source is an address of a
+// configured UPF without an established PFCP association.
+func IsUnassociatedPFCPSource(source net.IP) bool {
+	unassociated := false
+	upfPool.Range(func(_, value interface{}) bool {
+		upf := value.(*UPF)
+		unassociated = upf.IsAssociated() != nil && upf.MatchesPFCPSource(source)
+		return !unassociated
+	})
+	return unassociated
+}
+
 // *** add unit test ***//
 func RetrieveUPFNodeByNodeID(nodeID pfcptype.NodeID) *UPF {
 	var targetUPF *UPF = nil
