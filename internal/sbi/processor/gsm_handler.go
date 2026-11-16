@@ -30,6 +30,9 @@ func HandlePDUSessionEstablishmentRequest(
 	// Retrieve PTI (Procedure transaction identity)
 	smCtx.Pti = req.ProcedureTransactionID()
 
+	// TS 24.501 6.4.1.3: the accept answers an Always-on PDU session requested IE
+	smCtx.AlwaysOnPDUSessionRequested = req.AlwaysonPDUSessReq != nil
+
 	// Retrieve MaxIntegrityProtectedDataRate of UE for UP Security
 	if ipmdr := req.IntegrityProtectionMaxDataRate; ipmdr != nil {
 		switch ipmdr.Uplink {
