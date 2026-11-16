@@ -52,10 +52,10 @@ func HandlePDUSessionEstablishmentRequest(
 	// Handle PDUSessionType
 	if req.PDUSessType != nil {
 		requestedPDUSessionType := req.PDUSessType.Value
-		if err := smCtx.IsAllowedPDUSessionType(requestedPDUSessionType); err != nil {
+		if cause, err := smCtx.IsAllowedPDUSessionType(requestedPDUSessionType); err != nil {
 			logger.CtxLog.Errorf("%s", err)
 			return &GSMError{
-				GSMCause: nasie.Cause5GSM_PDUSessTypeIpv4OnlyAllowed,
+				GSMCause: cause,
 			}
 		}
 	} else {
