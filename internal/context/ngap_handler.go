@@ -272,8 +272,12 @@ func HandlePathSwitchRequestSetupFailedTransfer(b []byte, ctx *SMContext) error 
 
 func HandleHandoverRequiredTransfer(b []byte, ctx *SMContext) error {
 	handoverRequiredTransfer := ngapie.HandoverRequiredTransfer{}
+	ctx.QosFlowsToBeForwarded = nil
 
 	err := ngapie.UnmarshalBinary(b, &handoverRequiredTransfer)
+	if err != nil {
+		return err
+	}
 
 	directForwardingPath := handoverRequiredTransfer.DirectForwardingPathAvailability
 	if directForwardingPath != nil {
@@ -284,14 +288,12 @@ func HandleHandoverRequiredTransfer(b []byte, ctx *SMContext) error {
 		ctx.DLForwardingType = IndirectForwarding
 	}
 
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
 func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) error {
 	handoverRequestAcknowledgeTransfer := ngapie.HandoverRequestAcknowledgeTransfer{}
+	ctx.QosFlowsToBeForwarded = nil
 
 	err := ngapie.UnmarshalBinary(b, &handoverRequestAcknowledgeTransfer)
 	if err != nil {
@@ -313,6 +315,22 @@ func HandleHandoverRequestAcknowledgeTransfer(b []byte, ctx *SMContext) error {
 		ctx.DLForwardingType = NoForwarding
 		logger.PduSessLog.Warnf("Handle HandoverRequestAcknowledgeTransfer warned: %+v", "DL Forwarding Info not provision")
 		return nil
+	}
+
+	seenQFI := make(map[int64]struct{})
+	if qosFlowList := handoverRequestAcknowledgeTransfer.QosFlowSetupResponseList; qosFlowList != nil {
+		for _, item := range qosFlowList.List {
+			if item.QosFlowIdentifier == nil || item.DataForwardingAccepted == nil {
+				continue
+			}
+
+			qfi := item.QosFlowIdentifier.Value
+			if _, exists := seenQFI[qfi]; exists {
+				continue
+			}
+			seenQFI[qfi] = struct{}{}
+			ctx.QosFlowsToBeForwarded = append(ctx.QosFlowsToBeForwarded, qfi)
+		}
 	}
 
 	switch ctx.DLForwardingType {

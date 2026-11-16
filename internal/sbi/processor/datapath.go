@@ -10,6 +10,8 @@ import (
 	goPfcpMessage "github.com/wmnsk/go-pfcp/message"
 
 	nasie "github.com/free5gc/nas/ie"
+	"github.com/free5gc/openapi"
+	"github.com/free5gc/openapi/amf/Comm"
 	"github.com/free5gc/openapi/mediatype/multipart"
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
@@ -66,29 +68,8 @@ func (p *Processor) ActivateUPFSession(
 			continue
 		}
 		for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
-			pdrList := make([]*smf_context.PDR, 0, 2)
-			farList := make([]*smf_context.FAR, 0, 2)
-			qerList := make([]*smf_context.QER, 0, 2)
-			urrList := make([]*smf_context.URR, 0, 2)
-
-			if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
-				pdrList = append(pdrList, node.UpLinkTunnel.PDR)
-				farList = append(farList, node.UpLinkTunnel.PDR.FAR)
-				if node.UpLinkTunnel.PDR.QER != nil {
-					qerList = append(qerList, node.UpLinkTunnel.PDR.QER...)
-				}
-				if node.UpLinkTunnel.PDR.URR != nil {
-					urrList = append(urrList, node.UpLinkTunnel.PDR.URR...)
-				}
-			}
-			if node.DownLinkTunnel != nil && node.DownLinkTunnel.PDR != nil {
-				pdrList = append(pdrList, node.DownLinkTunnel.PDR)
-				farList = append(farList, node.DownLinkTunnel.PDR.FAR)
-				if node.DownLinkTunnel.PDR.URR != nil {
-					urrList = append(urrList, node.DownLinkTunnel.PDR.URR...)
-				}
-				// skip send QER because uplink and downlink shared one QER
-			}
+			state := pfcpStateForTunnels(node.UPF, node.UpLinkTunnel, node.DownLinkTunnel)
+			pdrList, farList, qerList, urrList := state.pdrList, state.farList, state.qerList, state.urrList
 
 			pfcpState := pfcpPool[node.GetNodeIP()]
 			if pfcpState == nil {
@@ -110,16 +91,21 @@ func (p *Processor) ActivateUPFSession(
 
 	resChan := make(chan SendPfcpResult)
 	establishmentTargets := make(map[string]*PFCPState)
+	pendingTargets := 0
 
 	for ip, pfcp := range pfcpPool {
+		sessionContext := smContext.PFCPContext[ip]
+		if sessionContext != nil && sessionContext.RemoteSEID != 0 && !pfcp.hasPendingChanges(smContext) {
+			continue
+		}
+		pendingTargets++
 		urrIds := []uint32{}
 		for _, urr := range pfcp.urrList {
 			urrIds = append(urrIds, urr.URRID)
 		}
 		logger.PduSessLog.Tracef("[ActivateUPFSession] About to send to UPF[%s]: %d PDRs, %d FARs, "+
 			"%d URRs (aggregated IDs: %v)", ip, len(pfcp.pdrList), len(pfcp.farList), len(pfcp.urrList), urrIds)
-		sessionContext, exist := smContext.PFCPContext[ip]
-		if !exist || sessionContext == nil || sessionContext.RemoteSEID == 0 {
+		if sessionContext == nil || sessionContext.RemoteSEID == 0 {
 			establishmentTargets[ip] = pfcp
 			go p.establishPfcpSession(smContext, pfcp, resChan)
 		} else {
@@ -127,7 +113,7 @@ func (p *Processor) ActivateUPFSession(
 		}
 	}
 
-	success := waitAllPfcpRsp(smContext, len(pfcpPool), resChan, nil)
+	success := waitAllPfcpRsp(smContext, pendingTargets, resChan, nil)
 	close(resChan)
 
 	// Initial PDU Session Establishment is atomic across every required UPF.
@@ -586,8 +572,8 @@ func (p *Processor) sendPDUSessionEstablishmentReject(
 
 	smContext.SetState(smf_context.InActive)
 
-	ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(
-		models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFType_AMF)
+	ctx, _, errToken := smf_context.GetSelf().GetTokenCtxForNFInstance(
+		models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFType_AMF, smContext.AMFProfile.NfInstanceId)
 	if errToken != nil {
 		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", errToken)
 		return
@@ -610,12 +596,14 @@ func (p *Processor) sendPDUSessionEstablishmentAccept(
 	smNasBuf, err := smf_context.BuildGSMPDUSessionEstablishmentAccept(smContext)
 	if err != nil {
 		logger.PduSessLog.Errorf("Build GSM PDUSessionEstablishmentAccept failed: %s", err)
+		p.releaseFailedEstablishment(smContext, true)
 		return
 	}
 
 	n2Pdu, err := smf_context.BuildPDUSessionResourceSetupRequestTransfer(smContext)
 	if err != nil {
 		logger.PduSessLog.Errorf("Build PDUSessionResourceSetupRequestTransfer failed: %s", err)
+		p.releaseFailedEstablishment(smContext, true)
 		return
 	}
 
@@ -644,9 +632,11 @@ func (p *Processor) sendPDUSessionEstablishmentAccept(
 		},
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFType_AMF)
+	ctx, _, err := smf_context.GetSelf().GetTokenCtxForNFInstance(
+		models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFType_AMF, smContext.AMFProfile.NfInstanceId)
 	if err != nil {
 		logger.PduSessLog.Warnf("Get NAMF_COMM context failed: %s", err)
+		p.releaseFailedEstablishment(smContext, true)
 		return
 	}
 
@@ -654,6 +644,12 @@ func (p *Processor) sendPDUSessionEstablishmentAccept(
 		N1N2MessageTransfer(ctx, smContext.Supi, n1n2Request, smContext.CommunicationClientApiPrefix)
 	if err != nil || rspData == nil {
 		logger.ConsumerLog.Warnf("N1N2MessageTransfer for sendPDUSessionEstablishmentAccept failed: %+v", err)
+		// TS 29.518 clause 5.2.2.3.1.2: on INVALID_SM_CONTEXT the SMF shall remove
+		// the SM Context and shall not send SMContextStatusNotification. Other
+		// failures do not tell whether the AMF delivered the Accept.
+		if n1n2TransferProblemCause(err) == "INVALID_SM_CONTEXT" {
+			p.releaseFailedEstablishment(smContext, false)
+		}
 		return
 	}
 
@@ -662,6 +658,32 @@ func (p *Processor) sendPDUSessionEstablishmentAccept(
 	if rspData.Cause == models.Amf_Comm_N1N2MessageTransferCause_N1_MSG_NOT_TRANSFERRED {
 		logger.PduSessLog.Warnf("%v", rspData.Cause)
 	}
+}
+
+// releaseFailedEstablishment undoes a PDU Session Establishment whose PFCP
+// sessions are installed but whose Accept was not delivered to the UE.
+func (p *Processor) releaseFailedEstablishment(smContext *smf_context.SMContext, sendNotification bool) {
+	// Local/NF cleanup must not depend on whether PFCP Session Deletion
+	// succeeds. The actual SMContext removal waits for the caller-held SMLock.
+	defer p.RemoveSMContextFromAllNF(smContext, sendNotification)
+
+	for _, res := range p.ReleaseTunnel(smContext) {
+		if res.Status != smf_context.SessionReleaseSuccess {
+			smContext.Log.Warnf("Delete PFCP session of failed PDU Session Establishment: %v", res.Err)
+		}
+	}
+}
+
+func n1n2TransferProblemCause(err error) string {
+	var apiErr openapi.GenericOpenAPIError
+	if !errors.As(err, &apiErr) {
+		return ""
+	}
+	transferErr, ok := apiErr.Model().(Comm.N1N2MessageTransferError)
+	if !ok || transferErr.ProblemDetails == nil {
+		return ""
+	}
+	return transferErr.ProblemDetails.Cause
 }
 
 func (p *Processor) updateAnUpfPfcpSession(
@@ -853,4 +875,73 @@ func (p *Processor) deletePfcpSession(
 		}
 	}
 	resCh <- SendPfcpResult{Status: smf_context.SessionReleaseSuccess}
+}
+
+// Include rules from every classifier, including downlink-only QoS/charging.
+func pfcpStateForTunnels(upf *smf_context.UPF, tunnels ...*smf_context.GTPTunnel) *PFCPState {
+	state := &PFCPState{upf: upf}
+	pdrs, fars := make(map[uint16]bool), make(map[uint32]bool)
+	qers, urrs := make(map[uint32]bool), make(map[uint32]bool)
+	for _, tunnel := range tunnels {
+		for _, pdr := range tunnel.PDRs() {
+			if pdrs[pdr.PDRID] {
+				continue
+			}
+			pdrs[pdr.PDRID] = true
+			state.pdrList = append(state.pdrList, pdr)
+			if pdr.FAR != nil && !fars[pdr.FAR.FARID] {
+				fars[pdr.FAR.FARID] = true
+				state.farList = append(state.farList, pdr.FAR)
+			}
+			for _, qer := range pdr.QER {
+				if !qers[qer.QERID] {
+					qers[qer.QERID] = true
+					state.qerList = append(state.qerList, qer)
+				}
+			}
+			for _, urr := range pdr.URR {
+				if !urrs[urr.URRID] {
+					urrs[urr.URRID] = true
+					state.urrList = append(state.urrList, urr)
+				}
+			}
+		}
+	}
+	return state
+}
+
+// Match the operations encoded by BuildSessionModificationRequest. Established
+// UPFs with no pending operations need neither a request nor a response waiter.
+func (state *PFCPState) hasPendingChanges(c *smf_context.SMContext) bool {
+	pending := func(ruleState smf_context.RuleState) bool {
+		return ruleState == smf_context.RULE_INITIAL || ruleState == smf_context.RULE_UPDATE ||
+			ruleState == smf_context.RULE_REMOVE
+	}
+	for _, pdr := range state.pdrList {
+		if !pdr.Disabled && pending(pdr.State) {
+			return true
+		}
+	}
+	for _, far := range state.farList {
+		if pending(far.State) {
+			return true
+		}
+	}
+	for _, bar := range state.barList {
+		if bar.State == smf_context.RULE_INITIAL {
+			return true
+		}
+	}
+	for _, qer := range state.qerList {
+		if qer.State == smf_context.RULE_INITIAL {
+			return true
+		}
+	}
+	for _, urr := range state.urrList {
+		ruleState := c.GetUrrState(state.upf.UUID(), urr.URRID)
+		if pending(ruleState) || ruleState == smf_context.RULE_QUERY {
+			return true
+		}
+	}
+	return false
 }

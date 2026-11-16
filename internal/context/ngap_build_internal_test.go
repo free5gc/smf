@@ -124,7 +124,7 @@ func TestGoldenBuildPDUSessionResourceModifyConfirmTransfer(t *testing.T) {
 		// Precedence must not be 255 (default flow is skipped by the builder)
 		node.DownLinkTunnel.PDR = &PDR{
 			Precedence: 100,
-			QER:        []*QER{{QFI: pfcptype.QFI{QFI: 2}}},
+			QER:        []*QER{{}, {QFI: &pfcptype.QFI{QFI: 2}}},
 		}
 		return tunnel
 	}
@@ -395,6 +395,7 @@ func TestGoldenBuildPathSwitchRequestAcknowledgeTransfer(t *testing.T) {
 func TestGoldenBuildHandoverCommandTransfer(t *testing.T) {
 	newDirectContext := func() *SMContext {
 		smContext := newGSMTestContext()
+		smContext.QosFlowsToBeForwarded = []int64{1}
 		// zero value of DLForwardingType is IndirectForwarding: ALWAYS set it
 		smContext.DLForwardingType = DirectForwarding
 		smContext.DLDirectForwardingTunnel = &ngapie.UPTransportLayerInformation{
@@ -412,6 +413,7 @@ func TestGoldenBuildHandoverCommandTransfer(t *testing.T) {
 	}
 	newIndirectContext := func() *SMContext {
 		smContext := newGSMTestContext()
+		smContext.QosFlowsToBeForwarded = []int64{1}
 		smContext.DLForwardingType = IndirectForwarding
 		smContext.Tunnel = newTestUPTunnel() // indirect branch reads the N3 IP from Tunnel's ANUPF
 		node2 := NewDataPathNode()
@@ -434,7 +436,7 @@ func TestGoldenBuildHandoverCommandTransfer(t *testing.T) {
 			wantIP:       "127.0.0.10",
 			golden: []byte{
 				0x60, 0x0f, 0x80, 0x7f, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x01, 0x04, 0x00,
-				0x12,
+				0x02,
 			},
 		},
 		{
@@ -444,7 +446,7 @@ func TestGoldenBuildHandoverCommandTransfer(t *testing.T) {
 			wantIP:       "127.0.0.8",
 			golden: []byte{
 				0x60, 0x0f, 0x80, 0x7f, 0x00, 0x00, 0x08, 0x00, 0x00, 0x10, 0x02, 0x00,
-				0x12,
+				0x02,
 			},
 		},
 	}
@@ -470,8 +472,56 @@ func TestGoldenBuildHandoverCommandTransfer(t *testing.T) {
 				gtpTunnel.TransportLayerAddress.Value.Bytes)
 			require.NotNil(t, decoded.QosFlowToBeForwardedList)
 			require.Len(t, decoded.QosFlowToBeForwardedList.List, 1)
-			require.Equal(t, int64(DefaultNonGBR5QI),
+			require.Equal(t, int64(1),
 				decoded.QosFlowToBeForwardedList.List[0].QosFlowIdentifier.Value)
 		})
 	}
+}
+
+// A session that the gNB split at its setup has NrdcIndicator set. With no PCC
+// rule of precedence 255, its split tunnel has no default data path. The
+// acknowledge of a path switch gives the split's UPF end from the tunnel's
+// other path, with the secondary node's end, in Additional NG-U UP TNL
+// Information (TS 38.413 9.3.4.9).
+func TestPathSwitchRequestAcknowledgeTransferOfASplitWithoutDefaultPath(t *testing.T) {
+	newContext := func() *SMContext {
+		smContext := newGSMTestContext()
+		smContext.Tunnel, smContext.DCTunnel = newTestUPTunnel(), newTestUPTunnel()
+		smContext.UpSecurityFromPathSwitchRequestSameAsLocalStored = true
+		smContext.NrdcIndicator = true
+		smContext.DCTunnel.ANInformation.IPAddress = net.ParseIP("192.0.2.30").To4()
+		smContext.DCTunnel.ANInformation.TEID = 0x30
+		return smContext
+	}
+
+	smContext := newContext()
+	split := smContext.DCTunnel.DataPathPool[1]
+	split.IsDefaultPath = false
+	split.FirstDPNode.UpLinkTunnel.TEID = 0x2002
+	var buf []byte
+	var err error
+	require.NotPanics(t, func() { buf, err = BuildPathSwitchRequestAcknowledgeTransfer(smContext) })
+	require.NoError(t, err)
+	var ack ngapie.PathSwitchRequestAcknowledgeTransfer
+	require.NoError(t, ngapie.UnmarshalBinary(buf, &ack))
+	require.NotNil(t, ack.IEExtensions)
+	require.Len(t, ack.IEExtensions.List, 1)
+	pairs := ack.IEExtensions.List[0].AdditionalNGUUPTNLInformation
+	require.NotNil(t, pairs)
+	require.Len(t, pairs.List, 1)
+	ul, ok := pairs.List[0].ULNGUUPTNLInformation.Choice.(*ngapie.GTPTunnel)
+	require.True(t, ok)
+	require.Equal(t, aper.OctetString{0x00, 0x00, 0x20, 0x02}, ul.GTPTEID.Value)
+	require.Equal(t, net.ParseIP("127.0.0.8").To4(), net.IP(ul.TransportLayerAddress.Value.Bytes))
+	dl, ok := pairs.List[0].DLNGUUPTNLInformation.Choice.(*ngapie.GTPTunnel)
+	require.True(t, ok)
+	require.Equal(t, aper.OctetString{0x00, 0x00, 0x00, 0x30}, dl.GTPTEID.Value)
+	require.Equal(t, net.ParseIP("192.0.2.30").To4(), net.IP(dl.TransportLayerAddress.Value.Bytes))
+
+	noPath := newContext()
+	noPath.DCTunnel = NewUPTunnel()
+	noPath.DCTunnel.ANInformation = smContext.DCTunnel.ANInformation
+	require.NotPanics(t, func() { buf, err = BuildPathSwitchRequestAcknowledgeTransfer(noPath) })
+	require.Error(t, err)
+	require.Nil(t, buf)
 }

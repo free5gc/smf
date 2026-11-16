@@ -30,6 +30,9 @@ func HandlePDUSessionEstablishmentRequest(
 	// Retrieve PTI (Procedure transaction identity)
 	smCtx.Pti = req.ProcedureTransactionID()
 
+	// TS 24.501 6.4.1.3: the accept answers an Always-on PDU session requested IE
+	smCtx.AlwaysOnPDUSessionRequested = req.AlwaysonPDUSessReq != nil
+
 	// Retrieve MaxIntegrityProtectedDataRate of UE for UP Security
 	if ipmdr := req.IntegrityProtectionMaxDataRate; ipmdr != nil {
 		switch ipmdr.Uplink {
@@ -52,10 +55,10 @@ func HandlePDUSessionEstablishmentRequest(
 	// Handle PDUSessionType
 	if req.PDUSessType != nil {
 		requestedPDUSessionType := req.PDUSessType.Value
-		if err := smCtx.IsAllowedPDUSessionType(requestedPDUSessionType); err != nil {
+		if cause, err := smCtx.IsAllowedPDUSessionType(requestedPDUSessionType); err != nil {
 			logger.CtxLog.Errorf("%s", err)
 			return &GSMError{
-				GSMCause: nasie.Cause5GSM_PDUSessTypeIpv4OnlyAllowed,
+				GSMCause: cause,
 			}
 		}
 	} else {
@@ -237,6 +240,19 @@ func (p *Processor) HandlePDUSessionModificationRequest(
 	if len(authQoSFlowDesc.Descs) > 0 {
 		rsp.AuthoQosFlowDescs = &authQoSFlowDesc
 	}
+
+	// TS 23.502 4.3.3.2 step 2a: update the UPF(s) with the N4 rules of the new,
+	// modified or removed QoS flows before the PDU Session Modification Command
+	// is sent, in the same sequence as HandleSMPolicyUpdateNotify uses for a
+	// PCF-initiated change. ActivateUPFSession sends every pending PDR
+	// (additional packet filter PDRs included), FAR, QER and URR to the UPF
+	// that owns it. As on that path, a UPF refusal does not turn into a Reject:
+	// the PCF decision is already applied to the SM context and cannot be
+	// rolled back here, so a Reject would leave the UE and the SMF out of step.
+	smCtx.SendUpPathChgNotification("EARLY", SendUpPathChgEventExposureNotification)
+	p.ActivateUPFSession(smCtx, nil)
+	smCtx.SendUpPathChgNotification("LATE", SendUpPathChgEventExposureNotification)
+	smCtx.PostRemoveDataPath()
 
 	return rsp, nil
 }

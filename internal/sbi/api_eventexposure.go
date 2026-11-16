@@ -10,9 +10,14 @@
 package sbi
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/smf/internal/sbi/processor"
+	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 )
 
 func (s *Server) getEventExposureRoutes() []Route {
@@ -54,12 +59,49 @@ func (s *Server) getEventExposureRoutes() []Route {
 
 // SubscriptionsPost -
 func (s *Server) HTTPCreateIndividualSubcription(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{})
+	var request models.Smf_EvtExpos_NsmfEventExposure
+	if err := c.ShouldBindBodyWithJSON(&request); err != nil {
+		writeEventExposureProblem(c, eventExposureMalformedRequest())
+		return
+	}
+
+	body, exists := c.Get(gin.BodyBytesKey)
+	bodyBytes, ok := body.([]byte)
+	if !exists || !ok {
+		writeEventExposureProblem(c, eventExposureMalformedRequest())
+		return
+	}
+	var rawObject map[string]json.RawMessage
+	if err := json.Unmarshal(bodyBytes, &rawObject); err != nil {
+		writeEventExposureProblem(c, eventExposureMalformedRequest())
+		return
+	}
+	_, pduSessionIDPresent := rawObject["pduSeId"]
+
+	result, problem := s.Processor().CreateEventExposureSubscription(
+		c.Request.Context(),
+		&request,
+		pduSessionIDPresent,
+	)
+	if problem != nil {
+		writeEventExposureProblem(c, problem)
+		return
+	}
+
+	c.Header("Location", result.Location)
+	c.JSON(http.StatusCreated, result.Response)
 }
 
 // SubscriptionsSubIdDelete -
 func (s *Server) HTTPDeleteIndividualSubcription(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{})
+	if problem := s.Processor().DeleteEventExposureSubscription(
+		c.Request.Context(),
+		c.Param("subId"),
+	); problem != nil {
+		writeEventExposureProblem(c, problem)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 // SubscriptionsSubIdGet -
@@ -70,4 +112,20 @@ func (s *Server) HTTPGetIndividualSubcription(c *gin.Context) {
 // SubscriptionsSubIdPut -
 func (s *Server) HTTPReplaceIndividualSubcription(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{})
+}
+
+func eventExposureMalformedRequest() *processor.EventExposureProblem {
+	return &processor.EventExposureProblem{
+		Status: http.StatusBadRequest,
+		ProblemDetails: &models.ProblemDetails{
+			Title:  "Malformed request syntax",
+			Status: http.StatusBadRequest,
+			Detail: "The Event Exposure request is invalid.",
+		},
+	}
+}
+
+func writeEventExposureProblem(c *gin.Context, problem *processor.EventExposureProblem) {
+	c.Set(sbi_metrics.IN_PB_DETAILS_CTX_STR, http.StatusText(problem.Status))
+	c.JSON(problem.Status, problem.ProblemDetails)
 }

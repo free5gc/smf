@@ -7,6 +7,9 @@ type Route struct {
 	Method  string
 	Pattern string
 	APIFunc gin.HandlerFunc
+	// IsNotification identifies a Notify operation of Subscribe/Notify semantics.
+	// TS 29.500 6.7.3 excludes these operations from OAuth access-token use.
+	IsNotification bool
 }
 
 func applyRoutes(group *gin.RouterGroup, routes []Route) {

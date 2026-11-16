@@ -134,9 +134,10 @@ func (p *Processor) notifyAMFOfDownlinkData(smContext *smf_context.SMContext) er
 		},
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx(
+	ctx, _, err := smf_context.GetSelf().GetTokenCtxForNFInstance(
 		models.Nrf_NFMgmt_ServiceName_NAMF_COMM,
 		models.Nrf_NFMgmt_NFType_AMF,
+		smContext.AMFProfile.NfInstanceId,
 	)
 	if err != nil {
 		return fmt.Errorf("get NAMF_COMM token context: %w", err)

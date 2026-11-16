@@ -25,6 +25,13 @@ func BuildGSMPDUSessionEstablishmentAccept(smContext *SMContext) ([]byte, error)
 		accept.Cause5GSM = &nasie.Cause5GSM{Value: v}
 	}
 
+	// TS 24.501 6.4.1.3 b): the SMF does not establish always-on PDU sessions,
+	// so an included Always-on PDU session requested IE, whatever its value,
+	// is answered with "Always-on PDU session not allowed".
+	if smContext.AlwaysOnPDUSessionRequested {
+		accept.AlwaysonPDUSessInd = &nasie.AlwaysonPDUSessInd{APSI: false}
+	}
+
 	sessAMBR := new(nasie.SessAMBR)
 	if err := sessAMBR.Set(sessRule.AuthSessAmbr.Uplink, sessRule.AuthSessAmbr.Downlink); err != nil {
 		return nil, err
@@ -153,6 +160,17 @@ func BuildGSMPDUSessionEstablishmentReject(smContext *SMContext, cause uint8) ([
 	return reject.MarshalBinary()
 }
 
+// BuildGSM5GSMStatus makes a plain 5GSM STATUS message (TS 24.501 8.3.16)
+// reporting cause for the 5GSM message received with the given PTI.
+func BuildGSM5GSMStatus(smContext *SMContext, pti uint8, cause uint8) ([]byte, error) {
+	status := &message.Status5GSM{
+		PDUSessId: uint8(smContext.PDUSessionID),
+		PTI:       pti,
+		Cause5GSM: &nasie.Cause5GSM{Value: cause},
+	}
+	return status.MarshalBinary()
+}
+
 // BuildGSMPDUSessionReleaseCommand makes a plain NAS message.
 //
 // If isTriggeredByUE is true, the PTI field of the constructed NAS message is
@@ -194,4 +212,11 @@ func BuildGSMPDUSessionModificationReject(smContext *SMContext) ([]byte, error) 
 		Cause5GSM: &nasie.Cause5GSM{Value: nasie.Cause5GSM_MsgTypeNonExistentOrNotImpl},
 	}
 	return reject.MarshalBinary()
+}
+
+type ProtocolConfigurationOptions struct {
+	DNSIPv4Request     bool
+	DNSIPv6Request     bool
+	PCSCFIPv4Request   bool
+	IPv4LinkMTURequest bool
 }

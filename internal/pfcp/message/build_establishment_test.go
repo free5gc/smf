@@ -9,6 +9,7 @@ import (
 	"github.com/wmnsk/go-pfcp/ie"
 	goPfcpMessage "github.com/wmnsk/go-pfcp/message"
 
+	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/context"
 	pfcp_message "github.com/free5gc/smf/internal/pfcp/message"
 	"github.com/free5gc/smf/internal/pfcp/pfcptype"
@@ -39,7 +40,7 @@ func TestBuildSessionEstablishmentRequestMapsRulesWithGoPFCP(t *testing.T) {
 	}
 	qer := &context.QER{
 		QERID:      300,
-		QFI:        pfcptype.QFI{QFI: 9},
+		QFI:        &pfcptype.QFI{QFI: 9},
 		GateStatus: &pfcptype.GateStatus{ULGate: pfcptype.GateOpen, DLGate: pfcptype.GateClose},
 		MBR:        &pfcptype.MBR{ULMBR: 100_000, DLMBR: 200_000},
 		GBR:        &pfcptype.GBR{ULGBR: 10_000, DLGBR: 20_000},
@@ -356,4 +357,138 @@ func requireIEUint64(
 	got, err := getter(candidate)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
+}
+
+// A dedicated flow shares the Session-AMBR QER but has its own marking QER.
+// Check the encoded messages, including the modification path's Create QERs.
+func TestSharedAMBRQEROmitsQFI(t *testing.T) {
+	for _, modification := range []bool{false, true} {
+		name := "establishment"
+		if modification {
+			name = "modification"
+		}
+		t.Run(name, func(t *testing.T) {
+			initDirectBuilderTestContext(t)
+			const upfIP = "10.4.0.1"
+			sm := context.NewSMContext("imsi-208930000000102", 10)
+			sm.PFCPContext[upfIP] = &context.PFCPSessionContext{LocalSEID: 1, RemoteSEID: 2}
+			qers := []*context.QER{
+				{QERID: 1, GateStatus: &pfcptype.GateStatus{}, MBR: &pfcptype.MBR{ULMBR: 100000, DLMBR: 200000}},
+				{QERID: 2, QFI: &pfcptype.QFI{QFI: 1}, GateStatus: &pfcptype.GateStatus{}},
+				{QERID: 3, QFI: &pfcptype.QFI{QFI: 4}, GateStatus: &pfcptype.GateStatus{}},
+			}
+			var wire []byte
+			if modification {
+				request, err := pfcp_message.BuildSessionModificationRequest(upfIP, "upf", sm, nil, nil, nil, qers, nil)
+				require.NoError(t, err)
+				wire, err = request.Marshal()
+				require.NoError(t, err)
+			} else {
+				request, err := pfcp_message.BuildSessionEstablishmentRequest(
+					*testNodeID, upfIP, "upf", sm, nil, nil, nil, qers, nil,
+				)
+				require.NoError(t, err)
+				wire, err = request.Marshal()
+				require.NoError(t, err)
+			}
+			parsed, err := goPfcpMessage.Parse(wire)
+			require.NoError(t, err)
+			var encoded []*ie.IE
+			switch request := parsed.(type) {
+			case *goPfcpMessage.SessionEstablishmentRequest:
+				encoded = request.CreateQER
+			case *goPfcpMessage.SessionModificationRequest:
+				encoded = request.CreateQER
+			default:
+				t.Fatalf("unexpected message %T", parsed)
+			}
+			require.Len(t, encoded, 3)
+			for index, grouped := range encoded {
+				children, decodeErr := grouped.CreateQER()
+				require.NoError(t, decodeErr)
+				var qfis []*ie.IE
+				for _, child := range children {
+					if child.Type == ie.QFI {
+						qfis = append(qfis, child)
+					}
+				}
+				if index == 0 {
+					require.Empty(t, qfis)
+					requireIEUint64(t, findIE(t, children, ie.MBR), 100000, (*ie.IE).MBRUL)
+					requireIEUint64(t, findIE(t, children, ie.MBR), 200000, (*ie.IE).MBRDL)
+				} else {
+					require.Len(t, qfis, 1)
+					qfi, qfiErr := qfis[0].QFI()
+					require.NoError(t, qfiErr)
+					require.Equal(t, qers[index].QFI.QFI, qfi)
+				}
+			}
+		})
+	}
+}
+
+func TestBuildSessionEstablishmentRequestSNSSAI(t *testing.T) {
+	initDirectBuilderTestContext(t)
+	for _, tc := range []struct {
+		name    string
+		snssai  *models.Snssai
+		payload []byte
+		failure string
+	}{
+		{name: "SST and SD", snssai: &models.Snssai{Sst: 1, Sd: "010203"}, payload: []byte{1, 1, 2, 3}},
+		{name: "SST only", snssai: &models.Snssai{Sst: 1}, payload: []byte{1, 255, 255, 255}},
+		{name: "uppercase SD", snssai: &models.Snssai{Sst: 255, Sd: "ABCDEF"}, payload: []byte{255, 171, 205, 239}},
+		{name: "explicit absent SD", snssai: &models.Snssai{Sst: 1, Sd: "ffffff"}, payload: []byte{1, 255, 255, 255}},
+		{name: "missing identity"},
+		{name: "negative SST", snssai: &models.Snssai{Sst: -1}, failure: "SST"},
+		{name: "oversized SST", snssai: &models.Snssai{Sst: 256}, failure: "SST"},
+		{name: "short SD", snssai: &models.Snssai{Sst: 1, Sd: "12345"}, failure: "six hexadecimal"},
+		{name: "long SD", snssai: &models.Snssai{Sst: 1, Sd: "1234567"}, failure: "six hexadecimal"},
+		{name: "invalid SD", snssai: &models.Snssai{Sst: 1, Sd: "ghijkl"}, failure: "invalid SD"},
+		{name: "signed SD", snssai: &models.Snssai{Sst: 1, Sd: "+00001"}, failure: "invalid SD"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			smContext := context.NewSMContext("imsi-208930000000106", 10)
+			smContext.PFCPContext["10.4.0.1"] = &context.PFCPSessionContext{LocalSEID: 106}
+			smContext.Smf_PDUSess_SmContextCreateData = &models.Smf_PDUSess_SmContextCreateData{SNssai: tc.snssai}
+			qer := &context.QER{QERID: 7, State: context.RULE_INITIAL}
+			request, err := pfcp_message.BuildSessionEstablishmentRequest(
+				*testNodeID, "10.4.0.1", "snssai-upf", smContext, nil, nil, nil, []*context.QER{qer}, nil,
+			)
+			if tc.failure != "" {
+				require.ErrorContains(t, err, tc.failure)
+				require.Nil(t, request)
+				require.Equal(t, context.RULE_INITIAL, qer.State, "invalid slice must be rejected before rule state changes")
+				return
+			}
+			require.NoError(t, err)
+			wire, err := request.Marshal()
+			require.NoError(t, err)
+			decoded, err := goPfcpMessage.Parse(wire)
+			require.NoError(t, err)
+			parsed, ok := decoded.(*goPfcpMessage.SessionEstablishmentRequest)
+			require.True(t, ok)
+			if tc.payload == nil {
+				require.Nil(t, parsed.SNSSAI)
+				return
+			}
+			require.NotNil(t, parsed.SNSSAI)
+			require.Equal(t, tc.payload, parsed.SNSSAI.Payload)
+			require.Equal(t, []byte{1, 1, 0, 4}, wire[len(wire)-8:len(wire)-4], "standard type 257 and four-octet payload")
+			// Removing the optional identity must recover the original request,
+			// including its existing QER and session addressing.
+			parsed.SNSSAI = nil
+			withoutSlice, err := parsed.Marshal()
+			require.NoError(t, err)
+			smContext.SNssai = nil
+			qer.State = context.RULE_INITIAL
+			original, err := pfcp_message.BuildSessionEstablishmentRequest(
+				*testNodeID, "10.4.0.1", "snssai-upf", smContext, nil, nil, nil, []*context.QER{qer}, nil,
+			)
+			require.NoError(t, err)
+			originalWire, err := original.Marshal()
+			require.NoError(t, err)
+			require.Equal(t, originalWire, withoutSlice)
+		})
+	}
 }

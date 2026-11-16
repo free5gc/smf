@@ -100,7 +100,8 @@ func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMCon
 	}
 
 	ctx, _, err := smf_context.GetSelf().
-		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, models.Nrf_NFMgmt_NFType_PCF)
+		GetTokenCtxForNFInstance(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL,
+			models.Nrf_NFMgmt_NFType_PCF, smContext.SelectedPCFProfile.NfInstanceId)
 	if err != nil {
 		return "", nil, err
 	}
@@ -207,7 +208,8 @@ func (s *npcfService) SendSMPolicyAssociationUpdateByUERequestModification(
 	}
 
 	ctx, _, err := smf_context.GetSelf().
-		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, models.Nrf_NFMgmt_NFType_PCF)
+		GetTokenCtxForNFInstance(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL,
+			models.Nrf_NFMgmt_NFType_PCF, smContext.SelectedPCFProfile.NfInstanceId)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +325,8 @@ func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.
 	}
 
 	ctx, _, err := smf_context.GetSelf().
-		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, models.Nrf_NFMgmt_NFType_PCF)
+		GetTokenCtxForNFInstance(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL,
+			models.Nrf_NFMgmt_NFType_PCF, smContext.SelectedPCFProfile.NfInstanceId)
 	if err != nil {
 		return err
 	}

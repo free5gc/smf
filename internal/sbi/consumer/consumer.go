@@ -9,8 +9,11 @@ import (
 	"github.com/free5gc/openapi/smf/PDUSess"
 	"github.com/free5gc/openapi/udm/SDM"
 	"github.com/free5gc/openapi/udm/UECM"
+	"github.com/free5gc/openapi/upf/EvtExpos"
 	smf_context "github.com/free5gc/smf/internal/context"
+	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/app"
+	"github.com/free5gc/util/nfheartbeat"
 )
 
 type Consumer struct {
@@ -24,6 +27,7 @@ type Consumer struct {
 	*nudmService
 	*nnrfService
 	*nbsfService // BSF service for PCF binding discovery
+	*nupfEventExposureService
 }
 
 func NewConsumer(smf app.App) (*Consumer, error) {
@@ -57,6 +61,15 @@ func NewConsumer(smf app.App) (*Consumer, error) {
 		NFManagementClients: make(map[string]*NFMgmt.APIClient),
 		NFDiscoveryClients:  make(map[string]*NFDisc.APIClient),
 	}
+	heartbeat, err := nfheartbeat.NewRunner(
+		nrfRegistrar{c.nnrfService},
+		func() int32 { return c.Config().GetNfHeartBeatTimer() },
+		logger.ConsumerLog,
+	)
+	if err != nil {
+		return nil, err
+	}
+	c.nnrfService.heartbeat = heartbeat
 
 	c.npcfService = &npcfService{
 		consumer:               c,
@@ -65,6 +78,11 @@ func NewConsumer(smf app.App) (*Consumer, error) {
 
 	c.nbsfService = &nbsfService{
 		consumer: c,
+	}
+
+	c.nupfEventExposureService = &nupfEventExposureService{
+		consumer: c,
+		clients:  make(map[string]*EvtExpos.APIClient),
 	}
 
 	return c, nil

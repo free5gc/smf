@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,7 +15,6 @@ import (
 	ngapie "github.com/free5gc/ngap/ie"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/free5gc/smf/internal/pfcp/pfcptype"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/idgenerator"
 )
@@ -85,12 +83,6 @@ func GetSMContextCount() uint64 {
 	return atomic.AddUint64(&smContextCount, 1)
 }
 
-type EventExposureNotification struct {
-	*models.Smf_EvtExpos_NsmfEventExposureNotification
-
-	Uri string
-}
-
 type UsageReport struct {
 	UrrId uint32
 	UpfId string
@@ -145,6 +137,7 @@ type SMContext struct {
 	DLForwardingType         DLForwardingType
 	DLDirectForwardingTunnel *ngapie.UPTransportLayerInformation
 	IndirectForwardingTunnel *DataPath
+	QosFlowsToBeForwarded    []int64
 
 	// UP Security support TS 29.502 R16 6.1.6.2.39
 	UpSecurity                                                     *models.UpSecurity
@@ -169,6 +162,11 @@ type SMContext struct {
 	PFCPContext                         map[string]*PFCPSessionContext
 	PFCPReleaseDone                     bool
 	PDUSessionRelease_DUE_TO_DUP_PDU_ID bool
+	// Set when this context's create incremented the UE's PDU session count.
+	// RemoveSMContextFromAllNF consumes it so each release advances the SDM
+	// bookkeeping exactly once; contexts rejected before subscribing never set
+	// it and never touch a sibling's slot.
+	SdmCounted bool
 
 	DNNInfo *SnssaiSmfDnnInfo
 
@@ -224,8 +222,9 @@ type SMContext struct {
 	//		one is for PSA 1, the other is for PSA 2.
 	ChargingInfo map[uint32]*ChargingInfo
 	// NAS
-	Pti                     uint8
-	EstAcceptCause5gSMValue uint8
+	Pti                         uint8
+	EstAcceptCause5gSMValue     uint8
+	AlwaysOnPDUSessionRequested bool
 
 	// PCO Related
 	ProtocolConfigurationOptions *ProtocolConfigurationOptions
@@ -490,371 +489,13 @@ func (smContext *SMContext) State() SMContextState {
 	return SMContextState(atomic.LoadUint32((*uint32)(&smContext.state)))
 }
 
-// BeginChargingRelease elects exactly one caller to send the CHF termination
-// request. Association-triggered release can race a later AMF/UE completion,
-// but a charging session must be terminated only once.
-func (smContext *SMContext) BeginChargingRelease() bool {
-	smContext.chargingReleaseMu.Lock()
-	defer smContext.chargingReleaseMu.Unlock()
-	if smContext.chargingReleaseDone {
-		return false
-	}
-	smContext.chargingReleaseDone = true
-	return true
-}
-
-func (smContext *SMContext) GetNodeIDByLocalSEID(seid uint64) pfcptype.NodeID {
-	for _, pfcpCtx := range smContext.PFCPContext {
-		if pfcpCtx.LocalSEID == seid {
-			return pfcpCtx.NodeID
-		}
-	}
-
-	return pfcptype.NodeID{}
-}
-
-func (smContext *SMContext) AllocateLocalSEIDForUPPath(path UPPath) {
-	for _, upNode := range path {
-		NodeIDtoIP := upNode.NodeID.ResolveNodeIdToIp().String()
-		if _, exist := smContext.PFCPContext[NodeIDtoIP]; !exist {
-			allocatedSEID := AllocateLocalSEID()
-
-			smContext.PFCPContext[NodeIDtoIP] = &PFCPSessionContext{
-				PDRs:      make(map[uint16]*PDR),
-				NodeID:    upNode.NodeID,
-				LocalSEID: allocatedSEID,
-			}
-
-			seidSMContextMap.Store(allocatedSEID, smContext)
-		}
-	}
-}
-
-func (smContext *SMContext) AllocateLocalSEIDForDataPath(dataPath *DataPath) {
-	logger.PduSessLog.Traceln("In AllocateLocalSEIDForDataPath")
-	for node := dataPath.FirstDPNode; node != nil; node = node.Next() {
-		NodeIDtoIP := node.UPF.NodeID.ResolveNodeIdToIp().String()
-		logger.PduSessLog.Traceln("NodeIDtoIP: ", NodeIDtoIP)
-		if _, exist := smContext.PFCPContext[NodeIDtoIP]; !exist {
-			allocatedSEID := AllocateLocalSEID()
-			smContext.PFCPContext[NodeIDtoIP] = &PFCPSessionContext{
-				PDRs:      make(map[uint16]*PDR),
-				NodeID:    node.UPF.NodeID,
-				LocalSEID: allocatedSEID,
-			}
-
-			seidSMContextMap.Store(allocatedSEID, smContext)
-		}
-	}
-}
-
-func (smContext *SMContext) PutPDRtoPFCPSession(nodeID pfcptype.NodeID, pdr *PDR) error {
-	NodeIDtoIP := nodeID.ResolveNodeIdToIp().String()
-	if pfcpSessCtx, exist := smContext.PFCPContext[NodeIDtoIP]; exist {
-		smContext.Log.Tracef("PutPDRtoPFCPSession [%+v]", pdr)
-		pfcpSessCtx.PDRs[pdr.PDRID] = pdr
-	} else {
-		return fmt.Errorf("can't find PFCPContext[%s] to put PDR(%d)", NodeIDtoIP, pdr.PDRID)
-	}
-	return nil
-}
-
-func (c *SMContext) findPSAandAllocUeIP(param *UPFSelectionParams) error {
-	c.Log.Traceln("findPSAandAllocUeIP")
-	if param == nil {
-		return fmt.Errorf("UPFSelectionParams is nil")
-	}
-
-	upi := GetUserPlaneInformation()
-	if GetSelf().ULCLSupport && CheckUEHasPreConfig(c.Supi) {
-		groupName := GetULCLGroupNameFromSUPI(c.Supi)
-		preConfigPathPool := GetUEDefaultPathPool(groupName)
-		if preConfigPathPool != nil {
-			selectedUPFName := ""
-			selectedUPFName, c.PDUAddress, c.UseStaticIP = preConfigPathPool.SelectUPFAndAllocUEIPForULCL(
-				upi, param)
-			c.SelectedUPF = upi.UPFs[selectedUPFName]
-		}
-	} else {
-		c.SelectedUPF, c.PDUAddress, c.UseStaticIP = upi.SelectUPFAndAllocUEIP(param)
-		c.Log.Infof("Allocated PDUAdress[%s]", c.PDUAddress.String())
-	}
-	if c.PDUAddress == nil {
-		return fmt.Errorf("fail to allocate PDU address, Selection Parameter: %s",
-			param.String())
-	}
-	return nil
-}
-
-func (c *SMContext) AllocUeIP() error {
-	c.SelectionParam = &UPFSelectionParams{
-		Dnn: c.Dnn,
-		SNssai: &SNssai{
-			Sst: c.SNssai.Sst,
-			Sd:  c.SNssai.Sd,
-		},
-	}
-
-	if len(c.DnnConfiguration.StaticIpAddress) > 0 {
-		staticIPConfig := c.DnnConfiguration.StaticIpAddress[0]
-		if staticIPConfig.Ipv4Addr != "" {
-			c.SelectionParam.PDUAddress = net.ParseIP(staticIPConfig.Ipv4Addr).To4()
-		}
-	}
-
-	if err := c.findPSAandAllocUeIP(c.SelectionParam); err != nil {
-		return err
-	}
-	return nil
-}
-
-// This function create ULCL data paths.
-func (c *SMContext) SelectULCLDataPaths() error {
-	if c.SelectionParam == nil || c.SelectedUPF == nil {
-		return fmt.Errorf("SelectULCLDataPath err: SelectionParam or SelectedUPF is nil")
-	}
-
-	if GetSelf().ULCLSupport && CheckUEHasPreConfig(c.Supi) {
-		c.Log.Infof("Has pre-config ULCL paths")
-		uePreConfigPaths := GetUEPreConfigPaths(c.Supi, c.SelectedUPF.Name)
-		for _, dp := range uePreConfigPaths.DataPathPool {
-			if !dp.IsDefaultPath {
-				c.Tunnel.AddDataPath(dp)
-			}
-		}
-	}
-	return nil
-}
-
-// This function create a data path to be default data path.
-func (c *SMContext) SelectDefaultDataPath() error {
-	if c.SelectionParam == nil || c.SelectedUPF == nil {
-		return fmt.Errorf("SelectDefaultDataPath err: SelectionParam or SelectedUPF is nil")
-	}
-
-	defaultPath := c.Tunnel.DataPathPool.GetDefaultPath()
-	if defaultPath != nil {
-		// A default path already exists.
-		// Use this one.
-		c.Log.Infof("Has default path")
-		defaultPath = c.Tunnel.DataPathPool.GetDefaultPath()
-	} else if GetSelf().ULCLSupport && CheckUEHasPreConfig(c.Supi) {
-		// Fallback on pre-config default path
-		c.Log.Infof("Has pre-config default path")
-		uePreConfigPaths := GetUEPreConfigPaths(c.Supi, c.SelectedUPF.Name)
-		defaultPath = uePreConfigPaths.DataPathPool.GetDefaultPath()
-		c.Tunnel.AddDataPath(defaultPath)
-	} else {
-		// UE has no pre-config path and default path
-		// Use default route
-		c.Log.Infof("Has no pre-config route. Has no default path")
-		defaultUPPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNNAndUPF(
-			c.SelectionParam, c.SelectedUPF)
-		defaultPath = GenerateDataPath(defaultUPPath)
-		if defaultPath != nil {
-			defaultPath.IsDefaultPath = true
-			c.Tunnel.AddDataPath(defaultPath)
-		}
-	}
-
-	if defaultPath == nil {
-		return fmt.Errorf("data path not found, Selection Parameter: %s",
-			c.SelectionParam.String())
-	}
-
-	if !defaultPath.Activated {
-		defaultPath.ActivateTunnelAndPDR(c, DefaultPrecedence)
-	}
-
-	return nil
-}
-
-func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
-	tcData *TrafficControlData, qosData *models.Pcf_SMPolCtrl_QosData,
-	chgData *models.Pcf_SMPolCtrl_ChargingData, pduChgDatas []*models.Pcf_SMPolCtrl_ChargingData,
-) error {
-	var targetRoute models.RouteToLocation
-	if tcData != nil && len(tcData.RouteToLocs) > 0 {
-		targetRoute = tcData.RouteToLocs[0]
-	}
-	param := &UPFSelectionParams{
-		Dnn: c.Dnn,
-		SNssai: &SNssai{
-			Sst: c.SNssai.Sst,
-			Sd:  c.SNssai.Sd,
-		},
-		Dnai: targetRoute.Dnai,
-	}
-	createdUpPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(param)
-	createdDataPath := GenerateDataPath(createdUpPath)
-	if createdDataPath == nil {
-		return fmt.Errorf("fail to create data path for pcc rule[%s]", pccRule.PccRuleId)
-	}
-	c.Log.Tracef("CreatePccRuleDataPath: pcc rule: %+v", pccRule)
-
-	// Try to use a default pcc rule as default data path
-	if c.Tunnel.DataPathPool.GetDefaultPath() == nil &&
-		pccRule.Precedence == 255 {
-		createdDataPath.IsDefaultPath = true
-	}
-
-	createdDataPath.GBRFlow = isGBRFlow(qosData)
-	createdDataPath.ActivateTunnelAndPDR(c, uint32(pccRule.Precedence))
-	c.Tunnel.AddDataPath(createdDataPath)
-	pccRule.Datapath = createdDataPath
-	pccRule.AddDataPathForwardingParameters(c, &targetRoute)
-
-	if chgLevel, err := pccRule.IdentifyChargingLevel(); err != nil {
-		c.Log.Warnf("fail to identify charging level[%+v] for pcc rule[%s]", err, pccRule.PccRuleId)
-	} else {
-		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData, pduChgDatas)
-	}
-
-	if pccRule.RefQosDataID() != "" {
-		pccRule.Datapath.AddQoS(c, pccRule.QFI, qosData)
-		c.AddQosFlow(pccRule.QFI, qosData)
-	}
-	return nil
-}
-
-func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
-	tcData *TrafficControlData, qosData *models.Pcf_SMPolCtrl_QosData,
-	chgData *models.Pcf_SMPolCtrl_ChargingData, pduChgDatas []*models.Pcf_SMPolCtrl_ChargingData,
-) error {
-	var targetRoute models.RouteToLocation
-	if tcData != nil && len(tcData.RouteToLocs) > 0 {
-		targetRoute = tcData.RouteToLocs[0]
-	}
-	param := &UPFSelectionParams{
-		Dnn: c.Dnn,
-		SNssai: &SNssai{
-			Sst: c.SNssai.Sst,
-			Sd:  c.SNssai.Sd,
-		},
-		Dnai: targetRoute.Dnai,
-	}
-	createdUpPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(param)
-	createdDataPath := GenerateDataPath(createdUpPath)
-	if createdDataPath == nil {
-		return fmt.Errorf("fail to create data path on DCTunnel for pcc rule[%s]", pccRule.PccRuleId)
-	}
-	c.Log.Infof("CreatePccRuleDataPathOnDctunnel: pcc rule: %+v", pccRule)
-
-	// Try to use a default pcc rule as default data path
-	if c.DCTunnel.DataPathPool.GetDefaultPath() == nil &&
-		pccRule.Precedence == 255 {
-		createdDataPath.IsDefaultPath = true
-	}
-
-	createdDataPath.GBRFlow = isGBRFlow(qosData)
-	createdDataPath.ActivateDcTunnelAndPDR(c, uint32(pccRule.Precedence))
-	c.DCTunnel.AddDataPath(createdDataPath)
-	pccRule.Datapath = createdDataPath
-	pccRule.AddDataPathForwardingParametersOnDcTunnel(c, &targetRoute)
-
-	if chgLevel, err := pccRule.IdentifyChargingLevel(); err != nil {
-		c.Log.Warnf("fail to identify charging level[%+v] for pcc rule[%s]", err, pccRule.PccRuleId)
-	} else {
-		pccRule.Datapath.AddChargingRules(c, chgLevel, chgData, pduChgDatas)
-	}
-
-	if pccRule.RefQosDataID() != "" {
-		pccRule.Datapath.AddQoS(c, pccRule.QFI, qosData)
-		c.AddQosFlow(pccRule.QFI, qosData)
-	}
-
-	return nil
-}
-
-func (c *SMContext) BuildUpPathChgEventExposureNotification(
-	chgEvent *models.Pcf_SMPolCtrl_UpPathChgEvent,
-	srcRoute, tgtRoute *models.RouteToLocation,
-) {
-	if chgEvent == nil {
-		return
-	}
-	if chgEvent.NotificationUri == "" {
-		c.Log.Warnf("No NotificationUri [%s]", chgEvent.NotificationUri)
-		return
-	}
-
-	en := models.Smf_EvtExpos_EventNotification{
-		Event:            models.Smf_EvtExpos_SmfEvent_UP_PATH_CH,
-		SourceTraRouting: srcRoute,
-		TargetTraRouting: tgtRoute,
-	}
-	if srcRoute.Dnai != tgtRoute.Dnai {
-		en.SourceDnai = srcRoute.Dnai
-		en.TargetDnai = tgtRoute.Dnai
-	}
-	// TODO: sourceUeIpv4Addr, sourceUeIpv6Prefix, targetUeIpv4Addr, targetUeIpv6Prefix
-
-	k := chgEvent.NotificationUri + chgEvent.NotifCorreId
-	if strings.Contains(string(chgEvent.DnaiChgType), "EARLY") {
-		en.DnaiChgType = models.DnaiChangeType("EARLY")
-		v, ok := c.UpPathChgEarlyNotification[k]
-		if ok {
-			v.EventNotifs = append(v.EventNotifs, en)
-		} else {
-			c.UpPathChgEarlyNotification[k] = newEventExposureNotification(
-				chgEvent.NotificationUri, chgEvent.NotifCorreId, &en)
-		}
-	}
-	if strings.Contains(string(chgEvent.DnaiChgType), "LATE") {
-		en.DnaiChgType = models.DnaiChangeType("LATE")
-		v, ok := c.UpPathChgLateNotification[k]
-		if ok {
-			v.EventNotifs = append(v.EventNotifs, en)
-		} else {
-			c.UpPathChgLateNotification[k] = newEventExposureNotification(
-				chgEvent.NotificationUri, chgEvent.NotifCorreId, &en)
-		}
-	}
-}
-
-func newEventExposureNotification(
-	uri, id string,
-	en *models.Smf_EvtExpos_EventNotification,
-) *EventExposureNotification {
-	return &EventExposureNotification{
-		Smf_EvtExpos_NsmfEventExposureNotification: &models.Smf_EvtExpos_NsmfEventExposureNotification{
-			NotifId:     id,
-			EventNotifs: []models.Smf_EvtExpos_EventNotification{*en},
-		},
-		Uri: uri,
-	}
-}
-
-type NotifCallback func(uri string,
-	notification *models.Smf_EvtExpos_NsmfEventExposureNotification)
-
-func (c *SMContext) SendUpPathChgNotification(chgType string, notifCb NotifCallback) {
-	var notifications map[string]*EventExposureNotification
-	switch chgType {
-	case "EARLY":
-		notifications = c.UpPathChgEarlyNotification
-	case "LATE":
-		notifications = c.UpPathChgLateNotification
-	default:
-		return
-	}
-	for k, n := range notifications {
-		c.Log.Infof("Send UpPathChg Event Exposure Notification [%s][%s] to NEF/AF", chgType, n.NotifId)
-		go notifCb(n.Uri, n.Smf_EvtExpos_NsmfEventExposureNotification)
-		delete(notifications, k)
-	}
-}
-
-func (smContext *SMContext) RemovePDRfromPFCPSession(nodeID pfcptype.NodeID, pdr *PDR) {
-	NodeIDtoIP := nodeID.ResolveNodeIdToIp().String()
-	pfcpSessCtx := smContext.PFCPContext[NodeIDtoIP]
-	delete(pfcpSessCtx.PDRs, pdr.PDRID)
-}
-
-func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint8) error {
+// IsAllowedPDUSessionType selects the PDU session type for the requested one. If the DNN does not allow it, it returns
+// the 5GSM cause of the PDU SESSION ESTABLISHMENT REJECT (TS 24.501 6.4.1.4.1) with the error.
+func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint8) (uint8, error) {
 	dnnPDUSessionType := smContext.DnnConfiguration.PduSessionTypes
 	if dnnPDUSessionType == nil {
-		return fmt.Errorf("this SMContext[%s] has no subscription pdu session type info", smContext.Ref)
+		return nasie.Cause5GSM_UnknownPDUSessType,
+			fmt.Errorf("this SMContext[%s] has no subscription pdu session type info", smContext.Ref)
 	}
 
 	allowIPv4 := false
@@ -879,7 +520,7 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 	switch supportedPDUSessionType {
 	case "IPv4":
 		if !allowIPv4 {
-			return fmt.Errorf(
+			return nasie.Cause5GSM_UnknownPDUSessType, fmt.Errorf(
 				"no SupportedPDUSessionType[%q] in DNN[%s] configuration",
 				supportedPDUSessionType,
 				smContext.Dnn,
@@ -887,7 +528,7 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 		}
 	case "IPv6":
 		if !allowIPv6 {
-			return fmt.Errorf(
+			return nasie.Cause5GSM_UnknownPDUSessType, fmt.Errorf(
 				"no SupportedPDUSessionType[%q] in DNN[%s] configuration",
 				supportedPDUSessionType,
 				smContext.Dnn,
@@ -895,7 +536,7 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 		}
 	case "IPv4v6":
 		if !allowIPv4 && !allowIPv6 {
-			return fmt.Errorf(
+			return nasie.Cause5GSM_UnknownPDUSessType, fmt.Errorf(
 				"no SupportedPDUSessionType[%q] in DNN[%s] configuration",
 				supportedPDUSessionType,
 				smContext.Dnn,
@@ -903,7 +544,7 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 		}
 	case "Ethernet":
 		if !allowEthernet {
-			return fmt.Errorf(
+			return nasie.Cause5GSM_UnknownPDUSessType, fmt.Errorf(
 				"no SupportedPDUSessionType[%q] in DNN[%s] configuration",
 				supportedPDUSessionType,
 				smContext.Dnn,
@@ -911,19 +552,33 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 		}
 	}
 
+	requested := PDUSessionTypeToModels(requestedPDUSessionType)
+	// TS 24.501 Table 9.11.4.11.1: the unused values 000 and 110 are interpreted as "IPv4v6"
+	if requestedPDUSessionType == 0 || requestedPDUSessionType == 6 {
+		requested = models.PduSessionType_IPV4_V6
+	}
+
 	smContext.EstAcceptCause5gSMValue = 0
-	switch PDUSessionTypeToModels(requestedPDUSessionType) {
+	switch requested {
 	case models.PduSessionType_IPV4:
 		if allowIPv4 {
 			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_IPV4)
 		} else {
-			return fmt.Errorf("PduSessionType_IPV4 is not allowed in DNN[%s] configuration", smContext.Dnn)
+			cause := nasie.Cause5GSM_UnknownPDUSessType
+			if allowIPv6 {
+				cause = nasie.Cause5GSM_PDUSessTypeIpv6OnlyAllowed
+			}
+			return cause, fmt.Errorf("PduSessionType_IPV4 is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	case models.PduSessionType_IPV6:
 		if allowIPv6 {
 			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_IPV6)
 		} else {
-			return fmt.Errorf("PduSessionType_IPV6 is not allowed in DNN[%s] configuration", smContext.Dnn)
+			cause := nasie.Cause5GSM_UnknownPDUSessType
+			if allowIPv4 {
+				cause = nasie.Cause5GSM_PDUSessTypeIpv4OnlyAllowed
+			}
+			return cause, fmt.Errorf("PduSessionType_IPV6 is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	case models.PduSessionType_IPV4_V6:
 		if allowIPv4 && allowIPv6 {
@@ -935,18 +590,21 @@ func (smContext *SMContext) IsAllowedPDUSessionType(requestedPDUSessionType uint
 			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_IPV6)
 			smContext.EstAcceptCause5gSMValue = nasie.Cause5GSM_PDUSessTypeIpv6OnlyAllowed
 		} else {
-			return fmt.Errorf("PduSessionType_IPV4_V6 is not allowed in DNN[%s] configuration", smContext.Dnn)
+			return nasie.Cause5GSM_UnknownPDUSessType,
+				fmt.Errorf("PduSessionType_IPV4_V6 is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	case models.PduSessionType_ETHERNET:
 		if allowEthernet {
 			smContext.SelectedPDUSessionType = ModelsToPDUSessionType(models.PduSessionType_ETHERNET)
 		} else {
-			return fmt.Errorf("PduSessionType_ETHERNET is not allowed in DNN[%s] configuration", smContext.Dnn)
+			return nasie.Cause5GSM_UnknownPDUSessType,
+				fmt.Errorf("PduSessionType_ETHERNET is not allowed in DNN[%s] configuration", smContext.Dnn)
 		}
 	default:
-		return fmt.Errorf("requested PDU Sesstion type[%d] is not supported", requestedPDUSessionType)
+		return nasie.Cause5GSM_UnknownPDUSessType,
+			fmt.Errorf("requested PDU Sesstion type[%d] is not supported", requestedPDUSessionType)
 	}
-	return nil
+	return 0, nil
 }
 
 func (smContext *SMContext) StopT3591() {
@@ -984,10 +642,13 @@ func (smContextState SMContextState) String() string {
 
 func (smContext *SMContext) AssignQFI(qosId string) uint8 {
 	qfi, ok := smContext.qosDataToQFI[qosId]
-	if !ok {
+	for !ok {
 		newId, err := smContext.QFIGenerator.Allocate()
 		if err != nil {
 			return 0
+		}
+		if session := smContext.SelectedSessionRule(); session != nil && uint8(newId) == session.DefQosQFI {
+			continue // Keep the session's default QFI reserved.
 		}
 		smContext.qosDataToQFI[qosId] = uint8(newId)
 		return uint8(newId)

@@ -39,3 +39,16 @@ func IsChargingRelatedUrr(urr *URR) bool {
 	}
 	return !urr.MeasurementInformation.HasMNOP() && !urr.MeasurementInformation.HasMBQE()
 }
+
+// BeginChargingRelease elects exactly one caller to send the CHF termination
+// request. Association-triggered release can race a later AMF/UE completion,
+// but a charging session must be terminated only once.
+func (smContext *SMContext) BeginChargingRelease() bool {
+	smContext.chargingReleaseMu.Lock()
+	defer smContext.chargingReleaseMu.Unlock()
+	if smContext.chargingReleaseDone {
+		return false
+	}
+	smContext.chargingReleaseDone = true
+	return true
+}

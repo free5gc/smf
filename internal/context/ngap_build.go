@@ -255,13 +255,19 @@ func BuildPDUSessionResourceModifyRequestTransfer(ctx *SMContext) ([]byte, error
 		}
 	}
 
+	// TS 38.413 9.3.4.3: the QoS Flow Add or Modify Request List is optional
+	// and holds 1..maxnoofQoSFlows items. Omit it when no QoS flow is added or
+	// modified instead of encoding an empty, undecodable list.
+	ieList := []ngapie.PDUSessionResourceModifyRequestTransferIEs{}
+	if len(qosFlowAddOrModifyRequestList.List) > 0 {
+		ieList = append(ieList, ngapie.PDUSessionResourceModifyRequestTransferIEs{
+			QosFlowAddOrModifyRequestList: qosFlowAddOrModifyRequestList,
+		})
+	}
+
 	resourceModifyRequestTransfer := ngapie.PDUSessionResourceModifyRequestTransfer{
 		ProtocolIEs: &ngapie.ProtocolIEContainerPDUSessionResourceModifyRequestTransferIEs{
-			List: []ngapie.PDUSessionResourceModifyRequestTransferIEs{
-				{
-					QosFlowAddOrModifyRequestList: qosFlowAddOrModifyRequestList,
-				},
-			},
+			List: ieList,
 		},
 	}
 
@@ -293,6 +299,9 @@ func BuildPDUSessionResourceModifyConfirmTransfer(
 			}
 
 			for _, qer := range DLPDR.QER {
+				if qer.QFI == nil {
+					continue
+				}
 				qosList.List = append(qosList.List, ngapie.QosFlowModifyConfirmItem{
 					QosFlowIdentifier: &ngapie.QosFlowIdentifier{
 						Value: int64(qer.QFI.QFI),
@@ -301,9 +310,17 @@ func BuildPDUSessionResourceModifyConfirmTransfer(
 			}
 		}
 	}
+	// TS 38.413 9.3.4.7: the QoS Flow Modify Confirm List is mandatory and
+	// holds 1..maxnoofQoSFlows items; an empty list cannot be encoded.
+	if len(qosList.List) == 0 {
+		return nil, fmt.Errorf("no QoS flow to confirm on this tunnel")
+	}
 
 	// UL NG-U UP TNL Information
-	ANUPF := tunnel.DataPathPool.GetDefaultPath().FirstDPNode
+	ANUPF := tunnel.ANNode()
+	if ANUPF == nil {
+		return nil, fmt.Errorf("no data path for the UL NG-U UP TNL Information")
+	}
 	teidOct := make([]byte, 4)
 	binary.BigEndian.PutUint32(teidOct, localULTeid)
 
@@ -350,7 +367,10 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 
 	// Additional DL NG-U UP TNL Information(optional) TS 38.413 9.3.4.9
 	if ctx.NrdcIndicator {
-		dcANUPF := ctx.DCTunnel.DataPathPool.GetDefaultPath().FirstDPNode
+		dcANUPF := ctx.DCTunnel.ANNode()
+		if dcANUPF == nil {
+			return nil, errors.New("no data path of the split tunnel")
+		}
 		dcUpNode, dcUlTeidOct, dcDlTeidOct := dcANUPF.UPF, make([]byte, 4), make([]byte, 4)
 		binary.BigEndian.PutUint32(dcUlTeidOct, dcANUPF.UpLinkTunnel.TEID)
 		binary.BigEndian.PutUint32(dcDlTeidOct, ctx.DCTunnel.ANInformation.TEID)
@@ -389,6 +409,16 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 	} else {
 		return buf, nil
 	}
+}
+
+// TS 38.413 9.3.4.22
+func BuildPDUSessionResourceModifyIndicationUnsuccessfulTransfer(cause ngapie.CauseAlt) ([]byte, error) {
+	transfer := ngapie.PDUSessionResourceModifyIndicationUnsuccessfulTransfer{
+		Cause: &ngapie.Cause{
+			Choice: cause,
+		},
+	}
+	return ngapie.MarshalBinary(&transfer)
 }
 
 func BuildPathSwitchRequestUnsuccessfulTransfer(cause ngapie.CauseAlt) (buf []byte, err error) {
@@ -439,14 +469,16 @@ func BuildHandoverCommandTransfer(ctx *SMContext) ([]byte, error) {
 		handoverCommandTransfer.DLForwardingUPTNLInformation = ctx.DLDirectForwardingTunnel
 	}
 
-	handoverCommandTransfer.QosFlowToBeForwardedList = &ngapie.QosFlowToBeForwardedList{
-		List: []ngapie.QosFlowToBeForwardedItem{
-			{
-				QosFlowIdentifier: &ngapie.QosFlowIdentifier{
-					Value: DefaultNonGBR5QI,
-				},
-			},
-		},
+	if len(ctx.QosFlowsToBeForwarded) > 0 {
+		qosFlowList := make([]ngapie.QosFlowToBeForwardedItem, 0, len(ctx.QosFlowsToBeForwarded))
+		for _, qfi := range ctx.QosFlowsToBeForwarded {
+			qosFlowList = append(qosFlowList, ngapie.QosFlowToBeForwardedItem{
+				QosFlowIdentifier: &ngapie.QosFlowIdentifier{Value: qfi},
+			})
+		}
+		handoverCommandTransfer.QosFlowToBeForwardedList = &ngapie.QosFlowToBeForwardedList{
+			List: qosFlowList,
+		}
 	}
 
 	if buf, err := ngapie.MarshalBinary(&handoverCommandTransfer); err != nil {
