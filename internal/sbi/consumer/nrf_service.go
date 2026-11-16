@@ -387,12 +387,15 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 			logger.ConsumerLog.Warnln("UDM discovery returned empty NfInstances")
 			return nil, openapi.ReportError("UDM discovery returned empty NfInstances")
 		}
-		udm, udmURI := util.SelectNFService(result.NfInstances, models.Nrf_NFMgmt_ServiceName_NUDM_SDM)
+		// TS 23.502 4.3.2.2.1 step 4: SDM and UECM go to the same selected UDM,
+		// so it must provide both services.
+		udm, uris := util.SelectNFServices(result.NfInstances,
+			models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_ServiceName_NUDM_UECM)
 		if udm == nil {
-			return nil, fmt.Errorf("no usable UDM SDM service in NRF discovery result")
+			return nil, fmt.Errorf("no UDM provides both SDM and UECM in NRF discovery result")
 		}
 		smfContext.UDMProfile = *udm
-		client := s.consumer.nudmService.getSubscribeDataManagementClient(udmURI)
+		client := s.consumer.nudmService.getSubscribeDataManagementClient(uris[0])
 		if client == nil {
 			logger.ConsumerLog.Traceln("Get Subscribe Data Management Client Failed")
 			return nil, fmt.Errorf("get Subscribe Data Management Client Failed")

@@ -161,6 +161,26 @@ func initDiscUDMStubNRF() {
 						},
 						ApiPrefix: "http://127.0.0.3:8000",
 					},
+					{
+						ServiceInstanceId: "1",
+						ServiceName:       "nudm-uecm",
+						Versions: []models.Nrf_NFMgmt_NFServiceVersion{
+							{
+								ApiVersionInUri: "v1",
+								ApiFullVersion:  "1.0.0",
+							},
+						},
+						Scheme:          "http",
+						NfServiceStatus: "REGISTERED",
+						IpEndPoints: []models.Nrf_NFMgmt_IpEndPoint{
+							{
+								Ipv4Address: "127.0.0.3",
+								Transport:   "TCP",
+								Port:        8000,
+							},
+						},
+						ApiPrefix: "http://127.0.0.3:8000",
+					},
 				},
 			},
 		},
