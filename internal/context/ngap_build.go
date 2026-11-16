@@ -317,11 +317,10 @@ func BuildPDUSessionResourceModifyConfirmTransfer(
 	}
 
 	// UL NG-U UP TNL Information
-	defaultPath := tunnel.DataPathPool.GetDefaultPath()
-	if defaultPath == nil {
-		return nil, fmt.Errorf("no default data path for the UL NG-U UP TNL Information")
+	ANUPF := tunnel.ANNode()
+	if ANUPF == nil {
+		return nil, fmt.Errorf("no data path for the UL NG-U UP TNL Information")
 	}
-	ANUPF := defaultPath.FirstDPNode
 	teidOct := make([]byte, 4)
 	binary.BigEndian.PutUint32(teidOct, localULTeid)
 
@@ -368,7 +367,10 @@ func BuildPathSwitchRequestAcknowledgeTransfer(ctx *SMContext) ([]byte, error) {
 
 	// Additional DL NG-U UP TNL Information(optional) TS 38.413 9.3.4.9
 	if ctx.NrdcIndicator {
-		dcANUPF := ctx.DCTunnel.DataPathPool.GetDefaultPath().FirstDPNode
+		dcANUPF := ctx.DCTunnel.ANNode()
+		if dcANUPF == nil {
+			return nil, errors.New("no data path of the split tunnel")
+		}
 		dcUpNode, dcUlTeidOct, dcDlTeidOct := dcANUPF.UPF, make([]byte, 4), make([]byte, 4)
 		binary.BigEndian.PutUint32(dcUlTeidOct, dcANUPF.UpLinkTunnel.TEID)
 		binary.BigEndian.PutUint32(dcDlTeidOct, ctx.DCTunnel.ANInformation.TEID)
