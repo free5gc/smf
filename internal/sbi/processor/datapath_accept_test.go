@@ -272,7 +272,9 @@ func TestSendPDUSessionEstablishmentAcceptTokenFailureReleasesSMContext(t *testi
 
 	require.False(t, n1n2.Done(), "N1N2MessageTransfer was sent without an access token")
 	require.Equal(t, []uint64{acceptTestRemoteSEID}, pfcpClient.deletedSEIDs())
-	require.False(t, notify.Done(), "SMContextStatusNotify was sent without an access token")
+	// Notify operations are exempt from OAuth (TS 29.500 6.7.3), so the
+	// release still reaches the AMF even though token acquisition failed.
+	require.True(t, notify.Done(), "SMContextStatusNotify was not sent")
 }
 
 func TestSendPDUSessionEstablishmentAcceptReleasesLocallyWhenPFCPDeletionFails(t *testing.T) {
