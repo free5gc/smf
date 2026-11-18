@@ -26,12 +26,14 @@ func validPFCPSource(upf *smf_context.UPF, remote *net.UDPAddr) bool {
 }
 
 // SetupAssociation validates a passive setup against the configured UPF and
-// defers recovery-time handling until its response has been sent. A newer
-// timestamp invalidates the current generation; the lifecycle owner performs
-// session cleanup and re-establishment after its association context closes.
+// defers the UP Function Features and recovery-time handling until its
+// response has been sent. A newer timestamp invalidates the current
+// generation; the lifecycle owner performs session cleanup and
+// re-establishment after its association context closes.
 func (p *Processor) SetupAssociation(
 	peer pfcptype.NodeID,
 	recoveryTime time.Time,
+	features []byte,
 	remote *net.UDPAddr,
 ) (uint8, func()) {
 	upf := smf_context.RetrieveUPFNodeByNodeID(peer)
@@ -47,6 +49,7 @@ func (p *Processor) SetupAssociation(
 		if currentGeneration != generation {
 			return
 		}
+		upf.SetUPFunctionFeatures(features)
 		current, restarted := upf.AcceptRecoveryTimeStampForGeneration(generation, recoveryTime)
 		if !current || !restarted {
 			return
