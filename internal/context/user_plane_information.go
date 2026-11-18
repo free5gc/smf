@@ -767,28 +767,34 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(selection *UPFSelectionPara
 }
 
 func (upi *UserPlaneInformation) GenerateDefaultPathToUPF(selection *UPFSelectionParams, destination *UPNode) bool {
-	var source *UPNode
-
-	for _, node := range upi.AccessNetwork {
+	// The destination may be reachable from only some of the access networks (e.g.
+	// one gNB -> I-UPF -> PSA chain per gNB). Try every AN, in name order so the
+	// result does not depend on map iteration order.
+	anNames := make([]string, 0, len(upi.AccessNetwork))
+	for name, node := range upi.AccessNetwork {
 		if node.Type == UPNODE_AN {
-			source = node
-			break
+			anNames = append(anNames, name)
 		}
 	}
-
-	if source == nil {
+	if len(anNames) == 0 {
 		logger.CtxLog.Errorf("There is no AN Node in config file!")
 		return false
 	}
+	sort.Strings(anNames)
 
-	// Run DFS
-	visited := make(map[*UPNode]bool)
-
-	for _, upNode := range upi.UPNodes {
-		visited[upNode] = false
+	var path []*UPNode
+	pathExist := false
+	for _, name := range anNames {
+		// Run DFS
+		visited := make(map[*UPNode]bool)
+		for _, upNode := range upi.UPNodes {
+			visited[upNode] = false
+		}
+		path, pathExist = getPathBetween(upi.AccessNetwork[name], destination, visited, selection)
+		if pathExist {
+			break
+		}
 	}
-
-	path, pathExist := getPathBetween(source, destination, visited, selection)
 
 	if pathExist {
 		if path[0].Type == UPNODE_AN {
