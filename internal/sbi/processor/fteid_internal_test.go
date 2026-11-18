@@ -444,8 +444,10 @@ func testN9TunnelsAreEstablishedInSequence(t *testing.T, features []byte) {
 	}
 	require.Equal(t, 2, toPSA)
 	if features[1] != 0 {
-		// The I-UPF's Traffic Endpoints: the uplink N3 one and the downlink N9 one.
-		require.Len(t, second.endpoints, 2)
+		// The I-UPF's Traffic Endpoints: the uplink N3 one, the downlink N9 one
+		// and, at the AN UPF, the split tunnel's uplink one.
+		require.Len(t, second.endpoints, 3)
+		require.Contains(t, endpointIDs(t, second.endpoints), smf_context.SplitUplinkChooseID)
 		require.Len(t, first.endpoints, 1)
 	} else {
 		for _, createPDR := range second.createPDR {
@@ -465,6 +467,36 @@ func testN9TunnelsAreEstablishedInSequence(t *testing.T, features []byte) {
 		require.Equal(t, upfTEID(fteidTestUPF, smf_context.DownlinkChooseID), ohc.TEID)
 		require.Equal(t, fteidTestUPF, ohc.IPv4Address.String())
 	}
+}
+
+// endpointIDs are the IDs of Create Traffic Endpoint IEs, in order.
+func endpointIDs(t *testing.T, endpoints []*ie.IE) []uint8 {
+	t.Helper()
+	ids := make([]uint8, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		id, err := endpoint.TrafficEndpointID()
+		require.NoError(t, err)
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// setupAdditionalULTEID is the TEID of the Additional UL NG-U UP TNL
+// Information of the session's PDU Session Resource Setup Request Transfer.
+func setupAdditionalULTEID(t *testing.T, sm *smf_context.SMContext) uint32 {
+	t.Helper()
+	buf, err := smf_context.BuildPDUSessionResourceSetupRequestTransfer(sm)
+	require.NoError(t, err)
+	var setup ngapie.PDUSessionResourceSetupRequestTransfer
+	require.NoError(t, ngapie.UnmarshalBinary(buf, &setup))
+	for _, item := range setup.ProtocolIEs.List {
+		if item.AdditionalULNGUUPTNLInformation != nil {
+			require.Len(t, item.AdditionalULNGUUPTNLInformation.List, 1)
+			return modIndTEID(t, item.AdditionalULNGUUPTNLInformation.List[0].NGUUPTNLInformation)
+		}
+	}
+	t.Fatal("no Additional UL NG-U UP TNL Information")
+	return 0
 }
 
 // pdiChildren are the IEs of the PDI of a Create PDR.
@@ -503,7 +535,10 @@ func TestPDRsOfATunnelShareATrafficEndpoint(t *testing.T) {
 	require.True(t, e.activate(t))
 	require.Len(t, upf.requests, 1)
 	request := upf.requests[0]
-	require.Len(t, request.endpoints, 1)
+	// The N3 uplink's Traffic Endpoint, and the split tunnel's uplink one.
+	require.Len(t, request.endpoints, 2)
+	require.Equal(t, []uint8{smf_context.UplinkChooseID, smf_context.SplitUplinkChooseID},
+		endpointIDs(t, request.endpoints))
 	endpoint, err := request.endpoints[0].CreateTrafficEndpoint()
 	require.NoError(t, err)
 	require.ElementsMatch(t, []ie.IEType{ie.TrafficEndpointID, ie.FTEID, ie.NetworkInstance, ie.UEIPAddress},
@@ -536,12 +571,20 @@ func TestPDRsOfATunnelShareATrafficEndpoint(t *testing.T) {
 	require.NoError(t, err)
 	var setup ngapie.PDUSessionResourceSetupRequestTransfer
 	require.NoError(t, ngapie.UnmarshalBinary(buf, &setup))
+	additional := false
 	for _, item := range setup.ProtocolIEs.List {
 		if item.ULNGUUPTNLInformation != nil {
 			requireGTPTunnel(t, item.ULNGUUPTNLInformation, upfTEID(fteidTestUPF, smf_context.UplinkChooseID),
 				fteidTestUPF)
 		}
+		if item.AdditionalULNGUUPTNLInformation != nil {
+			require.Len(t, item.AdditionalULNGUUPTNLInformation.List, 1)
+			requireGTPTunnel(t, item.AdditionalULNGUUPTNLInformation.List[0].NGUUPTNLInformation,
+				upfTEID(fteidTestUPF, smf_context.SplitUplinkChooseID), fteidTestUPF)
+			additional = true
+		}
 	}
+	require.True(t, additional, "the split tunnel's F-TEID that the UPF chose, before any split")
 
 	upf.requests = nil
 	require.NoError(t, e.sm.ApplyPccRules(&models.Pcf_SMPolCtrl_SmPolicyDecision{
@@ -699,17 +742,33 @@ func testSplitAtAnFTUPUPF(t *testing.T, features []byte) {
 	require.Equal(t, modIndGTPTunnel("10.100.0.9", 0x77), pair.DLNGUUPTNLInformation)
 
 	require.Len(t, upf.requests, 1)
-	asked := 0
 	if features[1] != 0 {
-		asked = len(upf.requests[0].endpoints)
-	}
-	for _, createPDR := range upf.requests[0].createPDR {
-		if fteid, err := localFTEID(createPDR); err == nil && fteid.HasCh() {
-			require.Equal(t, smf_context.SplitUplinkChooseID, fteid.ChooseID)
-			asked++
+		// The Traffic Endpoint of the split tunnel's uplink was created with the
+		// session: the split's uplink PDR refers to it, and the F-TEID is the
+		// one that the PDU Session Resource Setup Request gave.
+		require.Empty(t, upf.requests[0].endpoints)
+		refers := 0
+		for _, createPDR := range upf.requests[0].createPDR {
+			pdi := pdiChildren(t, createPDR)
+			for _, child := range pdi {
+				if id, err := child.TrafficEndpointID(); err == nil && id == smf_context.SplitUplinkChooseID {
+					require.NotContains(t, ieTypes(pdi), ie.FTEID)
+					refers++
+				}
+			}
 		}
+		require.Equal(t, 1, refers, "the split tunnel's uplink PDR refers to its Traffic Endpoint")
+		require.Equal(t, split, setupAdditionalULTEID(t, e.sm))
+	} else {
+		asked := 0
+		for _, createPDR := range upf.requests[0].createPDR {
+			if fteid, err := localFTEID(createPDR); err == nil && fteid.HasCh() {
+				require.Equal(t, smf_context.SplitUplinkChooseID, fteid.ChooseID)
+				asked++
+			}
+		}
+		require.Equal(t, 1, asked, "the split tunnel's uplink asks the UPF to choose its F-TEID")
 	}
-	require.Equal(t, 1, asked, "the split tunnel's uplink asks the UPF to choose its F-TEID")
 
 	// A path switch of the split session gives the split tunnel's F-TEID too.
 	e.sm.UpSecurityFromPathSwitchRequestSameAsLocalStored = true

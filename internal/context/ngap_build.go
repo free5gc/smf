@@ -189,14 +189,25 @@ func BuildPDUSessionResourceSetupRequestTransfer(ctx *SMContext) ([]byte, error)
 	}
 	// UL NG-U UP TNL Information
 	ieList = append(ieList, ngapie.PDUSessionResourceSetupRequestTransferIEs{ULNGUUPTNLInformation: ulTNL})
-	// Additional UL NG-U UP TNL Information, the SMF's TEID for a split of the
-	// session, which a UPF that allocates the F-TEIDs does not know.
+	// Additional UL NG-U UP TNL Information, the UPF end of a split of the
+	// session: the SMF's TEID, or, at a UPF that allocates the F-TEIDs, the
+	// F-TEID that it chose for the Traffic Endpoint of the split tunnel's
+	// uplink, created with the session. A UPF that allocates the F-TEIDs but
+	// has no Traffic Endpoints chooses it only at a split: then none.
+	var splitULTNL *ngapie.UPTransportLayerInformation
 	if !UpNode.AllocatesFTEID() {
+		splitULTNL = newGTPTunnelUPTransport(n3IP, teidOctForSplitPDUSession)
+	} else if ctx.ChosenFTEID(UpNode, SplitUplinkChooseID) != nil {
+		if splitULTNL, err = chosenUPFEnd(ctx, UpNode, SplitUplinkChooseID); err != nil {
+			return nil, err
+		}
+	}
+	if splitULTNL != nil {
 		ieList = append(ieList, ngapie.PDUSessionResourceSetupRequestTransferIEs{
 			AdditionalULNGUUPTNLInformation: &ngapie.UPTransportLayerInformationList{
 				List: []ngapie.UPTransportLayerInformationItem{
 					{
-						NGUUPTNLInformation: newGTPTunnelUPTransport(n3IP, teidOctForSplitPDUSession),
+						NGUUPTNLInformation: splitULTNL,
 					},
 				},
 			},

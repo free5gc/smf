@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/pfcp/pfcptype"
+	"github.com/free5gc/smf/pkg/factory"
 )
 
 type PFCPSessionResponseStatus int
@@ -93,6 +95,57 @@ func trafficEndpointFor(upf *UPF, chooseID uint8) uint8 {
 		return chooseID
 	}
 	return 0
+}
+
+// SplitUplinkEndpointToCreate is the PDI of the Traffic Endpoint of the split
+// tunnel's uplink, which the establishment of the session at the UPF of N4
+// address nodeIP creates, or nil. The PDU Session Resource Setup Request
+// carries the Additional UL NG-U UP TNL Information, the UPF end of a split of
+// the session, before any split (TS 38.413 9.3.4.1): at the AN UPF of the
+// session, when it allocates the F-TEIDs, only a Traffic Endpoint created
+// with the session has an F-TEID by then. The split tunnel's uplink PDRs refer
+// to it later (TS 29.244 5.2.1A.2, 5.5.3).
+func (smContext *SMContext) SplitUplinkEndpointToCreate(nodeIP string) (*PDI, error) {
+	if smContext.Tunnel == nil || smContext.PDUAddress == nil {
+		return nil, nil
+	}
+	defaultPath := smContext.Tunnel.DataPathPool.GetDefaultPath()
+	if defaultPath == nil || defaultPath.FirstDPNode == nil || defaultPath.FirstDPNode.UPF == nil {
+		return nil, nil
+	}
+	upf := defaultPath.FirstDPNode.UPF
+	if upf.NodeID.ResolveNodeIdToIp().String() != nodeIP {
+		return nil, nil
+	}
+	id := trafficEndpointFor(upf, SplitUplinkChooseID)
+	if id == 0 {
+		return nil, nil
+	}
+	if sessionContext := smContext.PFCPContext[nodeIP]; sessionContext != nil && sessionContext.HasTrafficEndpoint(id) {
+		return nil, nil
+	}
+	iface := upf.GetInterface(models.Nrf_NFMgmt_UPInterfaceType_N3, smContext.Dnn)
+	if iface == nil {
+		return nil, fmt.Errorf("UPF %s has no N3 interface for DNN %s", nodeIP, smContext.Dnn)
+	}
+	upIP, err := iface.IP(smContext.SelectedPDUSessionType)
+	if err != nil {
+		return nil, err
+	}
+	// The same PDI as the split tunnel's uplink PDR at the AN UPF.
+	return &PDI{
+		SourceInterface:   pfcptype.SourceInterface{InterfaceValue: pfcptype.SourceInterfaceAccess},
+		LocalFTeid:        newLocalFTEID(upf, SplitUplinkChooseID, upIP, 0),
+		TrafficEndpointID: id,
+		NetworkInstance: &pfcptype.NetworkInstance{
+			NetworkInstance: smContext.Dnn,
+			FQDNEncoding:    factory.SmfConfig.Configuration.NwInstFqdnEncoding,
+		},
+		UEIPAddress: &pfcptype.UEIPAddress{
+			V4:          true,
+			Ipv4Address: smContext.PDUAddress.To4(),
+		},
+	}, nil
 }
 
 // SetChosenFTEID records the F-TEID that the UPF chose for the PDRs that asked
