@@ -77,6 +77,13 @@ func BuildSessionEstablishmentRequest(
 	if err != nil {
 		return nil, fmt.Errorf("build Create Traffic Endpoint: %w", err)
 	}
+	splitEndpoint, err := newSplitUplinkEndpointIE(smContext, nodeIP, createTrafficEndpoints)
+	if err != nil {
+		return nil, fmt.Errorf("build Create Traffic Endpoint of the split uplink: %w", err)
+	}
+	if splitEndpoint != nil {
+		createTrafficEndpoints = append(createTrafficEndpoints, splitEndpoint)
+	}
 	createPDRs := make([]*ie.IE, 0, len(pdrList))
 	createFARs := make([]*ie.IE, 0, len(farList))
 	createBARs := make([]*ie.IE, 0, len(barList))
@@ -271,6 +278,30 @@ func newCreateTrafficEndpointIEs(
 			children...)...))
 	}
 	return endpoints, nil
+}
+
+// newSplitUplinkEndpointIE is the Create Traffic Endpoint of the split
+// tunnel's uplink that an establishment at the AN UPF adds, so that the UPF
+// chooses its F-TEID before the PDU Session Resource Setup Request, or nil
+// (see SMContext.SplitUplinkEndpointToCreate).
+func newSplitUplinkEndpointIE(
+	smContext *context.SMContext, nodeIP string, endpoints []*ie.IE,
+) (*ie.IE, error) {
+	pdi, err := smContext.SplitUplinkEndpointToCreate(nodeIP)
+	if err != nil || pdi == nil {
+		return nil, err
+	}
+	for _, endpoint := range endpoints {
+		if id, idErr := endpoint.TrafficEndpointID(); idErr == nil && id == pdi.TrafficEndpointID {
+			return nil, nil
+		}
+	}
+	children, err := pdiEndpointIEs(pdi)
+	if err != nil {
+		return nil, err
+	}
+	return ie.NewCreateTrafficEndpoint(append([]*ie.IE{ie.NewTrafficEndpointID(pdi.TrafficEndpointID)},
+		children...)...), nil
 }
 
 // pdiEndpointIEs are the Local F-TEID, the Network Instance and the UE IP
