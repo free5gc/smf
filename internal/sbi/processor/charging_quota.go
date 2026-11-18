@@ -148,7 +148,7 @@ func (p *Processor) updateGrantedQuota(
 				case models.Chf_ConvCharging_TriggerType_QUOTA_THRESHOLD:
 					if ui.VolumeQuotaThreshold != 0 {
 						trigger.SetVOLTH()
-						urr.VolumeThreshold = uint64(ui.VolumeQuotaThreshold)
+						urr.VolumeThreshold = ui.VolumeQuotaThreshold
 					}
 				// The difference between the quota validity time and the volume limit is
 				// that the validity time is counted by the UPF, the volume limit is counted by the SMF
@@ -161,7 +161,7 @@ func (p *Processor) updateGrantedQuota(
 					if chgInfo.ChargingMethod == models.Chf_ConvCharging_QuotaManagementIndicator_ONLINE_CHARGING {
 						if ui.GrantedUnit != nil {
 							trigger.SetVOLQU()
-							urr.VolumeQuota = uint64(ui.GrantedUnit.TotalVolume)
+							urr.VolumeQuota = ui.GrantedUnit.TotalVolume
 							logger.ChargingLog.Debugf("QUOTA_EXHAUSTED: Setting VolumeQuota=%d", urr.VolumeQuota)
 						} else {
 							// No granted quota, so set the urr.VolumeQuota to 0, upf should stop send traffic

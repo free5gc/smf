@@ -35,7 +35,7 @@ func TestRetiredTIUsageDoesNotRequestNewQuota(t *testing.T) {
 	require.Len(t, usages, 2)
 	for _, usage := range usages {
 		if usage.RatingGroup == 6 {
-			require.Equal(t, int32(1234), usage.UsedUnitContainer[0].TotalVolume)
+			require.Equal(t, uint64(1234), usage.UsedUnitContainer[0].TotalVolume)
 			require.Nil(t, usage.RequestedUnit, "final usage must be charged without requesting more credit")
 		} else {
 			require.NotNil(t, usage.RequestedUnit, "the live service still needs its initial quota")
@@ -87,7 +87,7 @@ func TestDeletingTIURRStopsTimersButKeepsFinalChargingIdentity(t *testing.T) {
 	require.Same(t, info, sm.ChargingInfo[10])
 	usages := buildMultiUnitUsageFromUsageReport(sm)
 	require.Len(t, usages, 1)
-	require.Equal(t, int32(300), usages[0].UsedUnitContainer[0].TotalVolume)
+	require.Equal(t, uint64(300), usages[0].UsedUnitContainer[0].TotalVolume)
 	require.Nil(t, usages[0].RequestedUnit)
 	// A delayed CHF response must not recreate a quota or timer after deletion.
 	(&Processor{}).updateGrantedQuota(sm, []models.Chf_ConvCharging_MultipleUnitInformation{{
@@ -109,11 +109,28 @@ func TestStaticAnchorsKeepSeparateChargingUPFIdentity(t *testing.T) {
 	}
 	usages := buildMultiUnitUsageFromUsageReport(sm)
 	require.Len(t, usages, 2, "one rating group at two anchors must not lose its UPF identity")
-	volumes := make(map[string]int32)
+	volumes := make(map[string]uint64)
 	for _, usage := range usages {
 		require.Equal(t, int32(5), usage.RatingGroup)
 		require.Len(t, usage.UsedUnitContainer, 1)
 		volumes[usage.UPFID] = usage.UsedUnitContainer[0].TotalVolume
 	}
-	require.Equal(t, map[string]int32{"old-anchor": 100, "mec-anchor": 200}, volumes)
+	require.Equal(t, map[string]uint64{"old-anchor": 100, "mec-anchor": 200}, volumes)
+}
+
+func TestUsageAboveInt32RangeIsReportedUnchanged(t *testing.T) {
+	const volume = 3 << 30 // 3 GiB, above the int32 range
+	sm := &smf_context.SMContext{
+		ChargingInfo: map[uint32]*smf_context.ChargingInfo{1: {RatingGroup: 5, UpfId: "upf"}},
+		UrrReports: []smf_context.UsageReport{{
+			UrrId: 1, UpfId: "upf", ReportTpye: models.Chf_ConvCharging_TriggerType_FINAL,
+			TotalVolume: volume, UplinkVolume: volume - 1, DownlinkVolume: 1,
+		}},
+	}
+	usages := buildMultiUnitUsageFromUsageReport(sm)
+	require.Len(t, usages, 1)
+	used := usages[0].UsedUnitContainer[0]
+	require.Equal(t, uint64(volume), used.TotalVolume)
+	require.Equal(t, uint64(volume-1), used.UplinkVolume)
+	require.Equal(t, uint64(1), used.DownlinkVolume)
 }

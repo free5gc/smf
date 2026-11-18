@@ -211,7 +211,7 @@ type SMContext struct {
 	ChargingDataRef string
 	// Each PDU session has a unique charging id
 	ChargingID    int32
-	RequestedUnit int32
+	RequestedUnit uint64
 
 	chargingReleaseMu   sync.Mutex
 	chargingReleaseDone bool
