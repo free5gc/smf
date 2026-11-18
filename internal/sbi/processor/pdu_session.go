@@ -418,6 +418,9 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	// Set at a UPF that chooses the split tunnel's F-TEID, which the Modify
 	// Confirm Transfer of the split carries: it is built after its answer.
 	var splitConfirmAfterPFCP bool
+	// The rules of a split, or of its end, at the UPFs after the AN UPF on
+	// the split tunnel's path, by UPF.
+	var splitRules map[string]*PFCPState
 	// Set by an accepted PDU Session Resource Modify Indication: puts back the
 	// split state the indication found if the UPF refuses the N4 update.
 	var restoreSplitState func()
@@ -782,6 +785,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					urrList = append(urrList, DLPDR.URR...)
 				}
 			}
+			splitRules = splitPathRules(tunnel, dcTunnel, true)
 		}
 		sendPFCPModification = true
 		smContext.SetState(smf_context.PFCPModification)
@@ -857,6 +861,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					farList = append(farList, DLPDR.FAR)
 				}
 			}
+
+			splitRules = splitPathRules(tunnel, dcTunnel, false)
 
 			// re-initialize DCTunnel
 			smContext.DCTunnel = smf_context.NewUPTunnel()
@@ -948,6 +954,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 							urrList = append(urrList, DLPDR.URR...)
 						}
 					}
+					splitRules = splitPathRules(tunnel, dcTunnel, true)
 					smContext.NrdcIndicator, sendPFCPModification = true, true
 					restoreSplitState = func() {
 						smContext.NrdcIndicator, smContext.DCTunnel = false, smf_context.NewUPTunnel()
@@ -1237,7 +1244,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		smContext.Log.Traceln("In case PFCPModification")
 
 		if sendPFCPModification {
-			pfcpResponseStatus = p.updateAnUpfPfcpSession(smContext, pdrList, farList, barList, qerList, urrList)
+			pfcpResponseStatus = p.updateAnUpfPfcpSession(smContext, pdrList, farList, barList, qerList, urrList,
+				splitRules)
 		}
 
 		switch pfcpResponseStatus {
