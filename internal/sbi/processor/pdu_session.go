@@ -881,8 +881,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				if err = smContext.ApplyDcPccRulesOnDcTunnel(); err != nil {
 					smContext.Log.Errorf("ApplyDcPccRulesOnDcTunnel failed: %+v", err)
 					sendPFCPModification = false
-				} else if n2CfmBuf, err = smf_context.BuildPDUSessionResourceModifyConfirmTransfer(
-					smContext, smContext.DCTunnel, smContext.LocalULTeidForSplitPDUSession); err != nil {
+				} else if n2CfmBuf, err = smf_context.BuildPDUSessionResourceModifyConfirmTransferOfASplit(
+					smContext); err != nil {
 					sendPFCPModification = false
 				} else {
 					// append the rules on DCTunnel
@@ -998,12 +998,18 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		// Wait till the state becomes Active again
 		// TODO: implement sleep wait in concurrent architecture
 
-		smContext.SetState(smf_context.ModificationPending)
-
 		if err = smf_context.HandlePathSwitchRequestTransfer(
 			relatedBytes(body.BinaryDataN2SmInformation), smContext); err != nil {
 			smContext.Log.Errorf("Handle PathSwitchRequestTransfer: %+v", err)
+
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, smf_errors.N2SmError.Cause)
+			c.JSON(http.StatusForbidden, models.Smf_PDUSess_SmContextUpdateError{
+				Error: &smf_errors.N2SmError,
+			})
+			return
 		}
+
+		smContext.SetState(smf_context.ModificationPending)
 
 		if n2Buf, err = smf_context.BuildPathSwitchRequestAcknowledgeTransfer(smContext); err != nil {
 			smContext.Log.Errorf("Build Path Switch Transfer Error(%+v)", err)

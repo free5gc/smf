@@ -54,6 +54,11 @@ func (p *Processor) sendSMContextStatusNotificationAndRemoveSMContext(
 	smContext.SMLock.Lock()
 	defer smContext.SMLock.Unlock()
 
+	// The release of an SM context is notified once (TS 29.502 5.2.2.3.11).
+	if smf_context.GetSMContextByRef(smContext.Ref) != smContext {
+		return
+	}
+
 	if sendNotification && len(smContext.SmStatusNotifyUri) != 0 {
 		p.SendReleaseNotification(smContext)
 	}

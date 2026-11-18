@@ -30,6 +30,9 @@ func HandlePDUSessionEstablishmentRequest(
 	// Retrieve PTI (Procedure transaction identity)
 	smCtx.Pti = req.ProcedureTransactionID()
 
+	// TS 24.501 6.4.1.3: the accept answers an Always-on PDU session requested IE
+	smCtx.AlwaysOnPDUSessionRequested = req.AlwaysonPDUSessReq != nil
+
 	// Retrieve MaxIntegrityProtectedDataRate of UE for UP Security
 	if ipmdr := req.IntegrityProtectionMaxDataRate; ipmdr != nil {
 		switch ipmdr.Uplink {
@@ -52,10 +55,10 @@ func HandlePDUSessionEstablishmentRequest(
 	// Handle PDUSessionType
 	if req.PDUSessType != nil {
 		requestedPDUSessionType := req.PDUSessType.Value
-		if err := smCtx.IsAllowedPDUSessionType(requestedPDUSessionType); err != nil {
+		if cause, err := smCtx.IsAllowedPDUSessionType(requestedPDUSessionType); err != nil {
 			logger.CtxLog.Errorf("%s", err)
 			return &GSMError{
-				GSMCause: nasie.Cause5GSM_PDUSessTypeIpv4OnlyAllowed,
+				GSMCause: cause,
 			}
 		}
 	} else {
