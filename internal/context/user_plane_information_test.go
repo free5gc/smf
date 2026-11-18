@@ -567,3 +567,39 @@ func TestGetUEIPPool(t *testing.T) {
 		})
 	}
 }
+
+// With several access networks, the path to a UPF exists from only one of them. Map
+// iteration order must not decide whether the path is found.
+func TestGenerateDefaultPathToUPFWithDisjointAccessNetworks(t *testing.T) {
+	snssai := func(i int) []*factory.SnssaiUpfInfoItem {
+		return []*factory.SnssaiUpfInfoItem{{
+			SNssai: &models.Snssai{Sst: 1, Sd: "010203"},
+			DnnUpfInfoList: []*factory.DnnUpfInfoItem{{
+				Dnn:   "internet",
+				Pools: []*factory.UEIPPool{{Cidr: fmt.Sprintf("10.6%d.0.0/16", i)}},
+			}},
+		}}
+	}
+	nodes := map[string]*factory.UPNode{}
+	links := []*factory.UPLink{}
+	for i := 0; i < 3; i++ {
+		an, upf := fmt.Sprintf("gNB%d", i), fmt.Sprintf("PSA-UPF-%d", i)
+		nodes[an] = &factory.UPNode{Type: "AN"}
+		nodes[upf] = &factory.UPNode{Type: "UPF", NodeID: fmt.Sprintf("192.168.180.%d", i+1), SNssaiInfos: snssai(i)}
+		links = append(links, &factory.UPLink{A: an, B: upf})
+	}
+	selection := &smf_context.UPFSelectionParams{
+		Dnn: "internet", SNssai: &smf_context.SNssai{Sst: 1, Sd: "010203"},
+	}
+
+	for i := 0; i < 50; i++ {
+		upi, err := smf_context.NewUserPlaneInformation(
+			&factory.UserPlaneInformation{UPNodes: nodes, Links: links})
+		require.NoError(t, err)
+		destination := upi.UPFs["PSA-UPF-0"]
+		require.True(t, upi.GenerateDefaultPathToUPF(selection, destination), "iteration %d", i)
+		path := upi.GetDefaultUserPlanePathByDNNAndUPF(selection, destination)
+		require.Len(t, path, 1)
+		require.Equal(t, "PSA-UPF-0", path[0].Name)
+	}
+}
