@@ -1800,8 +1800,9 @@ func TestReceiverContinuesAfterTransientUDPReadError(t *testing.T) {
 	server.conn = connection
 
 	var waitGroup sync.WaitGroup
-	waitGroup.Add(1)
+	waitGroup.Add(2)
 	go server.receiver(&waitGroup)
+	go server.parser(&waitGroup)
 	t.Cleanup(func() {
 		server.Stop()
 		waitGroup.Wait()

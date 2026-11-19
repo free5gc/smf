@@ -15,6 +15,7 @@ type RcvPfcpMsg struct {
 	RemoteAddr net.UDPAddr
 	Msg        message.Message
 	Rx         *RxTransaction
+	ParseError *packetParseError
 }
 
 type TransmitMessage struct {
