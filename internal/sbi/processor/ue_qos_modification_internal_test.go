@@ -172,8 +172,16 @@ func newUEQosModTestSession(t *testing.T, pfcpClient ActivePFCPClient) (*Process
 		SessionAmbr: &models.Ambr{Uplink: "1 Gbps", Downlink: "1 Gbps"},
 	}
 	sm.SMPolicyID = "smpolicy-259"
+	pcfAddr := pcf.Listener.Addr().(*net.TCPAddr)
 	sm.SelectedPCFProfile = models.Nrf_NFDisc_NFProfile{NfServices: []models.Nrf_NFDisc_NFService{{
-		ServiceName: models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, ApiPrefix: pcf.URL,
+		ServiceName:     models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL,
+		NfServiceStatus: models.Nrf_NFMgmt_NFServiceStatus_REGISTERED,
+		Scheme:          models.UriScheme_HTTP,
+		IpEndPoints: []models.Nrf_NFMgmt_IpEndPoint{{
+			Ipv4Address: pcfAddr.IP.String(),
+			Transport:   models.Nrf_NFMgmt_TransportProtocol_TCP,
+			Port:        int32(pcfAddr.Port),
+		}},
 	}}}
 	require.NoError(t, sm.AllocUeIP())
 	require.NoError(t, sm.SelectDefaultDataPath())
