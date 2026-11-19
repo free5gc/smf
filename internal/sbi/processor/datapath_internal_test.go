@@ -243,7 +243,7 @@ func TestStaticULCLPhasesSendEveryQoSClassifier(t *testing.T) {
 		require.Len(t, state.qerList, len(expectedQERs))
 		require.Len(t, state.urrList, len(expectedURRs))
 	}
-	processor.EstablishPSA2(sm)
+	require.NoError(t, processor.EstablishPSA2(sm))
 	check(<-client.requests, nodes[2], nodes[2].UpLinkTunnel)
 	require.NoError(t, processor.EstablishULCL(sm))
 	check(<-client.requests, nodes[1], nodes[1].UpLinkTunnel, nodes[1].DownLinkTunnel)

@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"fmt"
 	"net"
 	"reflect"
 
@@ -43,7 +44,9 @@ func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) err
 			// N1N2MessageTransfer Here
 
 			// Establish PSA2
-			p.EstablishPSA2(smContext)
+			if err = p.EstablishPSA2(smContext); err != nil {
+				return err
+			}
 
 			EstablishRANTunnelInfo(smContext)
 			// Establish ULCL
@@ -62,7 +65,7 @@ func (p *Processor) AddPDUSessionAnchorAndULCL(smContext *context.SMContext) err
 	return nil
 }
 
-func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
+func (p *Processor) EstablishPSA2(smContext *context.SMContext) error {
 	smContext.Log.Infoln("Establish PSA2")
 	bpMGR := smContext.BPManager
 	activatingPath := bpMGR.ActivatingPath
@@ -70,6 +73,7 @@ func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 	nodeAfterULCL := false
 	resChan := make(chan SendPfcpResult)
 	pendingUPFs := []string{}
+	establishmentTargets := make(map[string]*PFCPState)
 
 	for node := activatingPath.FirstDPNode; node != nil; node = node.Next() {
 		if nodeAfterULCL {
@@ -107,6 +111,7 @@ func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 
 			sessionContext, exist := smContext.PFCPContext[node.GetNodeIP()]
 			if !exist || sessionContext.RemoteSEID == 0 {
+				establishmentTargets[curDPNodeIP] = pfcpState
 				go p.establishPfcpSession(smContext, pfcpState, resChan)
 			} else {
 				go p.modifyExistingPfcpSession(smContext, pfcpState, resChan, "")
@@ -118,10 +123,18 @@ func (p *Processor) EstablishPSA2(smContext *context.SMContext) {
 
 	bpMGR.AddingPSAState = context.EstablishingNewPSA
 
-	waitAllPfcpRsp(smContext, len(pendingUPFs), resChan, nil)
+	success := waitAllPfcpRsp(smContext, len(pendingUPFs), resChan, nil)
 	close(resChan)
-	// TODO: remove failed PSA2 path
 	logger.PduSessLog.Traceln("End of EstablishPSA2")
+	if !success {
+		// Only the sessions this attempt newly established are rolled back;
+		// a pre-existing session that was merely modified is left alone.
+		if err := p.rollbackEstablishedPfcpSessions(smContext, establishmentTargets); err != nil {
+			logger.PduSessLog.Errorf("rollback failed PSA2 path: %v", err)
+		}
+		return fmt.Errorf("PSA2 establishment failed for one or more UPFs")
+	}
+	return nil
 }
 
 func (p *Processor) EstablishULCL(smContext *context.SMContext) error {
