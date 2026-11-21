@@ -118,9 +118,14 @@ func (p *Processor) HandleSMPolicyUpdateNotify(
 	// TODO: Response data type -
 	// [200 OK] UeCampingRep
 	// [200 OK] array(PartialSuccessReport)
-	// [400 Bad Request] ErrorReport
 	if err := smContext.ApplyPccRules(decision); err != nil {
 		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
+		// The PCC rules of the decision are enforced all together: none is installed
+		// (subclause 4.2.3.2 in TS29512).
+		if errorReport := pccRuleErrorReport(err); errorReport != nil {
+			c.JSON(http.StatusBadRequest, errorReport)
+			return
+		}
 		// TODO: Fill the error body
 		c.Status(http.StatusBadRequest)
 		return
