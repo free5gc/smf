@@ -106,6 +106,7 @@ func (p *Processor) HandleSMPolicyUpdateNotify(
 	// TODO: implement waiting in concurrent architecture
 
 	smContext.SetState(smf_context.ModificationPending)
+	smContext.RecordSmPolicyDecision(decision)
 
 	// Update SessionRule from decision
 	if err := smContext.ApplySessionRules(decision); err != nil {
@@ -134,7 +135,28 @@ func (p *Processor) HandleSMPolicyUpdateNotify(
 
 	smContext.PostRemoveDataPath()
 
+	p.reportAccessNetworkInfo(smContext, decision)
+
 	c.Status(http.StatusNoContent)
+}
+
+// reportAccessNetworkInfo reports the access network information requested in an SM policy
+// decision, if any (subclause 4.2.4.9 in TS29512). It is sent asynchronously, without the
+// SM context lock held by the caller.
+func (p *Processor) reportAccessNetworkInfo(
+	smContext *smf_context.SMContext, decision *models.Pcf_SMPolCtrl_SmPolicyDecision,
+) {
+	report := smContext.AccessNetworkInfoReport(decision)
+	if report == nil {
+		return
+	}
+	pcfProfile, smPolicyID := smContext.SelectedPCFProfile, smContext.SMPolicyID
+	go func() {
+		if err := p.Consumer().SendSMPolicyAssociationUpdateByAccessNetworkInfo(
+			&pcfProfile, smPolicyID, report); err != nil {
+			logger.PduSessLog.Errorf("Report access network information failed: %v", err)
+		}
+	}()
 }
 
 func SendUpPathChgEventExposureNotification(

@@ -280,6 +280,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		return
 	}
 	smContext.SMPolicyID = smPolicyID
+	smContext.RecordSmPolicyDecision(smPolicyDecision)
 
 	// PDU　session create is a charging event
 	logger.PduSessLog.Infof("CHF Selection for SMContext SUPI[%s] PDUSessionID[%d]\n",
@@ -431,6 +432,14 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	response.JsonData = new(models.Smf_PDUSess_SmContextUpdatedData)
 
 	smContextUpdateData := body.JsonData
+	// Keep the access network information reported to the PCF current (subclause 4.2.4.9 in TS29512)
+	var prevUeLocation *models.UserLocation
+	if smContext.Smf_PDUSess_SmContextCreateData != nil {
+		prevUeLocation = smContext.UeLocation
+	}
+	if smContextUpdateData != nil {
+		smContext.UpdateAccessNetworkInfo(smContextUpdateData.UeLocation, smContextUpdateData.UeTimeZone)
+	}
 
 	if body.BinaryDataN1SmMessage != nil {
 		var gsmMessage message.GSMMessage
@@ -651,7 +660,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		smContext.UpCnxState = body.JsonData.UpCnxState
 		// UE location change is a charging event
 		// TODO: This is not tested yet
-		if !reflect.DeepEqual(smContext.UeLocation, body.JsonData.UeLocation) {
+		if !reflect.DeepEqual(prevUeLocation, body.JsonData.UeLocation) {
 			// All rating group related to this Pdu session should send charging request
 			for _, dataPath := range tunnel.DataPathPool {
 				if dataPath.Activated {
@@ -666,8 +675,6 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 
 			p.ReportUsageAndUpdateQuota(smContext)
 		}
-
-		smContext.UeLocation = body.JsonData.UeLocation
 
 		// Set FAR and An, N3 Release Info
 		// TODO: Deactivate all datapath in ANUPF
