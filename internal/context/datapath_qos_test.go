@@ -124,6 +124,7 @@ func TestPathActivationRejectsInvalidQoSBindingBeforeAllocation(t *testing.T) {
 const (
 	updatedFlowMBR     = "20 Mbps"
 	qosTestPFCPAddress = "127.0.0.1"
+	anyToAssignedFlow  = "permit out ip from any to assigned"
 )
 
 // Marshal and parse the actual pending rules on each UPF, as activation does.
@@ -377,7 +378,7 @@ func TestSessionChargingURRSharedWithServicePDRs(t *testing.T) {
 			self.ExternalAddr = qosTestPFCPAddress
 			t.Cleanup(func() { self.ExternalAddr = originalAddress })
 			defaultRule := tiPCC("default", "", "", 255)
-			defaultRule.FlowInfos[0].FlowDescription = "permit out ip from any to assigned"
+			defaultRule.FlowInfos[0].FlowDescription = anyToAssignedFlow
 			defaultRule.RefChgData = []string{"session-charge"}
 			service := tiPCC("service", "qos", "", 128)
 			service.RefChgData = []string{"service-charge"}
@@ -458,5 +459,45 @@ func TestSessionChargingURRSharedWithServicePDRs(t *testing.T) {
 			require.NotNil(t, replacement)
 			require.NotEqual(t, sessionURR.URRID, replacement.URRID)
 		})
+	}
+}
+
+// A PCC rule without charging data of its own, e.g. derived from an AF media component,
+// still uses the session charging URR.
+func TestServicePCCRuleWithoutChargingDataUsesSessionCharging(t *testing.T) {
+	sm := newTIPolicyContext(t)
+	defaultRule := tiPCC("default", "", "", 255)
+	defaultRule.FlowInfos[0].FlowDescription = anyToAssignedFlow
+	defaultRule.RefChgData = []string{"session-charge"}
+	service := tiPCC("service", "qos", "", 128)
+	require.NoError(t, sm.ApplyPccRules(&models.Pcf_SMPolCtrl_SmPolicyDecision{
+		PccRules: map[string]*models.Pcf_SMPolCtrl_PccRule{"default": defaultRule, "service": service},
+		QosDecs: map[string]*models.Pcf_SMPolCtrl_QosData{
+			"qos": {QosId: "qos", Var5qi: 9},
+		},
+		ChgDecs: map[string]*models.Pcf_SMPolCtrl_ChargingData{
+			"session-charge": {ChgId: "session-charge", RatingGroup: 1, Offline: true},
+		},
+	}))
+
+	var anchor *smf_context.DataPathNode
+	for node := sm.PCCRules["service"].Datapath.FirstDPNode; node != nil; node = node.Next() {
+		if node.IsAnchorUPF() {
+			anchor = node
+		}
+	}
+	require.NotNil(t, anchor)
+	var sessionURR *smf_context.URR
+	for id, info := range sm.ChargingInfo {
+		if info.UpfId == anchor.UPF.UUID() && info.RatingGroup == 1 {
+			sessionURR = sm.GetUrrRule(info.UpfId, id)
+		}
+	}
+	require.NotNil(t, sessionURR)
+	for _, pdr := range []*smf_context.PDR{anchor.UpLinkTunnel.PDR, anchor.DownLinkTunnel.PDR} {
+		require.Contains(t, pdr.URR, sessionURR)
+	}
+	for _, info := range sm.ChargingInfo {
+		require.Equal(t, int32(1), info.RatingGroup, "no flow charging without charging data")
 	}
 }
