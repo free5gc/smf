@@ -86,16 +86,9 @@ func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMCon
 		Mcc: smContext.ServingNetwork.Mcc,
 		Mnc: smContext.ServingNetwork.Mnc,
 	}
-	smPolicyData.SuppFeat = "F"
-	if smContext.UeLocation != nil {
-		ueLocation := *smContext.UeLocation
-		if ueLocation.NrLocation != nil && ueLocation.NrLocation.AgeOfLocationInformation < 0 {
-			nrLoc := *ueLocation.NrLocation
-			nrLoc.AgeOfLocationInformation = 0
-			ueLocation.NrLocation = &nrLoc
-		}
-		smPolicyData.UserLocationInfo = &ueLocation
-	}
+	smPolicyData.SuppFeat = smf_context.SmPolicySuppFeat
+	smPolicyData.UserLocationInfo = smContext.PolicyUserLocation()
+	smPolicyData.UeTimeZone = smContext.PolicyUeTimeZone()
 
 	ctx, _, err := smf_context.GetSelf().
 		GetTokenCtxForNFInstance(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL,
@@ -326,14 +319,46 @@ func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.
 		return err
 	}
 
+	deleteData := smContext.SmPolicyDeleteData()
 	request := &SMPolCtrl.DeleteSMPolicyRequest{
 		SmPolicyId:  &smContext.SMPolicyID,
-		RequestBody: &models.Pcf_SMPolCtrl_SmPolicyDeleteData{},
+		RequestBody: &deleteData,
 	}
 
 	_, err = client.IndividualSMPolicyDocumentApi.DeleteSMPolicy(ctx, request)
 	if err != nil {
 		return fmt.Errorf("SM Policy termination failed: %v", err)
+	}
+	return nil
+}
+
+// SendSMPolicyAssociationUpdateByAccessNetworkInfo reports the access network information
+// requested by the PCF (TS 29.512 clause 4.2.4.9). It takes copies of the PCF profile and
+// SM policy ID so that it can run without holding the SM context lock.
+func (s *npcfService) SendSMPolicyAssociationUpdateByAccessNetworkInfo(
+	pcfProfile *models.Nrf_NFDisc_NFProfile, smPolicyID string,
+	report *models.Pcf_SMPolCtrl_SmPolicyUpdateContextData,
+) error {
+	pcfURI := util.SearchNFServiceUri(pcfProfile, models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL)
+	client := s.getSMPolicyControlClient(pcfURI)
+	if client == nil {
+		return fmt.Errorf("SM Policy Control PCF API root unavailable")
+	}
+
+	ctx, _, err := smf_context.GetSelf().
+		GetTokenCtxForNFInstance(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL,
+			models.Nrf_NFMgmt_NFType_PCF, pcfProfile.NfInstanceId)
+	if err != nil {
+		return err
+	}
+
+	request := &SMPolCtrl.UpdateSMPolicyRequest{
+		SmPolicyId:  &smPolicyID,
+		RequestBody: report,
+	}
+	// The report does not ask for new policies: the returned decision is not enforced again.
+	if _, err = client.IndividualSMPolicyDocumentApi.UpdateSMPolicy(ctx, request); err != nil {
+		return fmt.Errorf("update sm policy [%s] with access network information failed: %s", smPolicyID, err)
 	}
 	return nil
 }
