@@ -89,6 +89,16 @@ func HandlePDUSessionResourceSetupResponseTransfer(b []byte, ctx *SMContext) err
 	for _, qos := range ctx.AdditionalQosFlows {
 		qos.State = QoSFlowSet
 	}
+	if failedList := resourceSetupResponseTransfer.QosFlowFailedToSetupList; failedList != nil {
+		for _, item := range failedList.List {
+			qfi := uint8(item.QosFlowIdentifier.Value)
+			logger.PduSessLog.Warnf("PDU Session Resource Setup QFI[%d] %s", qfi, strNgapCause(item.Cause))
+			if qosFlow, ok := ctx.AdditionalQosFlows[qfi]; ok {
+				qosFlow.State = QoSFlowUnset
+			}
+			ctx.recordFailedQosFlow(qfi)
+		}
+	}
 	return nil
 }
 
@@ -130,6 +140,7 @@ func HandlePDUSessionResourceModifyResponseTransfer(b []byte, ctx *SMContext) er
 			} else {
 				logger.PduSessLog.Warnf("PDU Session Resource Modify QFI[%d] not found in AdditionalQosFlows", qfi)
 			}
+			ctx.recordFailedQosFlow(qfi)
 		}
 	}
 
