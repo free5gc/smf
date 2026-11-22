@@ -23,20 +23,20 @@ func newPathCacheTopology(t *testing.T) (*smf_context.UserPlaneInformation, []*s
 		}
 		dnns[i] = &factory.DnnUpfInfoItem{Dnn: dnn}
 	}
-	config := &factory.UserPlaneInformation{
+	topologyConfig := &factory.UserPlaneInformation{
 		UPNodes: map[string]*factory.UPNode{"AN": {Type: "AN"}},
 	}
 	for i := 1; i <= 2; i++ {
 		name := fmt.Sprintf("UPF%d", i)
-		config.UPNodes[name] = &factory.UPNode{
+		topologyConfig.UPNodes[name] = &factory.UPNode{
 			Type: "UPF", NodeID: fmt.Sprintf("192.0.2.%d", i),
 			SNssaiInfos: []*factory.SnssaiUpfInfoItem{{
 				SNssai: &models.Snssai{Sst: 1, Sd: "010203"}, DnnUpfInfoList: dnns,
 			}},
 		}
-		config.Links = append(config.Links, &factory.UPLink{A: "AN", B: name})
+		topologyConfig.Links = append(topologyConfig.Links, &factory.UPLink{A: "AN", B: name})
 	}
-	upi, err := smf_context.NewUserPlaneInformation(config)
+	upi, err := smf_context.NewUserPlaneInformation(topologyConfig)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		for _, upf := range upi.UPFs {

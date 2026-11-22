@@ -667,7 +667,7 @@ func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNNAndUPF(selection *U
 		logger.CtxLog.Traceln("pathExist: ", pathExist)
 		return path
 	}
-	if pathExist := upi.GenerateDefaultPathToUPF(selection, upf); pathExist {
+	if upi.GenerateDefaultPathToUPF(selection, upf) {
 		upi.pathCacheMu.RLock()
 		defer upi.pathCacheMu.RUnlock()
 		return upi.DefaultUserPlanePathToUPF[selection.String()][nodeID]
