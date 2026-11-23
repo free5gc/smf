@@ -120,7 +120,14 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 	}
 
 	// Shared logic for processing each rule in Pass 1 and Pass 2
-	processRule := func(id string, tgtPcc *PCCRule, pduChgDatas []*models.Pcf_SMPolCtrl_ChargingData) error {
+	processRule := func(id string, tgtPcc *PCCRule, pduChgDatas []*models.Pcf_SMPolCtrl_ChargingData) (retErr error) {
+		// TS 29.512 V17.11.0 clause 4.2.4.15: retain an active old rule
+		// when the failure does not affect it. Referenced-data updates reuse
+		// its wrapper, so prepare the candidate separately before changing it.
+		if tgtPcc == c.PCCRules[id] {
+			candidate := *tgtPcc
+			tgtPcc = &candidate
+		}
 		tgtTcID := tgtPcc.RefTcDataID()
 		_, tgtTcData := c.getSrcTgtTcData(decision.TraffContDecs, tgtTcID)
 		tgtChgID := tgtPcc.RefChgDataID()
@@ -149,12 +156,24 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 		}
 
 		var srcTcData *TrafficControlData
-		if srcPcc := c.PCCRules[id]; srcPcc != nil {
+		srcPcc := c.PCCRules[id]
+		if srcPcc != nil {
 			c.Log.Infof("Modify PCCRule[%s]", id)
 			srcTcData = c.TrafficControlDatas[srcPcc.RefTcDataID()]
-			c.PreRemoveDataPath(srcPcc.Datapath)
 		} else {
 			c.Log.Infof("Install PCCRule[%s]", id)
+		}
+
+		// Transfer default ownership before activation creates its marking QER,
+		// but restore the old path's ownership if replacement setup fails.
+		if srcPcc != nil && srcPcc.Datapath != nil && srcPcc.Datapath.IsDefaultPath {
+			oldPath := srcPcc.Datapath
+			oldPath.IsDefaultPath = false
+			defer func() {
+				if retErr != nil {
+					oldPath.IsDefaultPath = true
+				}
+			}()
 		}
 
 		// the main difference between Pass 1 and Pass 2: whether pduUrrs is passed in
@@ -163,6 +182,10 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 		}
 		if err := applyFlowInfoOrPFD(c, tgtPcc); err != nil {
 			return err
+		}
+		// Retire the old path only after the replacement is ready.
+		if srcPcc != nil {
+			c.PreRemoveDataPath(srcPcc.Datapath)
 		}
 		if err := checkUpPathChangeEvt(c, srcTcData, tgtTcData); err != nil {
 			c.Log.Warnf("Check UpPathChgEvent err: %v", err)
