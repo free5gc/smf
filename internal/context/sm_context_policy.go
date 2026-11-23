@@ -6,7 +6,6 @@ import (
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/smf/internal/logger"
-	"github.com/free5gc/smf/pkg/factory"
 )
 
 // SM Policy related operation
@@ -85,11 +84,24 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 	finalQosDatas := make(map[string]*models.Pcf_SMPolCtrl_QosData)
 	finalChgDatas := make(map[string]*models.Pcf_SMPolCtrl_ChargingData)
 
-	// Validate all explicit classifiers before retiring any working paths.
-	for _, rule := range decision.PccRules {
-		if rule != nil && len(rule.FlowInfos) != 0 {
-			if _, _, err := directionalSDFFilters(rule.FlowInfos); err != nil {
-				return err
+	// TS 29.512 V17.11.0 clause 4.2.3.16: validate each classifier
+	// independently; reject a whole notification only if every received rule
+	// failed validation. Do this before changing paths, QFIs or policy data.
+	candidates, rejected, reports := c.validatePCCClassifiers(decision)
+	if reports.AllRulesFailed {
+		return reports
+	}
+	for id := range rejected {
+		if old := c.PCCRules[id]; old != nil {
+			finalPccRules[id] = old
+			if ref := old.RefTcDataID(); ref != "" {
+				finalTcDatas[ref] = c.TrafficControlDatas[ref]
+			}
+			if ref := old.RefQosDataID(); ref != "" {
+				finalQosDatas[ref] = c.QosDatas[ref]
+			}
+			if ref := old.RefChgDataID(); ref != "" {
+				finalChgDatas[ref] = c.ChargingData[ref]
 			}
 		}
 	}
@@ -210,6 +222,9 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 
 	// 1.1 Handle Removed PccRule (PccMode == nil)
 	for id, pccModel := range decision.PccRules {
+		if rejected[id] {
+			continue
+		}
 		if pccModel == nil {
 			c.Log.Infof("Remove PCCRule[%s]", id)
 			if srcPcc := c.PCCRules[id]; srcPcc != nil {
@@ -224,7 +239,7 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 			delete(c.PCCRules, id)
 			continue
 		}
-		if err := queueRule(id, NewPCCRule(pccModel)); err != nil {
+		if err := queueRule(id, candidates[id]); err != nil {
 			return err
 		}
 	}
@@ -304,7 +319,13 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 	c.TrafficControlDatas = finalTcDatas
 	c.QosDatas = finalQosDatas
 	c.ChargingData = finalChgDatas
-	return c.refreshULCLQoSBindings()
+	if err := c.refreshULCLQoSBindings(); err != nil {
+		return err
+	}
+	if len(reports.RuleReports) != 0 {
+		return reports
+	}
+	return nil
 }
 
 func (c *SMContext) ApplyDcPccRulesOnDcTunnel() error {
@@ -567,40 +588,11 @@ func (c *SMContext) PostRemoveDataPath() {
 }
 
 func applyFlowInfoOrPFD(c *SMContext, pcc *PCCRule) error {
-	appID := pcc.AppId
-
-	if len(pcc.FlowInfos) == 0 && appID == "" {
-		return fmt.Errorf("no FlowInfo and AppID")
-	}
-
-	// Apply flow description if it presents
-	if len(pcc.FlowInfos) != 0 {
-		return pcc.Datapath.applyFlowInfos(c, pcc.FlowInfos)
-	}
-	logger.CfgLog.Tracef("applyFlowInfoOrPFD %+v", pcc.FlowDescription())
-
-	// Find PFD with AppID if no flow description presents
-	// TODO: Get PFD from NEF (not from config)
-	var matchedPFD *factory.PfdDataForApp
-	for _, pfdDataForApp := range factory.UERoutingConfig.PfdDatas {
-		if pfdDataForApp.AppID == appID {
-			matchedPFD = pfdDataForApp
-			break
-		}
-	}
-
-	// Workaround: UPF doesn't support PFD. Get FlowDescription from PFD.
-	// TODO: Send PFD to UPF
-	if matchedPFD == nil ||
-		len(matchedPFD.Pfds) == 0 ||
-		len(matchedPFD.Pfds[0].FlowDescriptions) == 0 {
-		return fmt.Errorf("no PFD matched for AppID [%s]", appID)
-	}
-	if err := pcc.UpdateDataPathFlowDescription(
-		matchedPFD.Pfds[0].FlowDescriptions[0]); err != nil {
+	infos, err := pccFlowInfos(pcc.Pcf_SMPolCtrl_PccRule)
+	if err != nil {
 		return err
 	}
-	return nil
+	return pcc.Datapath.applyFlowInfos(c, infos)
 }
 
 func checkUpPathChangeEvt(c *SMContext,

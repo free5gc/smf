@@ -337,3 +337,33 @@ func (s *npcfService) SendSMPolicyAssociationTermination(smContext *smf_context.
 	}
 	return nil
 }
+
+// SendSMPolicyRuleReport reports validation failures in PCF create/update
+// responses (TS 29.512 V17.11.0 clause 4.2.4.15). Return any corrective
+// decision so the caller can enforce it rather than silently discarding it.
+func (s *npcfService) SendSMPolicyRuleReport(
+	smContext *smf_context.SMContext, reports []models.Pcf_SMPolCtrl_RuleReport,
+) (*models.Pcf_SMPolCtrl_SmPolicyDecision, error) {
+	pcfURI := util.SearchNFServiceUri(&smContext.SelectedPCFProfile, models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL)
+	client := s.getSMPolicyControlClient(pcfURI)
+	if client == nil {
+		return nil, fmt.Errorf("SM Policy Control PCF API root unavailable")
+	}
+	ctx, _, err := smf_context.GetSelf().GetTokenCtxForNFInstance(
+		models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL,
+		models.Nrf_NFMgmt_NFType_PCF, smContext.SelectedPCFProfile.NfInstanceId)
+	if err != nil {
+		return nil, err
+	}
+	response, err := client.IndividualSMPolicyDocumentApi.UpdateSMPolicy(ctx, &SMPolCtrl.UpdateSMPolicyRequest{
+		SmPolicyId:  &smContext.SMPolicyID,
+		RequestBody: &models.Pcf_SMPolCtrl_SmPolicyUpdateContextData{RuleReports: reports},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("report PCC rule failures: %w", err)
+	}
+	if response == nil {
+		return nil, nil
+	}
+	return response.Pcf_SMPolCtrl_SmPolicyDecision, nil
+}

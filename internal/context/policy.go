@@ -105,7 +105,13 @@ func (r *PCCRule) RefTcDataID() string {
 }
 
 func (r *PCCRule) IdentifyChargingLevel() (ChargingLevel, error) {
-	dlIPFilterRule, err := flowdesc.Decode(r.FlowDescription())
+	// TS 29.512 V17.11.0 table 5.6.2.6-1 note 3 permits appId-only
+	// rules; use our local PFD classifier for charging classification too.
+	infos, err := pccFlowInfos(r.Pcf_SMPolCtrl_PccRule)
+	if err != nil {
+		return 0, err
+	}
+	dlIPFilterRule, err := flowdesc.Decode(infos[0].FlowDescription)
 	if err != nil {
 		return 0, err
 	}
