@@ -41,6 +41,8 @@ var aniTestPcfProfile = models.Nrf_NFDisc_NFProfile{
 func interceptPcf(t *testing.T, path string, status int, body any) {
 	t.Helper()
 	openapi.InterceptInnerHttp2Client(t, false)
+	// Mocks left by other tests in this package could answer first: gock matches in registration order.
+	gock.Flush()
 	t.Cleanup(gock.Off)
 	mock := gock.New(aniTestPcfURL + factory.PcfSmpolicycontrolUriPrefix).Post(path).
 		AddMatcher(func(req *http.Request, _ *gock.Request) (bool, error) {

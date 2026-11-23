@@ -36,6 +36,8 @@ func TestReportAccessNetworkInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	openapi.InterceptInnerHttp2Client(t, false)
+	// Mocks left by other tests in this package could answer first: gock matches in registration order.
+	gock.Flush()
 	t.Cleanup(gock.Off)
 	reports := make(chan models.Pcf_SMPolCtrl_SmPolicyUpdateContextData, 1)
 	gock.New(pcfURL + factory.PcfSmpolicycontrolUriPrefix).Post("/sm-policies/imsi-208930000001241-10/update").
