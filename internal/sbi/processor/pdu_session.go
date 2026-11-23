@@ -166,11 +166,18 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		SingleNssai: smContext.SNssai,
 	}
 
+	// Set PTI from the request so that a reject built before
+	// HandlePDUSessionEstablishmentRequest carries the UE's PTI.
+	smContext.Pti = establishmentRequest.ProcedureTransactionID()
+
 	ctx, _, oauthErr := smf_context.GetSelf().GetTokenCtxForNFInstance(
 		models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_NFType_UDM,
 		smf_context.GetSelf().UDMProfile.NfInstanceId)
 	if oauthErr != nil {
 		smContext.Log.Errorf("Get Token Context Error[%v]", oauthErr)
+		p.makeEstRejectResAndReleaseSMContext(c, smContext,
+			nasie.Cause5GSM_NwFailure,
+			&smf_errors.NetworkFailure)
 		return
 	}
 
