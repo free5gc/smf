@@ -195,6 +195,8 @@ type SMContext struct {
 	AMBRQerMap              map[uuid.UUID]uint32
 	QerUpfMap               map[string]uint32
 	AdditionalQosFlows      map[uint8]*QoSFlow // Key: qfi
+	// QoS flows the AN failed to set up or modify, not yet reported to the PCF
+	failedQosFlows []uint8
 
 	// URR
 	UrrIDGenerator     *idgenerator.IDGenerator

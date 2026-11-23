@@ -85,11 +85,16 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 	finalQosDatas := make(map[string]*models.Pcf_SMPolCtrl_QosData)
 	finalChgDatas := make(map[string]*models.Pcf_SMPolCtrl_ChargingData)
 
+	// fail reports the PCC rules of decision not enforced because the PCC rule id failed.
+	fail := func(id string, code models.Pcf_SMPolCtrl_FailureCode, err error) error {
+		return c.newPccRuleError(decision, id, ruleFailure{code: code, err: err})
+	}
+
 	// Validate all explicit classifiers before retiring any working paths.
-	for _, rule := range decision.PccRules {
+	for id, rule := range decision.PccRules {
 		if rule != nil && len(rule.FlowInfos) != 0 {
 			if _, _, err := directionalSDFFilters(rule.FlowInfos); err != nil {
-				return err
+				return fail(id, models.Pcf_SMPolCtrl_FailureCode_INCOR_FLOW_INFO, err)
 			}
 		}
 	}
@@ -108,7 +113,7 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 	queueRule := func(id string, pcc *PCCRule) error {
 		chgLevel, err := pcc.IdentifyChargingLevel()
 		if err != nil {
-			return err
+			return fail(id, models.Pcf_SMPolCtrl_FailureCode_INCOR_FLOW_INFO, err)
 		}
 
 		if chgLevel == PduSessionCharging {
@@ -121,6 +126,10 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 
 	// Shared logic for processing each rule in Pass 1 and Pass 2
 	processRule := func(id string, tgtPcc *PCCRule, pduChgDatas []*models.Pcf_SMPolCtrl_ChargingData) error {
+		failed := func(code models.Pcf_SMPolCtrl_FailureCode, err error) error {
+			return fail(id, code, err)
+		}
+
 		tgtTcID := tgtPcc.RefTcDataID()
 		_, tgtTcData := c.getSrcTgtTcData(decision.TraffContDecs, tgtTcID)
 		tgtChgID := tgtPcc.RefChgDataID()
@@ -130,19 +139,22 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 
 		if tgtQosID != "" {
 			if tgtQosData == nil {
-				return fmt.Errorf("PCC rule %s references missing QoS data %s", id, tgtQosID)
+				return failed(models.Pcf_SMPolCtrl_FailureCode_UNKNOWN_REF_ID,
+					fmt.Errorf("PCC rule %s references missing QoS data %s", id, tgtQosID))
 			}
 			var qfi uint8
 			if tgtQosData.DefQosFlowIndication {
 				session := c.SelectedSessionRule()
 				if session == nil || session.DefQosQFI == 0 || session.DefQosQFI > 63 {
-					return fmt.Errorf("PCC rule %s has no valid default QoS flow", id)
+					return failed(models.Pcf_SMPolCtrl_FailureCode_NO_QOS_FLOW_BOUND,
+						fmt.Errorf("PCC rule %s has no valid default QoS flow", id))
 				}
 				qfi = session.DefQosQFI
 			} else {
 				qfi = c.AssignQFI(tgtQosID)
 				if qfi == 0 {
-					return fmt.Errorf("no QFI available for QoS data %s", tgtQosID)
+					return failed(models.Pcf_SMPolCtrl_FailureCode_MAX_NR_QO_S_FLOW,
+						fmt.Errorf("no QFI available for QoS data %s", tgtQosID))
 				}
 			}
 			tgtPcc.SetQFI(qfi)
@@ -159,10 +171,10 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 
 		// the main difference between Pass 1 and Pass 2: whether pduUrrs is passed in
 		if err := c.CreatePccRuleDataPath(tgtPcc, tgtTcData, tgtQosData, tgtChgData, pduChgDatas); err != nil {
-			return err
+			return failed(models.Pcf_SMPolCtrl_FailureCode_RES_ALLO_FAIL, err)
 		}
 		if err := applyFlowInfoOrPFD(c, tgtPcc); err != nil {
-			return err
+			return failed(flowInfoFailureCode(tgtPcc), err)
 		}
 		if err := checkUpPathChangeEvt(c, srcTcData, tgtTcData); err != nil {
 			c.Log.Warnf("Check UpPathChgEvent err: %v", err)
@@ -254,14 +266,14 @@ func (c *SMContext) ApplyPccRules(decision *models.Pcf_SMPolCtrl_SmPolicyDecisio
 
 	// Collect PDU-level charging data from rules created in Pass 1
 	var pduChgDatas []*models.Pcf_SMPolCtrl_ChargingData
-	for _, pcc := range finalPccRules {
+	for id, pcc := range finalPccRules {
 		if chgLevel, err := pcc.IdentifyChargingLevel(); err == nil && chgLevel == PduSessionCharging && pcc.Datapath != nil {
 			chgID := pcc.RefChgDataID()
 			if data, ok := finalChgDatas[chgID]; ok {
 				pduChgDatas = append(pduChgDatas, data)
 			}
 		} else if err != nil {
-			return err
+			return fail(id, models.Pcf_SMPolCtrl_FailureCode_INCOR_FLOW_INFO, err)
 		}
 	}
 

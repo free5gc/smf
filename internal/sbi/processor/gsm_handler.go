@@ -158,6 +158,7 @@ func (p *Processor) HandlePDUSessionModificationRequest(
 
 	if errApplyPccRules := smCtx.ApplyPccRules(smPolicyDecision); errApplyPccRules != nil {
 		smCtx.Log.Errorf("apply sm policy decision error: %+v", errApplyPccRules)
+		p.reportApplyPccRulesFailure(smCtx, errApplyPccRules)
 	}
 
 	authQoSRules := []nasie.QosRule{}

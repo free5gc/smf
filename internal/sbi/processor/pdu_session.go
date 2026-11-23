@@ -314,6 +314,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	// If PCF prepares default Pcc Rule, SMF do not need to create defaultDataPath.
 	if err = smContext.ApplyPccRules(smPolicyDecision); err != nil {
 		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
+		p.reportApplyPccRulesFailure(smContext, err)
 	}
 
 	// SelectDefaultDataPath() will create a default data path if default data path is not found.
@@ -796,6 +797,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			}
 			splitRules = splitPathRules(tunnel, dcTunnel, true)
 		}
+		p.reportQosFlowFailures(smContext)
 		sendPFCPModification = true
 		smContext.SetState(smf_context.PFCPModification)
 	case models.Smf_PDUSess_N2SmInfoType_PDU_RES_SETUP_FAIL:
@@ -808,6 +810,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			HandlePDUSessionResourceModifyResponseTransfer(relatedBytes(body.BinaryDataN2SmInformation), smContext); err != nil {
 			smContext.Log.Errorf("Handle PDUSessionResourceModifyResponseTransfer failed: %+v", err)
 		}
+		p.reportQosFlowFailures(smContext)
 	case models.Smf_PDUSess_N2SmInfoType_PDU_RES_MOD_IND:
 		// This handler only processes changes in the number of tunnels:
 		// 1. Single tunnel to dual tunnels (1->2)
