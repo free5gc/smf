@@ -365,22 +365,33 @@ func TestNormalAndDCActivationReplaceChangedFlowQER(t *testing.T) {
 }
 
 func TestSessionChargingURRSharedWithServicePDRs(t *testing.T) {
-	for _, online := range []bool{false, true} {
-		name := "offline"
-		if online {
-			name = "online"
-		}
-		t.Run(name, func(t *testing.T) {
+	// TS 29.512 V17.11.0 table 5.6.2.6-1 note 7: omitted refChgData
+	// means no charging for this PCC rule. Keep the existing aggregate
+	// session accounting on the service PDRs independently of that rule.
+	for _, tc := range []struct {
+		name            string
+		online          bool
+		serviceCharging bool
+	}{
+		{"offline", false, true},
+		{"online", true, true},
+		{"offline session charging only", false, false},
+		{"online session charging only", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			online := tc.online
 			sm := newTIPolicyContext(t)
 			self := smf_context.GetSelf()
 			originalAddress := self.ExternalAddr
 			self.ExternalAddr = qosTestPFCPAddress
 			t.Cleanup(func() { self.ExternalAddr = originalAddress })
 			defaultRule := tiPCC("default", "", "", 255)
-			defaultRule.FlowInfos[0].FlowDescription = "permit out ip from any to assigned"
+			defaultRule.FlowInfos[0].FlowDescription = pccUpdateDefaultFlow
 			defaultRule.RefChgData = []string{"session-charge"}
 			service := tiPCC("service", "qos", "", 128)
-			service.RefChgData = []string{"service-charge"}
+			if tc.serviceCharging {
+				service.RefChgData = []string{"service-charge"}
+			}
 			require.NoError(t, sm.ApplyPccRules(&models.Pcf_SMPolCtrl_SmPolicyDecision{
 				PccRules: map[string]*models.Pcf_SMPolCtrl_PccRule{"default": defaultRule, "service": service},
 				QosDecs: map[string]*models.Pcf_SMPolCtrl_QosData{
@@ -405,6 +416,11 @@ func TestSessionChargingURRSharedWithServicePDRs(t *testing.T) {
 				}
 			}
 			require.NotNil(t, sessionURR)
+			if !tc.serviceCharging {
+				for _, info := range sm.ChargingInfo {
+					require.Equal(t, int32(1), info.RatingGroup, "no flow charging without refChgData")
+				}
+			}
 			for _, pdr := range []*smf_context.PDR{anchor.UpLinkTunnel.PDR, anchor.DownLinkTunnel.PDR} {
 				require.Contains(t, pdr.URR, sessionURR)
 			}
@@ -458,5 +474,36 @@ func TestSessionChargingURRSharedWithServicePDRs(t *testing.T) {
 			require.NotNil(t, replacement)
 			require.NotEqual(t, sessionURR.URRID, replacement.URRID)
 		})
+	}
+}
+
+// TS 29.512 V17.11.0 table 5.6.2.6-1 note 7 also applies when
+// cloning a PCC rule onto the secondary tunnel: no rule-specific charging.
+func TestDCServiceWithoutChargingDataUsesSessionCharging(t *testing.T) {
+	sm := newTIPolicyContext(t)
+	defaultRule := tiPCC("default", "", "", 255)
+	defaultRule.FlowInfos[0].FlowDescription = pccUpdateDefaultFlow
+	defaultRule.RefChgData = []string{"session-charge"}
+	require.NoError(t, sm.ApplyPccRules(&models.Pcf_SMPolCtrl_SmPolicyDecision{
+		PccRules: map[string]*models.Pcf_SMPolCtrl_PccRule{"default": defaultRule},
+		ChgDecs: map[string]*models.Pcf_SMPolCtrl_ChargingData{
+			"session-charge": {ChgId: "session-charge", RatingGroup: 1, Offline: true},
+		},
+	}))
+	// Exercise the DC caller directly with a service rule that has no charging reference.
+	sm.PCCRules["service"] = smf_context.NewPCCRule(tiPCC("service", "", "", 128))
+	sm.DCTunnel = smf_context.NewUPTunnel()
+	require.NoError(t, sm.ApplyDcPccRulesOnDcTunnel())
+	path := sm.DCPCCRules["service"].Datapath
+	charged := path.GetChargingUrr(sm)
+	require.Len(t, charged, 1)
+	info := sm.ChargingInfo[charged[0].URRID]
+	require.Equal(t, int32(1), info.RatingGroup)
+	require.Equal(t, smf_context.PduSessionCharging, info.ChargingLevel)
+	for node := path.FirstDPNode; node != nil; node = node.Next() {
+		if node.IsAnchorUPF() {
+			require.Contains(t, node.UpLinkTunnel.PDR.URR, charged[0])
+			require.Contains(t, node.DownLinkTunnel.PDR.URR, charged[0])
+		}
 	}
 }

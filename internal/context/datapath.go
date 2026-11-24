@@ -1238,12 +1238,20 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 
 		var urrsToAttach []*URR
 
-		urr, chgInfo := p.CreateUrrAndChgInfo(smContext, chgData, chgLevel, currentUPF)
-		if urr != nil && chgInfo != nil {
-			smContext.ChargingInfo[urr.URRID] = chgInfo
-			urrsToAttach = append(urrsToAttach, urr)
-		} else {
-			logger.ChargingLog.Warnf("[AddChargingRules]URR not created for UPF=%s RG=%d", currentUUID, chgData.RatingGroup)
+		// TS 29.512 V17.11.0 table 5.6.2.6-1 note 7: no refChgData
+		// means no charging for this PCC rule. Keep our existing aggregate
+		// PDU session accounting below (TS 32.255 V17.10.0 clause 5.2.1.3)
+		// without creating a rule-specific URR when charging data is absent.
+		if chgData != nil {
+			urr, chgInfo := p.CreateUrrAndChgInfo(smContext, chgData, chgLevel, currentUPF)
+			if urr != nil && chgInfo != nil {
+				smContext.ChargingInfo[urr.URRID] = chgInfo
+				urrsToAttach = append(urrsToAttach, urr)
+				logger.ChargingLog.Infof("[AddChargingRules] ChargingInfo bind URR[%d] -> RG=%d UPF=%s level=%v method=%v",
+					urr.URRID, chgInfo.RatingGroup, chgInfo.UpfId, chgInfo.ChargingLevel, chgInfo.ChargingMethod)
+			} else {
+				logger.ChargingLog.Warnf("[AddChargingRules]URR not created for UPF=%s RG=%d", currentUUID, chgData.RatingGroup)
+			}
 		}
 
 		if chgLevel != PduSessionCharging && len(pduChgDatas) > 0 {
@@ -1253,9 +1261,6 @@ func (p *DataPath) AddChargingRules(smContext *SMContext, chgLevel ChargingLevel
 				}
 			}
 		}
-
-		logger.ChargingLog.Infof("[AddChargingRules] ChargingInfo bind URR[%d] -> RG=%d UPF=%s level=%v method=%v",
-			urr.URRID, chgInfo.RatingGroup, chgInfo.UpfId, chgInfo.ChargingLevel, chgInfo.ChargingMethod)
 
 		if node.UpLinkTunnel != nil && node.UpLinkTunnel.PDR != nil {
 			smContext.PDRAppendURRs(currentUUID, node.UpLinkTunnel.PDR, urrsToAttach)
