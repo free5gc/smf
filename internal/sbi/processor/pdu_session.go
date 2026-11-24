@@ -312,7 +312,7 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 	}
 
 	// If PCF prepares default Pcc Rule, SMF do not need to create defaultDataPath.
-	if err = smContext.ApplyPccRules(smPolicyDecision); err != nil {
+	if err = p.applyPccRulesAndReport(smContext, smPolicyDecision); err != nil {
 		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
 	}
 

@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -105,7 +106,25 @@ func (p *Processor) HandleSMPolicyUpdateNotify(
 	// Wait till the state becomes Active again
 	// TODO: implement waiting in concurrent architecture
 
+	previousState := smContext.State()
 	smContext.SetState(smf_context.ModificationPending)
+	defer smContext.SetState(previousState)
+
+	// TS 29.512 V17.11.0 clause 4.2.6.1 note 4: a 400 rejects the
+	// whole notification, including session data. Stage only the wrappers
+	// ApplySessionRules mutates; restore the originals if PCC validation fails.
+	oldSessionRules, oldSelected := smContext.SessionRules, smContext.SelectedSessionRuleID
+	smContext.SessionRules = make(map[string]*smf_context.SessionRule, len(oldSessionRules))
+	for id, rule := range oldSessionRules {
+		copyRule := *rule
+		smContext.SessionRules[id] = &copyRule
+	}
+	accepted := false
+	defer func() {
+		if !accepted {
+			smContext.SessionRules, smContext.SelectedSessionRuleID = oldSessionRules, oldSelected
+		}
+	}()
 
 	// Update SessionRule from decision
 	if err := smContext.ApplySessionRules(decision); err != nil {
@@ -115,16 +134,24 @@ func (p *Processor) HandleSMPolicyUpdateNotify(
 		return
 	}
 
-	// TODO: Response data type -
-	// [200 OK] UeCampingRep
-	// [200 OK] array(PartialSuccessReport)
-	// [400 Bad Request] ErrorReport
+	// TS 29.512 V17.11.0 clauses 4.2.3.2 and 4.2.3.16:
+	// reject all-invalid batches; continue installing valid siblings otherwise.
+	var failures *smf_context.PCCRuleValidationError
 	if err := smContext.ApplyPccRules(decision); err != nil {
 		smContext.Log.Errorf("apply sm policy decision error: %+v", err)
-		// TODO: Fill the error body
-		c.Status(http.StatusBadRequest)
-		return
+		if !errors.As(err, &failures) {
+			c.Status(http.StatusBadRequest)
+			return
+		}
+		if failures.AllRulesFailed {
+			c.JSON(http.StatusBadRequest, models.Pcf_SMPolCtrl_ErrorReport{
+				Error:       &models.ProblemDetails{Status: http.StatusBadRequest, Cause: "PCC_RULE_EVENT"},
+				RuleReports: failures.RuleReports,
+			})
+			return
+		}
 	}
+	accepted = true
 
 	smContext.SendUpPathChgNotification("EARLY", SendUpPathChgEventExposureNotification)
 
@@ -134,6 +161,14 @@ func (p *Processor) HandleSMPolicyUpdateNotify(
 
 	smContext.PostRemoveDataPath()
 
+	if failures != nil {
+		// Table 5.5.2.2-2 specifies an array, even for one failure cause.
+		c.JSON(http.StatusOK, []models.Pcf_SMPolCtrl_PartialSuccessReport{{
+			FailureCause: models.Pcf_SMPolCtrl_FailureCause_PCC_RULE_EVENT,
+			RuleReports:  failures.RuleReports,
+		}})
+		return
+	}
 	c.Status(http.StatusNoContent)
 }
 

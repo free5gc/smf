@@ -156,7 +156,7 @@ func (p *Processor) HandlePDUSessionModificationRequest(
 		return nil, fmt.Errorf("PDUSessionSMContextCreate err: %v", errApplySessionRules)
 	}
 
-	if errApplyPccRules := smCtx.ApplyPccRules(smPolicyDecision); errApplyPccRules != nil {
+	if errApplyPccRules := p.applyPccRulesAndReport(smCtx, smPolicyDecision); errApplyPccRules != nil {
 		smCtx.Log.Errorf("apply sm policy decision error: %+v", errApplyPccRules)
 	}
 
