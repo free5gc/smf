@@ -150,6 +150,8 @@ func (p *Processor) HandlePDUSessionModificationRequest(
 	if smPolicyDecision.PccRules == nil {
 		smPolicyDecision.PccRules = map[string]*models.Pcf_SMPolCtrl_PccRule{}
 	}
+	smCtx.RecordSmPolicyDecision(smPolicyDecision)
+	p.reportAccessNetworkInfo(smCtx, smPolicyDecision)
 
 	// Update SessionRule from decision
 	if errApplySessionRules := smCtx.ApplySessionRules(smPolicyDecision); errApplySessionRules != nil {

@@ -132,6 +132,10 @@ type SMContext struct {
 	DnnConfiguration models.Udm_SDM_DnnConfiguration
 
 	SMPolicyID string
+	// Npcf_SMPolicyControl features negotiated with the PCF
+	SmPolicySuppFeat string
+	// AN_INFO policy control request trigger provisioned by the PCF
+	AnInfoTriggerSet bool
 
 	// Handover related
 	DLForwardingType         DLForwardingType
