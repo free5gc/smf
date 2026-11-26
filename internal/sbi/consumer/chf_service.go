@@ -14,6 +14,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/util"
 	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 )
 
@@ -157,23 +158,22 @@ func (s *nchfService) SendConvergedChargingRequestContext(
 		return nil, nil, err
 	}
 
+	candidate := util.SearchNFServiceUri(
+		&smContext.SelectedCHFProfile, models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING,
+	)
+	target, instanceID, targetErr := smContext.ChargingTarget(
+		requestType, candidate, smContext.SelectedCHFProfile.NfInstanceId,
+	)
+	if targetErr != nil {
+		return nil, openapi.ProblemDetailsDataNotFound(targetErr.Error()), nil
+	}
 	tokenCtx, pd, err := smf_context.GetSelf().
-		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, models.Nrf_NFMgmt_NFType_CHF)
+		GetTokenCtxForNFInstance(models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING,
+			models.Nrf_NFMgmt_NFType_CHF, instanceID)
 	if err != nil {
 		return nil, pd, err
 	}
 
-	var candidate string
-	for _, service := range smContext.SelectedCHFProfile.NfServices {
-		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING {
-			candidate = service.ApiPrefix
-			break
-		}
-	}
-	target, targetErr := smContext.ChargingTarget(requestType, candidate)
-	if targetErr != nil {
-		return nil, openapi.ProblemDetailsDataNotFound(targetErr.Error()), nil
-	}
 	client := s.getConvergedChargingClient(target)
 	if client == nil {
 		return nil, openapi.ProblemDetailsDataNotFound("no CHF destination"), nil

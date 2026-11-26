@@ -103,13 +103,13 @@ func TestPendingChargingReleaseOwnsItsSnapshot(t *testing.T) {
 	ref, snapshot, err := smContext.PendingChargingRelease()
 	require.NoError(t, err)
 	require.Equal(t, "original-ref", ref)
-	require.Equal(t, int32(40), snapshot.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume)
+	require.Equal(t, uint64(40), snapshot.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume)
 	require.Equal(t, 12, snapshot.InvocationTimeStamp.Hour())
 
 	snapshot.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume = 123
 	snapshot.InvocationSequenceNumber = 99
 	_, again, err := smContext.PendingChargingRelease()
 	require.NoError(t, err)
-	require.Equal(t, int32(40), again.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume)
+	require.Equal(t, uint64(40), again.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume)
 	require.Equal(t, int32(3), again.InvocationSequenceNumber)
 }

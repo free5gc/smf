@@ -18,6 +18,7 @@ import (
 // UserPlaneInformation store userplane topology
 type UserPlaneInformation struct {
 	Mu                        sync.RWMutex // protect UPF and topology structure
+	pathCacheMu               sync.RWMutex // protect path caches; lock after Mu
 	UPNodes                   map[string]*UPNode
 	UPFs                      map[string]*UPNode
 	AccessNetwork             map[string]*UPNode
@@ -565,6 +566,7 @@ func (upi *UserPlaneInformation) UpNodeDelete(upNodeName string) {
 				logger.InitLog.Tracef("Delete UPF [%s] from upi.UPFs.\n", upNodeName)
 				delete(upi.UPFs, upNodeName)
 			}
+			upi.pathCacheMu.Lock()
 			for selectionStr, destMap := range upi.DefaultUserPlanePathToUPF {
 				for destIp, path := range destMap {
 					if nodeInPath(upNode, path) != -1 {
@@ -573,6 +575,7 @@ func (upi *UserPlaneInformation) UpNodeDelete(upNodeName string) {
 					}
 				}
 			}
+			upi.pathCacheMu.Unlock()
 		}
 		if upNode.Type == UPNODE_AN {
 			logger.InitLog.Tracef("Delete AN [%s] from upi.AccessNetwork.\n", upNodeName)
@@ -632,7 +635,9 @@ func (upi *UserPlaneInformation) GetUPFIDByIP(ip string) string {
 }
 
 func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNN(selection *UPFSelectionParams) (path UPPath) {
+	upi.pathCacheMu.RLock()
 	path, pathExist := upi.DefaultUserPlanePath[selection.String()]
+	upi.pathCacheMu.RUnlock()
 	logger.CtxLog.Traceln("In GetDefaultUserPlanePathByDNN")
 	logger.CtxLog.Traceln("selection: ", selection.String())
 	if pathExist {
@@ -640,6 +645,8 @@ func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNN(selection *UPFSele
 	} else {
 		pathExist = upi.GenerateDefaultPath(selection)
 		if pathExist {
+			upi.pathCacheMu.RLock()
+			defer upi.pathCacheMu.RUnlock()
 			return upi.DefaultUserPlanePath[selection.String()]
 		}
 	}
@@ -651,22 +658,26 @@ func (upi *UserPlaneInformation) GetDefaultUserPlanePathByDNNAndUPF(selection *U
 ) (path UPPath) {
 	nodeID := upf.NodeID.ResolveNodeIdToIp().String()
 
-	if upi.DefaultUserPlanePathToUPF[selection.String()] != nil {
-		path, pathExist := upi.DefaultUserPlanePathToUPF[selection.String()][nodeID]
+	upi.pathCacheMu.RLock()
+	path, pathExist := upi.DefaultUserPlanePathToUPF[selection.String()][nodeID]
+	upi.pathCacheMu.RUnlock()
+	if pathExist {
 		logger.CtxLog.Traceln("In GetDefaultUserPlanePathByDNNAndUPF")
 		logger.CtxLog.Traceln("selection: ", selection.String())
 		logger.CtxLog.Traceln("pathExist: ", pathExist)
-		if pathExist {
-			return path
-		}
+		return path
 	}
-	if pathExist := upi.GenerateDefaultPathToUPF(selection, upf); pathExist {
+	if upi.GenerateDefaultPathToUPF(selection, upf) {
+		upi.pathCacheMu.RLock()
+		defer upi.pathCacheMu.RUnlock()
 		return upi.DefaultUserPlanePathToUPF[selection.String()][nodeID]
 	}
 	return nil
 }
 
 func (upi *UserPlaneInformation) ExistDefaultPath(dnn string) bool {
+	upi.pathCacheMu.RLock()
+	defer upi.pathCacheMu.RUnlock()
 	_, exist := upi.DefaultUserPlanePath[dnn]
 	return exist
 }
@@ -742,7 +753,9 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(selection *UPFSelectionPara
 				if path[0].Type == UPNODE_AN {
 					path = path[1:]
 				}
+				upi.pathCacheMu.Lock()
 				upi.DefaultUserPlanePath[selection.String()] = path
+				upi.pathCacheMu.Unlock()
 				break
 			}
 		}
@@ -767,37 +780,45 @@ func (upi *UserPlaneInformation) GenerateDefaultPath(selection *UPFSelectionPara
 }
 
 func (upi *UserPlaneInformation) GenerateDefaultPathToUPF(selection *UPFSelectionParams, destination *UPNode) bool {
-	var source *UPNode
-
-	for _, node := range upi.AccessNetwork {
+	// The destination may be reachable from only some of the access networks (e.g.
+	// one gNB -> I-UPF -> PSA chain per gNB). Try every AN, in name order so the
+	// result does not depend on map iteration order.
+	anNames := make([]string, 0, len(upi.AccessNetwork))
+	for name, node := range upi.AccessNetwork {
 		if node.Type == UPNODE_AN {
-			source = node
-			break
+			anNames = append(anNames, name)
 		}
 	}
-
-	if source == nil {
+	if len(anNames) == 0 {
 		logger.CtxLog.Errorf("There is no AN Node in config file!")
 		return false
 	}
+	sort.Strings(anNames)
 
-	// Run DFS
-	visited := make(map[*UPNode]bool)
-
-	for _, upNode := range upi.UPNodes {
-		visited[upNode] = false
+	var path []*UPNode
+	pathExist := false
+	for _, name := range anNames {
+		// Run DFS
+		visited := make(map[*UPNode]bool)
+		for _, upNode := range upi.UPNodes {
+			visited[upNode] = false
+		}
+		path, pathExist = getPathBetween(upi.AccessNetwork[name], destination, visited, selection)
+		if pathExist {
+			break
+		}
 	}
-
-	path, pathExist := getPathBetween(source, destination, visited, selection)
 
 	if pathExist {
 		if path[0].Type == UPNODE_AN {
 			path = path[1:]
 		}
+		upi.pathCacheMu.Lock()
 		if upi.DefaultUserPlanePathToUPF[selection.String()] == nil {
 			upi.DefaultUserPlanePathToUPF[selection.String()] = make(map[string][]*UPNode)
 		}
 		upi.DefaultUserPlanePathToUPF[selection.String()][destination.NodeID.ResolveNodeIdToIp().String()] = path
+		upi.pathCacheMu.Unlock()
 	}
 
 	return pathExist

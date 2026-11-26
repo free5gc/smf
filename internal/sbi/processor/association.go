@@ -172,6 +172,13 @@ func (p *Processor) setupPfcpAssociation(
 		return fmt.Errorf("decode PFCP Association Setup Recovery Time Stamp from UPF%s: %w", upfStr, err)
 	}
 	upf.SetRecoveryTimeStamp(recoveryTime)
+	var features []byte
+	if response.UPFunctionFeatures != nil {
+		if features, err = response.UPFunctionFeatures.UPFunctionFeatures(); err != nil {
+			return fmt.Errorf("decode PFCP Association Setup UP Function Features from UPF%s: %w", upfStr, err)
+		}
+	}
+	upf.SetUPFunctionFeatures(features)
 
 	logger.MainLog.Infof("Received PFCP Association Setup Accepted Response from UPF%s", upfStr)
 	logger.MainLog.Infof("UPF(%s) setup association", upf.NodeID.ResolveNodeIdToIp().String())
@@ -340,8 +347,8 @@ func (p *Processor) requestAMFToReleasePDUResources(
 		}
 	}
 
-	ctx, _, errToken := smf_context.GetSelf().GetTokenCtx(
-		models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFType_AMF)
+	ctx, _, errToken := smf_context.GetSelf().GetTokenCtxForNFInstance(
+		models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFType_AMF, smContext.AMFProfile.NfInstanceId)
 	if errToken != nil {
 		return false, false
 	}

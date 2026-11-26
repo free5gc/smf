@@ -22,6 +22,7 @@ import (
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/internal/pfcp/pfcptype"
+	"github.com/free5gc/smf/internal/util"
 	smf_errors "github.com/free5gc/smf/pkg/errors"
 	"github.com/free5gc/smf/pkg/factory"
 	"github.com/free5gc/util/metrics/sbi"
@@ -165,10 +166,18 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		SingleNssai: smContext.SNssai,
 	}
 
-	ctx, _, oauthErr := smf_context.GetSelf().GetTokenCtx(
-		models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_NFType_UDM)
+	// Set PTI from the request so that a reject built before
+	// HandlePDUSessionEstablishmentRequest carries the UE's PTI.
+	smContext.Pti = establishmentRequest.ProcedureTransactionID()
+
+	ctx, _, oauthErr := smf_context.GetSelf().GetTokenCtxForNFInstance(
+		models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_NFType_UDM,
+		smf_context.GetSelf().UDMProfile.NfInstanceId)
 	if oauthErr != nil {
 		smContext.Log.Errorf("Get Token Context Error[%v]", oauthErr)
+		p.makeEstRejectResAndReleaseSMContext(c, smContext,
+			nasie.Cause5GSM_NwFailure,
+			&smf_errors.NetworkFailure)
 		return
 	}
 
@@ -228,10 +237,11 @@ func (p *Processor) HandlePDUSessionSMContextCreate(
 		smContext.Log.Traceln("Send NF Discovery Serving AMF successfully")
 	}
 
-	for _, service := range smContext.AMFProfile.NfServices {
-		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NAMF_COMM {
-			smContext.CommunicationClientApiPrefix = service.ApiPrefix
-		}
+	// Store a complete API root for subsequent AMF N1/N2 requests.
+	smContext.CommunicationClientApiPrefix = util.SearchNFServiceUri(
+		&smContext.AMFProfile, models.Nrf_NFMgmt_ServiceName_NAMF_COMM)
+	if smContext.CommunicationClientApiPrefix == "" {
+		smContext.Log.Warnln("No usable AMF Communication API root from NRF discovery")
 	}
 
 	if err := smContext.AllocUeIP(); err != nil {
@@ -408,6 +418,13 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 	var sendPFCPModification bool
 	var createdIndirectForwarding bool
 	var removeIndirectForwardingAfterSuccess bool
+	var handoverCommandAfterPFCP bool
+	// Set at a UPF that chooses the split tunnel's F-TEID, which the Modify
+	// Confirm Transfer of the split carries: it is built after its answer.
+	var splitConfirmAfterPFCP bool
+	// The rules of a split, or of its end, at the UPFs after the AN UPF on
+	// the split tunnel's path, by UPF.
+	var splitRules map[string]*PFCPState
 	// Set by an accepted PDU Session Resource Modify Indication: puts back the
 	// split state the indication found if the UPF refuses the N4 update.
 	var restoreSplitState func()
@@ -763,6 +780,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 					urrList = append(urrList, DLPDR.URR...)
 				}
 			}
+			splitRules = splitPathRules(tunnel, dcTunnel, true)
 		}
 		sendPFCPModification = true
 		smContext.SetState(smf_context.PFCPModification)
@@ -839,6 +857,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				}
 			}
 
+			splitRules = splitPathRules(tunnel, dcTunnel, false)
+
 			// re-initialize DCTunnel
 			smContext.DCTunnel = smf_context.NewUPTunnel()
 			smContext.NrdcIndicator, sendPFCPModification = false, true
@@ -863,9 +883,12 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				// apply the rules on DCTunnel
 				if err = smContext.ApplyDcPccRulesOnDcTunnel(); err != nil {
 					smContext.Log.Errorf("ApplyDcPccRulesOnDcTunnel failed: %+v", err)
-					sendPFCPModification = false
-				} else if n2CfmBuf, err = smf_context.BuildPDUSessionResourceModifyConfirmTransfer(
-					smContext, smContext.DCTunnel, smContext.LocalULTeidForSplitPDUSession); err != nil {
+				} else if splitConfirmAfterPFCP = splitFTEIDChosenByUPF(smContext.DCTunnel); splitConfirmAfterPFCP {
+					err = smf_context.CheckModifyConfirm(smContext.DCTunnel)
+				} else {
+					n2CfmBuf, err = smf_context.BuildPDUSessionResourceModifyConfirmTransferOfASplit(smContext)
+				}
+				if err != nil {
 					sendPFCPModification = false
 				} else {
 					// append the rules on DCTunnel
@@ -926,6 +949,7 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 							urrList = append(urrList, DLPDR.URR...)
 						}
 					}
+					splitRules = splitPathRules(tunnel, dcTunnel, true)
 					smContext.NrdcIndicator, sendPFCPModification = true, true
 					restoreSplitState = func() {
 						smContext.NrdcIndicator, smContext.DCTunnel = false, smf_context.NewUPTunnel()
@@ -981,12 +1005,18 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		// Wait till the state becomes Active again
 		// TODO: implement sleep wait in concurrent architecture
 
-		smContext.SetState(smf_context.ModificationPending)
-
 		if err = smf_context.HandlePathSwitchRequestTransfer(
 			relatedBytes(body.BinaryDataN2SmInformation), smContext); err != nil {
 			smContext.Log.Errorf("Handle PathSwitchRequestTransfer: %+v", err)
+
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, smf_errors.N2SmError.Cause)
+			c.JSON(http.StatusForbidden, models.Smf_PDUSess_SmContextUpdateError{
+				Error: &smf_errors.N2SmError,
+			})
+			return
 		}
+
+		smContext.SetState(smf_context.ModificationPending)
 
 		if n2Buf, err = smf_context.BuildPathSwitchRequestAcknowledgeTransfer(smContext); err != nil {
 			smContext.Log.Errorf("Build Path Switch Transfer Error(%+v)", err)
@@ -1112,29 +1142,31 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 			createdIndirectForwarding = true
 			sendPFCPModification = true
 			smContext.SetState(smf_context.PFCPModification)
+			// A UPF that allocates the F-TEIDs chooses the forwarding tunnel's
+			// in its answer: the Handover Command that carries it is built then.
+			handoverCommandAfterPFCP = IndirectForwardingPDR.PDI.LocalFTeid.Ch
 		}
 
-		if n2Buf, err = smf_context.BuildHandoverCommandTransfer(smContext); err != nil {
-			smContext.Log.Errorf("Build HandoverCommandTransfer failed: %v", err)
-			if createdIndirectForwarding {
-				smContext.RemoveIndirectForwardingTunnel()
+		if !handoverCommandAfterPFCP {
+			if n2Buf, err = smf_context.BuildHandoverCommandTransfer(smContext); err != nil {
+				smContext.Log.Errorf("Build HandoverCommandTransfer failed: %v", err)
+				if createdIndirectForwarding {
+					smContext.RemoveIndirectForwardingTunnel()
+				}
+				smContext.SetState(smf_context.Active)
+				problemDetail := models.Smf_PDUSess_ExtProblemDetails{
+					Status: http.StatusInternalServerError,
+					Cause:  "SYSTEM_FAILURE",
+				}
+				c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+				c.JSON(http.StatusInternalServerError, models.UpdateSmContextResponse400{
+					JsonData: &models.Smf_PDUSess_SmContextUpdateError{Error: &problemDetail},
+				})
+				return
 			}
-			smContext.SetState(smf_context.Active)
-			problemDetail := models.Smf_PDUSess_ExtProblemDetails{
-				Status: http.StatusInternalServerError,
-				Cause:  "SYSTEM_FAILURE",
-			}
-			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
-			c.JSON(http.StatusInternalServerError, models.UpdateSmContextResponse400{
-				JsonData: &models.Smf_PDUSess_SmContextUpdateError{Error: &problemDetail},
-			})
-			return
-		} else {
 			response.BinaryDataN2SmInformation = related("HANDOVER_CMD", n2Buf)
 			response.JsonData.N2SmInfoType = models.Smf_PDUSess_N2SmInfoType_HANDOVER_CMD
-			response.JsonData.N2SmInfo = &models.RefToBinaryData{
-				ContentId: "HANDOVER_CMD",
-			}
+			response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "HANDOVER_CMD"}
 		}
 		response.JsonData.HoState = models.Smf_PDUSess_HoState_PREPARING
 	case models.Smf_PDUSess_HoState_COMPLETED:
@@ -1207,7 +1239,8 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		smContext.Log.Traceln("In case PFCPModification")
 
 		if sendPFCPModification {
-			pfcpResponseStatus = p.updateAnUpfPfcpSession(smContext, pdrList, farList, barList, qerList, urrList)
+			pfcpResponseStatus = p.updateAnUpfPfcpSession(smContext, pdrList, farList, barList, qerList, urrList,
+				splitRules)
 		}
 
 		switch pfcpResponseStatus {
@@ -1217,6 +1250,38 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 				smContext.RemoveIndirectForwardingTunnel()
 			}
 			smContext.SetState(smf_context.Active)
+			if splitConfirmAfterPFCP {
+				if n2Buf, err = smf_context.BuildPDUSessionResourceModifyConfirmTransferOfASplit(smContext); err != nil {
+					restoreSplitState()
+					p.rejectPDUSessionResourceModifyIndication(c, smContext, err)
+					break
+				}
+				response.BinaryDataN2SmInformation = related("PDU_RES_MOD_CFM", n2Buf)
+			}
+			if restoreSplitState != nil && !smContext.NrdcIndicator {
+				// The split ended: its PDRs are removed, and with them the
+				// F-TEIDs that the UPF chose for them.
+				for _, sessionContext := range smContext.PFCPContext {
+					sessionContext.ForgetSplitFTEIDs()
+				}
+			}
+			if handoverCommandAfterPFCP {
+				if n2Buf, err = smf_context.BuildHandoverCommandTransfer(smContext); err != nil {
+					smContext.Log.Errorf("Build HandoverCommandTransfer failed: %v", err)
+					problemDetail := models.Smf_PDUSess_ExtProblemDetails{
+						Status: http.StatusInternalServerError,
+						Cause:  "SYSTEM_FAILURE",
+					}
+					c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+					c.JSON(http.StatusInternalServerError, models.UpdateSmContextResponse400{
+						JsonData: &models.Smf_PDUSess_SmContextUpdateError{Error: &problemDetail},
+					})
+					break
+				}
+				response.BinaryDataN2SmInformation = related("HANDOVER_CMD", n2Buf)
+				response.JsonData.N2SmInfoType = models.Smf_PDUSess_N2SmInfoType_HANDOVER_CMD
+				response.JsonData.N2SmInfo = &models.RefToBinaryData{ContentId: "HANDOVER_CMD"}
+			}
 			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
 		case smf_context.SessionUpdateFailed:
 			smContext.Log.Traceln("In case SessionUpdateFailed")
@@ -1294,6 +1359,13 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
 		// So, local release smCtx and notify AMF after sending PDUSessionResourceReleaseCommand
 		p.queueSMContextRelease(smContext, true)
 	}
+}
+
+// splitFTEIDChosenByUPF reports whether the AN UPF of the split tunnel chooses
+// its F-TEIDs (TS 29.244 5.5.1).
+func splitFTEIDChosenByUPF(dcTunnel *smf_context.UPTunnel) bool {
+	anNode := dcTunnel.ANNode()
+	return anNode != nil && anNode.UPF.AllocatesFTEID()
 }
 
 // rejectPDUSessionResourceModifyIndication answers a PDU Session Resource
@@ -1585,8 +1657,8 @@ func (p *Processor) sendGSMPDUSessionReleaseCommand(smContext *smf_context.SMCon
 	// Start T3592
 	t3592 := factory.SmfConfig.Configuration.T3592
 	if t3592.Enable {
-		ctx, _, err := smf_context.GetSelf().GetTokenCtx(
-			models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFType_AMF)
+		ctx, _, err := smf_context.GetSelf().GetTokenCtxForNFInstance(
+			models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFType_AMF, smContext.AMFProfile.NfInstanceId)
 		if err != nil {
 			smContext.Log.Warnf("Get namf-comm token failed: %+v", err)
 			return
@@ -1643,8 +1715,8 @@ func (p *Processor) sendGSMPDUSessionModificationCommand(smContext *smf_context.
 	// Start T3591
 	t3591 := factory.SmfConfig.Configuration.T3591
 	if t3591.Enable {
-		ctx, _, err := smf_context.GetSelf().GetTokenCtx(
-			models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFType_AMF)
+		ctx, _, err := smf_context.GetSelf().GetTokenCtxForNFInstance(
+			models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFType_AMF, smContext.AMFProfile.NfInstanceId)
 		if err != nil {
 			smContext.Log.Warnf("Get namf-comm token failed: %+v", err)
 			return

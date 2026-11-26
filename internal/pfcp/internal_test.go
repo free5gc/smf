@@ -35,6 +35,7 @@ type fakeAssociationState struct {
 	update       *message.AssociationUpdateRequest
 	updateCalled bool
 	recoveryTime time.Time
+	features     []byte
 	remote       *net.UDPAddr
 	after        func()
 }
@@ -42,12 +43,14 @@ type fakeAssociationState struct {
 func (f *fakeAssociationState) SetupAssociation(
 	peer pfcptype.NodeID,
 	recoveryTime time.Time,
+	features []byte,
 	remote *net.UDPAddr,
 ) (uint8, func()) {
 	f.mu.Lock()
 	f.remote = remote
 	f.setupPeer = peer
 	f.recoveryTime = recoveryTime
+	f.features = features
 	f.mu.Unlock()
 	return f.setupCause, f.after
 }
@@ -116,10 +119,14 @@ func TestHandleAssociationSetupRequestUsesStateManager(t *testing.T) {
 		9,
 		ie.NewNodeIDHeuristic("192.0.2.10"),
 		ie.NewRecoveryTimeStamp(recoveryTime),
+		ie.NewUPFunctionFeatures(0x10, 0x02),
 	)
 
 	response, afterResponse := s.handleAssociationSetupRequest(request, testPeerAddr)
 	assertCause(t, response.Cause, ie.CauseRequestAccepted)
+	if got := state.features; len(got) != 2 || got[0] != 0x10 || got[1] != 0x02 {
+		t.Fatalf("UP Function Features = %x, want 1002", got)
+	}
 	if afterResponse == nil {
 		t.Fatal("accepted setup did not return afterResponse")
 	}
@@ -136,6 +143,25 @@ func TestHandleAssociationSetupRequestUsesStateManager(t *testing.T) {
 	if !afterCalled {
 		t.Fatal("afterResponse did not run")
 	}
+}
+
+func TestHandleAssociationSetupRequestRejectsShortUPFunctionFeatures(t *testing.T) {
+	state := &fakeAssociationState{setupCause: ie.CauseRequestAccepted}
+	s := NewPfcpServer(nil, "127.0.0.1")
+	s.SetAssociationStateManager(state)
+	response, afterResponse := s.handleAssociationSetupRequest(
+		message.NewAssociationSetupRequest(
+			10,
+			ie.NewNodeIDHeuristic("192.0.2.10"),
+			ie.NewRecoveryTimeStamp(time.Now()),
+			ie.New(ie.UPFunctionFeatures, []byte{0x10}),
+		),
+		testPeerAddr,
+	)
+	if afterResponse != nil {
+		t.Fatal("afterResponse is non-nil for an invalid request")
+	}
+	assertCause(t, response.Cause, ie.CauseInvalidLength)
 }
 
 func TestAssociationSetupDispatchRunsAfterResponse(t *testing.T) {
@@ -1449,12 +1475,15 @@ type fakeSessionReportHandler struct {
 	cause      uint8
 	remoteSEID uint64
 	request    *message.SessionReportRequest
+	remote     *net.UDPAddr
 }
 
 func (f *fakeSessionReportHandler) HandleSessionReportRequest(
 	request *message.SessionReportRequest,
+	remote *net.UDPAddr,
 ) (uint8, uint64) {
 	f.request = request
+	f.remote = remote
 	return f.cause, f.remoteSEID
 }
 
@@ -1470,9 +1499,14 @@ func TestHandleSessionReportRequestUsesProcedureHandler(t *testing.T) {
 		ie.NewReportType(0, 0, 1, 0),
 	)
 
-	response := server.handleSessionReportRequest(request)
+	remote := &net.UDPAddr{IP: net.ParseIP("192.0.2.1"), Port: 8805}
+
+	response := server.handleSessionReportRequest(request, remote)
 	if handler.request != request {
 		t.Fatal("Session Report procedure did not receive the original concrete request")
+	}
+	if handler.remote != remote {
+		t.Fatal("Session Report procedure did not receive the request's source address")
 	}
 	assertCause(t, response.Cause, ie.CauseRequestAccepted)
 	if got, want := response.SEID(), handler.remoteSEID; got != want {
@@ -1487,7 +1521,7 @@ func TestHandleSessionReportRequestWithoutHandler(t *testing.T) {
 	server := NewPfcpServer(nil, "127.0.0.1")
 	request := message.NewSessionReportRequest(0, 0, 99, 7, 0, ie.NewReportType(0, 0, 1, 0))
 
-	response := server.handleSessionReportRequest(request)
+	response := server.handleSessionReportRequest(request, nil)
 	assertCause(t, response.Cause, ie.CauseServiceNotSupported)
 	if response.SEID() != 0 {
 		t.Fatalf("response SEID = %d, want zero when no SMF procedure handled the request", response.SEID())

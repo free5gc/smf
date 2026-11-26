@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"encoding/binary"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -353,6 +354,14 @@ func modIndSplitTransfer() *ngapie.PDUSessionResourceModifyIndicationTransfer {
 	}
 }
 
+// modIndTEID is the GTP-TEID of a GTP tunnel.
+func modIndTEID(t *testing.T, info *ngapie.UPTransportLayerInformation) uint32 {
+	t.Helper()
+	tunnel, ok := info.Choice.(*ngapie.GTPTunnel)
+	require.True(t, ok)
+	return binary.BigEndian.Uint32(tunnel.GTPTEID.Value)
+}
+
 // requireSplitConfirmed checks the answer to an accepted split: a Confirm
 // Transfer listing QFI 2 and one N4 modification installing the DC tunnel rules.
 func (e *modIndTestEnv) requireSplitConfirmed(t *testing.T, rec *httptest.ResponseRecorder) {
@@ -365,6 +374,14 @@ func (e *modIndTestEnv) requireSplitConfirmed(t *testing.T, rec *httptest.Respon
 	require.NoError(t, ngapie.UnmarshalBinary(rsp.BinaryDataN2SmInformation.Content, &confirm))
 	require.Len(t, confirm.QosFlowModifyConfirmList.List, 1)
 	require.Equal(t, int64(2), confirm.QosFlowModifyConfirmList.List[0].QosFlowIdentifier.Value)
+	// TS 38.413 9.3.4.7: the UPF's end of the session's own tunnel, and the
+	// split tunnel's UPF end paired with the secondary node's end.
+	require.Equal(t, e.sm.LocalULTeid, modIndTEID(t, confirm.ULNGUUPTNLInformation))
+	require.NotNil(t, confirm.AdditionalNGUUPTNLInformation)
+	require.Len(t, confirm.AdditionalNGUUPTNLInformation.List, 1)
+	pair := confirm.AdditionalNGUUPTNLInformation.List[0]
+	require.Equal(t, e.sm.LocalULTeidForSplitPDUSession, modIndTEID(t, pair.ULNGUUPTNLInformation))
+	require.Equal(t, modIndGTPTunnel("10.100.0.9", 0x77), pair.DLNGUUPTNLInformation)
 
 	require.Len(t, e.pfcp.requests, 1)
 	request := <-e.pfcp.requests

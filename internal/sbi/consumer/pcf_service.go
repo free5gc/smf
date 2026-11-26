@@ -18,6 +18,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/pcf/SMPolCtrl"
 	smf_context "github.com/free5gc/smf/internal/context"
+	"github.com/free5gc/smf/internal/util"
 	"github.com/free5gc/util/flowdesc"
 	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 )
@@ -60,11 +61,8 @@ func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMCon
 	var client *SMPolCtrl.APIClient
 
 	// Create SMPolicyControl Client for this SM Context
-	for _, service := range smContext.SelectedPCFProfile.NfServices {
-		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL {
-			client = s.getSMPolicyControlClient(service.ApiPrefix)
-		}
-	}
+	pcfURI := util.SearchNFServiceUri(&smContext.SelectedPCFProfile, models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL)
+	client = s.getSMPolicyControlClient(pcfURI)
 
 	if client == nil {
 		return "", nil, errors.Errorf("smContext not selected PCF")
@@ -104,7 +102,8 @@ func (s *npcfService) SendSMPolicyAssociationCreate(smContext *smf_context.SMCon
 	}
 
 	ctx, _, err := smf_context.GetSelf().
-		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, models.Nrf_NFMgmt_NFType_PCF)
+		GetTokenCtxForNFInstance(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL,
+			models.Nrf_NFMgmt_NFType_PCF, smContext.SelectedPCFProfile.NfInstanceId)
 	if err != nil {
 		return "", nil, err
 	}
@@ -211,7 +210,8 @@ func (s *npcfService) SendSMPolicyAssociationUpdateByUERequestModification(
 	}
 
 	ctx, _, err := smf_context.GetSelf().
-		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, models.Nrf_NFMgmt_NFType_PCF)
+		GetTokenCtxForNFInstance(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL,
+			models.Nrf_NFMgmt_NFType_PCF, smContext.SelectedPCFProfile.NfInstanceId)
 	if err != nil {
 		return nil, err
 	}
@@ -219,12 +219,12 @@ func (s *npcfService) SendSMPolicyAssociationUpdateByUERequestModification(
 	var client *SMPolCtrl.APIClient
 
 	// Create SMPolicyControl Client for this SM Context
-	for _, service := range smContext.SelectedPCFProfile.NfServices {
-		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL {
-			client = s.getSMPolicyControlClient(service.ApiPrefix)
-		}
-	}
+	pcfURI := util.SearchNFServiceUri(&smContext.SelectedPCFProfile, models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL)
+	client = s.getSMPolicyControlClient(pcfURI)
 
+	if client == nil {
+		return nil, fmt.Errorf("SM Policy Control PCF API root unavailable")
+	}
 	var smPolicyDecision *models.Pcf_SMPolCtrl_SmPolicyDecision
 	request := &SMPolCtrl.UpdateSMPolicyRequest{
 		SmPolicyId:  &smContext.SMPolicyID,
@@ -322,18 +322,16 @@ func (s *npcfService) SendSMPolicyAssociationTerminationContext(
 	var client *SMPolCtrl.APIClient
 
 	// Create SMPolicyControl Client for this SM Context
-	for _, service := range smContext.SelectedPCFProfile.NfServices {
-		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL {
-			client = s.getSMPolicyControlClient(service.ApiPrefix)
-		}
-	}
+	pcfURI := util.SearchNFServiceUri(&smContext.SelectedPCFProfile, models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL)
+	client = s.getSMPolicyControlClient(pcfURI)
 
 	if client == nil {
 		return errors.Errorf("smContext not selected PCF")
 	}
 
 	tokenCtx, _, err := smf_context.GetSelf().
-		GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, models.Nrf_NFMgmt_NFType_PCF)
+		GetTokenCtxForNFInstance(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL,
+			models.Nrf_NFMgmt_NFType_PCF, smContext.SelectedPCFProfile.NfInstanceId)
 	if err != nil {
 		return err
 	}

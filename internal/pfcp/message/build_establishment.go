@@ -1,6 +1,7 @@
 package message
 
 import (
+	"encoding/hex"
 	"fmt"
 	"net"
 	"sort"
@@ -35,6 +36,11 @@ func BuildSessionEstablishmentRequest(
 		return nil, fmt.Errorf("build PFCP Session Establishment Request: nil SM context")
 	}
 
+	snssai, err := newSessionSNSSAIIE(smContext)
+	if err != nil {
+		return nil, fmt.Errorf("build PFCP Session Establishment S-NSSAI: %w", err)
+	}
+
 	nodeIP := upN4Addr
 	if nodeIP == "" {
 		nodeIP = upNodeID.ResolveNodeIdToIp().String()
@@ -67,6 +73,17 @@ func BuildSessionEstablishmentRequest(
 		return nil, fmt.Errorf("build PFCP Session Establishment CP F-SEID")
 	}
 
+	createTrafficEndpoints, err := newCreateTrafficEndpointIEs(sessionContext, pdrList)
+	if err != nil {
+		return nil, fmt.Errorf("build Create Traffic Endpoint: %w", err)
+	}
+	splitEndpoint, err := newSplitUplinkEndpointIE(smContext, nodeIP, createTrafficEndpoints)
+	if err != nil {
+		return nil, fmt.Errorf("build Create Traffic Endpoint of the split uplink: %w", err)
+	}
+	if splitEndpoint != nil {
+		createTrafficEndpoints = append(createTrafficEndpoints, splitEndpoint)
+	}
 	createPDRs := make([]*ie.IE, 0, len(pdrList))
 	createFARs := make([]*ie.IE, 0, len(farList))
 	createBARs := make([]*ie.IE, 0, len(barList))
@@ -99,7 +116,7 @@ func BuildSessionEstablishmentRequest(
 			return nil, fmt.Errorf("build Create FAR at index %d: nil FAR", index)
 		}
 		if far.State == context.RULE_INITIAL {
-			createFAR, buildErr := newCreateFARIE(far)
+			createFAR, buildErr := newCreateFARIE(smContext.FARToSend(far))
 			if buildErr != nil {
 				return nil, fmt.Errorf("build Create FAR %d: %w", far.FARID, buildErr)
 			}
@@ -165,7 +182,12 @@ func BuildSessionEstablishmentRequest(
 	topLevelIEs := make([]*ie.IE, 0,
 		2+len(createPDRs)+len(createFARs)+len(createURRs)+len(createQERs)+len(createBARs)+1)
 	topLevelIEs = append(topLevelIEs, nodeIDIE, cpFSEID)
+	if snssai != nil {
+		topLevelIEs = append(topLevelIEs, snssai)
+	}
+
 	topLevelIEs = append(topLevelIEs, createPDRs...)
+	topLevelIEs = append(topLevelIEs, createTrafficEndpoints...)
 	topLevelIEs = append(topLevelIEs, createFARs...)
 	topLevelIEs = append(topLevelIEs, createURRs...)
 	topLevelIEs = append(topLevelIEs, createQERs...)
@@ -173,6 +195,31 @@ func BuildSessionEstablishmentRequest(
 	topLevelIEs = append(topLevelIEs, ie.NewPDNType(ie.PDNTypeIPv4))
 
 	return goPfcpMessage.NewSessionEstablishmentRequest(1, 0, 0, 0, 0, topLevelIEs...), nil
+}
+
+// newSessionSNSSAIIE supplies the optional session identity from TS 29.244
+// Table 7.5.2.1-1. It does not configure the UPF's slice resource allocation.
+func newSessionSNSSAIIE(smContext *context.SMContext) (*ie.IE, error) {
+	if smContext.Smf_PDUSess_SmContextCreateData == nil || smContext.SNssai == nil {
+		return nil, nil
+	}
+	snssai := smContext.SNssai
+	if snssai.Sst < 0 || snssai.Sst > 255 {
+		return nil, fmt.Errorf("SST %d exceeds 8 bits", snssai.Sst)
+	}
+	// TS 23.003 defines 0xffffff as the absent Slice Differentiator value.
+	sd := uint32(0xffffff)
+	if snssai.Sd != "" {
+		if len(snssai.Sd) != 6 {
+			return nil, fmt.Errorf("SD must contain six hexadecimal digits")
+		}
+		octets, err := hex.DecodeString(snssai.Sd)
+		if err != nil {
+			return nil, fmt.Errorf("invalid SD: %w", err)
+		}
+		sd = uint32(octets[0])<<16 | uint32(octets[1])<<8 | uint32(octets[2])
+	}
+	return ie.NewSNSSAI(uint8(snssai.Sst), sd), nil
 }
 
 func newCreatePDRIE(pdr *context.PDR) (*ie.IE, error) {
@@ -205,14 +252,67 @@ func newCreatePDRIE(pdr *context.PDR) (*ie.IE, error) {
 	return ie.NewCreatePDR(children...), nil
 }
 
-func newPDIIE(pdi *context.PDI) (*ie.IE, error) {
-	if pdi.SourceInterface.InterfaceValue > 0x0f {
-		return nil, fmt.Errorf("source interface %d exceeds 4 bits", pdi.SourceInterface.InterfaceValue)
+// newCreateTrafficEndpointIEs are the Create Traffic Endpoint IEs of a
+// request: those that the PDRs that it creates refer to and that the UPF has
+// not created yet, with the Local F-TEID that the UPF is asked to choose, the
+// Network Instance and the UE IP address of the PDRs (TS 29.244 7.5.2.7).
+func newCreateTrafficEndpointIEs(
+	sessionContext *context.PFCPSessionContext, pdrList []*context.PDR,
+) ([]*ie.IE, error) {
+	var endpoints []*ie.IE
+	added := make(map[uint8]bool)
+	for _, pdr := range pdrList {
+		if pdr == nil || pdr.Disabled || pdr.State != context.RULE_INITIAL {
+			continue
+		}
+		id := pdr.PDI.TrafficEndpointID
+		if id == 0 || added[id] || sessionContext.HasTrafficEndpoint(id) {
+			continue
+		}
+		added[id] = true
+		children, err := pdiEndpointIEs(&pdr.PDI)
+		if err != nil {
+			return nil, err
+		}
+		endpoints = append(endpoints, ie.NewCreateTrafficEndpoint(append([]*ie.IE{ie.NewTrafficEndpointID(id)},
+			children...)...))
 	}
-	children := []*ie.IE{ie.NewSourceInterface(pdi.SourceInterface.InterfaceValue)}
+	return endpoints, nil
+}
 
+// newSplitUplinkEndpointIE is the Create Traffic Endpoint of the split
+// tunnel's uplink that an establishment at the AN UPF adds, so that the UPF
+// chooses its F-TEID before the PDU Session Resource Setup Request, or nil
+// (see SMContext.SplitUplinkEndpointToCreate).
+func newSplitUplinkEndpointIE(
+	smContext *context.SMContext, nodeIP string, endpoints []*ie.IE,
+) (*ie.IE, error) {
+	pdi, err := smContext.SplitUplinkEndpointToCreate(nodeIP)
+	if err != nil || pdi == nil {
+		return nil, err
+	}
+	for _, endpoint := range endpoints {
+		if id, idErr := endpoint.TrafficEndpointID(); idErr == nil && id == pdi.TrafficEndpointID {
+			return nil, nil
+		}
+	}
+	children, err := pdiEndpointIEs(pdi)
+	if err != nil {
+		return nil, err
+	}
+	return ie.NewCreateTrafficEndpoint(append([]*ie.IE{ie.NewTrafficEndpointID(pdi.TrafficEndpointID)},
+		children...)...), nil
+}
+
+// pdiEndpointIEs are the Local F-TEID, the Network Instance and the UE IP
+// address of a PDI, which a Traffic Endpoint has instead when the PDI refers
+// to one (TS 29.244 Table 7.5.2.2-2).
+func pdiEndpointIEs(pdi *context.PDI) ([]*ie.IE, error) {
+	var children []*ie.IE
 	if fteid := pdi.LocalFTeid; fteid != nil {
-		flags := boolMask(fteid.Chid, 0x08) |
+		// A Traffic Endpoint has one F-TEID: it asks with no CHOOSE ID.
+		chid := fteid.Chid && pdi.TrafficEndpointID == 0
+		flags := boolMask(chid, 0x08) |
 			boolMask(fteid.Ch, 0x04) |
 			boolMask(fteid.V6, 0x02) |
 			boolMask(fteid.V4, 0x01)
@@ -231,6 +331,24 @@ func newPDIIE(pdi *context.PDI) (*ie.IE, error) {
 			return nil, err
 		}
 		children = append(children, ueIPIE)
+	}
+	return children, nil
+}
+
+func newPDIIE(pdi *context.PDI) (*ie.IE, error) {
+	if pdi.SourceInterface.InterfaceValue > 0x0f {
+		return nil, fmt.Errorf("source interface %d exceeds 4 bits", pdi.SourceInterface.InterfaceValue)
+	}
+	children := []*ie.IE{ie.NewSourceInterface(pdi.SourceInterface.InterfaceValue)}
+
+	if pdi.TrafficEndpointID != 0 {
+		children = append(children, ie.NewTrafficEndpointID(pdi.TrafficEndpointID))
+	} else {
+		endpointIEs, err := pdiEndpointIEs(pdi)
+		if err != nil {
+			return nil, err
+		}
+		children = append(children, endpointIEs...)
 	}
 	if sdf := pdi.SDFFilter; sdf != nil {
 		fd, ttc, spi, flowLabel := "", "", "", ""

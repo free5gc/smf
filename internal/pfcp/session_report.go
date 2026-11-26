@@ -1,6 +1,8 @@
 package pfcp
 
 import (
+	"net"
+
 	"github.com/wmnsk/go-pfcp/ie"
 	"github.com/wmnsk/go-pfcp/message"
 )
@@ -9,7 +11,7 @@ import (
 // PfcpServer keeps wire/transaction concerns here while Processor performs
 // SM-context, AMF and charging work without importing the PFCP server package.
 type SessionReportHandler interface {
-	HandleSessionReportRequest(*message.SessionReportRequest) (cause uint8, remoteSEID uint64)
+	HandleSessionReportRequest(*message.SessionReportRequest, *net.UDPAddr) (cause uint8, remoteSEID uint64)
 }
 
 func (s *PfcpServer) SetSessionReportHandler(handler SessionReportHandler) {
@@ -20,6 +22,7 @@ func (s *PfcpServer) SetSessionReportHandler(handler SessionReportHandler) {
 
 func (s *PfcpServer) handleSessionReportRequest(
 	request *message.SessionReportRequest,
+	remote *net.UDPAddr,
 ) *message.SessionReportResponse {
 	cause := ie.CauseServiceNotSupported
 	remoteSEID := uint64(0)
@@ -30,7 +33,7 @@ func (s *PfcpServer) handleSessionReportRequest(
 	if handler == nil {
 		s.log.Warn("reject PFCP Session Report Request: session report handler is not configured")
 	} else {
-		cause, remoteSEID = handler.HandleSessionReportRequest(request)
+		cause, remoteSEID = handler.HandleSessionReportRequest(request, remote)
 	}
 
 	return message.NewSessionReportResponse(

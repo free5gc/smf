@@ -206,7 +206,7 @@ func (p *Processor) deleteAssociationPFCPSession(
 
 	// Accepted means the UPF session is gone even when a report is malformed.
 	// Clear first so no later release path sends the same deletion again.
-	sessionContext.RemoteSEID = 0
+	sessionContext.ForgetRemoteSession()
 	if len(response.UsageReport) == 0 {
 		return nil
 	}

@@ -36,7 +36,7 @@ func TestPassiveAssociationRejectsUnexpectedSource(t *testing.T) {
 			t.Cleanup(upf.CancelAssociation)
 			p := &Processor{}
 
-			cause, afterResponse := p.SetupAssociation(nodeID, time.Now().Add(time.Hour), source)
+			cause, afterResponse := p.SetupAssociation(nodeID, time.Now().Add(time.Hour), nil, source)
 			if cause != ie.CauseRequestRejected || afterResponse != nil {
 				t.Fatalf("SetupAssociation() cause=%d callback=%t, want Request Rejected without callback",
 					cause, afterResponse != nil)
@@ -70,7 +70,7 @@ func TestPassiveAssociationKeepsCauseForUnknownOrUnassociatedUPF(t *testing.T) {
 		NodeIdType: pfcptype.NodeIdTypeIpv4Address,
 		IP:         net.ParseIP("192.0.2.92").To4(),
 	}
-	if cause, _ := p.SetupAssociation(unknown, time.Now(), wrongSource); cause != ie.CauseRequestRejected {
+	if cause, _ := p.SetupAssociation(unknown, time.Now(), nil, wrongSource); cause != ie.CauseRequestRejected {
 		t.Fatalf("SetupAssociation(unknown) cause=%d, want Request Rejected", cause)
 	}
 	if cause, _ := p.UpdateAssociation(unknown, message.NewAssociationUpdateRequest(1), wrongSource); cause !=

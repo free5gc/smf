@@ -629,6 +629,16 @@ func checkUpPathChangeEvt(c *SMContext,
 	return nil
 }
 
+// pccRuleUpPath is the path of a PCC rule's data: to a UPF that serves the DNAI of its
+// route, or, for a rule that routes to no location (as the default PCC rule), to the
+// session's anchor, which holds the UE's address.
+func (c *SMContext) pccRuleUpPath(param *UPFSelectionParams) UPPath {
+	if param.Dnai == "" {
+		return GetUserPlaneInformation().GetDefaultUserPlanePathByDNNAndUPF(param, c.SelectedUPF)
+	}
+	return GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(param)
+}
+
 func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 	tcData *TrafficControlData, qosData *models.Pcf_SMPolCtrl_QosData,
 	chgData *models.Pcf_SMPolCtrl_ChargingData, pduChgDatas []*models.Pcf_SMPolCtrl_ChargingData,
@@ -645,7 +655,7 @@ func (c *SMContext) CreatePccRuleDataPath(pccRule *PCCRule,
 		},
 		Dnai: targetRoute.Dnai,
 	}
-	createdUpPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(param)
+	createdUpPath := c.pccRuleUpPath(param)
 	createdDataPath := GenerateDataPath(createdUpPath)
 	if createdDataPath == nil {
 		return fmt.Errorf("fail to create data path for pcc rule[%s]", pccRule.PccRuleId)
@@ -699,7 +709,7 @@ func (c *SMContext) CreateDcPccRuleDataPathOnDcTunnel(pccRule *PCCRule,
 		},
 		Dnai: targetRoute.Dnai,
 	}
-	createdUpPath := GetUserPlaneInformation().GetDefaultUserPlanePathByDNN(param)
+	createdUpPath := c.pccRuleUpPath(param)
 	createdDataPath := GenerateDataPath(createdUpPath)
 	if createdDataPath == nil {
 		return fmt.Errorf("fail to create data path on DCTunnel for pcc rule[%s]", pccRule.PccRuleId)

@@ -34,7 +34,7 @@ func TestChargingQuotaThresholdUsesRemainingTotalVolume(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		grant     *models.Chf_ConvCharging_GrantedUnit
-		remaining int32
+		remaining uint64
 		consumed  uint64
 		report    bool
 		reverse   bool
@@ -112,7 +112,7 @@ func TestChargingQuotaThresholdUsesRemainingTotalVolume(t *testing.T) {
 			require.False(t, quota.HasDLVOL())
 			var granted uint64
 			if tc.grant != nil {
-				granted = uint64(tc.grant.TotalVolume)
+				granted = tc.grant.TotalVolume
 			}
 			require.Equal(t, granted, quota.TotalVolume)
 			children, err := update.UpdateURR()
@@ -417,7 +417,7 @@ func TestRetiredTIUsageDoesNotRequestNewQuota(t *testing.T) {
 	require.Len(t, usages, 2)
 	for _, usage := range usages {
 		if usage.RatingGroup == 6 {
-			require.Equal(t, int32(1234), usage.UsedUnitContainer[0].TotalVolume)
+			require.Equal(t, uint64(1234), usage.UsedUnitContainer[0].TotalVolume)
 			require.Nil(t, usage.RequestedUnit, "final usage must be charged without requesting more credit")
 		} else {
 			require.NotNil(t, usage.RequestedUnit, "the live service still needs its initial quota")
@@ -469,7 +469,7 @@ func TestDeletingTIURRStopsTimersButKeepsFinalChargingIdentity(t *testing.T) {
 	require.Same(t, info, sm.ChargingInfo[10])
 	usages := buildMultiUnitUsage(sm, sm.UrrReports)
 	require.Len(t, usages, 1)
-	require.Equal(t, int32(300), usages[0].UsedUnitContainer[0].TotalVolume)
+	require.Equal(t, uint64(300), usages[0].UsedUnitContainer[0].TotalVolume)
 	require.Nil(t, usages[0].RequestedUnit)
 	// A delayed CHF response must not recreate a quota or timer after deletion.
 	(&Processor{}).updateGrantedQuota(sm, []models.Chf_ConvCharging_MultipleUnitInformation{{
@@ -491,13 +491,13 @@ func TestStaticAnchorsKeepSeparateChargingUPFIdentity(t *testing.T) {
 	}
 	usages := buildMultiUnitUsage(sm, sm.UrrReports)
 	require.Len(t, usages, 2, "one rating group at two anchors must not lose its UPF identity")
-	volumes := make(map[string]int32)
+	volumes := make(map[string]uint64)
 	for _, usage := range usages {
 		require.Equal(t, int32(5), usage.RatingGroup)
 		require.Len(t, usage.UsedUnitContainer, 1)
 		volumes[usage.UPFID] = usage.UsedUnitContainer[0].TotalVolume
 	}
-	require.Equal(t, map[string]int32{"old-anchor": 100, "mec-anchor": 200}, volumes)
+	require.Equal(t, map[string]uint64{"old-anchor": 100, "mec-anchor": 200}, volumes)
 }
 
 // Request replay and background retries.
@@ -574,7 +574,7 @@ func TestChargingUpdateSuccessConsumesAcknowledgedUsage(t *testing.T) {
 		p.ReportUsageAndUpdateQuota(sm)
 		request := <-received
 		require.Equal(t, int32(index+1), request.InvocationSequenceNumber)
-		require.Equal(t, int32(volume), request.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume)
+		require.Equal(t, volume, request.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume)
 		require.Empty(t, sm.UrrReports)
 		_, pending, err := sm.PendingChargingRequest(smf_context.CHARGING_UPDATE)
 		require.NoError(t, err)
@@ -994,7 +994,8 @@ func chargingReleaseOrderServer(t *testing.T, handler http.HandlerFunc) *httptes
 
 func chargingReleaseOrderProfile(name models.Nrf_NFMgmt_ServiceName, root string) models.Nrf_NFDisc_NFProfile {
 	return models.Nrf_NFDisc_NFProfile{NfServices: []models.Nrf_NFDisc_NFService{{
-		ServiceName: name, ApiPrefix: root,
+		ServiceName: name, ApiPrefix: root, Scheme: models.UriScheme_HTTP,
+		NfServiceStatus: models.Nrf_NFMgmt_NFServiceStatus_REGISTERED,
 	}}}
 }
 
@@ -1095,4 +1096,21 @@ func quotaInfo(upf string) models.Chf_ConvCharging_MultipleUnitInformation {
 			{TriggerType: models.Chf_ConvCharging_TriggerType_VALIDITY_TIME},
 		},
 	}
+}
+
+func TestUsageAboveInt32RangeIsReportedUnchanged(t *testing.T) {
+	const volume uint64 = 3 << 30 // 3 GiB, above the int32 range
+	sm := &smf_context.SMContext{
+		ChargingInfo: map[uint32]*smf_context.ChargingInfo{1: {RatingGroup: 5, UpfId: "upf"}},
+		UrrReports: []smf_context.UsageReport{{
+			UrrId: 1, UpfId: "upf", ReportTpye: models.Chf_ConvCharging_TriggerType_FINAL,
+			TotalVolume: volume, UplinkVolume: volume - 1, DownlinkVolume: 1,
+		}},
+	}
+	usages := buildMultiUnitUsage(sm, sm.UrrReports)
+	require.Len(t, usages, 1)
+	used := usages[0].UsedUnitContainer[0]
+	require.Equal(t, volume, used.TotalVolume)
+	require.Equal(t, volume-1, used.UplinkVolume)
+	require.Equal(t, uint64(1), used.DownlinkVolume)
 }

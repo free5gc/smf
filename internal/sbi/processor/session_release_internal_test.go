@@ -139,7 +139,7 @@ func TestChargingReleaseRecoveryResumesAuthorizedCleanup(t *testing.T) {
 					var request models.Chf_ConvCharging_ChargingDataRequest
 					require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
 					require.Len(t, request.MultipleUnitUsage, 1)
-					require.Equal(t, int32(40), request.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume)
+					require.Equal(t, uint64(40), request.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume)
 					require.Nil(t, request.MultipleUnitUsage[0].RequestedUnit)
 					bodies <- request
 					if calls.Add(1) == 1 {
@@ -261,7 +261,7 @@ func TestChargingReleaseWaitsForPendingUpdateThenSettlesRemainingUsage(t *testin
 	require.Equal(t, original.InvocationSequenceNumber+1, final.InvocationSequenceNumber)
 	require.Len(t, final.MultipleUnitUsage, 1)
 	require.Len(t, final.MultipleUnitUsage[0].UsedUnitContainer, 1)
-	require.Equal(t, int32(20), final.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume,
+	require.Equal(t, uint64(20), final.MultipleUnitUsage[0].UsedUnitContainer[0].TotalVolume,
 		"Release must charge only the reports not acknowledged by Update")
 	require.Nil(t, final.MultipleUnitUsage[0].RequestedUnit)
 	require.Equal(t, int32(1), policyDeletes.Load())

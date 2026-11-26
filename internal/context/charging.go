@@ -56,6 +56,7 @@ const (
 type pendingChargingRequest struct {
 	chargingDataRef string
 	target          string
+	targetInstance  string
 	body            []byte
 }
 
@@ -287,7 +288,9 @@ var ErrChargingResponseSequence = errors.New("CHF response invocation sequence d
 
 // ChargingTarget freezes the destination alongside the request, before I/O.
 // Once frozen, later CHF discovery changes cannot redirect an unsettled request.
-func (smContext *SMContext) ChargingTarget(requestType RequestType, candidate string) (string, error) {
+func (smContext *SMContext) ChargingTarget(
+	requestType RequestType, candidate, instanceID string,
+) (string, string, error) {
 	smContext.chargingMu.Lock()
 	defer smContext.chargingMu.Unlock()
 	var pending *pendingChargingRequest
@@ -297,16 +300,17 @@ func (smContext *SMContext) ChargingTarget(requestType RequestType, candidate st
 	case CHARGING_RELEASE:
 		pending = smContext.chargingReleaseRequest
 	default:
-		return candidate, nil
+		return candidate, instanceID, nil
 	}
 	if pending == nil {
-		return "", fmt.Errorf("charging request has not been prepared")
+		return "", "", fmt.Errorf("charging request has not been prepared")
 	}
 	if pending.target == "" {
 		pending.target = candidate
+		pending.targetInstance = instanceID
 	}
 	if pending.target == "" {
-		return "", fmt.Errorf("charging request has no CHF destination")
+		return "", "", fmt.Errorf("charging request has no CHF destination")
 	}
-	return pending.target, nil
+	return pending.target, pending.targetInstance, nil
 }

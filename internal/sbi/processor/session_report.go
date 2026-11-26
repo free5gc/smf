@@ -2,6 +2,7 @@ package processor
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/wmnsk/go-pfcp/ie"
 	"github.com/wmnsk/go-pfcp/message"
@@ -17,6 +18,7 @@ import (
 // report burst cannot create one unbounded goroutine per Usage Report.
 func (p *Processor) HandleSessionReportRequest(
 	request *message.SessionReportRequest,
+	remote *net.UDPAddr,
 ) (cause uint8, remoteSEID uint64) {
 	if request == nil {
 		return ie.CauseMandatoryIEMissing, 0
@@ -25,6 +27,15 @@ func (p *Processor) HandleSessionReportRequest(
 	localSEID := request.SEID()
 	smContext := smf_context.GetSMContextBySEID(localSEID)
 	if smContext == nil {
+		// TS 29.244 5.8.3: a report from a UPF without an established PFCP
+		// association is rejected with "No established PFCP Association".
+		// Another source keeps "Session context not found": it may be an
+		// associated UPF's F-SEID address (TS 29.244 5.8.1).
+		if remote != nil && smf_context.IsUnassociatedPFCPSource(remote.IP) {
+			logger.PfcpLog.Warnf("reject PFCP Session Report Request from %v for SEID[%d]: no established PFCP association",
+				remote, localSEID)
+			return ie.CauseNoEstablishedPFCPAssociation, 0
+		}
 		logger.PfcpLog.Errorf("PFCP Session SEID[%d] not found", localSEID)
 		return ie.CauseSessionContextNotFound, 0
 	}
@@ -134,9 +145,10 @@ func (p *Processor) notifyAMFOfDownlinkData(smContext *smf_context.SMContext) er
 		},
 	}
 
-	ctx, _, err := smf_context.GetSelf().GetTokenCtx(
+	ctx, _, err := smf_context.GetSelf().GetTokenCtxForNFInstance(
 		models.Nrf_NFMgmt_ServiceName_NAMF_COMM,
 		models.Nrf_NFMgmt_NFType_AMF,
+		smContext.AMFProfile.NfInstanceId,
 	)
 	if err != nil {
 		return fmt.Errorf("get NAMF_COMM token context: %w", err)

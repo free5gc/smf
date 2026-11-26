@@ -73,13 +73,7 @@ func newRouter(s *Server) *gin.Engine {
 	router := logger_util.NewGinWithLogrus(logger.GinLog)
 
 	router.Use(metrics.InboundMetrics())
-	smfCallbackGroup := router.Group(factory.SmfCallbackUriPrefix)
-	smfCallbackRoutes := s.getCallbackRoutes()
-	smfCallbackAuthCheck := util_oauth.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName("nsmf-callback"))
-	smfCallbackGroup.Use(func(c *gin.Context) {
-		smfCallbackAuthCheck.Check(c, smf_context.GetSelf())
-	})
-	applyRoutes(smfCallbackGroup, smfCallbackRoutes)
+	mountCallbackRoutes(router, s, smf_context.GetSelf())
 
 	upiGroup := router.Group(factory.UpiUriPrefix)
 	upiAuthCheck := util_oauth.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName_NSMF_OAM)
@@ -119,6 +113,26 @@ func newRouter(s *Server) *gin.Engine {
 	}
 
 	return router
+}
+
+func mountCallbackRoutes(router *gin.Engine, s *Server, authContext smf_context.NFContext) {
+	smfCallbackGroup := router.Group(factory.SmfCallbackUriPrefix)
+	applyCallbackRoutes(smfCallbackGroup, s.getCallbackRoutes(), authContext)
+}
+
+func applyCallbackRoutes(group *gin.RouterGroup, routes []Route, authContext smf_context.NFContext) {
+	authCheck := util_oauth.NewRouterAuthorizationCheck(smf_context.ServiceNameNsmfCallback)
+	for _, route := range routes {
+		handlers := make([]gin.HandlerFunc, 0, 2)
+		// Exempt only operations classified as Notify, not the whole URL group.
+		if !route.IsNotification {
+			handlers = append(handlers, func(c *gin.Context) {
+				authCheck.Check(c, authContext)
+			})
+		}
+		handlers = append(handlers, route.APIFunc)
+		group.Handle(route.Method, route.Pattern, handlers...)
+	}
 }
 
 func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {

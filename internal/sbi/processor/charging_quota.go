@@ -191,14 +191,14 @@ func (p *Processor) updateGrantedQuotaForRules(
 					}
 					// TS 32.290 5.4.2 specifies remaining quota; PFCP expects consumed volume.
 					// Both values apply to the total grant, not to each direction separately.
-					quota := uint64(ui.GrantedUnit.TotalVolume)
-					remaining := uint64(ui.VolumeQuotaThreshold)
+					quota := ui.GrantedUnit.TotalVolume
+					remaining := ui.VolumeQuotaThreshold
 					// gtp5g treats zero as disabled. Use its smallest active threshold
 					// so the next traffic packet reports an already reached threshold.
 					urr.VolumeThreshold = max(uint64(1), quota-min(quota, remaining))
 				} else {
 					// Offline charging has no granted quota and retains its usage threshold.
-					urr.VolumeThreshold = uint64(ui.VolumeQuotaThreshold)
+					urr.VolumeThreshold = ui.VolumeQuotaThreshold
 				}
 				trigger.SetVOLTH()
 			// The difference between the quota validity time and the volume limit is
@@ -212,7 +212,7 @@ func (p *Processor) updateGrantedQuotaForRules(
 				if chgInfo.ChargingMethod == models.Chf_ConvCharging_QuotaManagementIndicator_ONLINE_CHARGING {
 					if ui.GrantedUnit != nil {
 						trigger.SetVOLQU()
-						urr.VolumeQuota = uint64(ui.GrantedUnit.TotalVolume)
+						urr.VolumeQuota = ui.GrantedUnit.TotalVolume
 						logger.ChargingLog.Debugf("QUOTA_EXHAUSTED: Setting VolumeQuota=%d", urr.VolumeQuota)
 					} else {
 						// No granted quota, so set the urr.VolumeQuota to 0, upf should stop send traffic

@@ -477,3 +477,51 @@ func TestGoldenBuildHandoverCommandTransfer(t *testing.T) {
 		})
 	}
 }
+
+// A session that the gNB split at its setup has NrdcIndicator set. With no PCC
+// rule of precedence 255, its split tunnel has no default data path. The
+// acknowledge of a path switch gives the split's UPF end from the tunnel's
+// other path, with the secondary node's end, in Additional NG-U UP TNL
+// Information (TS 38.413 9.3.4.9).
+func TestPathSwitchRequestAcknowledgeTransferOfASplitWithoutDefaultPath(t *testing.T) {
+	newContext := func() *SMContext {
+		smContext := newGSMTestContext()
+		smContext.Tunnel, smContext.DCTunnel = newTestUPTunnel(), newTestUPTunnel()
+		smContext.UpSecurityFromPathSwitchRequestSameAsLocalStored = true
+		smContext.NrdcIndicator = true
+		smContext.DCTunnel.ANInformation.IPAddress = net.ParseIP("192.0.2.30").To4()
+		smContext.DCTunnel.ANInformation.TEID = 0x30
+		return smContext
+	}
+
+	smContext := newContext()
+	split := smContext.DCTunnel.DataPathPool[1]
+	split.IsDefaultPath = false
+	split.FirstDPNode.UpLinkTunnel.TEID = 0x2002
+	var buf []byte
+	var err error
+	require.NotPanics(t, func() { buf, err = BuildPathSwitchRequestAcknowledgeTransfer(smContext) })
+	require.NoError(t, err)
+	var ack ngapie.PathSwitchRequestAcknowledgeTransfer
+	require.NoError(t, ngapie.UnmarshalBinary(buf, &ack))
+	require.NotNil(t, ack.IEExtensions)
+	require.Len(t, ack.IEExtensions.List, 1)
+	pairs := ack.IEExtensions.List[0].AdditionalNGUUPTNLInformation
+	require.NotNil(t, pairs)
+	require.Len(t, pairs.List, 1)
+	ul, ok := pairs.List[0].ULNGUUPTNLInformation.Choice.(*ngapie.GTPTunnel)
+	require.True(t, ok)
+	require.Equal(t, aper.OctetString{0x00, 0x00, 0x20, 0x02}, ul.GTPTEID.Value)
+	require.Equal(t, net.ParseIP("127.0.0.8").To4(), net.IP(ul.TransportLayerAddress.Value.Bytes))
+	dl, ok := pairs.List[0].DLNGUUPTNLInformation.Choice.(*ngapie.GTPTunnel)
+	require.True(t, ok)
+	require.Equal(t, aper.OctetString{0x00, 0x00, 0x00, 0x30}, dl.GTPTEID.Value)
+	require.Equal(t, net.ParseIP("192.0.2.30").To4(), net.IP(dl.TransportLayerAddress.Value.Bytes))
+
+	noPath := newContext()
+	noPath.DCTunnel = NewUPTunnel()
+	noPath.DCTunnel.ANInformation = smContext.DCTunnel.ANInformation
+	require.NotPanics(t, func() { buf, err = BuildPathSwitchRequestAcknowledgeTransfer(noPath) })
+	require.Error(t, err)
+	require.Nil(t, buf)
+}

@@ -8,6 +8,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/h2non/gock"
 	"github.com/stretchr/testify/require"
 
@@ -323,6 +324,9 @@ func TestRegisterNFInstance(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			consumer := newNrfTestConsumer(t)
+			if tt.applyOAuth2 && tt.wantOAuth2 {
+				consumer.Context().NrfCertPem = newNRFOAuthCertificate(t, uuid.NewString())
+			}
 
 			reply := gock.New(testNrfUri).
 				Put(testNfIdPath).
@@ -350,4 +354,15 @@ func TestRegisterNFInstance(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRegisterNFInstanceRejectsInvalidOAuthConfiguration(t *testing.T) {
+	consumer := newNrfTestConsumer(t)
+	consumer.Context().NrfCertPem = ""
+	gock.New(testNrfUri).Put(testNfIdPath).Reply(http.StatusCreated).
+		JSON(nfProfileJSON(15, map[string]any{"oauth2": true}))
+	err := consumer.RegisterNFInstance(testCtx(t), true)
+	require.ErrorContains(t, err, "NRF certificate path is empty")
+	require.False(t, consumer.Context().OAuth2Required)
+	require.True(t, gock.IsDone())
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/smf/PDUSess"
-	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 )
@@ -56,15 +55,9 @@ func (s *nsmfService) SendSMContextStatusNotification(uri string) (*models.Probl
 
 		client := s.getPDUSessionClient(uri)
 
-		ctx, pd, err := smf_context.GetSelf().GetTokenCtx(
-			models.Nrf_NFMgmt_ServiceName("namf-callback"), models.Nrf_NFMgmt_NFType_AMF)
-		if err != nil {
-			logger.CtxLog.Warnf("[SMF] Get token for AMF callback failed: %+v", pd)
-			return pd, err
-		}
-
-		// An unreachable callback must not hold local resource removal indefinitely.
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		// Notify SM Context Status uses Subscribe/Notify semantics (TS 29.502
+		// table 5.2.1-1); TS 29.500 6.7.3 excludes OAuth access tokens.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		logger.CtxLog.Infoln("[SMF] Send SMContext Status Notification")
 		_, localErr := client.SMContextsCollectionApi.

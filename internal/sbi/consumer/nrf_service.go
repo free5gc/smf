@@ -12,11 +12,12 @@ import (
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/nrf/NFDisc"
 	"github.com/free5gc/openapi/nrf/NFMgmt"
-	"github.com/free5gc/openapi/udm/SDM"
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
+	"github.com/free5gc/smf/internal/util"
 	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 	"github.com/free5gc/util/nfheartbeat"
+	"github.com/free5gc/util/serviceuri"
 )
 
 const registerRetryInterval = 2 * time.Second
@@ -113,7 +114,9 @@ func (s *nnrfService) RegisterNFInstance(ctx context.Context, applyOAuth2 bool) 
 	for ctx.Err() == nil {
 		res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, registerNFInstanceRequest)
 		if err == nil && res != nil {
-			s.processRegisterResponse(smfContext, res.Nrf_NFMgmt_NFProfile, applyOAuth2)
+			if err = s.processRegisterResponse(smfContext, res.Nrf_NFMgmt_NFProfile, applyOAuth2); err != nil {
+				return err
+			}
 			logger.InitLog.Infof("SMF registered to NRF as %s", smfContext.NfInstanceID)
 			return nil
 		}
@@ -132,7 +135,7 @@ func (s *nnrfService) processRegisterResponse(
 	smfContext *smf_context.SMFContext,
 	nf *models.Nrf_NFMgmt_NFProfile,
 	applyOAuth2 bool,
-) {
+) error {
 	if nf == nil {
 		nf = &models.Nrf_NFMgmt_NFProfile{}
 	}
@@ -146,13 +149,13 @@ func (s *nnrfService) processRegisterResponse(
 		}
 	}
 	if applyOAuth2 {
-		smfContext.OAuth2Required = oauth2
-		if oauth2 && smfContext.NrfCertPem == "" {
-			logger.CfgLog.Error("OAuth2 enable but no nrfCertPem provided in config.")
+		if err := smfContext.SetOAuth2Required(oauth2); err != nil {
+			return err
 		}
 	} else if oauth2 != smfContext.OAuth2Required {
 		logger.ConsumerLog.Warnf("NRF OAuth2 setting changed to %v, restart SMF to apply it", oauth2)
 	}
+	return nil
 }
 
 // SendUpdateNFInstance sends an NFUpdate PATCH to the NRF, honoring ctx. The
@@ -162,10 +165,7 @@ func (s *nnrfService) SendUpdateNFInstance(ctx context.Context, patchItems []mod
 	nf models.Nrf_NFMgmt_NFProfile, problemDetails *models.ProblemDetails, err error,
 ) {
 	smfContext := s.consumer.Context()
-	tokCtx, pd, err := smfContext.GetTokenCtx(
-		models.Nrf_NFMgmt_ServiceName_NNRF_NFM,
-		models.Nrf_NFMgmt_NFType_NRF,
-	)
+	tokCtx, pd, err := smfContext.GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_NFM)
 	if err != nil {
 		return nf, pd, err
 	}
@@ -208,6 +208,19 @@ func (s *nnrfService) buildNfProfile(smfContext *smf_context.SMFContext) (
 	profile models.Nrf_NFMgmt_NFProfile, err error,
 ) {
 	smfProfile := smfContext.NfProfile
+	if smfProfile.NFServices == nil {
+		return profile, fmt.Errorf("SMF NFServices is nil")
+	}
+
+	services := make([]models.Nrf_NFMgmt_NFService, 0, len(*smfProfile.NFServices))
+	for _, nfService := range *smfProfile.NFServices {
+		allowed, known := smf_context.AllowedNfTypesForService(nfService.ServiceName)
+		if !known {
+			return profile, fmt.Errorf("no AllowedNfTypes policy for service %q", nfService.ServiceName)
+		}
+		nfService.AllowedNfTypes = allowed
+		services = append(services, nfService)
+	}
 
 	sNssais := []models.ExtSnssai{}
 	for _, snssaiSmfInfo := range smfProfile.SMFInfo.SNssaiSmfInfoList {
@@ -216,14 +229,17 @@ func (s *nnrfService) buildNfProfile(smfContext *smf_context.SMFContext) (
 
 	// set nfProfile
 	profile = models.Nrf_NFMgmt_NFProfile{
-		NfInstanceId:  smfContext.NfInstanceID,
-		NfType:        models.Nrf_NFMgmt_NFType_SMF,
-		NfStatus:      models.Nrf_NFMgmt_NFStatus_REGISTERED,
-		Ipv4Addresses: []string{smfContext.RegisterIPv4},
-		NfServices:    *smfProfile.NFServices,
-		SmfInfo:       smfProfile.SMFInfo,
-		SNssais:       sNssais,
+		NfInstanceId: smfContext.NfInstanceID,
+		NfType:       models.Nrf_NFMgmt_NFType_SMF,
+		NfStatus:     models.Nrf_NFMgmt_NFStatus_REGISTERED,
+		NfServices:   services,
+		SmfInfo:      smfProfile.SMFInfo,
+		SNssais:      sNssais,
 	}
+	addr := serviceuri.NewAddressing(smfContext.RegisterIPv4)
+	profile.Fqdn = addr.FQDN
+	profile.Ipv4Addresses = addr.IPv4Addresses
+	profile.Ipv6Addresses = addr.IPv6Addresses
 	// plmnList is optional in the config, only set it when it is configured
 	if smfProfile.PLMNList != nil {
 		profile.PlmnList = *smfProfile.PLMNList
@@ -238,7 +254,7 @@ func (s *nnrfService) SendDeregisterNFInstance() (err error) {
 	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
 	smfContext := s.consumer.Context()
-	ctx, pd, err := smfContext.GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_NFM, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, pd, err := smfContext.GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_NFM)
 	if err != nil {
 		logger.ConsumerLog.Errorf("Get token context failed, problem details: %+v", pd)
 		return err
@@ -267,7 +283,7 @@ func (s *nnrfService) SendSearchNFInstances(
 		return nil, openapi.ReportError("nrf not found")
 	}
 
-	ctx, _, err := smfContext.GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, _, err := smfContext.GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +362,7 @@ func (s *nnrfService) NFDiscoveryAMF(smContext *smf_context.SMContext, ctx conte
 
 func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 	smfContext := s.consumer.Context()
-	ctx, pd, err := smfContext.GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, pd, err := smfContext.GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return pd, err
 	}
@@ -371,14 +387,15 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 			logger.ConsumerLog.Warnln("UDM discovery returned empty NfInstances")
 			return nil, openapi.ReportError("UDM discovery returned empty NfInstances")
 		}
-		smfContext.UDMProfile = result.NfInstances[0]
-
-		var client *SDM.APIClient
-		for _, service := range smfContext.UDMProfile.NfServices {
-			if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NUDM_SDM {
-				client = s.consumer.nudmService.getSubscribeDataManagementClient(service.ApiPrefix)
-			}
+		// TS 23.502 4.3.2.2.1 step 4: SDM and UECM go to the same selected UDM,
+		// so it must provide both services.
+		udm, uris := util.SelectNFServices(result.NfInstances,
+			models.Nrf_NFMgmt_ServiceName_NUDM_SDM, models.Nrf_NFMgmt_ServiceName_NUDM_UECM)
+		if udm == nil {
+			return nil, fmt.Errorf("no UDM provides both SDM and UECM in NRF discovery result")
 		}
+		smfContext.UDMProfile = *udm
+		client := s.consumer.nudmService.getSubscribeDataManagementClient(uris[0])
 		if client == nil {
 			logger.ConsumerLog.Traceln("Get Subscribe Data Management Client Failed")
 			return nil, fmt.Errorf("get Subscribe Data Management Client Failed")
@@ -391,7 +408,7 @@ func (s *nnrfService) SendNFDiscoveryUDM() (*models.ProblemDetails, error) {
 }
 
 func (s *nnrfService) SendNFDiscoveryPCF() (*models.ProblemDetails, error) {
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, pd, err := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return pd, err
 	}
@@ -421,7 +438,7 @@ func (s *nnrfService) SendNFDiscoveryPCF() (*models.ProblemDetails, error) {
 }
 
 func (s *nnrfService) SendNFDiscoveryServingAMF(smContext *smf_context.SMContext) (*models.ProblemDetails, error) {
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, pd, err := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return pd, err
 	}
@@ -470,7 +487,7 @@ func (s *nnrfService) CHFSelection(smContext *smf_context.SMContext) error {
 		// Supi:            &smContext.Supi,
 	}
 
-	ctx, _, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, _, err := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return err
 	}
@@ -483,17 +500,19 @@ func (s *nnrfService) CHFSelection(smContext *smf_context.SMContext) error {
 		return err
 	}
 
-	// Select CHF from available CHF
-	if res != nil && len(res.Nrf_NFDisc_SearchResult.NfInstances) > 0 {
-		smContext.SelectedCHFProfile = res.Nrf_NFDisc_SearchResult.NfInstances[0]
-		return nil
+	if res != nil {
+		if chf, _ := util.SelectNFService(res.Nrf_NFDisc_SearchResult.NfInstances,
+			models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING); chf != nil {
+			smContext.SelectedCHFProfile = *chf
+			return nil
+		}
 	}
 	return fmt.Errorf("no CHF found in CHFSelection")
 }
 
 // PCFSelection will select PCF for this SM Context
 func (s *nnrfService) PCFSelection(smContext *smf_context.SMContext) error {
-	ctx, _, errToken := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, "NRF")
+	ctx, _, errToken := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if errToken != nil {
 		return errToken
 	}
@@ -516,11 +535,15 @@ func (s *nnrfService) PCFSelection(smContext *smf_context.SMContext) error {
 		return err
 	}
 
-	// Select PCF from available PCF
-	if res == nil || len(res.Nrf_NFDisc_SearchResult.NfInstances) == 0 {
+	if res == nil {
 		return fmt.Errorf("no PCF found in PCFSelection")
 	}
-	smContext.SelectedPCFProfile = res.Nrf_NFDisc_SearchResult.NfInstances[0]
+	pcf, _ := util.SelectNFService(res.Nrf_NFDisc_SearchResult.NfInstances,
+		models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL)
+	if pcf == nil {
+		return fmt.Errorf("no PCF found in PCFSelection")
+	}
+	smContext.SelectedPCFProfile = *pcf
 
 	return nil
 }

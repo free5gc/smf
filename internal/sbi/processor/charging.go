@@ -239,9 +239,9 @@ func buildMultiUnitUsage(
 				QuotaManagementIndicator: chgInfo.ChargingMethod,
 				Triggers:                 triggers,
 				TriggerTimestamp:         &triggerTime,
-				DownlinkVolume:           int32(ur.DownlinkVolume),
-				UplinkVolume:             int32(ur.UplinkVolume),
-				TotalVolume:              int32(ur.TotalVolume),
+				DownlinkVolume:           ur.DownlinkVolume,
+				UplinkVolume:             ur.UplinkVolume,
+				TotalVolume:              ur.TotalVolume,
 			}
 			upfID := ur.UpfId
 			if upfID == "" {
@@ -369,10 +369,9 @@ func (p *Processor) runChargingWork(
 				return nil, fmt.Errorf("charging update returned no response body")
 			}
 			for _, info := range rsp.MultipleUnitInformation {
-				if _, exists := work.owners[chargingOwner{rg: info.RatingGroup, upf: info.UPFID}]; !exists ||
-					(info.GrantedUnit != nil && info.GrantedUnit.TotalVolume < 0) {
+				if _, exists := work.owners[chargingOwner{rg: info.RatingGroup, upf: info.UPFID}]; !exists {
 					work.retryable = false
-					return nil, fmt.Errorf("CHF response has an unknown quota owner or invalid grant")
+					return nil, fmt.Errorf("CHF response has an unknown quota owner")
 				}
 			}
 		}

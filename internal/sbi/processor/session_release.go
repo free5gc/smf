@@ -91,6 +91,7 @@ func (p *Processor) sendSMContextStatusNotificationAndRemoveSMContext(
 	defer smContext.SMLock.Unlock()
 
 	defer p.chargingReleases.CompareAndDelete(smContext.Ref, work)
+	// Notify once for the current context.
 	if smf_context.GetSMContextByRef(smContext.Ref) != smContext {
 		return
 	}
