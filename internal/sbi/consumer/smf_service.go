@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
@@ -56,9 +57,11 @@ func (s *nsmfService) SendSMContextStatusNotification(uri string) (*models.Probl
 
 		// Notify SM Context Status uses Subscribe/Notify semantics (TS 29.502
 		// table 5.2.1-1); TS 29.500 6.7.3 excludes OAuth access tokens.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 		logger.CtxLog.Infoln("[SMF] Send SMContext Status Notification")
 		_, localErr := client.SMContextsCollectionApi.
-			PostSmContextsSmContextStatusNotification(context.Background(), uri, request)
+			PostSmContextsSmContextStatusNotification(ctx, uri, request)
 
 		switch err := localErr.(type) {
 		case openapi.GenericOpenAPIError:

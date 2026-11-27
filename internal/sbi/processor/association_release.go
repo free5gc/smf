@@ -226,7 +226,11 @@ func (p *Processor) finalizeAssociationAffectedPDUSession(smContext *smf_context
 		return
 	}
 
-	p.ReleaseChargingSession(smContext)
+	if err := p.ReleaseChargingSession(smContext); err != nil {
+		smContext.Log.Warnf("Final charging settlement pending after Association Release: %v", err)
+	}
+	// AMF-side resource release must still proceed; common cleanup retains
+	// the policy/context if the recorded charging result is a failure.
 	sendNotification, removeContext := p.requestAMFToReleasePDUResources(smContext)
 	if sendNotification {
 		p.SendReleaseNotification(smContext)

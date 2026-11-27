@@ -257,6 +257,9 @@ func TestSendPDUSessionEstablishmentAcceptTokenFailureReleasesSMContext(t *testi
 	t.Cleanup(func() { smfSelf.OAuth2Required = false })
 	isDone := make(chan struct{})
 	smContext := createAcceptTestSMContext(t, p, 12, isDone)
+	// Isolate AMF token failure from policy termination, which has its own retry tests.
+	smContext.SMPolicyID = ""
+	smContext.AMFProfile.NfInstanceId = "4e601d57-37ee-42b8-ab44-3074371d7420"
 
 	// The establishment goroutine is parked on isDone, so OAuth2 is enabled
 	// only for the Accept and the cleanup that follows it.
@@ -281,6 +284,7 @@ func TestSendPDUSessionEstablishmentAcceptReleasesLocallyWhenPFCPDeletionFails(t
 	pfcpClient := &acceptTestPFCPClient{deleteErr: errors.New("UPF unreachable")}
 	p := setupAcceptTest(t, pfcpClient)
 	stubN1N2MessageTransferProblem(http.StatusForbidden, "INVALID_SM_CONTEXT")
+	stubSMPolicyDelete()
 
 	smContext := createAcceptTestSMContext(t, p, 13, nil)
 	waitForSMContextRelease(t, smContext)

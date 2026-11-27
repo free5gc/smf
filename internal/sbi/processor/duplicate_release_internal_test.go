@@ -29,7 +29,7 @@ func TestTheReleaseOfAnSMContextIsNotifiedOnce(t *testing.T) {
 	// A duplicate PDU session ID removes the SM context at the end of the update
 	// with the duplicate cause, then twice for the N2 release response.
 	for range 3 {
-		e.p.sendSMContextStatusNotificationAndRemoveSMContext(e.sm, true)
+		e.p.sendSMContextStatusNotificationAndRemoveSMContext(&chargingReleaseContinuation{sm: e.sm, sendNotification: true})
 	}
 
 	require.Nil(t, smf_context.GetSMContextByRef(e.sm.Ref))
