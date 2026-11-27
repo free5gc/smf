@@ -40,6 +40,20 @@ func (u *Ues) DecrementPduSessionCount(ueId string) {
 	}
 }
 
+// ForgetPduSession removes local bookkeeping after remote cleanup is abandoned.
+func (u *Ues) ForgetPduSession(ueId string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+
+	ueData := u.ues[ueId]
+	if ueData.PduSessionCount <= 1 {
+		delete(u.ues, ueId)
+		return
+	}
+	ueData.PduSessionCount--
+	u.ues[ueId] = ueData
+}
+
 // SetSubscriptionId sets the SDM subscription ID for a given UE.
 func (u *Ues) SetSubscriptionId(ueId, subscriptionId string) {
 	u.mu.Lock()

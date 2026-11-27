@@ -336,6 +336,75 @@ func TestChargingCleanupRetriesOnlyIncompleteStages(t *testing.T) {
 	require.False(t, sm.SdmCounted)
 }
 
+func TestChargingCleanupCapsPCFAndUDMRetriesIndependently(t *testing.T) {
+	p, sm := chargingReleaseOrderSession(t)
+	sm.SMPolicyID = chargingReleaseOrderPolicyID
+	self := smf_context.GetSelf()
+	previousUes, previousUDM := self.Ues, self.UDMProfile
+	self.Ues = smf_context.InitSmfUeData()
+	t.Cleanup(func() { self.Ues, self.UDMProfile = previousUes, previousUDM })
+	self.Ues.IncrementPduSessionCount(sm.Supi)
+	self.Ues.SetSubscriptionId(sm.Supi, "subscription-1226")
+	sm.SdmCounted = true
+
+	var chfCalls, policyCalls, udmCalls, notifications atomic.Int32
+	server := chargingReleaseOrderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/release"):
+			chfCalls.Add(1)
+			w.WriteHeader(http.StatusNoContent)
+		case strings.HasSuffix(r.URL.Path, "/delete"):
+			policyCalls.Add(1)
+			chargingReleaseOrderFailure(t, w)
+		case strings.HasSuffix(r.URL.Path, "/sdm-subscriptions/subscription-1226"):
+			udmCalls.Add(1)
+			chargingReleaseOrderFailure(t, w)
+		case r.URL.Path == chargingReleasedPath:
+			notifications.Add(1)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected cleanup request: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	sm.SmStatusNotifyUri = server.URL + chargingReleasedPath
+	sm.SelectedCHFProfile = chargingReleaseOrderProfile(
+		models.Nrf_NFMgmt_ServiceName_NCHF_CONVERGEDCHARGING, server.URL)
+	sm.SelectedPCFProfile = chargingReleaseOrderProfile(
+		models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, server.URL)
+	self.UDMProfile = chargingReleaseOrderProfile(models.Nrf_NFMgmt_ServiceName_NUDM_SDM, server.URL)
+
+	sm.SMLock.Lock()
+	p.RemoveSMContextFromAllNF(sm, true)
+	sm.SMLock.Unlock()
+	require.EqualValues(t, 1, policyCalls.Load())
+	require.Zero(t, udmCalls.Load())
+
+	for want := 2; want <= 4; want++ {
+		retryChargingNow(p)
+		require.EqualValues(t, want, policyCalls.Load())
+	}
+	require.EqualValues(t, 1, udmCalls.Load(), "UDM cleanup starts after the PCF retries are exhausted")
+	require.Same(t, sm, smf_context.GetSMContextByRef(sm.Ref))
+	require.True(t, sm.SdmCounted)
+
+	for want := 2; want <= 4; want++ {
+		retryChargingNow(p)
+		require.EqualValues(t, want, udmCalls.Load())
+		require.EqualValues(t, 4, policyCalls.Load(), "UDM retries must not restart PCF cleanup")
+	}
+
+	require.Eventually(t, func() bool { return smf_context.GetSMContextByRef(sm.Ref) == nil },
+		time.Second, time.Millisecond)
+	require.False(t, self.Ues.UeExists(sm.Supi))
+	require.False(t, sm.SdmCounted)
+	require.EqualValues(t, 1, notifications.Load())
+	retryChargingNow(p)
+	require.EqualValues(t, 1, chfCalls.Load(), "cleanup retries must not repeat charging settlement")
+	require.EqualValues(t, 4, policyCalls.Load())
+	require.EqualValues(t, 4, udmCalls.Load())
+}
+
 func TestChargingCleanupRunsOnceAndPreservesReplacementSession(t *testing.T) {
 	p, sm := chargingReleaseOrderSession(t)
 	self := smf_context.GetSelf()

@@ -2,10 +2,13 @@ package processor
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	smf_context "github.com/free5gc/smf/internal/context"
 )
+
+const smContextCleanupMaxRetries = 3
 
 // RemoveSMContextFromAllNF requires SMLock. This is the lifecycle boundary
 // authorizing removal; a charging Release alone does not authorize it.
@@ -49,29 +52,31 @@ func (p *Processor) completeSMContextRelease(ctx context.Context, work *charging
 	}
 
 	// Delete policy-owned charging data after settlement succeeds or is explicitly abandoned.
-	if smContext.SMPolicyID != "" {
+	if !work.pcfCleanupDone && smContext.SMPolicyID != "" {
 		if err := p.Consumer().SendSMPolicyAssociationTerminationContext(ctx, smContext); err != nil {
-			smContext.Log.Errorf("SM Policy Termination failed: %s", err)
-			p.deferSMContextRelease(work)
-			return
+			if work.scheduleCleanupRetry("PCF SM policy termination", err) {
+				return
+			}
+		} else {
+			smContext.SMPolicyID = ""
 		}
-		smContext.SMPolicyID = ""
+		work.pcfCleanupDone = true
+		work.cleanupRetries = 0
 	}
 
-	// Run SDM cleanup once for contexts counted at creation.
-	// UnSubscribe decrements the count or deletes the last subscription.
-	// Clear the marker only on success, preserving state if UDM deletion fails.
-	if smContext.SdmCounted && smf_context.GetSelf().Ues.UeExists(smContext.Supi) {
+	// UnSubscribe decrements the session count or deletes the last subscription.
+	ues := smf_context.GetSelf().Ues
+	if smContext.SdmCounted && ues.UeExists(smContext.Supi) {
 		problemDetails, err := p.Consumer().UnSubscribeContext(ctx, smContext)
 		if problemDetails != nil {
-			smContext.Log.Errorf("SDM UnSubscription Failed Problem[%+v]", problemDetails)
-			p.deferSMContextRelease(work)
-			return
+			err = fmt.Errorf("SDM unsubscription failed: %+v", problemDetails)
 		}
 		if err != nil {
-			smContext.Log.Errorf("SDM UnSubscription Error[%+v]", err)
-			p.deferSMContextRelease(work)
-			return
+			if work.scheduleCleanupRetry("UDM SDM unsubscription", err) {
+				return
+			}
+			// An exhausted remote cleanup still ends this session's local bookkeeping.
+			ues.ForgetPduSession(smContext.Supi)
 		}
 		smContext.SdmCounted = false
 	}
@@ -125,8 +130,9 @@ type chargingReleaseContinuation struct {
 	cleanupRequested bool
 	sendNotification bool
 	removalScheduled bool
+	pcfCleanupDone   bool
 	retryAt          time.Time
-	attempts         int
+	cleanupRetries   int
 }
 
 func (p *Processor) rememberChargingRelease(sm *smf_context.SMContext) *chargingReleaseContinuation {
@@ -135,9 +141,16 @@ func (p *Processor) rememberChargingRelease(sm *smf_context.SMContext) *charging
 	return value.(*chargingReleaseContinuation)
 }
 
-func (p *Processor) deferSMContextRelease(work *chargingReleaseContinuation) {
-	work.retryAt = time.Now().Add(chargingRetryDelay(work.attempts))
-	work.attempts++
+func (work *chargingReleaseContinuation) scheduleCleanupRetry(stage string, err error) bool {
+	if work.cleanupRetries >= smContextCleanupMaxRetries {
+		work.sm.Log.Errorf("%s failed after %d retries: %v", stage, work.cleanupRetries, err)
+		return false
+	}
+	work.retryAt = time.Now().Add(chargingRetryDelay(work.cleanupRetries))
+	work.cleanupRetries++
+	work.sm.Log.Warnf("%s failed, scheduling retry %d/%d: %v",
+		stage, work.cleanupRetries, smContextCleanupMaxRetries, err)
+	return true
 }
 
 func (p *Processor) retryChargingReleases(ctx context.Context, now time.Time) {
