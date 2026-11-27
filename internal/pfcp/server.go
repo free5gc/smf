@@ -407,7 +407,7 @@ func (s *PfcpServer) sendRequest(
 			if err := ctx.Err(); err != nil {
 				return nil, fmt.Errorf("send PFCP request to %v: %w", addr, err)
 			}
-			return nil, fmt.Errorf("PFCP request to %v timed out", addr)
+			return nil, fmt.Errorf("PFCP request to %v timed out: %w", addr, context.DeadlineExceeded)
 		}
 		return received.Msg, nil
 	}
