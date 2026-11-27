@@ -526,30 +526,8 @@ func (p *Processor) deleteEstablishedPfcpSession(
 	if err != nil {
 		return err
 	}
-	client, ok := p.getActivePFCPClient().(SessionDeletionPFCPClient)
-	if !ok {
-		return fmt.Errorf("go-pfcp Session Deletion client is not configured")
-	}
-	request := goPfcpMessage.NewSessionDeletionRequest(0, 0, remoteSEID, 0, 0)
-	response, err := client.SendSessionDeletionRequest(
-		associationContext, request,
-		&net.UDPAddr{IP: upf.NodeID.ResolveNodeIdToIp(), Port: pfcpPeerPort},
-		localSEID,
-	)
-	if err != nil {
-		return err
-	}
-	if response == nil || response.Cause == nil {
-		return fmt.Errorf("PFCP Session Deletion Response is missing Cause")
-	}
-	cause, err := response.Cause.Cause()
-	if err != nil {
-		return fmt.Errorf("decode PFCP Session Deletion Cause: %w", err)
-	}
-	if cause != ie.CauseRequestAccepted {
-		return fmt.Errorf("PFCP Session Deletion rejected with Cause %d", cause)
-	}
-	return nil
+	_, err = p.requestSessionDeletion(associationContext, upf, localSEID, remoteSEID)
+	return err
 }
 
 func (p *Processor) sendSessionModificationRequest(
@@ -1044,44 +1022,9 @@ func (p *Processor) deletePfcpSession(
 		resCh <- SendPfcpResult{Status: smf_context.SessionReleaseSuccess}
 		return
 	}
-	client, ok := p.getActivePFCPClient().(SessionDeletionPFCPClient)
-	if !ok {
-		resCh <- SendPfcpResult{
-			Status: smf_context.SessionReleaseFailed,
-			Err:    fmt.Errorf("go-pfcp Session Deletion client is not configured"),
-		}
-		return
-	}
-	request := goPfcpMessage.NewSessionDeletionRequest(0, 0, sessionContext.RemoteSEID, 0, 0)
-	response, err := client.SendSessionDeletionRequest(
-		associationContext, request,
-		&net.UDPAddr{IP: nodeIP, Port: pfcpPeerPort},
-		sessionContext.LocalSEID,
-	)
+	response, err := p.requestSessionDeletion(associationContext, upf, sessionContext.LocalSEID, sessionContext.RemoteSEID)
 	if err != nil {
 		resCh <- SendPfcpResult{Status: smf_context.SessionReleaseFailed, Err: err}
-		return
-	}
-	if response == nil || response.Cause == nil {
-		resCh <- SendPfcpResult{
-			Status: smf_context.SessionReleaseFailed,
-			Err:    fmt.Errorf("PFCP Session Deletion Response is missing Cause"),
-		}
-		return
-	}
-	cause, err := response.Cause.Cause()
-	if err != nil {
-		resCh <- SendPfcpResult{
-			Status: smf_context.SessionReleaseFailed,
-			Err:    fmt.Errorf("decode PFCP Session Deletion Cause: %w", err),
-		}
-		return
-	}
-	if cause != ie.CauseRequestAccepted {
-		resCh <- SendPfcpResult{
-			Status: smf_context.SessionReleaseFailed,
-			Err:    fmt.Errorf("PFCP Session Deletion rejected with Cause %d", cause),
-		}
 		return
 	}
 

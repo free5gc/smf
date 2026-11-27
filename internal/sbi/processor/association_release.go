@@ -5,22 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net"
 	"time"
-
-	"github.com/wmnsk/go-pfcp/ie"
-	"github.com/wmnsk/go-pfcp/message"
 
 	smf_context "github.com/free5gc/smf/internal/context"
 	"github.com/free5gc/smf/internal/logger"
 	"github.com/free5gc/smf/pkg/factory"
 )
-
-type associationReleaseSessionDeletionClient interface {
-	SendSessionDeletionRequest(
-		context.Context, *message.SessionDeletionRequest, *net.UDPAddr, uint64,
-	) (*message.SessionDeletionResponse, error)
-}
 
 type associationReleasePDUSessionResult struct {
 	smContext *smf_context.SMContext
@@ -178,30 +168,9 @@ func (p *Processor) deleteAssociationPFCPSession(
 	if err := upf.IsAssociated(); err != nil {
 		return err
 	}
-	client, ok := p.getActivePFCPClient().(associationReleaseSessionDeletionClient)
-	if !ok {
-		return fmt.Errorf("active PFCP client does not support context-aware Session Deletion")
-	}
-
-	request := message.NewSessionDeletionRequest(0, 0, sessionContext.RemoteSEID, 0, 0)
-	response, err := client.SendSessionDeletionRequest(
-		ctx,
-		request,
-		&net.UDPAddr{IP: upf.NodeID.ResolveNodeIdToIp(), Port: pfcpPeerPort},
-		sessionContext.LocalSEID,
-	)
+	response, err := p.requestSessionDeletion(ctx, upf, sessionContext.LocalSEID, sessionContext.RemoteSEID)
 	if err != nil {
 		return err
-	}
-	if response == nil || response.Cause == nil {
-		return fmt.Errorf("PFCP Session Deletion Response is missing Cause")
-	}
-	cause, err := response.Cause.Cause()
-	if err != nil {
-		return fmt.Errorf("decode PFCP Session Deletion Cause: %w", err)
-	}
-	if cause != ie.CauseRequestAccepted {
-		return fmt.Errorf("PFCP Session Deletion rejected with Cause %d", cause)
 	}
 
 	// Accepted means the UPF session is gone even when a report is malformed.
